@@ -377,7 +377,7 @@ class AppProvider extends ChangeNotifier {
         SupabaseService.loadCustomerAddresses(normalizedPhone),
         SupabaseService.loadCustomerFavoriteIds(normalizedPhone),
         SupabaseService.loadUserState(normalizedPhone),
-      ]);
+      ]).timeout(const Duration(seconds: 18));
 
       final appUser = results[0] as Map<String, dynamic>?;
       final customerProfile = results[1] as Map<String, dynamic>?;
@@ -470,12 +470,18 @@ class AppProvider extends ChangeNotifier {
       await _persistLocalBackup();
 
       // جلب الطلبات في الخلفية دون تأخير فتح الواجهة
-      unawaited(SupabaseService.loadCustomerOrders(normalizedPhone).then((orders) {
-        if (orders.isNotEmpty) {
-          _orders = List<ActiveOrder>.from(orders);
-          notifyListeners();
-        }
-      }));
+      unawaited(
+        SupabaseService.loadCustomerOrders(normalizedPhone)
+            .timeout(const Duration(seconds: 18))
+            .then((orders) {
+          if (orders.isNotEmpty) {
+            _orders = List<ActiveOrder>.from(orders);
+            notifyListeners();
+          }
+        }).catchError((error) {
+          debugPrint('RESTORE_LOG: Orders recovery skipped: $error');
+        }),
+      );
 
       debugPrint('RESTORE_LOG: Parallel restoration complete.');
     } catch (e) {
@@ -849,7 +855,7 @@ class AppProvider extends ChangeNotifier {
     });
   }
 
-  void setMerchantStore(Map<String, dynamic> storeData) {
+  Future<void> setMerchantStore(Map<String, dynamic> storeData) async {
     final serviceIds = (storeData['serviceIds'] as List?)
             ?.map((item) => item.toString())
             .where((item) => item.isNotEmpty)
@@ -902,7 +908,7 @@ class AppProvider extends ChangeNotifier {
       ...storeData,
     };
     notifyListeners();
-    unawaited(_persistMerchantStore());
+    await _persistMerchantStore();
   }
 
   void updateMerchantStore(Map<String, dynamic> updates) {

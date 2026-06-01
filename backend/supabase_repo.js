@@ -259,8 +259,11 @@ async function getMerchantProfile(phone) {
 }
 
 async function saveMerchantProfile(phone, data = {}) {
-  await ensureAppUser(phone, data);
+  const appUser = await ensureAppUser(phone, data);
   const basePayload = { updated_at: nowIso() };
+  if (await hasColumn('merchant_profiles', 'user_id')) {
+    basePayload.user_id = appUser?.id || null;
+  }
   assignIfDefined(basePayload, 'store_name', data.store_name ?? data.storeName);
   assignIfDefined(basePayload, 'description', data.description);
   assignIfDefined(
@@ -268,7 +271,9 @@ async function saveMerchantProfile(phone, data = {}) {
     'primary_service_id',
     data.primary_service_id ?? data.primaryServiceId
   );
-  assignIfDefined(basePayload, 'whatsapp', data.whatsapp);
+  if (await hasColumn('merchant_profiles', 'whatsapp')) {
+    assignIfDefined(basePayload, 'whatsapp', data.whatsapp);
+  }
   assignIfDefined(basePayload, 'address', data.address);
   assignIfDefined(basePayload, 'open_time', data.open_time ?? data.openTime);
   assignIfDefined(basePayload, 'close_time', data.close_time ?? data.closeTime);
@@ -289,23 +294,33 @@ async function saveMerchantProfile(phone, data = {}) {
     'profile_image_base64',
     data.profile_image_base64 ?? data.profileImageBase64
   );
-  basePayload.work_sample_images_base64 = normalizeArray(
-    data.work_sample_images_base64 ?? data.workSampleImagesBase64
-  );
-  basePayload.professional_info = normalizeObject(
-    data.professional_info ?? data.professionalInfo
-  );
-  assignIfDefined(
-    basePayload,
-    'professional_category_id',
-    data.professional_category_id ?? data.professionalCategoryId
-  );
-  basePayload.service_ids = normalizeArray(data.service_ids ?? data.serviceIds);
-  assignIfDefined(
-    basePayload,
-    'active_service_id',
-    data.active_service_id ?? data.activeServiceId
-  );
+  if (await hasColumn('merchant_profiles', 'work_sample_images_base64')) {
+    basePayload.work_sample_images_base64 = normalizeArray(
+      data.work_sample_images_base64 ?? data.workSampleImagesBase64
+    );
+  }
+  if (await hasColumn('merchant_profiles', 'professional_info')) {
+    basePayload.professional_info = normalizeObject(
+      data.professional_info ?? data.professionalInfo
+    );
+  }
+  if (await hasColumn('merchant_profiles', 'professional_category_id')) {
+    assignIfDefined(
+      basePayload,
+      'professional_category_id',
+      data.professional_category_id ?? data.professionalCategoryId
+    );
+  }
+  if (await hasColumn('merchant_profiles', 'service_ids')) {
+    basePayload.service_ids = normalizeArray(data.service_ids ?? data.serviceIds);
+  }
+  if (await hasColumn('merchant_profiles', 'active_service_id')) {
+    assignIfDefined(
+      basePayload,
+      'active_service_id',
+      data.active_service_id ?? data.activeServiceId
+    );
+  }
   return saveRow('merchant_profiles', { ...basePayload, phone }, 'phone');
 }
 

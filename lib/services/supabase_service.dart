@@ -6,6 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/app_models.dart';
 
 class SupabaseService {
+  static const Duration _backendTimeout = Duration(seconds: 15);
   static const String _url = String.fromEnvironment(
     'SUPABASE_URL',
     defaultValue: 'https://gyayjuhrjvxhjjinerdx.supabase.co/rest/v1/',
@@ -76,10 +77,19 @@ class SupabaseService {
       headers['Authorization'] = 'Bearer $token';
     }
     
-    if (method == 'GET') response = await http.get(uri, headers: headers);
-    else if (method == 'PUT') response = await http.put(uri, headers: headers, body: jsonEncode(body));
-    else if (method == 'DELETE') response = await http.delete(uri, headers: headers);
-    else response = await http.post(uri, headers: headers, body: jsonEncode(body));
+    if (method == 'GET') {
+      response = await http.get(uri, headers: headers).timeout(_backendTimeout);
+    } else if (method == 'PUT') {
+      response = await http
+          .put(uri, headers: headers, body: jsonEncode(body))
+          .timeout(_backendTimeout);
+    } else if (method == 'DELETE') {
+      response = await http.delete(uri, headers: headers).timeout(_backendTimeout);
+    } else {
+      response = await http
+          .post(uri, headers: headers, body: jsonEncode(body))
+          .timeout(_backendTimeout);
+    }
 
     if (response.statusCode >= 200 && response.statusCode < 300) {
       return response.body.isEmpty ? null : jsonDecode(response.body);

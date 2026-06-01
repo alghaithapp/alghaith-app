@@ -533,7 +533,7 @@ class _MerchantSetupScreenState extends State<MerchantSetupScreen> {
                         padding: const EdgeInsets.symmetric(vertical: 16),
                         color: Colors.orange,
                         borderRadius: BorderRadius.circular(18),
-                        onPressed: () {
+                        onPressed: () async {
                           final name = _nameController.text.trim();
                           if (name.isEmpty) {
                             _showMessage(
@@ -582,7 +582,7 @@ class _MerchantSetupScreenState extends State<MerchantSetupScreen> {
                             }
                           }
 
-                          appProvider.setMerchantStore({
+                          await appProvider.setMerchantStore({
                             'name': name,
                             'description': _descController.text.trim(),
                             'category': _primaryServiceId,
@@ -642,7 +642,7 @@ class _MerchantSetupScreenState extends State<MerchantSetupScreen> {
                             'professionalCategoryId':
                                 _selectedProfessionalCategoryId,
                           });
-                          appProvider.setUserRole('merchant');
+                          await appProvider.setUserRole('merchant');
                         },
                         child: Text(
                           isAr

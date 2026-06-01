@@ -106,7 +106,7 @@ class _StartupSplashView extends StatelessWidget {
                           ),
                           const SizedBox(height: 8),
                           const Text(
-                            'منصة خدمات وسوق محلي بتجربة أنيقة وسريعة',
+                            'منصة عراقية للخدمات والتسوق المحلي في مكان واحد',
                             textAlign: TextAlign.center,
                             style: TextStyle(
                               fontSize: 13.5,
