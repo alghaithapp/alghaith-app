@@ -39,6 +39,8 @@ class ListItem {
   final String? listingMode;
   final int? prepMinutes;
   bool isAvailable;
+  final String? merchantPhone;
+  final String? merchantStoreName;
 
   ListItem({
     required this.id,
@@ -67,6 +69,8 @@ class ListItem {
     this.listingMode,
     this.prepMinutes,
     this.isAvailable = true,
+    this.merchantPhone,
+    this.merchantStoreName,
   });
 
   ListItem copyWith({
@@ -96,6 +100,8 @@ class ListItem {
     String? listingMode,
     int? prepMinutes,
     bool? isAvailable,
+    String? merchantPhone,
+    String? merchantStoreName,
   }) {
     return ListItem(
       id: id ?? this.id,
@@ -124,6 +130,8 @@ class ListItem {
       listingMode: listingMode ?? this.listingMode,
       prepMinutes: prepMinutes ?? this.prepMinutes,
       isAvailable: isAvailable ?? this.isAvailable,
+      merchantPhone: merchantPhone ?? this.merchantPhone,
+      merchantStoreName: merchantStoreName ?? this.merchantStoreName,
     );
   }
 
@@ -155,6 +163,8 @@ class ListItem {
       'listingMode': listingMode,
       'prepMinutes': prepMinutes,
       'isAvailable': isAvailable,
+      'merchantPhone': merchantPhone,
+      'merchantStoreName': merchantStoreName,
     };
   }
 
@@ -186,6 +196,8 @@ class ListItem {
       listingMode: map['listingMode'] as String?,
       prepMinutes: (map['prepMinutes'] as num?)?.toInt(),
       isAvailable: (map['isAvailable'] as bool?) ?? true,
+      merchantPhone: map['merchantPhone'] as String?,
+      merchantStoreName: map['merchantStoreName'] as String?,
     );
   }
 }
@@ -234,6 +246,8 @@ class CartItem {
   int count;
   final String image;
   final String category;
+  final String? merchantPhone;
+  final String? merchantStoreName;
   final String? optionAr;
   final String? optionEn;
 
@@ -245,6 +259,8 @@ class CartItem {
     required this.count,
     required this.image,
     required this.category,
+    this.merchantPhone,
+    this.merchantStoreName,
     this.optionAr,
     this.optionEn,
   });
@@ -279,6 +295,10 @@ class ActiveOrder {
   final String? deliveryStatusEn;
   final String? assignedCourierName;
   final bool isRestaurantOrder;
+  final String? merchantPhone;
+  final String? merchantStoreName;
+  final bool requiresDelivery;
+  final bool codConfirmed;
 
   ActiveOrder({
     required this.id,
@@ -309,6 +329,10 @@ class ActiveOrder {
     this.deliveryStatusEn,
     this.assignedCourierName,
     this.isRestaurantOrder = false,
+    this.merchantPhone,
+    this.merchantStoreName,
+    this.requiresDelivery = true,
+    this.codConfirmed = false,
   });
 
   Map<String, dynamic> toMap() {
@@ -341,6 +365,10 @@ class ActiveOrder {
       'deliveryStatusEn': deliveryStatusEn,
       'assignedCourierName': assignedCourierName,
       'isRestaurantOrder': isRestaurantOrder,
+      'merchantPhone': merchantPhone,
+      'merchantStoreName': merchantStoreName,
+      'requiresDelivery': requiresDelivery,
+      'codConfirmed': codConfirmed,
     };
   }
 
@@ -382,6 +410,10 @@ class ActiveOrder {
       deliveryStatusEn: map['deliveryStatusEn'] as String?,
       assignedCourierName: map['assignedCourierName'] as String?,
       isRestaurantOrder: (map['isRestaurantOrder'] as bool?) ?? false,
+      merchantPhone: map['merchantPhone'] as String?,
+      merchantStoreName: map['merchantStoreName'] as String?,
+      requiresDelivery: (map['requiresDelivery'] as bool?) ?? true,
+      codConfirmed: (map['codConfirmed'] as bool?) ?? false,
     );
   }
 }

@@ -655,6 +655,15 @@ async function saveCustomerOrder(phone, data = {}) {
         ''
     ).trim() || null;
 
+  const courierPhone =
+    String(
+      data.courier_phone ??
+        data.courierPhone ??
+        order.courierPhone ??
+        order.assignedCourierPhone ??
+        ''
+    ).trim() || null;
+
   const payload = {
     id: orderId,
     phone,
@@ -669,8 +678,165 @@ async function saveCustomerOrder(phone, data = {}) {
   if (await hasColumn('customer_orders', 'merchant_phone')) {
     payload.merchant_phone = merchantPhone;
   }
+  if (await hasColumn('customer_orders', 'courier_phone')) {
+    payload.courier_phone = courierPhone;
+  }
 
   return saveRow('customer_orders', payload, 'id');
+}
+
+function readOrderMeta(row) {
+  const payload = normalizeObject(row.order_payload);
+  return {
+    row,
+    payload,
+    id: String(row.id ?? payload.id ?? '').trim(),
+    customerPhone: String(row.phone ?? payload.customerPhone ?? '').trim(),
+    merchantPhone: String(row.merchant_phone ?? payload.merchantPhone ?? '').trim(),
+    courierPhone: String(
+      row.courier_phone ?? payload.courierPhone ?? payload.assignedCourierPhone ?? ''
+    ).trim(),
+    statusKey: String(row.status_key ?? payload.statusKey ?? '').trim(),
+    deliveryStatusKey: String(
+      row.delivery_status_key ?? payload.deliveryStatusKey ?? ''
+    ).trim(),
+  };
+}
+
+function isDeliveryPoolOrder(meta) {
+  return (
+    meta.statusKey === 'delivering' &&
+    meta.deliveryStatusKey === 'waiting' &&
+    !meta.courierPhone
+  );
+}
+
+async function getDeliveryPoolOrders() {
+  const rows = await selectMany(
+    'customer_orders',
+    [],
+    { column: 'updated_at', ascending: false }
+  );
+  return rows.filter((row) => isDeliveryPoolOrder(readOrderMeta(row)));
+}
+
+async function getCourierAssignedOrders(courierPhone) {
+  const variants = getPhoneVariants(courierPhone);
+  if (await hasColumn('customer_orders', 'courier_phone')) {
+    return selectMany(
+      'customer_orders',
+      [{ method: 'in', column: 'courier_phone', value: variants }],
+      { column: 'updated_at', ascending: false }
+    );
+  }
+
+  const rows = await selectMany(
+    'customer_orders',
+    [],
+    { column: 'updated_at', ascending: false }
+  );
+  return rows.filter((row) => {
+    const meta = readOrderMeta(row);
+    return variants.includes(meta.courierPhone);
+  });
+}
+
+async function acceptDeliveryOrder(courierPhone, orderId, data = {}) {
+  const normalizedCourier = await resolvePhoneKey(courierPhone);
+  const id = String(orderId || '').trim();
+  if (!id) {
+    throw new Error('Order id is required.');
+  }
+
+  const row = await selectSingle('customer_orders', 'id', id);
+  if (!row) {
+    throw new Error('Order not found.');
+  }
+
+  const meta = readOrderMeta(row);
+  if (!isDeliveryPoolOrder(meta)) {
+    throw new Error('Order is not available for delivery.');
+  }
+
+  const courierName =
+    String(data.courierName ?? data.courier_name ?? '').trim() || 'مندوب الغيث';
+
+  const nextOrder = {
+    ...meta.payload,
+    deliveryStatusKey: 'accepted',
+    deliveryStatusAr: 'المندوب في الطريق للمتجر',
+    deliveryStatusEn: 'Courier heading to store',
+    assignedCourierName: courierName,
+    courierPhone: normalizedCourier,
+    courierAcceptedAt: nowIso(),
+  };
+
+  return saveCustomerOrder(meta.customerPhone, {
+    order: nextOrder,
+    merchant_phone: meta.merchantPhone || null,
+    courier_phone: normalizedCourier,
+  });
+}
+
+async function updateCourierDeliveryStatus(courierPhone, orderId, updates = {}) {
+  const normalizedCourier = await resolvePhoneKey(courierPhone);
+  const id = String(orderId || '').trim();
+  if (!id) {
+    throw new Error('Order id is required.');
+  }
+
+  const row = await selectSingle('customer_orders', 'id', id);
+  if (!row) {
+    throw new Error('Order not found.');
+  }
+
+  const meta = readOrderMeta(row);
+  const courierVariants = getPhoneVariants(normalizedCourier);
+  if (!courierVariants.includes(meta.courierPhone)) {
+    throw new Error('You are not assigned to this order.');
+  }
+
+  const deliveryStatusKey = String(
+    updates.deliveryStatusKey ?? meta.deliveryStatusKey ?? ''
+  ).trim();
+
+  const nextOrder = {
+    ...meta.payload,
+    deliveryStatusKey,
+    deliveryStatusAr: String(updates.deliveryStatusAr ?? meta.payload.deliveryStatusAr ?? '').trim(),
+    deliveryStatusEn: String(updates.deliveryStatusEn ?? meta.payload.deliveryStatusEn ?? '').trim(),
+    assignedCourierName:
+      String(updates.assignedCourierName ?? meta.payload.assignedCourierName ?? '').trim() ||
+      meta.payload.assignedCourierName,
+    courierPhone: normalizedCourier,
+  };
+
+  if (deliveryStatusKey === 'picked_up') {
+    nextOrder.deliveryStatusAr = 'تم استلام الطلب من المتجر';
+    nextOrder.deliveryStatusEn = 'Order picked up from store';
+  }
+
+  if (deliveryStatusKey === 'on_way') {
+    nextOrder.deliveryStatusAr = 'المندوب في الطريق للزبون';
+    nextOrder.deliveryStatusEn = 'Courier on the way';
+  }
+
+  if (deliveryStatusKey === 'delivered' || deliveryStatusKey === 'completed') {
+    nextOrder.deliveryStatusKey = 'delivered';
+    nextOrder.deliveryStatusAr = 'تم التسليم — دفع نقداً';
+    nextOrder.deliveryStatusEn = 'Delivered — cash collected';
+    nextOrder.statusKey = 'completed';
+    nextOrder.statusAr = 'مكتمل';
+    nextOrder.statusEn = 'Completed';
+    nextOrder.codConfirmed = true;
+    nextOrder.deliveredAt = nowIso();
+  }
+
+  return saveCustomerOrder(meta.customerPhone, {
+    order: nextOrder,
+    merchant_phone: meta.merchantPhone || null,
+    courier_phone: normalizedCourier,
+  });
 }
 
 async function getMerchantIncomingOrders(merchantPhone) {
@@ -733,6 +899,12 @@ async function updateIncomingOrderStatus(merchantPhone, orderId, updates = {}) {
   }
   if (updates.deliveryStatusEn !== undefined) {
     nextOrder.deliveryStatusEn = updates.deliveryStatusEn;
+  }
+
+  if (nextOrder.statusKey === 'delivering') {
+    nextOrder.deliveryStatusKey = 'waiting';
+    nextOrder.deliveryStatusAr = 'بانتظار مندوب التوصيل';
+    nextOrder.deliveryStatusEn = 'Waiting for courier';
   }
 
   return saveCustomerOrder(row.phone, {
@@ -1070,4 +1242,8 @@ module.exports = {
   listRealEstateListings,
   getMerchantIncomingOrders,
   updateIncomingOrderStatus,
+  getDeliveryPoolOrders,
+  getCourierAssignedOrders,
+  acceptDeliveryOrder,
+  updateCourierDeliveryStatus,
 };

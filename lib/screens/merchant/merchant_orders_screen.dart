@@ -42,7 +42,7 @@ class MerchantOrdersScreen extends StatelessWidget {
                         child: _MiniStat(
                           label: isAr ? 'قيد التجهيز' : 'Preparing',
                           value:
-                              '${provider.orders.where((o) => o.statusKey == 'preparing').length}',
+                              '${provider.merchantIncomingOrders.where((o) => o.statusKey == 'preparing').length}',
                           color: Colors.deepOrange,
                         ),
                       ),
@@ -50,7 +50,7 @@ class MerchantOrdersScreen extends StatelessWidget {
                         child: _MiniStat(
                           label: isAr ? 'جاهز' : 'Ready',
                           value:
-                              '${provider.orders.where((o) => o.statusKey == 'delivering').length}',
+                              '${provider.merchantIncomingOrders.where((o) => o.statusKey == 'delivering').length}',
                           color: Colors.green,
                         ),
                       ),
@@ -58,7 +58,7 @@ class MerchantOrdersScreen extends StatelessWidget {
                         child: _MiniStat(
                           label: isAr ? 'ملغي' : 'Cancelled',
                           value:
-                              '${provider.orders.where((o) => o.statusKey == 'cancelled').length}',
+                              '${provider.merchantIncomingOrders.where((o) => o.statusKey == 'cancelled').length}',
                           color: Colors.red,
                         ),
                       ),
@@ -87,31 +87,31 @@ class MerchantOrdersScreen extends StatelessWidget {
             child: TabBarView(
               children: [
                 _OrdersList(
-                  orders: provider.orders
+                  orders: provider.merchantIncomingOrders
                       .where((o) => o.statusKey == 'pending')
                       .toList(),
                   isAr: isAr,
                 ),
                 _OrdersList(
-                  orders: provider.orders
+                  orders: provider.merchantIncomingOrders
                       .where((o) => o.statusKey == 'preparing')
                       .toList(),
                   isAr: isAr,
                 ),
                 _OrdersList(
-                  orders: provider.orders
+                  orders: provider.merchantIncomingOrders
                       .where((o) => o.statusKey == 'delivering')
                       .toList(),
                   isAr: isAr,
                 ),
                 _OrdersList(
-                  orders: provider.orders
+                  orders: provider.merchantIncomingOrders
                       .where((o) => o.statusKey == 'completed')
                       .toList(),
                   isAr: isAr,
                 ),
                 _OrdersList(
-                  orders: provider.orders
+                  orders: provider.merchantIncomingOrders
                       .where((o) => o.statusKey == 'cancelled')
                       .toList(),
                   isAr: isAr,
@@ -162,26 +162,17 @@ class _OrdersList extends StatelessWidget {
             );
           },
           onAccept: () => provider.updateOrderStatus(
-              order.id, 'accepted', 'تم القبول', 'Accepted'),
+              order.id, 'preparing', 'قيد التجهيز', 'Preparing'),
           onReject: () => provider.updateOrderStatus(
               order.id, 'cancelled', 'ملغي', 'Cancelled'),
           onNext: () {
-            final nextStatus = order.statusKey == 'pending'
-                ? 'preparing'
-                : order.statusKey == 'preparing'
-                    ? 'delivering'
-                    : 'completed';
-            final nextAr = order.statusKey == 'pending'
-                ? 'قيد التجهيز'
-                : order.statusKey == 'preparing'
-                    ? 'جاهز للتوصيل'
-                    : 'مكتمل';
-            final nextEn = order.statusKey == 'pending'
-                ? 'Preparing'
-                : order.statusKey == 'preparing'
-                    ? 'Ready'
-                    : 'Completed';
-            provider.updateOrderStatus(order.id, nextStatus, nextAr, nextEn);
+            if (order.statusKey != 'preparing') return;
+            provider.updateOrderStatus(
+              order.id,
+              'delivering',
+              'جاهز للتوصيل',
+              'Ready for delivery',
+            );
           },
         );
       },
@@ -344,8 +335,17 @@ class _OrderCard extends StatelessWidget {
                   color: Colors.red,
                   onTap: onReject,
                 ),
+              if (order.statusKey == 'preparing')
+                _SmallButton(
+                  label: isAr ? 'جاهز للتوصيل' : 'Ready for courier',
+                  color: Colors.green,
+                  onTap: onNext,
+                ),
               if (order.statusKey != 'completed' &&
-                  order.statusKey != 'cancelled')
+                  order.statusKey != 'cancelled' &&
+                  order.statusKey != 'delivering' &&
+                  order.statusKey != 'preparing' &&
+                  order.statusKey != 'pending')
                 _SmallButton(
                   label: isAr ? 'تغيير الحالة' : 'Next Status',
                   color: Colors.green,

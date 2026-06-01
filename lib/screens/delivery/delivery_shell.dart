@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../../models/app_models.dart';
 import '../../providers/app_provider.dart';
 import '../../utils/extensions.dart';
+import '../../utils/helpers.dart';
 
 class DeliveryShell extends StatefulWidget {
   const DeliveryShell({super.key});
@@ -22,6 +23,14 @@ class _DeliveryShellState extends State<DeliveryShell> {
     DeliveryActiveScreen(),
     DeliveryAccountScreen(),
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<AppProvider>().refreshCourierOrders();
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -118,8 +127,8 @@ class DeliveryDashboardScreen extends StatelessWidget {
             _TopCard(
               title: isAr ? 'مرحبًا بك يا مندوب' : 'Welcome courier',
               subtitle: isAr
-                  ? 'تابع الطلبات الجديدة من المطاعم ووافق عليها أو ارفضها'
-                  : 'Track restaurant requests and accept or reject them',
+                  ? 'تابع طلبات المطاعم والتسوق — استلام نقداً عند التسليم'
+                  : 'Track restaurant and shopping orders — cash on delivery',
               icon: CupertinoIcons.bag_fill,
             ),
             const SizedBox(height: 16),
@@ -183,21 +192,30 @@ class DeliveryRequestsScreen extends StatelessWidget {
           style:
               const TextStyle(fontWeight: FontWeight.bold, fontFamily: 'Cairo'),
         ),
+        trailing: CupertinoButton(
+          padding: EdgeInsets.zero,
+          onPressed: () => appProvider.refreshCourierOrders(),
+          child: const Icon(CupertinoIcons.refresh, size: 22),
+        ),
         border: null,
       ),
       child: SafeArea(
         child: orders.isEmpty
             ? _EmptyCard(
                 text: isAr
-                    ? 'لا توجد طلبات واردة من المطاعم'
-                    : 'No incoming restaurant requests',
+                    ? 'لا توجد طلبات جاهزة للتوصيل حالياً'
+                    : 'No orders ready for delivery yet',
               )
-            : ListView.builder(
-                padding: const EdgeInsets.all(16),
-                itemCount: orders.length,
-                itemBuilder: (context, index) {
-                  return _DeliveryOrderCard(order: orders[index], isAr: isAr);
-                },
+            : RefreshIndicator(
+                onRefresh: appProvider.refreshCourierOrders,
+                child: ListView.builder(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: const EdgeInsets.all(16),
+                  itemCount: orders.length,
+                  itemBuilder: (context, index) {
+                    return _DeliveryOrderCard(order: orders[index], isAr: isAr);
+                  },
+                ),
               ),
       ),
     );
@@ -221,21 +239,30 @@ class DeliveryActiveScreen extends StatelessWidget {
           style:
               const TextStyle(fontWeight: FontWeight.bold, fontFamily: 'Cairo'),
         ),
+        trailing: CupertinoButton(
+          padding: EdgeInsets.zero,
+          onPressed: () => appProvider.refreshCourierOrders(),
+          child: const Icon(CupertinoIcons.refresh, size: 22),
+        ),
         border: null,
       ),
       child: SafeArea(
         child: orders.isEmpty
             ? _EmptyCard(
                 text: isAr
-                    ? 'لا توجد طلبات نشطة حاليًا'
+                    ? 'لا توجد طلبات نشطة حالياً'
                     : 'No active deliveries yet',
               )
-            : ListView.builder(
-                padding: const EdgeInsets.all(16),
-                itemCount: orders.length,
-                itemBuilder: (context, index) {
-                  return _ActiveDeliveryCard(order: orders[index], isAr: isAr);
-                },
+            : RefreshIndicator(
+                onRefresh: appProvider.refreshCourierOrders,
+                child: ListView.builder(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: const EdgeInsets.all(16),
+                  itemCount: orders.length,
+                  itemBuilder: (context, index) {
+                    return _ActiveDeliveryCard(order: orders[index], isAr: isAr);
+                  },
+                ),
               ),
       ),
     );
@@ -267,8 +294,8 @@ class DeliveryAccountScreen extends StatelessWidget {
             _TopCard(
               title: isAr ? 'مندوب التوصيل' : 'Delivery Courier',
               subtitle: isAr
-                  ? 'هذا القسم مخصص لإدارة طلبات التوصيل القادمة من المطاعم'
-                  : 'Manage restaurant delivery requests from here',
+                  ? 'إدارة طلبات التوصيل من التجار إلى الزبائن'
+                  : 'Manage deliveries from merchants to customers',
               icon: CupertinoIcons.car_detailed,
             ),
             const SizedBox(height: 16),
@@ -330,8 +357,8 @@ class _DeliveryOrderCard extends StatelessWidget {
               Expanded(
                 child: Text(
                   isAr
-                      ? 'طلب مطعم #${order.orderNumber}'
-                      : 'Restaurant order #${order.orderNumber}',
+                      ? 'طلب #${order.orderNumber}'
+                      : 'Order #${order.orderNumber}',
                   style: const TextStyle(
                       fontWeight: FontWeight.w800, fontFamily: 'Cairo'),
                 ),
@@ -340,13 +367,13 @@ class _DeliveryOrderCard extends StatelessWidget {
                 padding:
                     const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                 decoration: BoxDecoration(
-                  color: Colors.orange.withValues(alpha: 0.1),
+                  color: Colors.green.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(999),
                 ),
                 child: Text(
-                  isAr ? 'جديد' : 'New',
+                  isAr ? 'دفع عند الاستلام' : 'COD',
                   style: const TextStyle(
-                    color: Colors.orange,
+                    color: Colors.green,
                     fontSize: 11,
                     fontWeight: FontWeight.bold,
                     fontFamily: 'Cairo',
@@ -355,17 +382,77 @@ class _DeliveryOrderCard extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 10),
+          if ((order.merchantStoreName ?? '').isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text(
+              isAr
+                  ? 'المتجر: ${order.merchantStoreName}'
+                  : 'Store: ${order.merchantStoreName}',
+              style: const TextStyle(
+                fontFamily: 'Cairo',
+                fontWeight: FontWeight.w700,
+                fontSize: 13,
+              ),
+            ),
+          ],
+          const SizedBox(height: 8),
           Text(
             isAr ? order.itemsNameAr : order.itemsNameEn,
             style: const TextStyle(fontFamily: 'Cairo'),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              const Icon(CupertinoIcons.location_solid,
+                  size: 14, color: Colors.grey),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  isAr ? order.addressAr : order.addressEn,
+                  style: const TextStyle(
+                    fontFamily: 'Cairo',
+                    fontSize: 12,
+                    color: Colors.grey,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Row(
+            children: [
+              const Icon(CupertinoIcons.person_fill,
+                  size: 14, color: Colors.grey),
+              const SizedBox(width: 6),
+              Text(
+                isAr ? order.customerNameAr : order.customerNameEn,
+                style: const TextStyle(fontFamily: 'Cairo', fontSize: 12),
+              ),
+              const Spacer(),
+              CupertinoButton(
+                padding: EdgeInsets.zero,
+                minSize: 0,
+                onPressed: () => AppHelpers.makePhoneCall(order.customerPhone),
+                child: Text(
+                  order.customerPhone,
+                  style: const TextStyle(
+                    fontFamily: 'Cairo',
+                    fontSize: 12,
+                    color: Colors.blue,
+                  ),
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 10),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text('${order.price.toPrice()} د.ع',
-                  style: const TextStyle(fontWeight: FontWeight.w900)),
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w900,
+                    fontFamily: 'Cairo',
+                  )),
               Row(
                 children: [
                   CupertinoButton(
@@ -411,6 +498,7 @@ class _ActiveDeliveryCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final appProvider = Provider.of<AppProvider>(context, listen: false);
     final delivered = order.deliveryStatusKey == 'delivered';
+    final statusKey = order.deliveryStatusKey ?? '';
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
@@ -433,11 +521,27 @@ class _ActiveDeliveryCard extends StatelessWidget {
                 : (order.deliveryStatusEn ?? 'Out for delivery'),
             style: const TextStyle(color: Colors.grey, fontFamily: 'Cairo'),
           ),
+          const SizedBox(height: 8),
+          Text(
+            isAr ? order.addressAr : order.addressEn,
+            style: const TextStyle(fontFamily: 'Cairo', fontSize: 12),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            '${order.price.toPrice()} د.ع — ${isAr ? order.paymentMethodAr : order.paymentMethodEn}',
+            style: const TextStyle(
+              fontFamily: 'Cairo',
+              fontWeight: FontWeight.w800,
+              color: Colors.deepOrange,
+            ),
+          ),
           const SizedBox(height: 12),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.end,
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            alignment: WrapAlignment.end,
             children: [
-              if (order.deliveryStatusKey == 'accepted')
+              if (statusKey == 'accepted')
                 CupertinoButton(
                   padding:
                       const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
@@ -445,11 +549,23 @@ class _ActiveDeliveryCard extends StatelessWidget {
                   borderRadius: BorderRadius.circular(12),
                   minimumSize: Size.zero,
                   onPressed: () => appProvider.markDeliveryPickedUp(order.id),
-                  child: Text(isAr ? 'استلام الطلب' : 'Pick Up',
+                  child: Text(isAr ? 'استلام من المتجر' : 'Pick up',
                       style:
                           const TextStyle(color: Colors.white, fontSize: 12)),
                 ),
-              if (order.deliveryStatusKey == 'picked_up')
+              if (statusKey == 'picked_up')
+                CupertinoButton(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                  color: Colors.blue,
+                  borderRadius: BorderRadius.circular(12),
+                  minimumSize: Size.zero,
+                  onPressed: () => appProvider.markDeliveryOnTheWay(order.id),
+                  child: Text(isAr ? 'في الطريق' : 'On the way',
+                      style:
+                          const TextStyle(color: Colors.white, fontSize: 12)),
+                ),
+              if (statusKey == 'on_way')
                 CupertinoButton(
                   padding:
                       const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
@@ -457,7 +573,7 @@ class _ActiveDeliveryCard extends StatelessWidget {
                   borderRadius: BorderRadius.circular(12),
                   minimumSize: Size.zero,
                   onPressed: () => appProvider.markDeliveryCompleted(order.id),
-                  child: Text(isAr ? 'تم التسليم' : 'Delivered',
+                  child: Text(isAr ? 'تم التسليم + كاش' : 'Delivered + COD',
                       style:
                           const TextStyle(color: Colors.white, fontSize: 12)),
                 ),

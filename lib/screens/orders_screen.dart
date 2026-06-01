@@ -18,6 +18,14 @@ class _OrdersScreenState extends State<OrdersScreen> {
   int _selectedSegment = 0;
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<AppProvider>().refreshCustomerOrders();
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     final appProvider = Provider.of<AppProvider>(context);
     final lang = appProvider.lang;
@@ -170,6 +178,29 @@ class _OrdersScreenState extends State<OrdersScreen> {
                     fontWeight: FontWeight.bold,
                   ),
                 ),
+              ),
+            ),
+          ],
+          if ((order.assignedCourierName ?? '').isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Text(
+              isAr
+                  ? 'المندوب: ${order.assignedCourierName}'
+                  : 'Courier: ${order.assignedCourierName}',
+              style: const TextStyle(
+                fontSize: 11,
+                color: CupertinoColors.systemGrey,
+              ),
+            ),
+          ],
+          if (order.codConfirmed) ...[
+            const SizedBox(height: 6),
+            Text(
+              isAr ? '✓ تم الدفع نقداً' : '✓ Cash payment confirmed',
+              style: const TextStyle(
+                fontSize: 11,
+                color: Colors.green,
+                fontWeight: FontWeight.bold,
               ),
             ),
           ],

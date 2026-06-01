@@ -37,6 +37,10 @@ const {
   listRealEstateListings,
   getMerchantIncomingOrders,
   updateIncomingOrderStatus,
+  getDeliveryPoolOrders,
+  getCourierAssignedOrders,
+  acceptDeliveryOrder,
+  updateCourierDeliveryStatus,
 } = require('./supabase_repo');
 
 const app = express();
@@ -721,6 +725,70 @@ app.put('/db/incoming-order-status', async (req, res) => {
     console.error('update incoming-order-status error:', error);
     const status = String(error?.message || '').includes('not allowed') ? 403 : 500;
     return res.status(status).json({ message: error?.message || 'Failed to update order status.' });
+  }
+});
+
+app.get('/db/delivery-pool', async (req, res) => {
+  try {
+    const phone = requireAuthorizedPhone(req, res, { allowMissing: true });
+    if (!phone) return;
+    const rows = await getDeliveryPoolOrders();
+    return res.json(rows);
+  } catch (error) {
+    console.error('get delivery-pool error:', error);
+    return res.status(500).json({ message: error?.message || 'Failed to load delivery pool.' });
+  }
+});
+
+app.get('/db/courier-orders', async (req, res) => {
+  try {
+    const phone = requireAuthorizedPhone(req, res, { allowMissing: true });
+    if (!phone) return;
+    const rows = await getCourierAssignedOrders(phone);
+    return res.json(rows);
+  } catch (error) {
+    console.error('get courier-orders error:', error);
+    return res.status(500).json({ message: error?.message || 'Failed to load courier orders.' });
+  }
+});
+
+app.put('/db/delivery-order/accept', async (req, res) => {
+  try {
+    const phone = requireAuthorizedPhone(req, res, { allowMissing: true });
+    if (!phone) return;
+    const orderId = String(req.body?.orderId || req.body?.id || '').trim();
+    if (!orderId) {
+      return res.status(400).json({ message: 'Order id is required.' });
+    }
+    const row = await acceptDeliveryOrder(phone, orderId, req.body || {});
+    return res.json(row);
+  } catch (error) {
+    console.error('accept delivery-order error:', error);
+    const message = error?.message || 'Failed to accept delivery order.';
+    const status = message.includes('not available') ? 409 : 500;
+    return res.status(status).json({ message });
+  }
+});
+
+app.put('/db/delivery-order/status', async (req, res) => {
+  try {
+    const phone = requireAuthorizedPhone(req, res, { allowMissing: true });
+    if (!phone) return;
+    const orderId = String(req.body?.orderId || req.body?.id || '').trim();
+    if (!orderId) {
+      return res.status(400).json({ message: 'Order id is required.' });
+    }
+    const row = await updateCourierDeliveryStatus(phone, orderId, {
+      deliveryStatusKey: req.body?.deliveryStatusKey,
+      deliveryStatusAr: req.body?.deliveryStatusAr,
+      deliveryStatusEn: req.body?.deliveryStatusEn,
+    });
+    return res.json(row);
+  } catch (error) {
+    console.error('update delivery-order status error:', error);
+    const message = error?.message || 'Failed to update delivery status.';
+    const status = message.includes('not assigned') ? 403 : 500;
+    return res.status(status).json({ message });
   }
 });
 
