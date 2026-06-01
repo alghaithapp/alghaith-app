@@ -1353,6 +1353,13 @@ class AppProvider extends ChangeNotifier {
 
   /// يرفع بيانات المتجر والمنتجات إلى السحابة ليظهرها الزبون.
   Future<void> syncMerchantCatalogToCloud() async {
+    final phone = _trimmedOrNull(_authPhone) ?? _trimmedOrNull(_customerPhone);
+    if (phone == null) {
+      throw StateError('لا يوجد رقم هاتف مرتبط بالجلسة. أعد تسجيل الدخول.');
+    }
+    if (_sessionToken == null || _sessionToken!.trim().isEmpty) {
+      throw StateError('جلسة الدخول منتهية أو غير متاحة. أعد تسجيل الدخول.');
+    }
     await _syncMerchantDataBeforeLeavingMerchantMode();
   }
 
