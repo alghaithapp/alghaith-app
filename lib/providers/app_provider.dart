@@ -775,12 +775,38 @@ class AppProvider extends ChangeNotifier {
     if (!SupabaseService.isConfigured) return;
     try {
       final rows = await SupabaseService.loadCatalog();
-      _catalogItems = rows.map(_listItemFromCatalogRow).toList();
+      if (rows.isNotEmpty) {
+        _catalogItems = rows.map(_listItemFromCatalogRow).toList();
+      } else {
+        _catalogItems = _buildLocalCatalogFallback();
+      }
       _applyFavoriteSelections();
       notifyListeners();
     } catch (error) {
       debugPrint('CATALOG_LOAD_ERROR: $error');
+      _catalogItems = _buildLocalCatalogFallback();
+      _applyFavoriteSelections();
+      notifyListeners();
     }
+  }
+
+  List<ListItem> _buildLocalCatalogFallback() {
+    if (_items.isEmpty) return const [];
+    final fallbackPhone = _normalizeStoredPhone(
+      _authPhone ?? _customerPhone ?? merchantPhone,
+    );
+    final fallbackStoreName = merchantStoreName;
+    return _items
+        .where((item) => item.isAvailable)
+        .map((item) => item.copyWith(
+              merchantPhone: (item.merchantPhone ?? '').trim().isNotEmpty
+                  ? item.merchantPhone
+                  : (fallbackPhone.isNotEmpty ? fallbackPhone : null),
+              merchantStoreName: (item.merchantStoreName ?? '').trim().isNotEmpty
+                  ? item.merchantStoreName
+                  : (fallbackStoreName.isNotEmpty ? fallbackStoreName : null),
+            ))
+        .toList();
   }
 
   Future<void> refreshMerchantIncomingOrders() => _refreshMerchantIncomingOrders();
@@ -1733,11 +1759,17 @@ class AppProvider extends ChangeNotifier {
     notifyListeners();
     final phone = _normalizeStoredPhone(_authPhone ?? merchantPhone);
     if (phone.isEmpty) return;
-    await _ensureMerchantProfileSynced();
-    await SupabaseService.saveMerchantProduct(
-      phone,
-      _productRowFromListItem(item),
-    );
+    try {
+      await _ensureMerchantProfileSynced();
+      await SupabaseService.saveMerchantProduct(
+        phone,
+        _productRowFromListItem(item),
+      );
+    } catch (error) {
+      _items.removeWhere((product) => product.id == item.id);
+      notifyListeners();
+      rethrow;
+    }
   }
 
   void updateProduct(ListItem updatedItem) {
