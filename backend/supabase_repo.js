@@ -42,6 +42,7 @@ const isLikelyAnonKey = supabaseKeyRole === 'anon';
 const isLikelyServiceRoleKey = supabaseKeyRole === 'service_role';
 
 let supabaseAdmin = null;
+const schemaColumnCache = new Map();
 
 function getSupabaseAdmin() {
   if (supabaseAdmin) return supabaseAdmin;
@@ -105,6 +106,12 @@ function normalizeObject(value) {
   return {};
 }
 
+function isUuid(value) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+    String(value || '').trim()
+  );
+}
+
 async function selectSingle(table, column, value) {
   const supabase = assertSupabaseAdmin();
   const { data, error } = await supabase
@@ -128,6 +135,19 @@ async function selectMany(table, filters = [], orderBy = null) {
   const { data, error } = await query;
   if (error) throw new Error(error.message);
   return Array.isArray(data) ? data : [];
+}
+
+async function hasColumn(table, column) {
+  const cacheKey = `${table}.${column}`;
+  if (schemaColumnCache.has(cacheKey)) {
+    return schemaColumnCache.get(cacheKey);
+  }
+
+  const supabase = assertSupabaseAdmin();
+  const { error } = await supabase.from(table).select(column).limit(1);
+  const exists = !error;
+  schemaColumnCache.set(cacheKey, exists);
+  return exists;
 }
 
 async function saveRow(table, payload, conflictColumn) {
@@ -178,6 +198,13 @@ async function getAppUserId(phone) {
   return appUser?.id ? String(appUser.id) : null;
 }
 
+async function ensureAppUser(phone, seed = {}) {
+  const existing = await getAppUser(phone);
+  if (existing) return existing;
+  await saveAppUser(phone, seed);
+  return getAppUser(phone);
+}
+
 async function saveAppUser(phone, data = {}) {
   const payload = { phone, updated_at: nowIso() };
   assignIfDefined(payload, 'full_name', data.fullName ?? data.full_name);
@@ -195,10 +222,16 @@ async function getCustomerProfile(phone) {
 }
 
 async function saveCustomerProfile(phone, data = {}) {
+  const appUser = await ensureAppUser(phone, data);
   const basePayload = {
-    phone,
     updated_at: nowIso(),
   };
+  if (await hasColumn('customer_profiles', 'phone')) {
+    basePayload.phone = phone;
+  }
+  if (await hasColumn('customer_profiles', 'user_id')) {
+    basePayload.user_id = appUser?.id || null;
+  }
   assignIfDefined(
     basePayload,
     'display_name',
@@ -211,11 +244,10 @@ async function saveCustomerProfile(phone, data = {}) {
   );
   assignIfDefined(basePayload, 'address', data.address);
 
-  return saveRow(
-    'customer_profiles',
-    basePayload,
-    'phone'
-  );
+  const conflictColumn = (await hasColumn('customer_profiles', 'phone'))
+    ? 'phone'
+    : 'user_id';
+  return saveRow('customer_profiles', basePayload, conflictColumn);
 }
 
 async function deleteCustomerProfile(phone) {
@@ -227,6 +259,7 @@ async function getMerchantProfile(phone) {
 }
 
 async function saveMerchantProfile(phone, data = {}) {
+  await ensureAppUser(phone, data);
   const basePayload = { updated_at: nowIso() };
   assignIfDefined(basePayload, 'store_name', data.store_name ?? data.storeName);
   assignIfDefined(basePayload, 'description', data.description);
@@ -281,11 +314,30 @@ async function deleteMerchantProfile(phone) {
 }
 
 async function getCustomerAddresses(phone) {
-  return selectMany(
+  if (await hasColumn('customer_addresses', 'phone')) {
+    return selectMany(
+      'customer_addresses',
+      [{ method: 'eq', column: 'phone', value: phone }],
+      { column: 'sort_order', ascending: true }
+    );
+  }
+
+  const userId = await getAppUserId(phone);
+  if (!userId) return [];
+
+  const orderBy = (await hasColumn('customer_addresses', 'sort_order'))
+    ? { column: 'sort_order', ascending: true }
+    : { column: 'created_at', ascending: false };
+
+  const rows = await selectMany(
     'customer_addresses',
-    [{ method: 'eq', column: 'phone', value: phone }],
-    { column: 'sort_order', ascending: true }
+    [{ method: 'eq', column: 'user_id', value: userId }],
+    orderBy
   );
+  return rows.map((row) => ({
+    ...row,
+    address_text: row.address_text ?? row.address ?? '',
+  }));
 }
 
 async function saveCustomerAddress(phone, data = {}) {
@@ -295,20 +347,46 @@ async function saveCustomerAddress(phone, data = {}) {
   }
   const sortOrder = Number.parseInt(data.sortOrder ?? data.sort_order, 10) || 0;
   const supabase = assertSupabaseAdmin();
-  const existing = await supabase
-    .from('customer_addresses')
-    .select('id')
-    .eq('phone', phone)
-    .eq('address_text', addressText)
-    .maybeSingle();
+  const appUser = await ensureAppUser(phone, data);
+  if (!appUser?.id) {
+    throw new Error('Unable to resolve app user for address.');
+  }
+
+  let existingQuery = supabase.from('customer_addresses').select('id');
+  if (await hasColumn('customer_addresses', 'phone')) {
+    existingQuery = existingQuery.eq('phone', phone);
+  } else {
+    existingQuery = existingQuery.eq('user_id', appUser.id);
+  }
+  existingQuery = existingQuery.eq(
+    (await hasColumn('customer_addresses', 'address_text')) ? 'address_text' : 'address',
+    addressText
+  );
+  const existing = await existingQuery.maybeSingle();
   if (existing.error) throw new Error(existing.error.message);
 
-  const payload = {
-    phone,
-    address_text: addressText,
-    sort_order: sortOrder,
-    updated_at: nowIso(),
-  };
+  const payload = { updated_at: nowIso() };
+  if (await hasColumn('customer_addresses', 'phone')) {
+    payload.phone = phone;
+  }
+  if (await hasColumn('customer_addresses', 'user_id')) {
+    payload.user_id = appUser.id;
+  }
+  if (await hasColumn('customer_addresses', 'address_text')) {
+    payload.address_text = addressText;
+  }
+  if (await hasColumn('customer_addresses', 'address')) {
+    payload.address = addressText;
+  }
+  if (await hasColumn('customer_addresses', 'sort_order')) {
+    payload.sort_order = sortOrder;
+  }
+  if (await hasColumn('customer_addresses', 'label')) {
+    payload.label = String(data.label || 'عنوان محفوظ');
+  }
+  if (await hasColumn('customer_addresses', 'is_default')) {
+    payload.is_default = Boolean(data.is_default ?? false);
+  }
 
   if (existing.data?.id) {
     const { data: updated, error } = await supabase
@@ -332,18 +410,36 @@ async function saveCustomerAddress(phone, data = {}) {
 
 async function deleteCustomerAddress(phone, address) {
   const supabase = assertSupabaseAdmin();
-  const { error } = await supabase
-    .from('customer_addresses')
-    .delete()
-    .eq('phone', phone)
-    .eq('address_text', address);
+  let query = supabase.from('customer_addresses').delete();
+  if (await hasColumn('customer_addresses', 'phone')) {
+    query = query.eq('phone', phone);
+  } else {
+    const userId = await getAppUserId(phone);
+    if (!userId) return;
+    query = query.eq('user_id', userId);
+  }
+  query = query.eq(
+    (await hasColumn('customer_addresses', 'address_text')) ? 'address_text' : 'address',
+    address
+  );
+  const { error } = await query;
   if (error) throw new Error(error.message);
 }
 
 async function getCustomerFavorites(phone) {
+  if (await hasColumn('customer_favorites', 'phone')) {
+    return selectMany(
+      'customer_favorites',
+      [{ method: 'eq', column: 'phone', value: phone }],
+      { column: 'created_at', ascending: false }
+    );
+  }
+
+  const userId = await getAppUserId(phone);
+  if (!userId) return [];
   return selectMany(
     'customer_favorites',
-    [{ method: 'eq', column: 'phone', value: phone }],
+    [{ method: 'eq', column: 'user_id', value: userId }],
     { column: 'created_at', ascending: false }
   );
 }
@@ -355,39 +451,63 @@ async function saveCustomerFavorite(phone, data = {}) {
   }
   const isFavorite = data.isFavorite !== false && data.is_favorite !== false;
   const supabase = assertSupabaseAdmin();
+  const appUser = await ensureAppUser(phone, data);
+  if (!appUser?.id) {
+    throw new Error('Unable to resolve app user for favorite.');
+  }
+
+  // Some legacy databases still keep product_id as uuid while parts of the app
+  // can generate text ids. Ignore those writes instead of breaking the session.
+  if (!isUuid(productId)) {
+    return null;
+  }
 
   if (!isFavorite) {
-    const { error } = await supabase
-      .from('customer_favorites')
-      .delete()
-      .eq('phone', phone)
-      .eq('product_id', productId);
+    let removeQuery = supabase.from('customer_favorites').delete();
+    if (await hasColumn('customer_favorites', 'phone')) {
+      removeQuery = removeQuery.eq('phone', phone);
+    } else {
+      removeQuery = removeQuery.eq('user_id', appUser.id);
+    }
+    const { error } = await removeQuery.eq('product_id', productId);
     if (error) throw new Error(error.message);
     return null;
   }
 
   const payload = {
-    phone,
     product_id: productId,
     updated_at: nowIso(),
   };
+  if (await hasColumn('customer_favorites', 'phone')) {
+    payload.phone = phone;
+  }
+  if (await hasColumn('customer_favorites', 'user_id')) {
+    payload.user_id = appUser.id;
+  }
 
-  const existing = await supabase
+  let existingQuery = supabase
     .from('customer_favorites')
-    .select('phone, product_id')
-    .eq('phone', phone)
-    .eq('product_id', productId)
-    .maybeSingle();
+    .select('product_id')
+    .eq('product_id', productId);
+  if (await hasColumn('customer_favorites', 'phone')) {
+    existingQuery = existingQuery.eq('phone', phone);
+  } else {
+    existingQuery = existingQuery.eq('user_id', appUser.id);
+  }
+  const existing = await existingQuery.maybeSingle();
   if (existing.error) throw new Error(existing.error.message);
 
   if (existing.data) {
-    const { data: updated, error } = await supabase
+    let updateQuery = supabase
       .from('customer_favorites')
       .update(payload)
-      .eq('phone', phone)
-      .eq('product_id', productId)
-      .select()
-      .maybeSingle();
+      .eq('product_id', productId);
+    if (await hasColumn('customer_favorites', 'phone')) {
+      updateQuery = updateQuery.eq('phone', phone);
+    } else {
+      updateQuery = updateQuery.eq('user_id', appUser.id);
+    }
+    const { data: updated, error } = await updateQuery.select().maybeSingle();
     if (error) throw new Error(error.message);
     return updated || null;
   }
@@ -410,6 +530,7 @@ async function getCustomerOrders(phone) {
 }
 
 async function saveCustomerOrder(phone, data = {}) {
+  await ensureAppUser(phone, data);
   const order = normalizeObject(data.order ?? data.order_payload);
   const orderId = String(order.id ?? data.id ?? '').trim();
   if (!orderId) {
@@ -438,6 +559,7 @@ async function getUserState(phone) {
 }
 
 async function saveUserState(phone, state = {}) {
+  await ensureAppUser(phone);
   const payload = {
     phone,
     state,
@@ -459,6 +581,7 @@ async function getMerchantProducts(phone) {
 }
 
 async function saveMerchantProduct(phone, data = {}) {
+  await ensureAppUser(phone, data);
   const payload = {
     id:
       data.id && String(data.id).trim().length > 0
