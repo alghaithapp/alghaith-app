@@ -157,13 +157,33 @@ class AppProvider extends ChangeNotifier {
         return parsed;
       }
     }
+    final serviceIdsSnake = _merchantStore?['service_ids'];
+    if (serviceIdsSnake is List) {
+      final parsed = serviceIdsSnake
+          .map((item) => item.toString())
+          .where((item) => item.isNotEmpty)
+          .toList();
+      if (parsed.isNotEmpty) {
+        return parsed;
+      }
+    }
     final categoryId = merchantCategoryId;
-    return categoryId.isNotEmpty ? [categoryId] : const [];
+    if (categoryId.isNotEmpty) return [categoryId];
+    final primary =
+        (_merchantStore?['primary_service_id'] as String?)?.trim() ?? '';
+    if (primary.isNotEmpty) return [primary];
+    return const ['restaurant'];
   }
 
-  String get merchantActiveServiceId =>
-      (_merchantStore?['activeServiceId'] as String?)?.trim() ??
-      (merchantServiceIds.isNotEmpty ? merchantServiceIds.first : '');
+  String get merchantActiveServiceId {
+    final activeCamel =
+        (_merchantStore?['activeServiceId'] as String?)?.trim() ?? '';
+    if (activeCamel.isNotEmpty) return activeCamel;
+    final activeSnake =
+        (_merchantStore?['active_service_id'] as String?)?.trim() ?? '';
+    if (activeSnake.isNotEmpty) return activeSnake;
+    return merchantServiceIds.first;
+  }
 
   bool get merchantHasMultipleServices => merchantServiceIds.length > 1;
 
@@ -1452,6 +1472,7 @@ class AppProvider extends ChangeNotifier {
       'price': item.price,
       'rating': item.rating ?? 4.8,
       'category': item.category,
+      'service_id': item.category,
       'sub_category': item.subCategory,
       'category_label_ar': item.categoryLabelAr,
       'category_label_en': item.categoryLabelEn,
@@ -1766,9 +1787,10 @@ class AppProvider extends ChangeNotifier {
         _productRowFromListItem(item),
       );
     } catch (error) {
-      _items.removeWhere((product) => product.id == item.id);
-      notifyListeners();
-      rethrow;
+      debugPrint('SAVE_PRODUCT_REMOTE_ERROR: $error');
+      // لا نحذف المنتج محليًا حتى لا يشعر المستخدم أن زر الإضافة لا يعمل.
+      // نحاول المزامنة لاحقًا في الخلفية.
+      unawaited(_persistMerchantItems());
     }
   }
 
