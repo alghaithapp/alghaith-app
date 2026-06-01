@@ -209,8 +209,8 @@ export default {
 
       // --- Image Upload Endpoint ---
       if (url.pathname === '/upload' && request.method === 'POST') {
-        const contentType = request.headers.get('content-type') || '';
-        if (!contentType.includes('multipart/form-data')) {
+        const requestContentType = request.headers.get('content-type') || '';
+        if (!requestContentType.includes('multipart/form-data')) {
           return json({ success: false, message: 'Invalid content type' }, 400);
         }
 
@@ -244,14 +244,14 @@ export default {
         const fileName = `${Date.now()}_${safeName}`;
         const objectPath = `${bucket}/${fileName}`;
         const uploadUrl = `${supabaseUrl}/storage/v1/object/${objectPath}`;
-        const contentType = file.type || 'image/jpeg';
+        const fileContentType = file.type || 'image/jpeg';
 
         const uploadResponse = await fetch(uploadUrl, {
           method: 'POST',
           headers: {
             Authorization: `Bearer ${supabaseKey}`,
             apikey: supabaseKey,
-            'Content-Type': contentType,
+            'Content-Type': fileContentType,
             'x-upsert': 'true',
             'cache-control': '3600',
           },
