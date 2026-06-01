@@ -596,7 +596,7 @@ async function getMerchantProducts(phone) {
 }
 
 async function saveMerchantProduct(phone, data = {}) {
-  await ensureAppUser(phone, data);
+  const appUser = await ensureAppUser(phone, data);
   const payload = {
     id:
       data.id && String(data.id).trim().length > 0
@@ -605,6 +605,14 @@ async function saveMerchantProduct(phone, data = {}) {
     phone,
     updated_at: nowIso(),
   };
+  if (await hasColumn('merchant_products', 'merchant_user_id')) {
+    payload.merchant_user_id = appUser?.id || null;
+  }
+  if (await hasColumn('merchant_products', 'service_id')) {
+    payload.service_id = String(
+      data.service_id ?? data.serviceId ?? data.category ?? 'restaurant'
+    ).trim() || 'restaurant';
+  }
   assignIfDefined(payload, 'name_ar', data.name_ar ?? data.nameAr ?? '');
   assignIfDefined(payload, 'name_en', data.name_en ?? data.nameEn ?? '');
   assignIfDefined(
