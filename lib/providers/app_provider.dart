@@ -50,6 +50,8 @@ class AppProvider extends ChangeNotifier {
   String _customerName = '';
   String _customerPhone = '';
   String _customerAddress = '';
+  double? _customerLatitude;
+  double? _customerLongitude;
   String? _customerAvatarBase64;
 
   AppProvider() {
@@ -132,6 +134,8 @@ class AppProvider extends ChangeNotifier {
   String get customerName => _customerName;
   String get customerPhone => _customerPhone;
   String get customerAddress => _customerAddress;
+  double? get customerLatitude => _customerLatitude;
+  double? get customerLongitude => _customerLongitude;
   ThemeMode get themeMode => _darkMode ? ThemeMode.dark : ThemeMode.light;
   bool get isMerchant => _userRole == 'merchant';
   bool get isDelivery => _userRole == 'delivery';
@@ -208,6 +212,12 @@ class AppProvider extends ChangeNotifier {
       (_merchantStore?['whatsapp'] as String?)?.trim() ?? merchantPhone;
   String get merchantAddress =>
       (_merchantStore?['address'] as String?)?.trim() ?? '';
+  double? get merchantLatitude =>
+      _toDoubleValue(_merchantStore?['latitude']) ??
+      _toDoubleValue(_merchantStore?['lat']);
+  double? get merchantLongitude =>
+      _toDoubleValue(_merchantStore?['longitude']) ??
+      _toDoubleValue(_merchantStore?['lng']);
   String get merchantOpenTime =>
       (_merchantStore?['openTime'] as String?)?.trim() ?? '';
   String get merchantCloseTime =>
@@ -223,6 +233,11 @@ class AppProvider extends ChangeNotifier {
       (_merchantStore?['rating'] as num?)?.toDouble() ?? 0.0;
   String? get merchantProfileImageUrl =>
       _merchantStore?['profileImageUrl'] as String?;
+
+  double? _toDoubleValue(dynamic value) {
+    if (value is num) return value.toDouble();
+    return double.tryParse(value?.toString() ?? '');
+  }
   List<String> get merchantWorkSampleUrls {
     if (merchantActiveServiceId == 'restaurant') {
       return const [];
@@ -356,6 +371,8 @@ class AppProvider extends ChangeNotifier {
       customerName: _customerName,
       customerPhone: _customerPhone,
       customerAddress: _customerAddress,
+      customerLatitude: _customerLatitude,
+      customerLongitude: _customerLongitude,
       customerAvatarRef: _customerAvatarBase64,
       darkMode: _darkMode,
       driverType: _driverType,
@@ -383,6 +400,14 @@ class AppProvider extends ChangeNotifier {
         _trimmedOrNull(snapshot['customerPhone']?.toString()) ?? _customerPhone;
     _customerAddress = _trimmedOrNull(snapshot['customerAddress']?.toString()) ??
         _customerAddress;
+    final customerLat = snapshot['customerLatitude'];
+    if (customerLat is num) {
+      _customerLatitude = customerLat.toDouble();
+    }
+    final customerLng = snapshot['customerLongitude'];
+    if (customerLng is num) {
+      _customerLongitude = customerLng.toDouble();
+    }
     _customerAvatarBase64 = _trimmedOrNull(
             snapshot['customerAvatarBase64']?.toString() ??
                 snapshot['customerAvatarUrl']?.toString()) ??
@@ -529,6 +554,14 @@ class AppProvider extends ChangeNotifier {
         _customerAddress =
             _trimmedOrNull(customerProfile['address']?.toString()) ??
                 _customerAddress;
+        _customerLatitude =
+            (customerProfile['latitude'] as num?)?.toDouble() ??
+                (customerProfile['lat'] as num?)?.toDouble() ??
+                _customerLatitude;
+        _customerLongitude =
+            (customerProfile['longitude'] as num?)?.toDouble() ??
+                (customerProfile['lng'] as num?)?.toDouble() ??
+                _customerLongitude;
         _customerAvatarBase64 =
             _trimmedOrNull(customerProfile['avatar_base64']?.toString() ??
                     customerProfile['avatar_url']?.toString()) ??
@@ -568,7 +601,8 @@ class AppProvider extends ChangeNotifier {
         _orders = List<ActiveOrder>.from(remoteOrders);
       }
 
-      if (remoteProducts.isNotEmpty && _userRole == 'merchant') {
+      if (remoteProducts.isNotEmpty &&
+          (_userRole == 'merchant' || _items.isEmpty)) {
         _items = remoteProducts
             .map((row) => _listItemFromProductRow(row))
             .toList();
@@ -843,6 +877,8 @@ class AppProvider extends ChangeNotifier {
       _authPhone ?? _customerPhone ?? merchantPhone,
     );
     final fallbackStoreName = merchantStoreName;
+    final fallbackLat = merchantLatitude;
+    final fallbackLng = merchantLongitude;
     return _items
         .where((item) => item.isAvailable)
         .map((item) => item.copyWith(
@@ -852,6 +888,8 @@ class AppProvider extends ChangeNotifier {
               merchantStoreName: (item.merchantStoreName ?? '').trim().isNotEmpty
                   ? item.merchantStoreName
                   : (fallbackStoreName.isNotEmpty ? fallbackStoreName : null),
+              merchantLatitude: item.merchantLatitude ?? fallbackLat,
+              merchantLongitude: item.merchantLongitude ?? fallbackLng,
             ))
         .toList();
   }
@@ -942,6 +980,8 @@ class AppProvider extends ChangeNotifier {
       'courierProfile': _courierProfile,
       'accountType': _accountType,
       'customerPhone': _customerPhone,
+      'customerLatitude': _customerLatitude,
+      'customerLongitude': _customerLongitude,
       'userRole': _userRole,
       'customerName': _customerName,
       'customerAvatarBase64': _customerAvatarBase64,
@@ -952,6 +992,7 @@ class AppProvider extends ChangeNotifier {
       'merchantOffers': _merchantOffers.map((offer) => offer.toMap()).toList(),
       'merchantReviews':
           _merchantReviews.map((review) => review.toMap()).toList(),
+      'items': _items.map((item) => item.toMap()).toList(),
       if (_merchantStore != null) 'merchantStore': _merchantStore,
       'merchantProfileComplete': hasCompletedMerchantProfile,
     };
@@ -965,6 +1006,9 @@ class AppProvider extends ChangeNotifier {
       'phone': row['phone']?.toString() ?? '',
       'whatsapp': row['whatsapp']?.toString() ?? '',
       'address': row['address']?.toString() ?? '',
+      'latitude': _toDoubleValue(row['latitude']) ?? _toDoubleValue(row['lat']),
+      'longitude':
+          _toDoubleValue(row['longitude']) ?? _toDoubleValue(row['lng']),
       'openTime': row['open_time']?.toString() ?? '',
       'closeTime': row['close_time']?.toString() ?? '',
       'deliveryFee': row['delivery_fee'] is num
@@ -1011,6 +1055,10 @@ class AppProvider extends ChangeNotifier {
     _hasAdminAccess = state['adminAccess'] == true;
     _customerPhone =
         _trimmedOrNull(state['customerPhone']?.toString()) ?? _customerPhone;
+    _customerLatitude =
+        (state['customerLatitude'] as num?)?.toDouble() ?? _customerLatitude;
+    _customerLongitude =
+        (state['customerLongitude'] as num?)?.toDouble() ?? _customerLongitude;
     _userRole = _trimmedOrNull(state['userRole']?.toString()) ?? _userRole;
     _normalizeDriverProfileForRole();
     if (_customerName.trim().isEmpty) {
@@ -1041,6 +1089,14 @@ class AppProvider extends ChangeNotifier {
           .whereType<Map>()
           .map((item) =>
               MerchantReview.fromMap(Map<String, dynamic>.from(item)))
+          .toList();
+    }
+
+    final items = state['items'];
+    if (items is List && (_items.isEmpty || _userRole == 'merchant')) {
+      _items = items
+          .whereType<Map>()
+          .map((item) => ListItem.fromMap(Map<String, dynamic>.from(item)))
           .toList();
     }
 
@@ -1090,11 +1146,15 @@ class AppProvider extends ChangeNotifier {
     String? name,
     String? phone,
     String? address,
+    double? latitude,
+    double? longitude,
     String? avatarBase64,
   }) async {
     if (name != null && name.trim().isNotEmpty) _customerName = name.trim();
     if (phone != null && phone.trim().isNotEmpty) _customerPhone = _normalizeStoredPhone(phone);
     if (address != null && address.trim().isNotEmpty) _customerAddress = address.trim();
+    if (latitude != null && latitude.isFinite) _customerLatitude = latitude;
+    if (longitude != null && longitude.isFinite) _customerLongitude = longitude;
     if (avatarBase64 != null) {
       _customerAvatarBase64 =
           ImageStorageService.normalizeImageRef(avatarBase64);
@@ -1118,6 +1178,8 @@ class AppProvider extends ChangeNotifier {
         await SupabaseService.saveCustomerProfile(phoneId, {
           'display_name': _customerName,
           'address': _customerAddress,
+          'latitude': _customerLatitude,
+          'longitude': _customerLongitude,
           ...ImageStorageService.customerAvatarFields(_customerAvatarBase64),
         });
         await SupabaseService.saveUserState(phoneId, _buildRemoteState());
@@ -1225,6 +1287,8 @@ class AppProvider extends ChangeNotifier {
                   _merchantStore?['primaryServiceId'],
           'whatsapp': _normalizeStoredPhone(_merchantStore?['whatsapp']?.toString() ?? ''),
           'address': _merchantStore?['address'],
+          'latitude': _merchantStore?['latitude'] ?? _merchantStore?['lat'],
+          'longitude': _merchantStore?['longitude'] ?? _merchantStore?['lng'],
           if (openTime != null) 'open_time': openTime,
           if (closeTime != null) 'close_time': closeTime,
           'delivery_areas': _merchantStore?['deliveryAreas'] ?? _merchantStore?['delivery_areas'],
@@ -1265,7 +1329,12 @@ class AppProvider extends ChangeNotifier {
   }
 
   Future<void> _persistMerchantItems() async {
-    await _ensureMerchantProfileSynced();
+    try {
+      await _ensureMerchantProfileSynced();
+    } catch (error) {
+      debugPrint('MERCHANT_PROFILE_SYNC_SKIPPED_WHILE_SAVING_ITEMS: $error');
+      // لا نوقف مزامنة المنتجات إذا تعذر حفظ بيانات المتجر.
+    }
     final phone = _normalizeStoredPhone(_authPhone ?? merchantPhone);
     if (phone.isNotEmpty) {
       for (final item in _items) {
@@ -1273,6 +1342,11 @@ class AppProvider extends ChangeNotifier {
             phone, _productRowFromListItem(item));
       }
     }
+    final statePhone = _trimmedOrNull(_authPhone) ?? _trimmedOrNull(_customerPhone);
+    if (statePhone != null) {
+      await SupabaseService.saveUserState(statePhone, _buildRemoteState());
+    }
+    await _persistLocalBackup();
   }
 
   Future<void> addMerchantOffer(MerchantOffer offer) async {
@@ -1439,6 +1513,10 @@ class AppProvider extends ChangeNotifier {
         : (category.isNotEmpty ? <String>[category] : <String>[]);
     final activeServiceId = (storeData['activeServiceId'] as String?)?.trim() ??
         (normalizedServiceIds.isNotEmpty ? normalizedServiceIds.first : '');
+    final latitude =
+        _toDoubleValue(storeData['latitude']) ?? _toDoubleValue(storeData['lat']);
+    final longitude = _toDoubleValue(storeData['longitude']) ??
+        _toDoubleValue(storeData['lng']);
     _merchantStore = {
       'name': (storeData['name'] as String?)?.trim() ?? '',
       'description': (storeData['description'] as String?)?.trim() ?? '',
@@ -1458,6 +1536,8 @@ class AppProvider extends ChangeNotifier {
       'phone': (storeData['phone'] as String?)?.trim() ?? '',
       'whatsapp': (storeData['whatsapp'] as String?)?.trim() ?? '',
       'address': (storeData['address'] as String?)?.trim() ?? '',
+      'latitude': latitude,
+      'longitude': longitude,
       'openTime': (storeData['openTime'] as String?)?.trim() ?? '',
       'closeTime': (storeData['closeTime'] as String?)?.trim() ?? '',
       'isOpen': true,
@@ -1505,6 +1585,26 @@ class AppProvider extends ChangeNotifier {
     _merchantStore!['activeServiceId'] = serviceId;
     notifyListeners();
     unawaited(_persistMerchantStoreAndState());
+  }
+
+  Future<void> addMerchantService(String serviceId) async {
+    if (_merchantStore == null) return;
+    final normalized = serviceId.trim();
+    if (normalized.isEmpty) return;
+    final current = merchantServiceIds;
+    if (current.contains(normalized)) {
+      await setMerchantActiveService(normalized);
+      return;
+    }
+    final updated = <String>[...current, normalized];
+    _merchantStore!['serviceIds'] = updated;
+    _merchantStore!['activeServiceId'] = normalized;
+    _merchantStore!['category'] =
+        (_merchantStore?['category'] as String?)?.trim().isNotEmpty == true
+            ? _merchantStore?['category']
+            : updated.first;
+    notifyListeners();
+    await _persistMerchantStoreAndState();
   }
 
   List<ListItem> get merchantItems {
@@ -1572,6 +1672,10 @@ class AppProvider extends ChangeNotifier {
           row['merchant_phone']?.toString() ?? row['phone']?.toString(),
       merchantStoreName: row['merchant_store_name']?.toString() ?? '',
       address: row['merchant_address']?.toString() ?? row['address']?.toString(),
+      merchantLatitude:
+          _toDoubleValue(row['merchant_latitude']) ?? _toDoubleValue(row['latitude']),
+      merchantLongitude:
+          _toDoubleValue(row['merchant_longitude']) ?? _toDoubleValue(row['longitude']),
     );
   }
 
@@ -1680,6 +1784,8 @@ class AppProvider extends ChangeNotifier {
         merchantPhone: item.merchantPhone,
         merchantStoreName: item.merchantStoreName,
         merchantAddress: item.address,
+        merchantLatitude: item.merchantLatitude,
+        merchantLongitude: item.merchantLongitude,
       ));
     }
     notifyListeners();
@@ -1786,6 +1892,103 @@ class AppProvider extends ChangeNotifier {
 
   int get productCount => _items.length;
 
+  String _statusArFromKey(String statusKey) {
+    switch (statusKey) {
+      case 'pending':
+        return 'بانتظار الموافقة';
+      case 'accepted':
+        return 'تمت الموافقة';
+      case 'completed':
+        return 'مكتمل';
+      case 'cancelled':
+        return 'ملغي';
+      case 'cancel_requested':
+        return 'طلب إلغاء بانتظار موافقة التاجر';
+      default:
+        return statusKey;
+    }
+  }
+
+  String _statusEnFromKey(String statusKey) {
+    switch (statusKey) {
+      case 'pending':
+        return 'Pending Approval';
+      case 'accepted':
+        return 'Approved';
+      case 'completed':
+        return 'Completed';
+      case 'cancelled':
+        return 'Cancelled';
+      case 'cancel_requested':
+        return 'Cancellation Requested';
+      default:
+        return statusKey;
+    }
+  }
+
+  bool requestCustomerOrderCancellation(String orderId) {
+    final index = _orders.indexWhere((order) => order.id == orderId);
+    if (index == -1) return false;
+    final order = _orders[index];
+    if (order.statusKey == 'completed' ||
+        order.statusKey == 'cancelled' ||
+        order.statusKey == 'rejected' ||
+        order.statusKey == 'cancel_requested') {
+      return false;
+    }
+    final noteEn = '__cancel_prev:${order.statusKey}__';
+    updateOrderStatus(
+      orderId,
+      'cancel_requested',
+      'طلب إلغاء بانتظار موافقة التاجر',
+      'Cancellation requested',
+      noteAr: 'تم إرسال طلب الإلغاء إلى التاجر بانتظار الموافقة.',
+      noteEn: noteEn,
+    );
+    return true;
+  }
+
+  bool resolveCustomerCancellationRequestByMerchant(
+    String orderId, {
+    required bool approve,
+  }) {
+    final index =
+        _merchantIncomingOrders.indexWhere((item) => item.id == orderId);
+    if (index == -1) return false;
+    final order = _merchantIncomingOrders[index];
+    if (order.statusKey != 'cancel_requested') return false;
+
+    final noteEn = order.noteEn;
+    final match = RegExp(r'^__cancel_prev:([a-z_]+)__').firstMatch(noteEn);
+    final previousStatus = match?.group(1) ?? 'pending';
+
+    if (approve) {
+      updateOrderStatus(
+        orderId,
+        'cancelled',
+        'تم إلغاء الطلب بموافقة التاجر',
+        'Cancelled by merchant approval',
+        noteAr: 'تمت الموافقة على إلغاء الطلب.',
+        noteEn: 'Merchant approved cancellation.',
+      );
+      return true;
+    }
+
+    final restoredStatus =
+        previousStatus == 'accepted' || previousStatus == 'pending'
+            ? previousStatus
+            : 'pending';
+    updateOrderStatus(
+      orderId,
+      restoredStatus,
+      _statusArFromKey(restoredStatus),
+      _statusEnFromKey(restoredStatus),
+      noteAr: 'تم رفض طلب الإلغاء من التاجر.',
+      noteEn: 'Merchant rejected cancellation request.',
+    );
+    return true;
+  }
+
   void updateOrderStatus(
     String orderId,
     String newStatusKey,
@@ -1832,6 +2035,8 @@ class AppProvider extends ChangeNotifier {
       merchantStoreName: order.merchantStoreName,
       requiresDelivery: order.requiresDelivery,
       codConfirmed: order.codConfirmed,
+      customerLatitude: order.customerLatitude,
+      customerLongitude: order.customerLongitude,
     );
     list[index] = updated;
     if (isMerchant) {
@@ -1859,11 +2064,21 @@ class AppProvider extends ChangeNotifier {
     final phone = _normalizeStoredPhone(_authPhone ?? merchantPhone);
     if (phone.isEmpty) return;
     try {
-      await _ensureMerchantProfileSynced();
+      try {
+        await _ensureMerchantProfileSynced();
+      } catch (error) {
+        debugPrint('MERCHANT_PROFILE_SYNC_SKIPPED_ON_ADD_PRODUCT: $error');
+      }
       await SupabaseService.saveMerchantProduct(
         phone,
         _productRowFromListItem(item),
       );
+      final statePhone =
+          _trimmedOrNull(_authPhone) ?? _trimmedOrNull(_customerPhone);
+      if (statePhone != null) {
+        await SupabaseService.saveUserState(statePhone, _buildRemoteState());
+      }
+      await _persistLocalBackup();
     } catch (error) {
       debugPrint('SAVE_PRODUCT_REMOTE_ERROR: $error');
       // لا نحذف المنتج محليًا حتى لا يشعر المستخدم أن زر الإضافة لا يعمل.
@@ -1877,6 +2092,7 @@ class AppProvider extends ChangeNotifier {
     if (index == -1) return;
     _items[index] = updatedItem;
     unawaited(_persistMerchantItems());
+    unawaited(_persistLocalBackup());
     notifyListeners();
   }
 
@@ -1886,6 +2102,7 @@ class AppProvider extends ChangeNotifier {
       unawaited(SupabaseService.deleteMerchantProduct(id, phone: _authPhone));
     }
     unawaited(_persistMerchantItems());
+    unawaited(_persistLocalBackup());
     notifyListeners();
   }
 
@@ -1938,7 +2155,7 @@ class AppProvider extends ChangeNotifier {
         customerPhone: _customerPhone,
         addressAr: finalAddressAr,
         addressEn: finalAddressEn,
-        noteAr: orderDeliveryFee > 0 ? 'رسوم التوصيل: ${orderDeliveryFee.toLocaleString()} د.ع' : '',
+        noteAr: orderDeliveryFee > 0 ? 'رسوم التوصيل: $orderDeliveryFee د.ع' : '',
         noteEn: orderDeliveryFee > 0 ? 'Delivery fee: $orderDeliveryFee IQD' : '',
         paymentMethodAr: 'نقداً عند الاستلام',
         paymentMethodEn: 'Cash on Delivery',
@@ -1962,6 +2179,8 @@ class AppProvider extends ChangeNotifier {
             items.any((item) => item.category == 'restaurant'),
         requiresDelivery: true,
         codConfirmed: false,
+        customerLatitude: _customerLatitude,
+        customerLongitude: _customerLongitude,
         deliveryStatusKey: null,
         deliveryStatusAr: null,
         deliveryStatusEn: null,
@@ -2108,6 +2327,8 @@ class AppProvider extends ChangeNotifier {
     _customerName = '';
     _customerPhone = '';
     _customerAddress = '';
+    _customerLatitude = null;
+    _customerLongitude = null;
     _customerAvatarBase64 = null;
     _favoriteItemIds.clear();
 
@@ -2170,10 +2391,49 @@ class AppProvider extends ChangeNotifier {
             .contains(order.deliveryStatusKey);
       }));
 
+  int _deliveryFeeFromOrder(ActiveOrder order) {
+    final arMatch = RegExp(r'رسوم التوصيل:\s*(\d+)').firstMatch(order.noteAr);
+    if (arMatch != null) {
+      return int.tryParse(arMatch.group(1) ?? '') ?? 0;
+    }
+    final enMatch = RegExp(r'Delivery fee:\s*(\d+)').firstMatch(order.noteEn);
+    if (enMatch != null) {
+      return int.tryParse(enMatch.group(1) ?? '') ?? 0;
+    }
+    return 0;
+  }
+
+  int courierDeliveryFeeForOrder(ActiveOrder order) => _deliveryFeeFromOrder(order);
+
+  bool _isDeliveredWithinDays(ActiveOrder order, int days) {
+    final deliveredAt = order.deliveredAt;
+    if (deliveredAt == null || deliveredAt.trim().isEmpty) return false;
+    final parsed = DateTime.tryParse(deliveredAt.trim());
+    if (parsed == null) return false;
+    final now = DateTime.now();
+    if (days <= 1) {
+      return DateUtils.isSameDay(parsed.toLocal(), now);
+    }
+    final diff = now.difference(parsed.toLocal());
+    return !diff.isNegative && diff <= Duration(days: days);
+  }
+
   int get courierTotalEarnings => deliveryCompletedOrders.fold<int>(
         0,
-        (sum, order) => sum + order.price,
+        (sum, order) => sum + _deliveryFeeFromOrder(order),
       );
+
+  int get courierTodayEarnings => deliveryCompletedOrders
+      .where((order) => _isDeliveredWithinDays(order, 1))
+      .fold<int>(0, (sum, order) => sum + _deliveryFeeFromOrder(order));
+
+  int get courierWeeklyEarnings => deliveryCompletedOrders
+      .where((order) => _isDeliveredWithinDays(order, 7))
+      .fold<int>(0, (sum, order) => sum + _deliveryFeeFromOrder(order));
+
+  int get courierMonthlyEarnings => deliveryCompletedOrders
+      .where((order) => _isDeliveredWithinDays(order, 30))
+      .fold<int>(0, (sum, order) => sum + _deliveryFeeFromOrder(order));
 
   int get courierCompletedCount => deliveryCompletedOrders.length;
 

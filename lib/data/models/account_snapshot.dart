@@ -9,6 +9,8 @@ class AccountSnapshot {
     this.customerName = '',
     this.customerPhone = '',
     this.customerAddress = '',
+    this.customerLatitude,
+    this.customerLongitude,
     this.customerAvatarRef,
     this.darkMode = false,
     this.driverType,
@@ -30,6 +32,8 @@ class AccountSnapshot {
   final String customerName;
   final String customerPhone;
   final String customerAddress;
+  final double? customerLatitude;
+  final double? customerLongitude;
   final String? customerAvatarRef;
   final bool darkMode;
   final String? driverType;
@@ -52,6 +56,8 @@ class AccountSnapshot {
       'customerName': customerName,
       'customerPhone': customerPhone,
       'customerAddress': customerAddress,
+      'customerLatitude': customerLatitude,
+      'customerLongitude': customerLongitude,
       'customerAvatarBase64': customerAvatarRef,
       'darkMode': darkMode,
       'driverType': driverType,
@@ -76,6 +82,8 @@ class AccountSnapshot {
       customerName: json['customerName']?.toString() ?? '',
       customerPhone: json['customerPhone']?.toString() ?? '',
       customerAddress: json['customerAddress']?.toString() ?? '',
+      customerLatitude: (json['customerLatitude'] as num?)?.toDouble(),
+      customerLongitude: (json['customerLongitude'] as num?)?.toDouble(),
       customerAvatarRef: json['customerAvatarBase64']?.toString(),
       darkMode: json['darkMode'] as bool? ?? false,
       driverType: json['driverType']?.toString(),

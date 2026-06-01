@@ -411,6 +411,18 @@ async function saveMerchantProfile(phone, data = {}) {
     assignIfDefined(basePayload, 'whatsapp', data.whatsapp);
   }
   assignIfDefined(basePayload, 'address', data.address);
+  if (await hasColumn('merchant_profiles', 'latitude')) {
+    assignIfDefined(basePayload, 'latitude', data.latitude ?? data.lat);
+  }
+  if (await hasColumn('merchant_profiles', 'longitude')) {
+    assignIfDefined(basePayload, 'longitude', data.longitude ?? data.lng);
+  }
+  if (await hasColumn('merchant_profiles', 'lat')) {
+    assignIfDefined(basePayload, 'lat', data.latitude ?? data.lat);
+  }
+  if (await hasColumn('merchant_profiles', 'lng')) {
+    assignIfDefined(basePayload, 'lng', data.longitude ?? data.lng);
+  }
   assignIfDefined(basePayload, 'open_time', data.open_time ?? data.openTime);
   assignIfDefined(basePayload, 'close_time', data.close_time ?? data.closeTime);
   assignIfDefined(basePayload, 'delivery_areas', data.delivery_areas ?? data.deliveryAreas);
@@ -1385,6 +1397,10 @@ async function listCatalogProducts(category = '', subCategoryId = '') {
         merchant_phone: phone,
         merchant_store_name: profile?.store_name ?? '',
         merchant_address: profile?.address ?? '',
+        merchant_latitude:
+          profile?.latitude ?? profile?.lat ?? null,
+        merchant_longitude:
+          profile?.longitude ?? profile?.lng ?? null,
       };
     });
 }
