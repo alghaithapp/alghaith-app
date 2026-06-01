@@ -3,18 +3,25 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
+import 'package:provider/provider.dart';
+
 import '../models/app_models.dart';
+import '../providers/app_provider.dart';
 import '../services/supabase_service.dart';
 import '../utils/extensions.dart';
 import '../utils/helpers.dart';
 import '../../widgets/app_image.dart';
 
+enum MerchantStoreKind { shopping, restaurant }
+
 class ShoppingStoresScreen extends StatefulWidget {
-  final ServiceCategory subCategory;
+  final ServiceCategory? subCategory;
+  final MerchantStoreKind storeKind;
 
   const ShoppingStoresScreen({
     super.key,
-    required this.subCategory,
+    this.subCategory,
+    this.storeKind = MerchantStoreKind.shopping,
   });
 
   @override
@@ -25,12 +32,27 @@ class _ShoppingStoresScreenState extends State<ShoppingStoresScreen> {
   final TextEditingController _searchController = TextEditingController();
   late Future<List<Map<String, dynamic>>> _futureStores;
 
+  Future<List<Map<String, dynamic>>> _loadStores() {
+    if (widget.storeKind == MerchantStoreKind.restaurant) {
+      return SupabaseService.loadRestaurantStores(
+        subCategoryId: widget.subCategory?.id,
+      );
+    }
+    return SupabaseService.loadShoppingStores(
+      subCategoryId: widget.subCategory!.id,
+    );
+  }
+
+  void _reloadStores() {
+    setState(() {
+      _futureStores = _loadStores();
+    });
+  }
+
   @override
   void initState() {
     super.initState();
-    _futureStores = SupabaseService.loadShoppingStores(
-      subCategoryId: widget.subCategory.id,
-    );
+    _futureStores = _loadStores();
   }
 
   @override
@@ -44,17 +66,29 @@ class _ShoppingStoresScreenState extends State<ShoppingStoresScreen> {
     final isAr = Directionality.of(context) == TextDirection.rtl;
     final query = _searchController.text.trim().toLowerCase();
 
+    final isRestaurant = widget.storeKind == MerchantStoreKind.restaurant;
+    final title = widget.subCategory != null
+        ? (isAr ? widget.subCategory!.titleAr : widget.subCategory!.titleEn)
+        : (isAr
+            ? (isRestaurant ? 'المطاعم' : 'التسوق')
+            : (isRestaurant ? 'Restaurants' : 'Shopping'));
+
     return CupertinoPageScaffold(
       backgroundColor: const Color(0xFFF2F2F7),
       navigationBar: CupertinoNavigationBar(
         middle: Text(
-          isAr ? widget.subCategory.titleAr : widget.subCategory.titleEn,
+          title,
           style: const TextStyle(
             fontWeight: FontWeight.bold,
             fontFamily: 'Cairo',
           ),
         ),
         previousPageTitle: isAr ? 'الرجوع' : 'Back',
+        trailing: CupertinoButton(
+          padding: EdgeInsets.zero,
+          onPressed: _reloadStores,
+          child: const Icon(CupertinoIcons.refresh, size: 22),
+        ),
       ),
       child: SafeArea(
         child: Column(
@@ -63,7 +97,13 @@ class _ShoppingStoresScreenState extends State<ShoppingStoresScreen> {
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
               child: CupertinoSearchTextField(
                 controller: _searchController,
-                placeholder: isAr ? 'ابحث عن سوق أو محل' : 'Search a store',
+                placeholder: isAr
+                    ? (isRestaurant
+                        ? 'ابحث عن مطعم'
+                        : 'ابحث عن سوق أو محل')
+                    : (isRestaurant
+                        ? 'Search a restaurant'
+                        : 'Search a store'),
                 onChanged: (_) => setState(() {}),
               ),
             ),
@@ -77,9 +117,15 @@ class _ShoppingStoresScreenState extends State<ShoppingStoresScreen> {
 
                   if (snapshot.hasError) {
                     return _EmptyState(
-                      message:
-                          isAr ? 'تعذر تحميل الأسواق' : 'Failed to load stores',
+                      message: isRestaurant
+                          ? (isAr
+                              ? 'تعذر تحميل المطاعم'
+                              : 'Failed to load restaurants')
+                          : (isAr
+                              ? 'تعذر تحميل الأسواق'
+                              : 'Failed to load stores'),
                       isAr: isAr,
+                      onRetry: _reloadStores,
                     );
                   }
 
@@ -100,17 +146,28 @@ class _ShoppingStoresScreenState extends State<ShoppingStoresScreen> {
                   if (filtered.isEmpty) {
                     return _EmptyState(
                       isAr: isAr,
+                      onRetry: _reloadStores,
                       message: query.isEmpty
-                          ? (isAr
-                              ? 'لا توجد أسواق أو محلات في هذا القسم بعد'
-                              : 'No stores in this category yet')
+                          ? (isRestaurant
+                              ? (isAr
+                                  ? 'لا توجد مطاعم في هذا القسم بعد'
+                                  : 'No restaurants in this section yet')
+                              : (isAr
+                                  ? 'لا توجد أسواق أو محلات في هذا القسم بعد'
+                                  : 'No stores in this category yet'))
                           : (isAr
                               ? 'لا توجد نتائج مطابقة'
                               : 'No matching stores'),
                     );
                   }
 
-                  return ListView.separated(
+                  return RefreshIndicator(
+                    onRefresh: () async {
+                      _reloadStores();
+                      await _futureStores;
+                    },
+                    child: ListView.separated(
+                      physics: const AlwaysScrollableScrollPhysics(),
                     padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
                     itemCount: filtered.length,
                     separatorBuilder: (_, __) => const SizedBox(height: 12),
@@ -119,8 +176,10 @@ class _ShoppingStoresScreenState extends State<ShoppingStoresScreen> {
                         isAr: isAr,
                         data: filtered[index],
                         subCategory: widget.subCategory,
+                        storeKind: widget.storeKind,
                       );
                     },
+                    ),
                   );
                 },
               ),
@@ -135,12 +194,14 @@ class _ShoppingStoresScreenState extends State<ShoppingStoresScreen> {
 class _StoreCard extends StatelessWidget {
   final bool isAr;
   final Map<String, dynamic> data;
-  final ServiceCategory subCategory;
+  final ServiceCategory? subCategory;
+  final MerchantStoreKind storeKind;
 
   const _StoreCard({
     required this.isAr,
     required this.data,
     required this.subCategory,
+    required this.storeKind,
   });
 
   @override
@@ -292,12 +353,19 @@ class _StoreCard extends StatelessWidget {
                             profile: profile,
                             products: products,
                             subCategory: subCategory,
+                            storeKind: storeKind,
                           ),
                         ),
                       );
                     },
                     icon: const Icon(Icons.menu_book_rounded),
-                    label: Text(isAr ? 'فتح المنيو' : 'Open menu'),
+                    label: Text(isAr
+                        ? (storeKind == MerchantStoreKind.restaurant
+                            ? 'عرض المنيو'
+                            : 'فتح المنيو')
+                        : (storeKind == MerchantStoreKind.restaurant
+                            ? 'View menu'
+                            : 'Open menu')),
                   ),
                 ),
               ],
@@ -313,7 +381,8 @@ class ShoppingStoreMenuScreen extends StatefulWidget {
   final bool isAr;
   final Map<String, dynamic> profile;
   final List<Map<String, dynamic>> products;
-  final ServiceCategory subCategory;
+  final ServiceCategory? subCategory;
+  final MerchantStoreKind storeKind;
 
   const ShoppingStoreMenuScreen({
     super.key,
@@ -321,6 +390,7 @@ class ShoppingStoreMenuScreen extends StatefulWidget {
     required this.profile,
     required this.products,
     required this.subCategory,
+    this.storeKind = MerchantStoreKind.shopping,
   });
 
   @override
@@ -387,9 +457,13 @@ class _ShoppingStoreMenuScreenState extends State<ShoppingStoreMenuScreen> {
           if (products.isEmpty)
             _EmptyState(
               isAr: widget.isAr,
-              message: widget.isAr
-                  ? 'لا توجد منتجات مطابقة'
-                  : 'No matching products',
+              message: widget.storeKind == MerchantStoreKind.restaurant
+                  ? (widget.isAr
+                      ? 'لا توجد أصناف في منيو هذا المطعم بعد'
+                      : 'No menu items in this restaurant yet')
+                  : (widget.isAr
+                      ? 'لا توجد منتجات في هذا المتجر بعد'
+                      : 'No products in this store yet'),
             )
           else
             ...products.map((row) {
@@ -397,6 +471,7 @@ class _ShoppingStoreMenuScreenState extends State<ShoppingStoreMenuScreen> {
               return _ProductCard(
                 isAr: widget.isAr,
                 item: item,
+                profile: widget.profile,
                 onWhatsApp: () => AppHelpers.launchWhatsApp(
                   whatsapp,
                   widget.isAr
@@ -522,11 +597,13 @@ class _StoreHeader extends StatelessWidget {
 class _ProductCard extends StatelessWidget {
   final bool isAr;
   final Map<String, dynamic> item;
+  final Map<String, dynamic> profile;
   final VoidCallback onWhatsApp;
 
   const _ProductCard({
     required this.isAr,
     required this.item,
+    required this.profile,
     required this.onWhatsApp,
   });
 
@@ -606,9 +683,52 @@ class _ProductCard extends StatelessWidget {
                         minSize: 0,
                         color: Colors.deepOrange,
                         borderRadius: BorderRadius.circular(12),
-                        onPressed: onWhatsApp,
+                        onPressed: () {
+                          final provider = context.read<AppProvider>();
+                          final added = provider.addStoreProductToCart(
+                            item,
+                            profile,
+                          );
+                          if (!added) {
+                            showCupertinoDialog(
+                              context: context,
+                              builder: (context) => CupertinoAlertDialog(
+                                title: Text(isAr ? 'تنبيه' : 'Notice'),
+                                content: Text(
+                                  isAr
+                                      ? 'السلة تحتوي منتجات من متجر آخر. أكمل طلبك الحالي أو افرغ السلة أولاً.'
+                                      : 'Your cart has items from another store. Complete or clear it first.',
+                                ),
+                                actions: [
+                                  CupertinoDialogAction(
+                                    child: Text(isAr ? 'حسنًا' : 'OK'),
+                                    onPressed: () => Navigator.pop(context),
+                                  ),
+                                ],
+                              ),
+                            );
+                            return;
+                          }
+                          showCupertinoDialog(
+                            context: context,
+                            builder: (context) => CupertinoAlertDialog(
+                              title: Text(isAr ? 'تمت الإضافة' : 'Added'),
+                              content: Text(
+                                isAr
+                                    ? 'تمت إضافة المنتج إلى السلة.'
+                                    : 'Item added to cart.',
+                              ),
+                              actions: [
+                                CupertinoDialogAction(
+                                  child: Text(isAr ? 'حسنًا' : 'OK'),
+                                  onPressed: () => Navigator.pop(context),
+                                ),
+                              ],
+                            ),
+                          );
+                        },
                         child: Text(
-                          isAr ? 'واتساب' : 'WhatsApp',
+                          isAr ? 'أضف للسلة' : 'Add to cart',
                           style: const TextStyle(
                             color: Colors.white,
                             fontSize: 12,
@@ -668,10 +788,12 @@ class _InfoChip extends StatelessWidget {
 class _EmptyState extends StatelessWidget {
   final bool isAr;
   final String message;
+  final VoidCallback? onRetry;
 
   const _EmptyState({
     required this.isAr,
     required this.message,
+    this.onRetry,
   });
 
   @override
@@ -689,8 +811,10 @@ class _EmptyState extends StatelessWidget {
                 color: Colors.deepOrange.withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(24),
               ),
-              child: const Icon(
-                Icons.storefront_rounded,
+              child: Icon(
+                message.contains('مطاعم') || message.contains('restaurant')
+                    ? Icons.restaurant_rounded
+                    : Icons.storefront_rounded,
                 color: Colors.deepOrange,
                 size: 44,
               ),
@@ -708,19 +832,30 @@ class _EmptyState extends StatelessWidget {
             const SizedBox(height: 8),
             Text(
               isAr
-                  ? 'ستظهر هنا المتاجر والمنتجات الحقيقية من قاعدة البيانات.'
-                  : 'Live stores and products from the database will appear here.',
+                  ? 'عندما يسجّل تاجر مطعمه ويضيف منتجات، ستظهر هنا للزبائن.'
+                  : 'When a merchant registers and adds products, they will appear here.',
               textAlign: TextAlign.center,
               style: const TextStyle(
                 fontFamily: 'Cairo',
                 color: Colors.grey,
-                height: 1.4,
+                height: 1.45,
               ),
             ),
+            if (onRetry != null) ...[
+              const SizedBox(height: 16),
+              CupertinoButton(
+                color: Colors.deepOrange,
+                borderRadius: BorderRadius.circular(14),
+                onPressed: onRetry,
+                child: Text(
+                  isAr ? 'تحديث' : 'Refresh',
+                  style: const TextStyle(fontFamily: 'Cairo'),
+                ),
+              ),
+            ],
           ],
         ),
       ),
     );
   }
 }
-

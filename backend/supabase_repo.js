@@ -110,6 +110,36 @@ function normalizeObject(value) {
   return {};
 }
 
+function profileServiceIds(profile) {
+  const serviceIds = normalizeArray(profile.service_ids).map((item) =>
+    String(item).trim()
+  );
+  const parsed = serviceIds.filter(Boolean);
+  if (parsed.length > 0) {
+    return parsed;
+  }
+  const primary = String(profile.primary_service_id || '').trim();
+  return primary ? [primary] : [];
+}
+
+function buildProfileByPhoneMap(profiles) {
+  const map = new Map();
+  for (const profile of profiles) {
+    for (const variant of getPhoneVariants(profile.phone)) {
+      map.set(variant, profile);
+    }
+  }
+  return map;
+}
+
+function findProfileForPhone(map, phone) {
+  for (const variant of getPhoneVariants(phone)) {
+    const profile = map.get(variant);
+    if (profile) return profile;
+  }
+  return null;
+}
+
 function isUuid(value) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
     String(value || '').trim()
@@ -416,7 +446,8 @@ async function saveMerchantProfile(phone, data = {}) {
       data.active_service_id ?? data.activeServiceId
     );
   }
-  return saveRow('merchant_profiles', { ...basePayload, phone }, 'phone');
+  const phoneKey = await resolvePhoneKey(phone);
+  return saveRow('merchant_profiles', { ...basePayload, phone: phoneKey }, 'phone');
 }
 
 async function deleteMerchantProfile(phone) {
@@ -943,13 +974,14 @@ async function getMerchantProducts(phone) {
 }
 
 async function saveMerchantProduct(phone, data = {}) {
-  const appUser = await ensureAppUser(phone, data);
+  const phoneKey = await resolvePhoneKey(phone);
+  const appUser = await ensureAppUser(phoneKey, data);
   const payload = {
     id:
       data.id && String(data.id).trim().length > 0
         ? String(data.id).trim()
         : String(Date.now()),
-    phone,
+    phone: phoneKey,
     updated_at: nowIso(),
   };
   if (await hasColumn('merchant_products', 'merchant_user_id')) {
@@ -1073,17 +1105,16 @@ async function listMerchantStoresByService({
   const result = [];
 
   for (const profile of profiles) {
-    const serviceIds = normalizeArray(profile.service_ids).map((item) =>
-      String(item)
-    );
+    const serviceIds = profileServiceIds(profile);
     const hasService = serviceIds.includes(String(serviceId));
     const isOpen = profile.is_open !== false;
     if (!hasService || !isOpen) continue;
 
+    const phoneVariants = getPhoneVariants(profile.phone);
     const products = await selectMany(
       'merchant_products',
       [
-        { method: 'eq', column: 'phone', value: profile.phone },
+        { method: 'in', column: 'phone', value: phoneVariants },
         { method: 'eq', column: 'category', value: productCategory },
       ],
       { column: 'created_at', ascending: false }
@@ -1094,8 +1125,6 @@ async function listMerchantStoresByService({
       if (!target) return true;
       return String(row.sub_category || '').trim() === target;
     });
-
-    if (filteredProducts.length === 0) continue;
 
     result.push({
       profile,
@@ -1125,9 +1154,7 @@ async function listRestaurantStores(subCategoryId = '') {
 async function listCatalogProducts(category = '', subCategoryId = '') {
   const profiles = await selectMany('merchant_profiles');
   const openProfiles = profiles.filter((row) => row.is_open !== false);
-  const profileByPhone = new Map(
-    openProfiles.map((row) => [String(row.phone || '').trim(), row])
-  );
+  const profileByPhone = buildProfileByPhoneMap(openProfiles);
 
   const categoryFilter = String(category || '').trim();
   const target = String(subCategoryId || '').trim();
@@ -1146,12 +1173,10 @@ async function listCatalogProducts(category = '', subCategoryId = '') {
     .filter((row) => {
       if (row.is_available === false) return false;
       const phone = String(row.phone || '').trim();
-      const profile = profileByPhone.get(phone);
+      const profile = findProfileForPhone(profileByPhone, phone);
       if (!profile) return false;
 
-      const serviceIds = normalizeArray(profile.service_ids).map((item) =>
-        String(item)
-      );
+      const serviceIds = profileServiceIds(profile);
       if (categoryFilter === 'product' && !serviceIds.includes('product')) {
         return false;
       }
@@ -1165,7 +1190,7 @@ async function listCatalogProducts(category = '', subCategoryId = '') {
     })
     .map((row) => {
       const phone = String(row.phone || '').trim();
-      const profile = profileByPhone.get(phone);
+      const profile = findProfileForPhone(profileByPhone, phone);
       return {
         ...row,
         merchant_phone: phone,

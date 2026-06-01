@@ -1486,7 +1486,15 @@ class AppProvider extends ChangeNotifier {
 
   void addProduct(ListItem item) {
     _items.insert(0, item);
-    unawaited(_persistMerchantItems());
+    final phone = _normalizeStoredPhone(_authPhone ?? merchantPhone);
+    if (phone.isNotEmpty) {
+      unawaited(
+        SupabaseService.saveMerchantProduct(
+          phone,
+          _productRowFromListItem(item),
+        ),
+      );
+    }
     notifyListeners();
   }
 
