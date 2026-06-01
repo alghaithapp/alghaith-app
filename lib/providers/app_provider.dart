@@ -553,6 +553,7 @@ class AppProvider extends ChangeNotifier {
     return {
       'darkMode': _darkMode,
       'driverType': _driverType,
+      'customerPhone': _customerPhone,
       'selectedCategory': _selectedCategory,
       'activeSubCategory': _activeSubCategory,
       // لا يتم حفظ العناوين هنا لمنع تضارب البيانات مع الجداول المخصصة
@@ -563,6 +564,8 @@ class AppProvider extends ChangeNotifier {
   void _applyRemoteState(Map<String, dynamic> state) {
     _darkMode = state['darkMode'] as bool? ?? _darkMode;
     _driverType = state['driverType'] as String? ?? _driverType;
+    _customerPhone =
+        _trimmedOrNull(state['customerPhone']?.toString()) ?? _customerPhone;
     _selectedCategory = state['selectedCategory'] as String? ?? _selectedCategory;
     _activeSubCategory = state['activeSubCategory'] as String? ?? _activeSubCategory;
   }
@@ -631,6 +634,7 @@ class AppProvider extends ChangeNotifier {
           'avatar_base64': _customerAvatarBase64,
           'address': _customerAddress,
         });
+        await SupabaseService.saveUserState(phoneId, _buildRemoteState());
         await _persistLocalBackup();
         
         debugPrint('RESTORE_LOG: Profile saved successfully.');

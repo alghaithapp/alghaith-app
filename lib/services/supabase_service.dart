@@ -237,7 +237,12 @@ class SupabaseService {
     return response.map((i) => ActiveOrder.fromMap(Map<String, dynamic>.from(i['order_payload']))).toList();
   }
 
-  static Future<void> saveAppUser(String phone, {String? fullName, String? role, String? avatarBase64}) async {
+  static Future<void> saveAppUser(
+    String phone, {
+    String? fullName,
+    String? role,
+    String? avatarBase64,
+  }) async {
     if (_useBackend) {
       await _backendRequest('PUT', '/db/app-user', body: {
         'phone': phone,
