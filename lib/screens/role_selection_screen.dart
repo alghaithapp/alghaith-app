@@ -9,9 +9,43 @@ import 'customer_setup_screen.dart';
 class RoleSelectionScreen extends StatelessWidget {
   const RoleSelectionScreen({super.key});
 
+  Future<void> _pickRole(
+    BuildContext context,
+    AppProvider appProvider,
+    String role, {
+    VoidCallback? onSuccess,
+  }) async {
+    final ok = await appProvider.setUserRole(role);
+    if (!context.mounted) return;
+    if (!ok) {
+      await showCupertinoDialog<void>(
+        context: context,
+        builder: (context) => CupertinoAlertDialog(
+          title: const Text(
+            'نوع الحساب مقفول',
+            style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w900),
+          ),
+          content: const Text(
+            'هذا الرقم مسجّل بنوع حساب آخر ولا يمكن تغييره. استخدم رقمًا جديدًا أو سجّل الدخول بنفس نوع حسابك.',
+            style: TextStyle(fontFamily: 'Cairo'),
+          ),
+          actions: [
+            CupertinoDialogAction(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('حسنًا', style: TextStyle(fontFamily: 'Cairo')),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+    onSuccess?.call();
+  }
+
   @override
   Widget build(BuildContext context) {
     final appProvider = Provider.of<AppProvider>(context);
+    final locked = appProvider.hasLockedAccountType;
 
     return Scaffold(
       backgroundColor: const Color(0xFF0F0F0F),
@@ -51,10 +85,10 @@ class RoleSelectionScreen extends StatelessWidget {
                   const SizedBox(height: 22),
                   FadeInDown(
                     delay: const Duration(milliseconds: 80),
-                    child: const Text(
-                      'اختيار الحساب',
+                    child: Text(
+                      locked ? 'تأكيد نوع حسابك' : 'اختيار نوع الحساب',
                       textAlign: TextAlign.center,
-                      style: TextStyle(
+                      style: const TextStyle(
                         color: Colors.white,
                         fontSize: 34,
                         height: 1.2,
@@ -66,10 +100,12 @@ class RoleSelectionScreen extends StatelessWidget {
                   const SizedBox(height: 8),
                   FadeIn(
                     delay: const Duration(milliseconds: 150),
-                    child: const Text(
-                      'ابدأ بحساب زبون / تاجر، ثم فعّل حساب التاجر لاحقًا من صفحة حسابي إذا احتجت ذلك',
+                    child: Text(
+                      locked
+                          ? 'هذا الرقم مربوط بنوع حساب واحد فقط ولا يمكن تغييره لاحقًا.'
+                          : 'اختر نوع حسابك الآن — القرار نهائي ولا يمكن تحويل الرقم لنوع آخر لاحقًا.',
                       textAlign: TextAlign.center,
-                      style: TextStyle(
+                      style: const TextStyle(
                         color: Color(0xFFB8B8B8),
                         fontSize: 14.5,
                         height: 1.7,
@@ -79,50 +115,73 @@ class RoleSelectionScreen extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 28),
-                  FadeInRight(
-                    delay: const Duration(milliseconds: 220),
-                    child: _RoleCard(
-                      title: 'حساب زبون / تاجر',
-                      subtitle:
-                          'أنشئ حسابك الشخصي أولًا، ثم يمكنك الانتقال إلى حساب التاجر من داخل صفحة حسابي',
-                      icon: CupertinoIcons.person_crop_circle_fill,
-                      accentColor: const Color(0xFFE53935),
-                      onTap: () async {
-                        if (appProvider.hasCompletedCustomerProfile) {
-                          await appProvider.setUserRole('customer');
-                          return;
-                        }
-                        if (!context.mounted) return;
-                        Navigator.of(context).push(
-                          CupertinoPageRoute(
-                            builder: (_) => const CustomerSetupScreen(),
-                          ),
-                        );
-                      },
+                  if (!locked || appProvider.isMarketplaceAccount) ...[
+                    FadeInRight(
+                      delay: const Duration(milliseconds: 220),
+                      child: _RoleCard(
+                        title: 'حساب زبون / تاجر',
+                        subtitle:
+                            'تسوق، طلبات، ومتجر خاص — لا يمكن تحويل هذا الرقم لمندوب توصيل',
+                        icon: CupertinoIcons.person_crop_circle_fill,
+                        accentColor: const Color(0xFFE53935),
+                        onTap: () async {
+                          if (appProvider.hasCompletedCustomerProfile) {
+                            await _pickRole(context, appProvider, 'customer');
+                            return;
+                          }
+                          final ok = await appProvider.setUserRole('customer');
+                          if (!context.mounted || !ok) return;
+                          Navigator.of(context).push(
+                            CupertinoPageRoute(
+                              builder: (_) => const CustomerSetupScreen(),
+                            ),
+                          );
+                        },
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 14),
-                  FadeInUp(
-                    delay: const Duration(milliseconds: 300),
-                    child: _RoleCard(
-                      title: 'حساب سائق',
-                      subtitle: 'لتلقي الطلبات وإدارة حالة السائق',
-                      icon: Icons.local_taxi_rounded,
-                      accentColor: const Color(0xFF2196F3),
-                      onTap: () => appProvider.setUserRole('driver'),
+                    const SizedBox(height: 14),
+                  ],
+                  if (!locked || appProvider.isDriverAccount) ...[
+                    FadeInUp(
+                      delay: const Duration(milliseconds: 300),
+                      child: _RoleCard(
+                        title: 'سائق تكسي',
+                        subtitle:
+                            'نقل الركاب بسيارة — حساب مستقل لا يتحول لزبون أو مندوب',
+                        icon: Icons.local_taxi_rounded,
+                        accentColor: const Color(0xFF2196F3),
+                        onTap: () => _pickRole(context, appProvider, 'driver'),
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 14),
-                  FadeInUp(
-                    delay: const Duration(milliseconds: 380),
-                    child: _RoleCard(
-                      title: 'مندوب توصيل',
-                      subtitle: 'لاستلام وتسليم الطلبات ومتابعة المهام',
-                      icon: Icons.motorcycle,
-                      accentColor: const Color(0xFF00A3A3),
-                      onTap: () => appProvider.setUserRole('delivery'),
+                    const SizedBox(height: 14),
+                  ],
+                  if (!locked || appProvider.isDeliveryAccount) ...[
+                    FadeInUp(
+                      delay: const Duration(milliseconds: 380),
+                      child: _RoleCard(
+                        title: 'مندوب توصيل',
+                        subtitle:
+                            'توصيل طلبات المطاعm والتسوق — حساب مستقل لا يتحول لزبون/تاجر',
+                        icon: Icons.motorcycle,
+                        accentColor: const Color(0xFF00A3A3),
+                        onTap: () => _pickRole(context, appProvider, 'delivery'),
+                      ),
                     ),
-                  ),
+                    const SizedBox(height: 14),
+                  ],
+                  if (appProvider.hasAdminAccess) ...[
+                    FadeInUp(
+                      delay: const Duration(milliseconds: 460),
+                      child: _RoleCard(
+                        title: 'لوحة الإدارة',
+                        subtitle:
+                            'تقارير المنصة — للمدير فقط ولا تغيّر نوع الحساب الأساسي',
+                        icon: CupertinoIcons.chart_bar_square_fill,
+                        accentColor: const Color(0xFF7B1FA2),
+                        onTap: () => _pickRole(context, appProvider, 'admin'),
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),

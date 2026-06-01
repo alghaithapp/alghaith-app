@@ -314,9 +314,20 @@ async function ensureAppUser(phone, seed = {}) {
 
 async function saveAppUser(phone, data = {}) {
   const phoneKey = await resolvePhoneKey(phone);
+  const existing = await getAppUser(phoneKey);
+  const incomingType = data.account_type ?? data.accountType;
+  if (
+    incomingType &&
+    existing?.account_type &&
+    existing.account_type !== incomingType
+  ) {
+    throw new Error('Account type is locked and cannot be changed.');
+  }
+
   const payload = { phone: phoneKey, updated_at: nowIso() };
   assignIfDefined(payload, 'full_name', data.fullName ?? data.full_name);
   assignIfDefined(payload, 'role', data.role);
+  assignIfDefined(payload, 'account_type', incomingType);
   const avatarRef = data.avatar_base64 ?? data.avatarBase64;
   assignIfDefined(payload, 'avatar_base64', avatarRef);
   assignIfDefined(
@@ -954,6 +965,9 @@ async function assertAdminAccess(phone) {
   }
 
   const state = await getUserState(normalized);
+  if (state?.adminAccess === true) {
+    return normalized;
+  }
   const role = String(state?.userRole ?? state?.user_role ?? '').trim();
   if (role === 'admin') {
     return normalized;

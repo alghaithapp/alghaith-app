@@ -17,7 +17,10 @@ class AppProvider extends ChangeNotifier {
   String? _sessionToken;
   String? _driverType;
   Map<String, dynamic>? _driverProfile;
+  Map<String, dynamic>? _courierProfile;
   String? _userRole; // merchant or customer
+  String? _accountType; // marketplace | delivery | driver — يُقفل عند أول تسجيل
+  bool _hasAdminAccess = false;
   Map<String, dynamic>? _appUserRecord;
   Map<String, dynamic>? _merchantStore; // بيانات المتجر أو المهنة الحالية
   List<MerchantOffer> _merchantOffers = [];
@@ -29,6 +32,7 @@ class AppProvider extends ChangeNotifier {
   List<ActiveOrder> _merchantIncomingOrders = [];
   List<ActiveOrder> _courierPoolOrders = [];
   List<ActiveOrder> _courierAssignedOrders = [];
+  Map<String, dynamic>? _adminReports;
   List<TaxiRequest> _taxiRequests = [];
   List<String> _addresses = [];
   List<Map<String, String>> _notifications = [];
@@ -79,6 +83,12 @@ class AppProvider extends ChangeNotifier {
   String get lang => _lang;
   bool get hasSelectedLanguage => true;
   String? get userRole => _userRole;
+  String? get accountType => _accountType;
+  bool get hasLockedAccountType => _accountType?.trim().isNotEmpty == true;
+  bool get isMarketplaceAccount => _accountType == 'marketplace';
+  bool get isDeliveryAccount => _accountType == 'delivery';
+  bool get isDriverAccount => _accountType == 'driver';
+  bool get hasAdminAccess => _hasAdminAccess;
   String? get authPhone => _authPhone;
   String? get sessionToken => _sessionToken;
   bool get isLoggingIn => _isLoggingIn;
@@ -127,6 +137,7 @@ class AppProvider extends ChangeNotifier {
   bool get isDelivery => _userRole == 'delivery';
   bool get isDriver => _userRole == 'driver';
   bool get isCustomer => _userRole == 'customer';
+  bool get isAdmin => _userRole == 'admin';
   bool get isRestoring => _isRestoring;
   bool get hasCompletedMerchantProfile =>
       _merchantStore != null && merchantStoreName.isNotEmpty;
@@ -217,22 +228,30 @@ class AppProvider extends ChangeNotifier {
   String? get driverType => _driverType;
   Map<String, dynamic>? get driverProfile => _driverProfile;
   bool get hasDriverProfile => _driverProfile != null;
-  String get deliveryCourierName => 'مندوبي التوصيل';
-
-  bool get driverAcceptsTaxi => _driverServiceEnabled('taxi');
-  bool get driverAcceptsDelivery => _driverServiceEnabled('delivery');
-  bool get driverAcceptsBoth => driverAcceptsTaxi && driverAcceptsDelivery;
-  String get driverServiceModeLabelAr {
-    if (driverAcceptsBoth) return 'سائق تكسي ومندوب توصيل';
-    if (driverAcceptsDelivery) return 'مندوب توصيل';
-    return 'سائق تكسي';
+  Map<String, dynamic>? get courierProfile => _courierProfile;
+  bool get hasCourierProfile =>
+      (_courierProfile?['name']?.toString().trim().isNotEmpty ?? false);
+  String get deliveryCourierName {
+    final name = _courierProfile?['name']?.toString().trim();
+    if (name != null && name.isNotEmpty) return name;
+    if (_customerName.trim().isNotEmpty) return _customerName.trim();
+    return 'مندوب التوصيل';
   }
 
-  String get driverServiceModeLabelEn {
-    if (driverAcceptsBoth) return 'Taxi Driver & Delivery Courier';
-    if (driverAcceptsDelivery) return 'Delivery Courier';
-    return 'Taxi Driver';
+  String get courierPhone {
+    final phone = _courierProfile?['phone']?.toString().trim();
+    if (phone != null && phone.isNotEmpty) return phone;
+    return _authPhone ?? _customerPhone;
   }
+
+  bool get isCourierAvailable =>
+      _courierProfile?['available'] as bool? ?? true;
+
+  bool get driverAcceptsTaxi => _userRole == 'driver' || _driverServiceEnabled('taxi');
+  bool get driverAcceptsDelivery => false;
+  bool get driverAcceptsBoth => false;
+  String get driverServiceModeLabelAr => 'سائق تكسي';
+  String get driverServiceModeLabelEn => 'Taxi Driver';
 
   void setLanguage(String l) {
     // الإعداد مخصص للعربية فقط حاليًا
@@ -286,6 +305,7 @@ class AppProvider extends ChangeNotifier {
   AccountSnapshot _buildLocalBackupSnapshot() {
     return AccountSnapshot(
       userRole: _userRole,
+      accountType: _accountType,
       customerName: _customerName,
       customerPhone: _customerPhone,
       customerAddress: _customerAddress,
@@ -293,6 +313,7 @@ class AppProvider extends ChangeNotifier {
       darkMode: _darkMode,
       driverType: _driverType,
       driverProfile: _driverProfile,
+      courierProfile: _courierProfile,
       merchantStore: _merchantStore,
       merchantOffers: _merchantOffers,
       merchantReviews: _merchantReviews,
@@ -307,6 +328,8 @@ class AppProvider extends ChangeNotifier {
 
   void _applyLocalBackupSnapshot(Map<String, dynamic> snapshot) {
     _userRole = _trimmedOrNull(snapshot['userRole']?.toString()) ?? _userRole;
+    _accountType = _trimmedOrNull(snapshot['accountType']?.toString()) ??
+        _accountType;
     _customerName =
         _trimmedOrNull(snapshot['customerName']?.toString()) ?? _customerName;
     _customerPhone =
@@ -322,6 +345,10 @@ class AppProvider extends ChangeNotifier {
     final driverProfile = snapshot['driverProfile'];
     if (driverProfile is Map) {
       _driverProfile = Map<String, dynamic>.from(driverProfile);
+    }
+    final courierProfile = snapshot['courierProfile'];
+    if (courierProfile is Map) {
+      _courierProfile = Map<String, dynamic>.from(courierProfile);
     }
 
     final merchantStore = snapshot['merchantStore'];
@@ -435,6 +462,11 @@ class AppProvider extends ChangeNotifier {
         _customerName = _trimmedOrNull(appUser['full_name']?.toString()) ??
             _customerName;
         _userRole = _trimmedOrNull(appUser['role']?.toString()) ?? _userRole;
+        _accountType = _trimmedOrNull(
+              appUser['account_type']?.toString() ??
+                  appUser['accountType']?.toString(),
+            ) ??
+            _accountType;
         _customerAvatarBase64 = _trimmedOrNull(
               appUser['avatar_base64']?.toString() ??
                   appUser['customer_avatar_base64']?.toString() ??
@@ -495,7 +527,9 @@ class AppProvider extends ChangeNotifier {
             .toList();
       }
       _applyFavoriteSelections();
+      _inferAccountTypeFromLegacyData();
       _inferRoleFromRestoredData();
+      _applyAccountTypeConstraints();
 
       if (isCustomer) {
         await refreshCustomerCatalog();
@@ -515,12 +549,126 @@ class AppProvider extends ChangeNotifier {
     }
   }
 
+  String? _accountTypeForRole(String role) {
+    switch (role) {
+      case 'customer':
+      case 'merchant':
+        return 'marketplace';
+      case 'delivery':
+        return 'delivery';
+      case 'driver':
+        return 'driver';
+      default:
+        return null;
+    }
+  }
+
+  bool isRoleAllowedForAccount(String role) {
+    if (role == 'admin') return _hasAdminAccess;
+    final locked = _trimmedOrNull(_accountType);
+    if (locked == null) {
+      return role == 'customer' ||
+          role == 'merchant' ||
+          role == 'delivery' ||
+          role == 'driver' ||
+          (role == 'admin' && _hasAdminAccess);
+    }
+    switch (locked) {
+      case 'marketplace':
+        return role == 'customer' || role == 'merchant';
+      case 'delivery':
+        return role == 'delivery';
+      case 'driver':
+        return role == 'driver';
+      default:
+        return false;
+    }
+  }
+
+  String? _defaultRoleForAccountType(String? accountType) {
+    switch (accountType) {
+      case 'marketplace':
+        return _primaryAccountRole() ?? 'customer';
+      case 'delivery':
+        return 'delivery';
+      case 'driver':
+        return 'driver';
+      default:
+        return null;
+    }
+  }
+
+  void _inferAccountTypeFromLegacyData() {
+    if (_accountType != null) return;
+
+    final fromUser = _trimmedOrNull(
+      _appUserRecord?['account_type']?.toString() ??
+          _appUserRecord?['accountType']?.toString(),
+    );
+    if (fromUser != null) {
+      _accountType = fromUser;
+      return;
+    }
+
+    final storedRole = _trimmedOrNull(_appUserRecord?['role']?.toString());
+    if (storedRole == 'delivery') {
+      _accountType = 'delivery';
+      return;
+    }
+    if (storedRole == 'driver') {
+      _accountType = 'driver';
+      return;
+    }
+    if (storedRole == 'customer' || storedRole == 'merchant') {
+      _accountType = 'marketplace';
+      return;
+    }
+
+    final hasMerchant =
+        _merchantStore != null && merchantStoreName.trim().isNotEmpty;
+    if (hasMerchant || hasCompletedCustomerProfile) {
+      _accountType = 'marketplace';
+      return;
+    }
+    if (hasCourierProfile) {
+      _accountType = 'delivery';
+      return;
+    }
+    if (_driverProfile != null && _driverProfile!.isNotEmpty) {
+      _accountType = 'driver';
+    }
+  }
+
+  void _applyAccountTypeConstraints() {
+    if (_accountType == null) return;
+
+    final allowedRole = _defaultRoleForAccountType(_accountType);
+    if (allowedRole == null) return;
+
+    if (!isRoleAllowedForAccount(_userRole ?? '')) {
+      _userRole = allowedRole;
+      return;
+    }
+
+    if (_userRole == null) {
+      _userRole = allowedRole;
+    }
+  }
+
+  String? _primaryAccountRole() {
+    final hasMerchant =
+        _merchantStore != null && merchantStoreName.trim().isNotEmpty;
+    if (hasMerchant) return 'merchant';
+    if (hasCompletedCustomerProfile) return 'customer';
+    return null;
+  }
+
   void _inferRoleFromRestoredData() {
     if (_userRole != null && _userRole!.trim().isNotEmpty) return;
 
-    final stateRole = _trimmedOrNull(_appUserRecord?['role']?.toString());
-    if (stateRole != null) {
-      _userRole = stateRole;
+    final storedRole = _trimmedOrNull(_appUserRecord?['role']?.toString());
+    if (storedRole != null && isRoleAllowedForAccount(storedRole)) {
+      _userRole = storedRole;
       return;
     }
 
@@ -535,8 +683,15 @@ class AppProvider extends ChangeNotifier {
       return;
     }
 
-    if (_driverProfile != null && _driverProfile!.isNotEmpty) {
-      _userRole = _trimmedOrNull(_driverType) == 'delivery' ? 'delivery' : 'driver';
+    if (_accountType == 'delivery' || hasCourierProfile) {
+      _userRole = 'delivery';
+      return;
+    }
+
+    if (_accountType == 'driver' &&
+        _driverProfile != null &&
+        _driverProfile!.isNotEmpty) {
+      _userRole = 'driver';
     }
   }
 
@@ -544,6 +699,21 @@ class AppProvider extends ChangeNotifier {
     final trimmed = value?.trim();
     if (trimmed == null || trimmed.isEmpty) return null;
     return trimmed;
+  }
+
+  String? _roleForAppUserSync() {
+    final current = _trimmedOrNull(_userRole);
+    if (current != null && isRoleAllowedForAccount(current)) {
+      return current;
+    }
+    return _defaultRoleForAccountType(_accountType) ?? _primaryAccountRole();
+  }
+
+  Future<void> _persistAccountTypeIfNeeded() async {
+    final phone = _trimmedOrNull(_authPhone) ?? _trimmedOrNull(_customerPhone);
+    final type = _trimmedOrNull(_accountType);
+    if (phone == null || type == null) return;
+    await SupabaseService.saveAppUser(phone, accountType: type);
   }
 
   Map<String, dynamic> _customerProfilePayload() {
@@ -572,7 +742,7 @@ class AppProvider extends ChangeNotifier {
     // حماية قصوى: لا تسمح أبداً برفع بيانات الهوية إذا كانت فارغة في الذاكرة حالياً
     // هذا يمنع مسح البيانات القديمة في السحابة بالخطأ
     final nameToSave = _trimmedOrNull(_customerName);
-    final roleToSave = _trimmedOrNull(_userRole);
+    final roleToSave = _roleForAppUserSync();
     
     if (nameToSave == null && roleToSave == null && _customerAvatarBase64 == null) {
       debugPrint('Sync skipped: Attempting to save empty identity');
@@ -583,6 +753,7 @@ class AppProvider extends ChangeNotifier {
       phone,
       fullName: nameToSave,
       role: roleToSave,
+      accountType: _accountType,
       avatarBase64: _customerAvatarBase64,
     );
 
@@ -665,6 +836,8 @@ class AppProvider extends ChangeNotifier {
       'darkMode': _darkMode,
       'driverType': _driverType,
       'driverProfile': _driverProfile,
+      'courierProfile': _courierProfile,
+      'accountType': _accountType,
       'customerPhone': _customerPhone,
       'userRole': _userRole,
       'customerName': _customerName,
@@ -723,9 +896,20 @@ class AppProvider extends ChangeNotifier {
     if (driverProfile is Map) {
       _driverProfile = Map<String, dynamic>.from(driverProfile);
     }
+    final courierProfile = state['courierProfile'];
+    if (courierProfile is Map) {
+      _courierProfile = Map<String, dynamic>.from(courierProfile);
+    }
+    _accountType = _trimmedOrNull(
+          state['accountType']?.toString() ??
+              state['account_type']?.toString(),
+        ) ??
+        _accountType;
+    _hasAdminAccess = state['adminAccess'] == true;
     _customerPhone =
         _trimmedOrNull(state['customerPhone']?.toString()) ?? _customerPhone;
     _userRole = _trimmedOrNull(state['userRole']?.toString()) ?? _userRole;
+    _normalizeDriverProfileForRole();
     if (_customerName.trim().isEmpty) {
       _customerName =
           _trimmedOrNull(state['customerName']?.toString()) ?? _customerName;
@@ -1006,8 +1190,18 @@ class AppProvider extends ChangeNotifier {
   }
 
   void setDriverType(String type) {
-    _driverType = type;
+    _driverType = type == 'delivery' ? 'delivery' : 'taxi';
     notifyListeners();
+  }
+
+  void _normalizeDriverProfileForRole() {
+    if (_userRole != 'driver' || _driverProfile == null) return;
+    _driverType = 'taxi';
+    _driverProfile = {
+      ..._driverProfile!,
+      'type': 'taxi',
+      'services': {'taxi': true, 'delivery': false},
+    };
   }
 
   bool _driverServiceEnabled(String service) {
@@ -1031,17 +1225,36 @@ class AppProvider extends ChangeNotifier {
   }
 
   Future<void> setDriverProfile(Map<String, dynamic> profile) async {
+    final normalized = Map<String, dynamic>.from(profile);
+    normalized['type'] = 'taxi';
+    normalized['services'] = {'taxi': true, 'delivery': false};
+    _driverType = 'taxi';
+
     _driverProfile = {
       ...?_driverProfile,
-      ...profile,
+      ...normalized,
     };
-    if (profile['type'] is String) {
-      _driverType = profile['type'] as String;
-    }
     if (_authPhone != null && _authPhone!.isNotEmpty) {
       await SupabaseService.saveUserState(_authPhone!, _buildRemoteState());
     }
     notifyListeners();
+  }
+
+  Future<void> setCourierProfile(Map<String, dynamic> profile) async {
+    _courierProfile = {
+      ...?_courierProfile,
+      ...profile,
+    };
+    final phone = _trimmedOrNull(_authPhone) ?? _trimmedOrNull(_customerPhone);
+    if (phone != null) {
+      await SupabaseService.saveUserState(phone, _buildRemoteState());
+    }
+    await _persistLocalBackup();
+    notifyListeners();
+  }
+
+  Future<void> setCourierAvailability(bool available) async {
+    await setCourierProfile({'available': available});
   }
 
   Future<void> setDriverAvailability(bool available) async {
@@ -1049,20 +1262,10 @@ class AppProvider extends ChangeNotifier {
   }
 
   Future<void> setDriverServiceEnabled(String service, bool enabled) async {
-    final currentServices =
-        Map<String, bool>.from(_driverProfile?['services'] as Map? ?? {});
-    currentServices[service] = enabled;
-
-    final updatedType =
-        currentServices['taxi'] == true && currentServices['delivery'] == true
-            ? 'both'
-            : currentServices['delivery'] == true
-                ? 'delivery'
-                : 'taxi';
-
+    if (service != 'taxi') return;
     await setDriverProfile({
-      'type': updatedType,
-      'services': currentServices,
+      'type': 'taxi',
+      'services': {'taxi': enabled, 'delivery': false},
     });
   }
 
@@ -1609,11 +1812,41 @@ class AppProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> setUserRole(String role) async {
+  Future<bool> setUserRole(String role) async {
+    if (role == 'admin') {
+      if (!_hasAdminAccess) return false;
+      _userRole = role;
+      notifyListeners();
+      final phone = _trimmedOrNull(_authPhone) ?? _trimmedOrNull(_customerPhone);
+      if (phone != null) {
+        await SupabaseService.saveUserState(phone, _buildRemoteState());
+      }
+      await _persistLocalBackup();
+      await refreshAdminReports();
+      return true;
+    }
+
+    if (!isRoleAllowedForAccount(role)) {
+      debugPrint(
+        'ROLE_LOCK: role "$role" blocked for account type "$_accountType"',
+      );
+      return false;
+    }
+
+    if (_accountType == null) {
+      final lockedType = _accountTypeForRole(role);
+      if (lockedType == null) return false;
+      _accountType = lockedType;
+    }
+
     _userRole = role;
+    if (role == 'driver') {
+      _normalizeDriverProfileForRole();
+    }
     notifyListeners();
 
     await _syncIdentityRecords();
+    await _persistAccountTypeIfNeeded();
     final phone = _trimmedOrNull(_authPhone) ?? _trimmedOrNull(_customerPhone);
     if (phone != null) {
       await SupabaseService.saveUserState(phone, _buildRemoteState());
@@ -1628,13 +1861,17 @@ class AppProvider extends ChangeNotifier {
     } else if (role == 'delivery') {
       await refreshCourierOrders();
     }
+    return true;
   }
 
   /// بعد إكمال إعداد التاجر — تأكد من حفظ الدور + المتجر في السحابة.
   Future<void> activateMerchantRole() async {
+    if (_accountType != null && _accountType != 'marketplace') return;
+    if (_accountType == null) _accountType = 'marketplace';
     _userRole = 'merchant';
     notifyListeners();
     await _syncIdentityRecords();
+    await _persistAccountTypeIfNeeded();
     if (_merchantStore != null && merchantStoreName.isNotEmpty) {
       await _persistMerchantStoreAndState();
     } else {
@@ -1655,10 +1892,13 @@ class AppProvider extends ChangeNotifier {
     _authPhone = null;
     _sessionToken = null;
     _userRole = null;
+    _accountType = null;
+    _hasAdminAccess = false;
     _merchantStore = null;
     _appUserRecord = null;
     _driverType = null;
     _driverProfile = null;
+    _courierProfile = null;
     _cart.clear();
     _items.clear();
     _catalogItems.clear();
@@ -1666,6 +1906,7 @@ class AppProvider extends ChangeNotifier {
     _merchantIncomingOrders.clear();
     _courierPoolOrders.clear();
     _courierAssignedOrders.clear();
+    _adminReports = null;
     _taxiRequests.clear();
     _addresses.clear();
     _notifications.clear();
@@ -1736,6 +1977,39 @@ class AppProvider extends ChangeNotifier {
         return const {'delivered', 'completed', 'done'}
             .contains(order.deliveryStatusKey);
       }));
+
+  int get courierTotalEarnings => deliveryCompletedOrders.fold<int>(
+        0,
+        (sum, order) => sum + order.price,
+      );
+
+  int get courierCompletedCount => deliveryCompletedOrders.length;
+
+  Map<String, dynamic>? get adminReports => _adminReports;
+
+  List<ListItem> searchCatalogItems(String query) {
+    final normalized = query.trim().toLowerCase();
+    if (normalized.isEmpty) {
+      return List<ListItem>.unmodifiable(_catalogItems);
+    }
+    return _catalogItems.where((item) {
+      return item.nameAr.toLowerCase().contains(normalized) ||
+          item.nameEn.toLowerCase().contains(normalized) ||
+          item.category.toLowerCase().contains(normalized) ||
+          (item.merchantStoreName ?? '').toLowerCase().contains(normalized);
+    }).toList();
+  }
+
+  Future<void> refreshAdminReports() async {
+    final phone = _trimmedOrNull(_authPhone) ?? _trimmedOrNull(_customerPhone);
+    if (phone == null) return;
+    try {
+      _adminReports = await SupabaseService.loadAdminReports(phone);
+      notifyListeners();
+    } catch (error) {
+      debugPrint('ADMIN_REPORTS_ERROR: $error');
+    }
+  }
 
   List<ActiveOrder> get visibleDeliveryIncomingOrders => deliveryIncomingOrders;
   List<ActiveOrder> get visibleDeliveryActiveOrders => deliveryActiveOrders;
@@ -1839,9 +2113,7 @@ class AppProvider extends ChangeNotifier {
       await SupabaseService.acceptDeliveryOrder(
         phone,
         orderId,
-        courierName: _customerName.trim().isNotEmpty
-            ? _customerName
-            : deliveryCourierName,
+        courierName: deliveryCourierName,
       );
       await refreshCourierOrders();
     } catch (error) {
@@ -1850,9 +2122,16 @@ class AppProvider extends ChangeNotifier {
   }
 
   Future<void> rejectDeliveryOrder(String orderId) async {
-    // المندوب يتخطى الطلب — لا حاجة لتحديث السحابة
-    _courierPoolOrders.removeWhere((order) => order.id == orderId);
-    notifyListeners();
+    final phone = _trimmedOrNull(_authPhone);
+    if (phone == null) return;
+    try {
+      await SupabaseService.rejectDeliveryOrder(phone, orderId);
+      _courierPoolOrders.removeWhere((order) => order.id == orderId);
+      notifyListeners();
+      await refreshCourierOrders();
+    } catch (error) {
+      debugPrint('REJECT_DELIVERY_ERROR: $error');
+    }
   }
 
   Future<void> markDeliveryPickedUp(String orderId) async {

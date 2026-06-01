@@ -210,6 +210,24 @@ class DatabaseRepository {
     });
   }
 
+  Future<void> rejectDeliveryOrder(String courierPhone, String orderId) async {
+    await ApiClient.instance.put('/db/delivery-order/reject', body: {
+      'phone': _phone(courierPhone),
+      'orderId': orderId,
+    });
+  }
+
+  Future<Map<String, dynamic>> loadAdminReports(String phone) async {
+    final result = await ApiClient.instance.get(
+      '/db/admin/reports',
+      queryParameters: {'phone': _phone(phone)},
+    );
+    if (result is Map) {
+      return Map<String, dynamic>.from(result);
+    }
+    return const {};
+  }
+
   Future<List<Map<String, dynamic>>> loadRealEstateListings({
     String? subCategoryId,
   }) async {
@@ -295,12 +313,14 @@ class DatabaseRepository {
     String phone, {
     String? fullName,
     String? role,
+    String? accountType,
     String? avatarBase64,
   }) async {
     await ApiClient.instance.put('/db/app-user', body: {
       'phone': _phone(phone),
       if (fullName != null) 'full_name': fullName,
       if (role != null) 'role': role,
+      if (accountType != null) 'account_type': accountType,
       ...ImageStorageService.customerAvatarFields(avatarBase64),
     });
   }

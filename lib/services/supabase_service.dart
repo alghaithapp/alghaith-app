@@ -113,6 +113,15 @@ class SupabaseService {
         deliveryStatusEn: deliveryStatusEn,
       );
 
+  static Future<void> rejectDeliveryOrder(
+    String courierPhone,
+    String orderId,
+  ) =>
+      _db.rejectDeliveryOrder(courierPhone, orderId);
+
+  static Future<Map<String, dynamic>> loadAdminReports(String phone) =>
+      _db.loadAdminReports(phone);
+
   static Future<List<Map<String, dynamic>>> loadRealEstateListings({
     String? subCategoryId,
   }) =>
@@ -134,12 +143,14 @@ class SupabaseService {
     String phone, {
     String? fullName,
     String? role,
+    String? accountType,
     String? avatarBase64,
   }) =>
       _db.saveAppUser(
         phone,
         fullName: fullName,
         role: role,
+        accountType: accountType,
         avatarBase64: avatarBase64,
       );
 
