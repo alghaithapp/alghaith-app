@@ -20,6 +20,14 @@ class SupabaseService {
   static bool _initialized = false;
   static String? _sessionToken;
 
+  static void _assertProductionBackendConfigured() {
+    if (kReleaseMode && !_useBackend) {
+      throw StateError(
+        'DATABASE_BACKEND_BASE_URL is required in release builds to keep Supabase protected behind the backend.',
+      );
+    }
+  }
+
   static String get _databaseBackendBaseUrl {
     const compiledBaseUrl =
         String.fromEnvironment('DATABASE_BACKEND_BASE_URL', defaultValue: '');
@@ -42,6 +50,7 @@ class SupabaseService {
   }
 
   static Future<void> initialize() async {
+    _assertProductionBackendConfigured();
     if (!isConfigured || _initialized) return;
     await Supabase.initialize(url: _projectUrl, anonKey: _anonKey);
     _initialized = true;

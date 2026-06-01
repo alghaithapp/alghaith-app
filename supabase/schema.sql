@@ -195,22 +195,20 @@ for each row execute function public.set_updated_at();
 
 grant usage on schema public to anon, authenticated;
 
-grant select, insert, update, delete on
-  public.app_users,
-  public.merchant_profiles,
-  public.merchant_products,
-  public.customer_profiles,
-  public.customer_addresses,
-  public.customer_favorites,
-  public.customer_orders,
-  public.app_state
-to anon, authenticated;
+revoke all on table public.app_users from anon, authenticated;
+revoke all on table public.merchant_profiles from anon, authenticated;
+revoke all on table public.merchant_products from anon, authenticated;
+revoke all on table public.customer_profiles from anon, authenticated;
+revoke all on table public.customer_addresses from anon, authenticated;
+revoke all on table public.customer_favorites from anon, authenticated;
+revoke all on table public.customer_orders from anon, authenticated;
+revoke all on table public.app_state from anon, authenticated;
 
-alter table if exists public.app_users disable row level security;
-alter table if exists public.merchant_profiles disable row level security;
-alter table if exists public.merchant_products disable row level security;
-alter table if exists public.customer_profiles disable row level security;
-alter table if exists public.customer_addresses disable row level security;
-alter table if exists public.customer_favorites disable row level security;
-alter table if exists public.customer_orders disable row level security;
-alter table if exists public.app_state disable row level security;
+alter table if exists public.app_users enable row level security;
+alter table if exists public.merchant_profiles enable row level security;
+alter table if exists public.merchant_products enable row level security;
+alter table if exists public.customer_profiles enable row level security;
+alter table if exists public.customer_addresses enable row level security;
+alter table if exists public.customer_favorites enable row level security;
+alter table if exists public.customer_orders enable row level security;
+alter table if exists public.app_state enable row level security;

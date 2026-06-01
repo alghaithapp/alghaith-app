@@ -1,6 +1,8 @@
 .dart_tool/
 .idea/
 .wrangler/
+.kotlin/
+android/.kotlin/
 .flutter-plugins-dependencies
 .metadata
 *.iml
