@@ -1,0 +1,674 @@
+require('dotenv').config({ path: require('path').join(__dirname, '.env') });
+
+const crypto = require('crypto');
+const cors = require('cors');
+const express = require('express');
+const {
+  isConfigured: isSupabaseConfigured,
+  supabaseKeyRole,
+  isLikelyAnonKey,
+  isLikelyServiceRoleKey,
+  getAppUser,
+  saveAppUser,
+  deleteAppUser,
+  getCustomerProfile,
+  saveCustomerProfile,
+  deleteCustomerProfile,
+  getCustomerAddresses,
+  saveCustomerAddress,
+  deleteCustomerAddress,
+  getCustomerFavorites,
+  saveCustomerFavorite,
+  getCustomerOrders,
+  saveCustomerOrder,
+  getMerchantProfile,
+  saveMerchantProfile,
+  deleteMerchantProfile,
+  getUserState,
+  saveUserState,
+  deleteUserState,
+  getMerchantProducts,
+  saveMerchantProduct,
+  deleteMerchantProduct,
+  listProfessionalProfiles,
+  listShoppingStores,
+  listRealEstateListings,
+} = require('./supabase_repo');
+
+const app = express();
+const port = process.env.PORT || 3000;
+
+const otpiqApiKey = process.env.OTPIQ_API_KEY;
+const otpiqBaseUrl = (process.env.OTPIQ_BASE_URL || 'https://api.otpiq.com').replace(/\/$/, '');
+const otpiqSmsProvider = process.env.OTPIQ_SMS_PROVIDER || 'sms';
+const otpiqWhatsappProvider = process.env.OTPIQ_WHATSAPP_PROVIDER || 'whatsapp-telegram-sms';
+const otpiqTelegramProvider = process.env.OTPIQ_TELEGRAM_PROVIDER || 'whatsapp-telegram-sms';
+const otpTtlMs = Number.parseInt(process.env.OTP_TTL_MS || '300000', 10);
+const otpLength = Number.parseInt(process.env.OTP_LENGTH || '6', 10);
+const sessionSecret = String(process.env.SESSION_SECRET || '').trim();
+
+if (!otpiqApiKey) {
+  console.warn(
+    'Missing OTPIQ_API_KEY. Add it to backend/.env before sending OTPs.'
+  );
+}
+
+if (!sessionSecret) {
+  console.warn(
+    'Missing SESSION_SECRET. Private database routes and signed login sessions will not work until you add it to backend/.env.'
+  );
+}
+
+if (!isSupabaseConfigured) {
+  console.warn(
+    'Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY. Database routes will not work until you add them to backend/.env.'
+  );
+} else if (isLikelyAnonKey || !isLikelyServiceRoleKey) {
+  console.warn(
+    `SUPABASE_SERVICE_ROLE_KEY does not look like a service_role key. Current role: ${supabaseKeyRole || 'unknown'}. Replace it with the real service_role key from Supabase Dashboard -> Project Settings -> API.`
+  );
+}
+
+app.use(cors());
+app.use(express.json());
+
+const pendingOtps = new Map();
+
+function base64UrlDecode(input) {
+  const normalized = String(input || '')
+    .replace(/-/g, '+')
+    .replace(/_/g, '/')
+    .padEnd(Math.ceil(String(input || '').length / 4) * 4, '=');
+  return Buffer.from(normalized, 'base64');
+}
+
+function base64UrlEncode(input) {
+  const buffer = Buffer.isBuffer(input) ? input : Buffer.from(String(input), 'utf8');
+  return buffer
+    .toString('base64')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/g, '');
+}
+
+function createSessionToken(phone) {
+  if (!sessionSecret) {
+    throw new Error('SESSION_SECRET is not configured.');
+  }
+
+  const payload = {
+    phone: normalizePhone(phone),
+    iat: Math.floor(Date.now() / 1000),
+    exp: Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 30,
+  };
+  const encodedPayload = base64UrlEncode(JSON.stringify(payload));
+  const signature = crypto
+    .createHmac('sha256', sessionSecret)
+    .update(encodedPayload)
+    .digest();
+  return `${encodedPayload}.${base64UrlEncode(signature)}`;
+}
+
+function verifySessionToken(token) {
+  if (!sessionSecret) {
+    throw new Error('SESSION_SECRET is not configured.');
+  }
+
+  const [encodedPayload, encodedSignature] = String(token || '').split('.');
+  if (!encodedPayload || !encodedSignature) {
+    throw new Error('Missing token payload or signature.');
+  }
+
+  const expectedSignature = crypto
+    .createHmac('sha256', sessionSecret)
+    .update(encodedPayload)
+    .digest();
+  const actualSignature = base64UrlDecode(encodedSignature);
+
+  if (
+    actualSignature.length !== expectedSignature.length ||
+    !crypto.timingSafeEqual(actualSignature, expectedSignature)
+  ) {
+    throw new Error('Invalid token signature.');
+  }
+
+  const payloadText = base64UrlDecode(encodedPayload).toString('utf8');
+  let payload = null;
+  try {
+    payload = JSON.parse(payloadText);
+  } catch (_) {
+    throw new Error('Invalid token payload.');
+  }
+
+  const phone = normalizePhone(payload?.phone);
+  const exp = Number(payload?.exp || 0);
+  const now = Math.floor(Date.now() / 1000);
+  if (!phone || !exp || exp <= now) {
+    throw new Error('Token expired or invalid.');
+  }
+
+  return { phone, exp };
+}
+
+function normalizePhone(phone) {
+  const raw = String(phone || '').trim().replace(/[\s-]/g, '');
+  if (!raw) return '';
+
+  const digits = raw.replace(/\D/g, '');
+  if (digits.startsWith('0')) {
+    return `964${digits.slice(1)}`;
+  }
+  if (digits.startsWith('964')) {
+    return digits;
+  }
+  return `964${digits}`;
+}
+
+function normalizePhoneForDisplay(phone) {
+  const normalized = normalizePhone(phone);
+  return normalized ? `+${normalized}` : '';
+}
+
+function generateOtp() {
+  const upperBound = 10 ** otpLength;
+  const lowerBound = 10 ** (otpLength - 1);
+  return String(Math.floor(lowerBound + Math.random() * (upperBound - lowerBound)));
+}
+
+function cleanupExpiredOtps() {
+  const now = Date.now();
+  for (const [phone, entry] of pendingOtps.entries()) {
+    if (entry.expiresAt <= now) {
+      pendingOtps.delete(phone);
+    }
+  }
+}
+
+async function sendOtpViaOtpiq(phoneNumber, verificationCode, channel = 'sms') {
+  if (!otpiqApiKey) {
+    throw new Error('OTPIQ_API_KEY is not configured.');
+  }
+
+  const normalizedChannel = String(channel || '').trim().toLowerCase();
+  const provider = normalizedChannel === 'whatsapp'
+    ? otpiqWhatsappProvider
+    : normalizedChannel === 'telegram'
+      ? otpiqTelegramProvider
+      : otpiqSmsProvider;
+
+  const response = await fetch(`${otpiqBaseUrl}/api/sms`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${otpiqApiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      phoneNumber,
+      smsType: 'verification',
+      provider,
+      verificationCode,
+    }),
+  });
+
+  const bodyText = await response.text();
+  let payload = null;
+  try {
+    payload = bodyText ? JSON.parse(bodyText) : null;
+  } catch (_) {
+    payload = null;
+  }
+
+  if (!response.ok) {
+    const message =
+      payload?.message ||
+      payload?.error ||
+      bodyText ||
+      `OTPIQ request failed with status ${response.status}`;
+    throw new Error(message);
+  }
+
+  return payload;
+}
+
+app.get('/health', (_, res) => {
+  res.json({ ok: true });
+});
+
+app.post('/auth/send-code', async (req, res) => {
+  try {
+    cleanupExpiredOtps();
+
+    const phone = normalizePhone(req.body?.phone);
+    const channel = String(req.body?.channel || 'sms').trim().toLowerCase();
+    if (!phone) {
+      return res.status(400).json({ message: 'Phone number is required.' });
+    }
+
+    const verificationCode = generateOtp();
+    const smsResult = await sendOtpViaOtpiq(phone, verificationCode, channel);
+    pendingOtps.set(phone, {
+      code: verificationCode,
+      expiresAt: Date.now() + otpTtlMs,
+      smsId: smsResult?.smsId || null,
+    });
+
+    return res.json({
+      success: true,
+      phoneNumber: normalizePhoneForDisplay(phone),
+      smsId: smsResult?.smsId || null,
+      channel,
+      expiresInMs: otpTtlMs,
+    });
+  } catch (error) {
+    console.error('send-code error:', error);
+    return res.status(500).json({
+      success: false,
+      message: error?.message || 'Failed to send verification code.',
+    });
+  }
+});
+
+app.post('/auth/verify-code', async (req, res) => {
+  try {
+    cleanupExpiredOtps();
+
+    const phone = normalizePhone(req.body?.phone);
+    const code = String(req.body?.code || '').trim();
+
+    if (!phone || !code) {
+      return res.status(400).json({ message: 'Phone number and code are required.' });
+    }
+
+    const otpEntry = pendingOtps.get(phone);
+    if (!otpEntry) {
+      return res.status(400).json({ success: false, message: 'Verification code expired. Please resend it.' });
+    }
+
+    if (otpEntry.code !== code) {
+      return res.status(400).json({ success: false, message: 'Invalid verification code.' });
+    }
+
+    pendingOtps.delete(phone);
+    const token = createSessionToken(phone);
+    return res.json({
+      success: true,
+      token,
+      phoneNumber: normalizePhoneForDisplay(phone),
+      expiresInSeconds: 60 * 60 * 24 * 30,
+    });
+  } catch (error) {
+    console.error('verify-code error:', error);
+    return res.status(500).json({
+      success: false,
+      message: error?.message || 'Failed to verify code.',
+    });
+  }
+});
+
+function parseQueryValue(value) {
+  if (Array.isArray(value)) return value[0];
+  return value;
+}
+
+function readRequestedPhone(req) {
+  if (req.method === 'GET' || req.method === 'DELETE') {
+    return String(parseQueryValue(req.query.phone) || '').trim();
+  }
+  return String(req.body?.phone || '').trim();
+}
+
+function requireAuthorizedPhone(req, res, { allowMissing = false } = {}) {
+  const requestedPhone = normalizePhone(readRequestedPhone(req));
+  if (!requestedPhone) {
+    if (allowMissing) {
+      return req.authPhone;
+    }
+    res.status(400).json({ message: 'Phone number is required.' });
+    return null;
+  }
+
+  if (requestedPhone !== req.authPhone) {
+    res.status(403).json({ message: 'You are not allowed to access this phone number.' });
+    return null;
+  }
+
+  return requestedPhone;
+}
+
+app.use('/db', (req, res, next) => {
+  const publicPaths = new Set([
+    '/professionals',
+    '/shopping-stores',
+    '/real-estate-listings',
+  ]);
+
+  if (publicPaths.has(req.path)) {
+    return next();
+  }
+
+  const authorization = String(req.headers.authorization || '').trim();
+  if (!authorization.startsWith('Bearer ')) {
+    return res.status(401).json({ message: 'Missing authorization token.' });
+  }
+
+  try {
+    const token = authorization.slice('Bearer '.length).trim();
+    const session = verifySessionToken(token);
+    req.authPhone = session.phone;
+    req.authSessionExpiresAt = session.exp;
+    return next();
+  } catch (error) {
+    return res.status(401).json({
+      message: error?.message || 'Invalid authorization token.',
+    });
+  }
+});
+
+app.get('/db/app-user', async (req, res) => {
+  try {
+    const phone = requireAuthorizedPhone(req, res);
+    if (!phone) return;
+    const row = await getAppUser(phone);
+    return res.json(row);
+  } catch (error) {
+    console.error('get app-user error:', error);
+    return res.status(500).json({ message: error?.message || 'Failed to load app user.' });
+  }
+});
+
+app.put('/db/app-user', async (req, res) => {
+  try {
+    const phone = requireAuthorizedPhone(req, res);
+    if (!phone) return;
+    const row = await saveAppUser(phone, req.body || {});
+    return res.json(row);
+  } catch (error) {
+    console.error('save app-user error:', error);
+    return res.status(500).json({ message: error?.message || 'Failed to save app user.' });
+  }
+});
+
+app.delete('/db/app-user', async (req, res) => {
+  try {
+    const phone = requireAuthorizedPhone(req, res);
+    if (!phone) return;
+    await deleteAppUser(phone);
+    return res.json({ success: true });
+  } catch (error) {
+    console.error('delete app-user error:', error);
+    return res.status(500).json({ message: error?.message || 'Failed to delete app user.' });
+  }
+});
+
+app.get('/db/customer-profile', async (req, res) => {
+  try {
+    const phone = requireAuthorizedPhone(req, res);
+    if (!phone) return;
+    const row = await getCustomerProfile(phone);
+    return res.json(row);
+  } catch (error) {
+    console.error('get customer-profile error:', error);
+    return res.status(500).json({ message: error?.message || 'Failed to load customer profile.' });
+  }
+});
+
+app.put('/db/customer-profile', async (req, res) => {
+  try {
+    const phone = requireAuthorizedPhone(req, res);
+    if (!phone) return;
+    const row = await saveCustomerProfile(phone, req.body || {});
+    return res.json(row);
+  } catch (error) {
+    console.error('save customer-profile error:', error);
+    return res.status(500).json({ message: error?.message || 'Failed to save customer profile.' });
+  }
+});
+
+app.delete('/db/customer-profile', async (req, res) => {
+  try {
+    const phone = requireAuthorizedPhone(req, res);
+    if (!phone) return;
+    await deleteCustomerProfile(phone);
+    return res.json({ success: true });
+  } catch (error) {
+    console.error('delete customer-profile error:', error);
+    return res.status(500).json({ message: error?.message || 'Failed to delete customer profile.' });
+  }
+});
+
+app.get('/db/customer-addresses', async (req, res) => {
+  try {
+    const phone = requireAuthorizedPhone(req, res);
+    if (!phone) return;
+    const rows = await getCustomerAddresses(phone);
+    return res.json(rows);
+  } catch (error) {
+    console.error('get customer-addresses error:', error);
+    return res.status(500).json({ message: error?.message || 'Failed to load customer addresses.' });
+  }
+});
+
+app.put('/db/customer-address', async (req, res) => {
+  try {
+    const phone = requireAuthorizedPhone(req, res);
+    if (!phone) return;
+    const row = await saveCustomerAddress(phone, req.body || {});
+    return res.json(row);
+  } catch (error) {
+    console.error('save customer-address error:', error);
+    return res.status(500).json({ message: error?.message || 'Failed to save customer address.' });
+  }
+});
+
+app.delete('/db/customer-address', async (req, res) => {
+  try {
+    const phone = requireAuthorizedPhone(req, res);
+    const address = String(parseQueryValue(req.query.address) || '').trim();
+    if (!phone) return;
+    if (!address) {
+      return res.status(400).json({ message: 'Address is required.' });
+    }
+    await deleteCustomerAddress(phone, address);
+    return res.json({ success: true });
+  } catch (error) {
+    console.error('delete customer-address error:', error);
+    return res.status(500).json({ message: error?.message || 'Failed to delete customer address.' });
+  }
+});
+
+app.get('/db/customer-favorites', async (req, res) => {
+  try {
+    const phone = requireAuthorizedPhone(req, res);
+    if (!phone) return;
+    const rows = await getCustomerFavorites(phone);
+    return res.json(rows);
+  } catch (error) {
+    console.error('get customer-favorites error:', error);
+    return res.status(500).json({ message: error?.message || 'Failed to load customer favorites.' });
+  }
+});
+
+app.put('/db/customer-favorite', async (req, res) => {
+  try {
+    const phone = requireAuthorizedPhone(req, res);
+    if (!phone) return;
+    const row = await saveCustomerFavorite(phone, req.body || {});
+    return res.json(row);
+  } catch (error) {
+    console.error('save customer-favorite error:', error);
+    return res.status(500).json({ message: error?.message || 'Failed to save customer favorite.' });
+  }
+});
+
+app.get('/db/customer-orders', async (req, res) => {
+  try {
+    const phone = requireAuthorizedPhone(req, res);
+    if (!phone) return;
+    const rows = await getCustomerOrders(phone);
+    return res.json(rows);
+  } catch (error) {
+    console.error('get customer-orders error:', error);
+    return res.status(500).json({ message: error?.message || 'Failed to load customer orders.' });
+  }
+});
+
+app.put('/db/customer-order', async (req, res) => {
+  try {
+    const phone = requireAuthorizedPhone(req, res);
+    if (!phone) return;
+    const row = await saveCustomerOrder(phone, req.body || {});
+    return res.json(row);
+  } catch (error) {
+    console.error('save customer-order error:', error);
+    return res.status(500).json({ message: error?.message || 'Failed to save customer order.' });
+  }
+});
+
+app.get('/db/merchant-profile', async (req, res) => {
+  try {
+    const phone = requireAuthorizedPhone(req, res);
+    if (!phone) return;
+    const row = await getMerchantProfile(phone);
+    return res.json(row);
+  } catch (error) {
+    console.error('get merchant-profile error:', error);
+    return res.status(500).json({ message: error?.message || 'Failed to load merchant profile.' });
+  }
+});
+
+app.put('/db/merchant-profile', async (req, res) => {
+  try {
+    const phone = requireAuthorizedPhone(req, res);
+    if (!phone) return;
+    const row = await saveMerchantProfile(phone, req.body || {});
+    return res.json(row);
+  } catch (error) {
+    console.error('save merchant-profile error:', error);
+    return res.status(500).json({ message: error?.message || 'Failed to save merchant profile.' });
+  }
+});
+
+app.delete('/db/merchant-profile', async (req, res) => {
+  try {
+    const phone = requireAuthorizedPhone(req, res);
+    if (!phone) return;
+    await deleteMerchantProfile(phone);
+    return res.json({ success: true });
+  } catch (error) {
+    console.error('delete merchant-profile error:', error);
+    return res.status(500).json({ message: error?.message || 'Failed to delete merchant profile.' });
+  }
+});
+
+app.get('/db/user-state', async (req, res) => {
+  try {
+    const phone = requireAuthorizedPhone(req, res);
+    if (!phone) return;
+    const state = await getUserState(phone);
+    return res.json(state);
+  } catch (error) {
+    console.error('get user-state error:', error);
+    return res.status(500).json({ message: error?.message || 'Failed to load user state.' });
+  }
+});
+
+app.put('/db/user-state', async (req, res) => {
+  try {
+    const phone = requireAuthorizedPhone(req, res);
+    if (!phone) return;
+    const row = await saveUserState(phone, req.body?.state || {});
+    return res.json(row);
+  } catch (error) {
+    console.error('save user-state error:', error);
+    return res.status(500).json({ message: error?.message || 'Failed to save user state.' });
+  }
+});
+
+app.delete('/db/user-state', async (req, res) => {
+  try {
+    const phone = requireAuthorizedPhone(req, res);
+    if (!phone) return;
+    await deleteUserState(phone);
+    return res.json({ success: true });
+  } catch (error) {
+    console.error('delete user-state error:', error);
+    return res.status(500).json({ message: error?.message || 'Failed to delete user state.' });
+  }
+});
+
+app.get('/db/merchant-products', async (req, res) => {
+  try {
+    const phone = requireAuthorizedPhone(req, res);
+    if (!phone) return;
+    const rows = await getMerchantProducts(phone);
+    return res.json(rows);
+  } catch (error) {
+    console.error('get merchant-products error:', error);
+    return res.status(500).json({ message: error?.message || 'Failed to load merchant products.' });
+  }
+});
+
+app.put('/db/merchant-product', async (req, res) => {
+  try {
+    const phone = requireAuthorizedPhone(req, res);
+    if (!phone) return;
+    const row = await saveMerchantProduct(phone, req.body || {});
+    return res.json(row);
+  } catch (error) {
+    console.error('save merchant-product error:', error);
+    return res.status(500).json({ message: error?.message || 'Failed to save merchant product.' });
+  }
+});
+
+app.delete('/db/merchant-product', async (req, res) => {
+  try {
+    const phone = requireAuthorizedPhone(req, res);
+    const id = String(parseQueryValue(req.query.id) || '').trim();
+    if (!phone) return;
+    if (!id) {
+      return res.status(400).json({ message: 'Product id is required.' });
+    }
+    await deleteMerchantProduct(id, phone);
+    return res.json({ success: true });
+  } catch (error) {
+    console.error('delete merchant-product error:', error);
+    return res.status(500).json({ message: error?.message || 'Failed to delete merchant product.' });
+  }
+});
+
+app.get('/db/professionals', async (req, res) => {
+  try {
+    const professionId = String(parseQueryValue(req.query.professionId) || '').trim();
+    const rows = await listProfessionalProfiles(professionId);
+    return res.json(rows);
+  } catch (error) {
+    console.error('list professionals error:', error);
+    return res.status(500).json({ message: error?.message || 'Failed to load professionals.' });
+  }
+});
+
+app.get('/db/shopping-stores', async (req, res) => {
+  try {
+    const subCategoryId = String(parseQueryValue(req.query.subCategoryId) || '').trim();
+    const rows = await listShoppingStores(subCategoryId);
+    return res.json(rows);
+  } catch (error) {
+    console.error('list shopping-stores error:', error);
+    return res.status(500).json({ message: error?.message || 'Failed to load shopping stores.' });
+  }
+});
+
+app.get('/db/real-estate-listings', async (req, res) => {
+  try {
+    const subCategoryId = String(parseQueryValue(req.query.subCategoryId) || '').trim();
+    const rows = await listRealEstateListings(subCategoryId);
+    return res.json(rows);
+  } catch (error) {
+    console.error('list real-estate-listings error:', error);
+    return res.status(500).json({ message: error?.message || 'Failed to load real estate listings.' });
+  }
+});
+
+app.listen(port, () => {
+  console.log(`Auth backend listening on port ${port}`);
+});

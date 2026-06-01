@@ -1,0 +1,7 @@
+name = "lively-wind-9d98"
+main = "cloudflare_worker.js"
+compatibility_date = "2026-05-31"
+
+[[kv_namespaces]]
+binding = "AUTH_KV"
+id = "66faee95770a43829610c7c0e40d281f"

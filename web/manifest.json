@@ -1,0 +1,23 @@
+{
+    "name": "Al-Ghaith",
+    "short_name": "Al-Ghaith",
+    "start_url": ".",
+    "display": "standalone",
+    "background_color": "#ffffff",
+    "theme_color": "#FF9800",
+    "description": "Al-Ghaith - Professional Service & Shopping App in Iraq",
+    "orientation": "portrait-primary",
+    "prefer_related_applications": false,
+    "icons": [
+        {
+            "src": "icons/Icon-192.png",
+            "sizes": "192x192",
+            "type": "image/png"
+        },
+        {
+            "src": "icons/Icon-512.png",
+            "sizes": "512x512",
+            "type": "image/png"
+        }
+    ]
+}
