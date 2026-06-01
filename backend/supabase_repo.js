@@ -1092,6 +1092,12 @@ async function updateIncomingOrderStatus(merchantPhone, orderId, updates = {}) {
     statusAr: String(updates.statusAr ?? payload.statusAr ?? '').trim(),
     statusEn: String(updates.statusEn ?? payload.statusEn ?? '').trim(),
   };
+  if (updates.noteAr !== undefined) {
+    nextOrder.noteAr = String(updates.noteAr ?? '').trim();
+  }
+  if (updates.noteEn !== undefined) {
+    nextOrder.noteEn = String(updates.noteEn ?? '').trim();
+  }
 
   if (updates.deliveryStatusKey !== undefined) {
     nextOrder.deliveryStatusKey = updates.deliveryStatusKey;
@@ -1378,6 +1384,7 @@ async function listCatalogProducts(category = '', subCategoryId = '') {
         ...row,
         merchant_phone: phone,
         merchant_store_name: profile?.store_name ?? '',
+        merchant_address: profile?.address ?? '',
       };
     });
 }

@@ -322,6 +322,33 @@ class AppProvider extends ChangeNotifier {
   /// توحيد رقم الهاتف للصيغة الدولية لضمان استرجاع البيانات القديمة (+964...)
   String _normalizeStoredPhone(String phone) => PhoneUtils.normalize(phone);
 
+  String? _normalizeTimeForDb(dynamic value) {
+    final raw = value?.toString().trim() ?? '';
+    if (raw.isEmpty) return null;
+
+    final hourOnly = int.tryParse(raw);
+    if (hourOnly != null && hourOnly >= 0 && hourOnly <= 23) {
+      return '${hourOnly.toString().padLeft(2, '0')}:00';
+    }
+
+    final parts = raw.split(':');
+    if (parts.length == 2) {
+      final hour = int.tryParse(parts[0].trim());
+      final minute = int.tryParse(parts[1].trim());
+      if (hour != null &&
+          minute != null &&
+          hour >= 0 &&
+          hour <= 23 &&
+          minute >= 0 &&
+          minute <= 59) {
+        return '${hour.toString().padLeft(2, '0')}:${minute.toString().padLeft(2, '0')}';
+      }
+    }
+
+    // إذا كانت الصيغة غير صالحة نتجاهلها كي لا تفشل المزامنة.
+    return null;
+  }
+
   AccountSnapshot _buildLocalBackupSnapshot() {
     return AccountSnapshot(
       userRole: _userRole,
@@ -847,10 +874,40 @@ class AppProvider extends ChangeNotifier {
     final phone = _trimmedOrNull(_authPhone);
     if (phone == null || !SupabaseService.isConfigured) return;
     try {
-      _orders = await SupabaseService.loadCustomerOrders(phone);
+      final previousById = {
+        for (final order in _orders) order.id: order,
+      };
+      final loaded = await SupabaseService.loadCustomerOrders(phone);
+      _orders = loaded;
+      _pushRejectedOrderNotifications(previousById, loaded);
       notifyListeners();
     } catch (error) {
       debugPrint('CUSTOMER_ORDERS_LOAD_ERROR: $error');
+    }
+  }
+
+  void _pushRejectedOrderNotifications(
+    Map<String, ActiveOrder> previousById,
+    List<ActiveOrder> loaded,
+  ) {
+    if (previousById.isEmpty) return;
+    for (final order in loaded) {
+      if (order.statusKey != 'cancelled') continue;
+      final reason = order.noteAr.trim();
+      if (reason.isEmpty) continue;
+      final previous = previousById[order.id];
+      if (previous == null) continue;
+      final statusChanged = previous.statusKey != 'cancelled';
+      final reasonChanged = previous.noteAr.trim() != reason;
+      if (!statusChanged && !reasonChanged) continue;
+      final title = 'تم رفض الطلب ${order.orderNumber}';
+      final body = reason;
+      final exists = _notifications.any(
+        (item) => item['title'] == title && item['body'] == body,
+      );
+      if (!exists) {
+        _notifications.insert(0, {'title': title, 'body': body});
+      }
     }
   }
 
@@ -1152,6 +1209,12 @@ class AppProvider extends ChangeNotifier {
       if (serviceIds.isEmpty && category.isNotEmpty) {
         serviceIds = [category];
       }
+      final openTime = _normalizeTimeForDb(
+        _merchantStore?['openTime'] ?? _merchantStore?['open_time'],
+      );
+      final closeTime = _normalizeTimeForDb(
+        _merchantStore?['closeTime'] ?? _merchantStore?['close_time'],
+      );
 
       await SupabaseService.saveMerchantProfile(phone, {
           'store_name': _merchantStore?['name'],
@@ -1162,8 +1225,8 @@ class AppProvider extends ChangeNotifier {
                   _merchantStore?['primaryServiceId'],
           'whatsapp': _normalizeStoredPhone(_merchantStore?['whatsapp']?.toString() ?? ''),
           'address': _merchantStore?['address'],
-          'open_time': _merchantStore?['openTime'] ?? _merchantStore?['open_time'],
-          'close_time': _merchantStore?['closeTime'] ?? _merchantStore?['close_time'],
+          if (openTime != null) 'open_time': openTime,
+          if (closeTime != null) 'close_time': closeTime,
           'delivery_areas': _merchantStore?['deliveryAreas'] ?? _merchantStore?['delivery_areas'],
           'delivery_fee': _merchantStore?['deliveryFee'] ?? _merchantStore?['delivery_fee'],
           'is_open': _merchantStore?['isOpen'] ?? _merchantStore?['is_open'] ?? true,
@@ -1508,6 +1571,7 @@ class AppProvider extends ChangeNotifier {
       merchantPhone:
           row['merchant_phone']?.toString() ?? row['phone']?.toString(),
       merchantStoreName: row['merchant_store_name']?.toString() ?? '',
+      address: row['merchant_address']?.toString() ?? row['address']?.toString(),
     );
   }
 
@@ -1615,6 +1679,7 @@ class AppProvider extends ChangeNotifier {
         category: item.category,
         merchantPhone: item.merchantPhone,
         merchantStoreName: item.merchantStoreName,
+        merchantAddress: item.address,
       ));
     }
     notifyListeners();
@@ -1635,7 +1700,8 @@ class AppProvider extends ChangeNotifier {
   ) {
     final row = Map<String, dynamic>.from(product)
       ..['merchant_phone'] = profile['phone']?.toString()
-      ..['merchant_store_name'] = profile['store_name']?.toString() ?? '';
+      ..['merchant_store_name'] = profile['store_name']?.toString() ?? ''
+      ..['merchant_address'] = profile['address']?.toString() ?? '';
     return addToCart(_listItemFromCatalogRow(row));
   }
 
@@ -1724,7 +1790,10 @@ class AppProvider extends ChangeNotifier {
     String orderId,
     String newStatusKey,
     String statusAr,
-    String statusEn,
+    String statusEn, {
+    String? noteAr,
+    String? noteEn,
+    }
   ) {
     final list = isMerchant ? _merchantIncomingOrders : _orders;
     final index = list.indexWhere((o) => o.id == orderId);
@@ -1740,8 +1809,8 @@ class AppProvider extends ChangeNotifier {
       customerPhone: order.customerPhone,
       addressAr: order.addressAr,
       addressEn: order.addressEn,
-      noteAr: order.noteAr,
-      noteEn: order.noteEn,
+      noteAr: noteAr ?? order.noteAr,
+      noteEn: noteEn ?? order.noteEn,
       paymentMethodAr: order.paymentMethodAr,
       paymentMethodEn: order.paymentMethodEn,
       statusKey: newStatusKey,
@@ -1774,6 +1843,8 @@ class AppProvider extends ChangeNotifier {
           statusKey: newStatusKey,
           statusAr: statusAr,
           statusEn: statusEn,
+          noteAr: noteAr,
+          noteEn: noteEn,
         ).then((_) => _refreshMerchantIncomingOrders()));
       }
     } else {
@@ -1818,7 +1889,7 @@ class AppProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<int> checkout() async {
+  Future<int> checkout({int deliveryFeeIqd = 0}) async {
     if (_cart.isEmpty) return 0;
 
     final grouped = <String, List<CartItem>>{};
@@ -1851,6 +1922,8 @@ class AppProvider extends ChangeNotifier {
               ? _customerAddress
               : 'Location not set');
 
+      final orderDeliveryFee = createdCount == 0 ? deliveryFeeIqd : 0;
+      final totalPrice = subtotal + (orderDeliveryFee > 0 ? orderDeliveryFee : 0);
       final newOrder = ActiveOrder(
         id: '${DateTime.now().millisecondsSinceEpoch}-${createdCount + 1}',
         orderNumber:
@@ -1865,14 +1938,14 @@ class AppProvider extends ChangeNotifier {
         customerPhone: _customerPhone,
         addressAr: finalAddressAr,
         addressEn: finalAddressEn,
-        noteAr: '',
-        noteEn: '',
+        noteAr: orderDeliveryFee > 0 ? 'رسوم التوصيل: ${orderDeliveryFee.toLocaleString()} د.ع' : '',
+        noteEn: orderDeliveryFee > 0 ? 'Delivery fee: $orderDeliveryFee IQD' : '',
         paymentMethodAr: 'نقداً عند الاستلام',
         paymentMethodEn: 'Cash on Delivery',
         statusKey: 'pending',
         statusAr: 'بانتظار الموافقة',
         statusEn: 'Pending Approval',
-        price: subtotal,
+        price: totalPrice,
         itemsCount: items.length,
         itemsNameAr: items.map((e) => e.nameAr).join(' ، '),
         itemsNameEn: items.map((e) => e.nameEn).join(', '),
@@ -2007,7 +2080,7 @@ class AppProvider extends ChangeNotifier {
   }
 
   void resetAll() {
-    _isRestoring = true;
+    _isRestoring = false;
     final previousPhone = _authPhone;
     
     // مسح البيانات من الذاكرة فقط
@@ -2048,11 +2121,7 @@ class AppProvider extends ChangeNotifier {
     // العودة لوضع البداية
     _isReady = true; 
     _isLoggingIn = false;
-    // نترك _isRestoring = true لفترة لضمان عدم حدوث مزامنة بالخطأ أثناء الانتقال لشاشة الدخول
-    Future.delayed(const Duration(seconds: 1), () {
-      _isRestoring = false;
-      notifyListeners();
-    });
+    notifyListeners();
   }
 
   List<TaxiRequest> get visibleTaxiRequests => List<TaxiRequest>.unmodifiable(
