@@ -8,9 +8,13 @@
     "dev": "node server.js"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.56.0",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
-    "@supabase/supabase-js": "^2.56.0"
+    "ws": "^8.18.3"
+  },
+  "engines": {
+    "node": ">=20"
   }
 }

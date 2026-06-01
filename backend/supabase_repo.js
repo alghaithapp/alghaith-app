@@ -1,4 +1,5 @@
 const { createClient } = require('@supabase/supabase-js');
+const WebSocket = require('ws');
 
 function normalizeSupabaseUrl(url) {
   if (!url) return '';
@@ -53,6 +54,9 @@ function getSupabaseAdmin() {
     auth: {
       persistSession: false,
       autoRefreshToken: false,
+    },
+    realtime: {
+      transport: WebSocket,
     },
   });
   return supabaseAdmin;
