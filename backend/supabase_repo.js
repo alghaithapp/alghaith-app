@@ -647,20 +647,98 @@ async function saveCustomerOrder(phone, data = {}) {
     throw new Error('Order id is required.');
   }
 
-  return saveRow(
+  const merchantPhone =
+    String(
+      data.merchant_phone ??
+        data.merchantPhone ??
+        order.merchantPhone ??
+        ''
+    ).trim() || null;
+
+  const payload = {
+    id: orderId,
+    phone,
+    order_number: String(order.orderNumber ?? data.order_number ?? '').trim() || null,
+    status_key: String(order.statusKey ?? data.status_key ?? '').trim() || null,
+    delivery_status_key:
+      String(order.deliveryStatusKey ?? data.delivery_status_key ?? '').trim() || null,
+    order_payload: order,
+    updated_at: nowIso(),
+  };
+
+  if (await hasColumn('customer_orders', 'merchant_phone')) {
+    payload.merchant_phone = merchantPhone;
+  }
+
+  return saveRow('customer_orders', payload, 'id');
+}
+
+async function getMerchantIncomingOrders(merchantPhone) {
+  const variants = getPhoneVariants(merchantPhone);
+  if (await hasColumn('customer_orders', 'merchant_phone')) {
+    return selectMany(
+      'customer_orders',
+      [{ method: 'in', column: 'merchant_phone', value: variants }],
+      { column: 'created_at', ascending: false }
+    );
+  }
+
+  const rows = await selectMany(
     'customer_orders',
-    {
-      id: orderId,
-      phone,
-      order_number: String(order.orderNumber ?? data.order_number ?? '').trim() || null,
-      status_key: String(order.statusKey ?? data.status_key ?? '').trim() || null,
-      delivery_status_key:
-        String(order.deliveryStatusKey ?? data.delivery_status_key ?? '').trim() || null,
-      order_payload: order,
-      updated_at: nowIso(),
-    },
-    'id'
+    [],
+    { column: 'created_at', ascending: false }
   );
+  return rows.filter((row) => {
+    const payload = normalizeObject(row.order_payload);
+    const linkedMerchant = String(
+      row.merchant_phone ?? payload.merchantPhone ?? ''
+    ).trim();
+    return variants.includes(linkedMerchant);
+  });
+}
+
+async function updateIncomingOrderStatus(merchantPhone, orderId, updates = {}) {
+  const normalizedMerchant = await resolvePhoneKey(merchantPhone);
+  const id = String(orderId || '').trim();
+  if (!id) {
+    throw new Error('Order id is required.');
+  }
+
+  const row = await selectSingle('customer_orders', 'id', id);
+  if (!row) {
+    throw new Error('Order not found.');
+  }
+
+  const payload = normalizeObject(row.order_payload);
+  const linkedMerchant = String(
+    row.merchant_phone ?? payload.merchantPhone ?? ''
+  ).trim();
+  const merchantVariants = getPhoneVariants(normalizedMerchant);
+  if (!merchantVariants.includes(linkedMerchant)) {
+    throw new Error('You are not allowed to update this order.');
+  }
+
+  const nextOrder = {
+    ...payload,
+    statusKey: String(updates.statusKey ?? payload.statusKey ?? 'pending').trim(),
+    statusAr: String(updates.statusAr ?? payload.statusAr ?? '').trim(),
+    statusEn: String(updates.statusEn ?? payload.statusEn ?? '').trim(),
+  };
+
+  if (updates.deliveryStatusKey !== undefined) {
+    nextOrder.deliveryStatusKey = updates.deliveryStatusKey;
+  }
+  if (updates.deliveryStatusAr !== undefined) {
+    nextOrder.deliveryStatusAr = updates.deliveryStatusAr;
+  }
+  if (updates.deliveryStatusEn !== undefined) {
+    nextOrder.deliveryStatusEn = updates.deliveryStatusEn;
+  }
+
+  return saveCustomerOrder(row.phone, {
+    order: nextOrder,
+    merchant_phone: linkedMerchant,
+  });
 }
 
 async function getUserState(phone) {
@@ -813,7 +891,11 @@ async function listProfessionalProfiles(professionId = '') {
   });
 }
 
-async function listShoppingStores(subCategoryId = '') {
+async function listMerchantStoresByService({
+  serviceId,
+  productCategory,
+  subCategoryId = '',
+}) {
   const profiles = await selectMany('merchant_profiles');
   const target = String(subCategoryId || '').trim();
   const result = [];
@@ -822,20 +904,21 @@ async function listShoppingStores(subCategoryId = '') {
     const serviceIds = normalizeArray(profile.service_ids).map((item) =>
       String(item)
     );
-    const hasShopping = serviceIds.includes('product');
+    const hasService = serviceIds.includes(String(serviceId));
     const isOpen = profile.is_open !== false;
-    if (!hasShopping || !isOpen) continue;
+    if (!hasService || !isOpen) continue;
 
     const products = await selectMany(
       'merchant_products',
       [
         { method: 'eq', column: 'phone', value: profile.phone },
-        { method: 'eq', column: 'category', value: 'product' },
+        { method: 'eq', column: 'category', value: productCategory },
       ],
       { column: 'created_at', ascending: false }
     );
 
     const filteredProducts = products.filter((row) => {
+      if (row.is_available === false) return false;
       if (!target) return true;
       return String(row.sub_category || '').trim() === target;
     });
@@ -849,6 +932,74 @@ async function listShoppingStores(subCategoryId = '') {
   }
 
   return result;
+}
+
+async function listShoppingStores(subCategoryId = '') {
+  return listMerchantStoresByService({
+    serviceId: 'product',
+    productCategory: 'product',
+    subCategoryId,
+  });
+}
+
+async function listRestaurantStores(subCategoryId = '') {
+  return listMerchantStoresByService({
+    serviceId: 'restaurant',
+    productCategory: 'restaurant',
+    subCategoryId,
+  });
+}
+
+async function listCatalogProducts(category = '', subCategoryId = '') {
+  const profiles = await selectMany('merchant_profiles');
+  const openProfiles = profiles.filter((row) => row.is_open !== false);
+  const profileByPhone = new Map(
+    openProfiles.map((row) => [String(row.phone || '').trim(), row])
+  );
+
+  const categoryFilter = String(category || '').trim();
+  const target = String(subCategoryId || '').trim();
+  const filters = [];
+  if (categoryFilter) {
+    filters.push({ method: 'eq', column: 'category', value: categoryFilter });
+  }
+
+  const products = await selectMany(
+    'merchant_products',
+    filters,
+    { column: 'created_at', ascending: false }
+  );
+
+  return products
+    .filter((row) => {
+      if (row.is_available === false) return false;
+      const phone = String(row.phone || '').trim();
+      const profile = profileByPhone.get(phone);
+      if (!profile) return false;
+
+      const serviceIds = normalizeArray(profile.service_ids).map((item) =>
+        String(item)
+      );
+      if (categoryFilter === 'product' && !serviceIds.includes('product')) {
+        return false;
+      }
+      if (categoryFilter === 'restaurant' && !serviceIds.includes('restaurant')) {
+        return false;
+      }
+      if (target && String(row.sub_category || '').trim() !== target) {
+        return false;
+      }
+      return true;
+    })
+    .map((row) => {
+      const phone = String(row.phone || '').trim();
+      const profile = profileByPhone.get(phone);
+      return {
+        ...row,
+        merchant_phone: phone,
+        merchant_store_name: profile?.store_name ?? '',
+      };
+    });
 }
 
 async function listRealEstateListings(subCategoryId = '') {
@@ -914,5 +1065,9 @@ module.exports = {
   deleteMerchantProduct,
   listProfessionalProfiles,
   listShoppingStores,
+  listRestaurantStores,
+  listCatalogProducts,
   listRealEstateListings,
+  getMerchantIncomingOrders,
+  updateIncomingOrderStatus,
 };

@@ -32,7 +32,11 @@ const {
   deleteMerchantProduct,
   listProfessionalProfiles,
   listShoppingStores,
+  listRestaurantStores,
+  listCatalogProducts,
   listRealEstateListings,
+  getMerchantIncomingOrders,
+  updateIncomingOrderStatus,
 } = require('./supabase_repo');
 
 const app = express();
@@ -340,6 +344,8 @@ app.use('/db', (req, res, next) => {
   const publicPaths = new Set([
     '/professionals',
     '/shopping-stores',
+    '/restaurant-stores',
+    '/catalog',
     '/real-estate-listings',
   ]);
 
@@ -656,6 +662,65 @@ app.get('/db/shopping-stores', async (req, res) => {
   } catch (error) {
     console.error('list shopping-stores error:', error);
     return res.status(500).json({ message: error?.message || 'Failed to load shopping stores.' });
+  }
+});
+
+app.get('/db/restaurant-stores', async (req, res) => {
+  try {
+    const subCategoryId = String(parseQueryValue(req.query.subCategoryId) || '').trim();
+    const rows = await listRestaurantStores(subCategoryId);
+    return res.json(rows);
+  } catch (error) {
+    console.error('list restaurant-stores error:', error);
+    return res.status(500).json({ message: error?.message || 'Failed to load restaurant stores.' });
+  }
+});
+
+app.get('/db/catalog', async (req, res) => {
+  try {
+    const category = String(parseQueryValue(req.query.category) || '').trim();
+    const subCategoryId = String(parseQueryValue(req.query.subCategoryId) || '').trim();
+    const rows = await listCatalogProducts(category, subCategoryId);
+    return res.json(rows);
+  } catch (error) {
+    console.error('list catalog error:', error);
+    return res.status(500).json({ message: error?.message || 'Failed to load catalog.' });
+  }
+});
+
+app.get('/db/merchant-incoming-orders', async (req, res) => {
+  try {
+    const phone = requireAuthorizedPhone(req, res, { allowMissing: true });
+    if (!phone) return;
+    const rows = await getMerchantIncomingOrders(phone);
+    return res.json(rows);
+  } catch (error) {
+    console.error('get merchant-incoming-orders error:', error);
+    return res.status(500).json({ message: error?.message || 'Failed to load merchant orders.' });
+  }
+});
+
+app.put('/db/incoming-order-status', async (req, res) => {
+  try {
+    const phone = requireAuthorizedPhone(req, res, { allowMissing: true });
+    if (!phone) return;
+    const orderId = String(req.body?.orderId || req.body?.id || '').trim();
+    if (!orderId) {
+      return res.status(400).json({ message: 'Order id is required.' });
+    }
+    const row = await updateIncomingOrderStatus(phone, orderId, {
+      statusKey: req.body?.statusKey,
+      statusAr: req.body?.statusAr,
+      statusEn: req.body?.statusEn,
+      deliveryStatusKey: req.body?.deliveryStatusKey,
+      deliveryStatusAr: req.body?.deliveryStatusAr,
+      deliveryStatusEn: req.body?.deliveryStatusEn,
+    });
+    return res.json(row);
+  } catch (error) {
+    console.error('update incoming-order-status error:', error);
+    const status = String(error?.message || '').includes('not allowed') ? 403 : 500;
+    return res.status(status).json({ message: error?.message || 'Failed to update order status.' });
   }
 });
 
