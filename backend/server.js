@@ -3,6 +3,8 @@ require('dotenv').config({ path: require('path').join(__dirname, '.env') });
 const crypto = require('crypto');
 const cors = require('cors');
 const express = require('express');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
 const {
   isConfigured: isSupabaseConfigured,
   supabaseKeyRole,
@@ -56,6 +58,11 @@ const otpiqTelegramProvider = process.env.OTPIQ_TELEGRAM_PROVIDER || 'whatsapp-t
 const otpTtlMs = Number.parseInt(process.env.OTP_TTL_MS || '300000', 10);
 const otpLength = Number.parseInt(process.env.OTP_LENGTH || '6', 10);
 const sessionSecret = String(process.env.SESSION_SECRET || '').trim();
+const mapboxAccessToken = String(process.env.MAPBOX_ACCESS_TOKEN || '').trim();
+const corsAllowedOrigins = String(process.env.CORS_ALLOWED_ORIGINS || '')
+  .split(',')
+  .map((value) => value.trim())
+  .filter(Boolean);
 
 if (!otpiqApiKey) {
   console.warn(
@@ -69,6 +76,12 @@ if (!sessionSecret) {
   );
 }
 
+if (!mapboxAccessToken) {
+  console.warn(
+    'Missing MAPBOX_ACCESS_TOKEN. Road-distance route API will use fallback behavior in the app.'
+  );
+}
+
 if (!isSupabaseConfigured) {
   console.warn(
     'Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY. Database routes will not work until you add them to backend/.env.'
@@ -79,9 +92,73 @@ if (!isSupabaseConfigured) {
   );
 }
 
-app.use(cors());
+function normalizePhone(phone) {
+  const raw = String(phone || '').trim().replace(/[\s-]/g, '');
+  if (!raw) return '';
+
+  const digits = raw.replace(/\D/g, '');
+  if (digits.startsWith('0')) {
+    return `964${digits.slice(1)}`;
+  }
+  if (digits.startsWith('964')) {
+    return digits;
+  }
+  return `964${digits}`;
+}
+
+app.use(helmet());
+app.use(
+  cors({
+    origin(origin, callback) {
+      // Mobile/native clients often send no Origin header.
+      if (!origin) {
+        callback(null, true);
+        return;
+      }
+      if (corsAllowedOrigins.length === 0 || corsAllowedOrigins.includes(origin)) {
+        callback(null, true);
+        return;
+      }
+      callback(new Error('Not allowed by CORS'));
+    },
+  })
+);
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+const generalRateLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: Number.parseInt(process.env.RATE_LIMIT_GENERAL_MAX || '120', 10),
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: 'Too many requests. Try again later.' },
+});
+
+const authSendCodeLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: Number.parseInt(process.env.RATE_LIMIT_OTP_SEND_MAX || '5', 10),
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator(req) {
+    const phone = normalizePhone(req.body?.phone);
+    return phone ? `send:${phone}:${req.ip}` : req.ip;
+  },
+  message: { message: 'Too many OTP requests. Try again later.' },
+});
+
+const authVerifyCodeLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: Number.parseInt(process.env.RATE_LIMIT_OTP_VERIFY_MAX || '10', 10),
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator(req) {
+    const phone = normalizePhone(req.body?.phone);
+    return phone ? `verify:${phone}:${req.ip}` : req.ip;
+  },
+  message: { message: 'Too many verification attempts. Try again later.' },
+});
+
+app.use(generalRateLimiter);
 
 const pendingOtps = new Map();
 
@@ -161,20 +238,6 @@ function verifySessionToken(token) {
   return { phone, exp };
 }
 
-function normalizePhone(phone) {
-  const raw = String(phone || '').trim().replace(/[\s-]/g, '');
-  if (!raw) return '';
-
-  const digits = raw.replace(/\D/g, '');
-  if (digits.startsWith('0')) {
-    return `964${digits.slice(1)}`;
-  }
-  if (digits.startsWith('964')) {
-    return digits;
-  }
-  return `964${digits}`;
-}
-
 function normalizePhoneForDisplay(phone) {
   const normalized = normalizePhone(phone);
   return normalized ? `+${normalized}` : '';
@@ -245,7 +308,117 @@ app.get('/health', (_, res) => {
   res.json({ ok: true });
 });
 
-app.post('/auth/send-code', async (req, res) => {
+async function geocodeAddressWithMapbox(addressText) {
+  const address = String(addressText || '').trim();
+  const query = encodeURIComponent(address);
+  const params = new URLSearchParams({
+    language: 'ar',
+    country: 'iq',
+    limit: '1',
+    access_token: mapboxAccessToken,
+  });
+  const response = await fetch(
+    `https://api.mapbox.com/geocoding/v5/mapbox.places/${query}.json?${params.toString()}`
+  );
+  if (!response.ok) {
+    throw new Error(`Mapbox geocoding failed with status ${response.status}`);
+  }
+  const payload = await response.json();
+  const feature = Array.isArray(payload?.features) ? payload.features[0] : null;
+  const center = Array.isArray(feature?.center) ? feature.center : null;
+  if (!center || center.length < 2) {
+    throw new Error('Could not geocode one of the addresses.');
+  }
+  const longitude = Number(center[0]);
+  const latitude = Number(center[1]);
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+    throw new Error('Invalid coordinates from geocoding result.');
+  }
+  return { latitude, longitude };
+}
+
+async function computeRoadDistanceMeters(origin, destination) {
+  const coordinates =
+    `${origin.longitude},${origin.latitude};${destination.longitude},${destination.latitude}`;
+  const params = new URLSearchParams({
+    alternatives: 'false',
+    overview: 'false',
+    language: 'ar',
+    access_token: mapboxAccessToken,
+  });
+  const response = await fetch(
+    `https://api.mapbox.com/directions/v5/mapbox/driving/${coordinates}?${params.toString()}`
+  );
+
+  if (!response.ok) {
+    const bodyText = await response.text();
+    throw new Error(bodyText || `Mapbox directions failed with status ${response.status}`);
+  }
+
+  const payload = await response.json();
+  const route = Array.isArray(payload?.routes) ? payload.routes[0] : null;
+  if (!route || typeof route.distance !== 'number') {
+    throw new Error('No routes available between the selected points.');
+  }
+  return {
+    distanceMeters: route.distance,
+    duration: String(route.duration || ''),
+  };
+}
+
+app.post('/maps/route-distance', async (req, res) => {
+  try {
+    if (!mapboxAccessToken) {
+      return res.status(503).json({
+        message: 'MAPBOX_ACCESS_TOKEN is not configured on backend.',
+      });
+    }
+
+    const pickupAddress = String(req.body?.pickupAddress || '').trim();
+    const dropoffAddress = String(req.body?.dropoffAddress || '').trim();
+    const pickupLatitude = Number(req.body?.pickupLatitude);
+    const pickupLongitude = Number(req.body?.pickupLongitude);
+    const dropoffLatitude = Number(req.body?.dropoffLatitude);
+    const dropoffLongitude = Number(req.body?.dropoffLongitude);
+
+    const hasPickupCoords =
+      Number.isFinite(pickupLatitude) && Number.isFinite(pickupLongitude);
+    const hasDropoffCoords =
+      Number.isFinite(dropoffLatitude) && Number.isFinite(dropoffLongitude);
+
+    const origin = hasPickupCoords
+      ? { latitude: pickupLatitude, longitude: pickupLongitude }
+      : pickupAddress
+        ? await geocodeAddressWithMapbox(pickupAddress)
+        : null;
+    const destination = hasDropoffCoords
+      ? { latitude: dropoffLatitude, longitude: dropoffLongitude }
+      : dropoffAddress
+        ? await geocodeAddressWithMapbox(dropoffAddress)
+        : null;
+
+    if (!origin || !destination) {
+      return res.status(400).json({
+        message:
+          'Provide pickup/dropoff coordinates or valid addresses for both points.',
+      });
+    }
+
+    const route = await computeRoadDistanceMeters(origin, destination);
+    return res.json({
+      distanceMeters: route.distanceMeters,
+      distanceKm: route.distanceMeters / 1000,
+      duration: route.duration,
+    });
+  } catch (error) {
+    console.error('route-distance error:', error);
+    return res.status(500).json({
+      message: error?.message || 'Failed to compute route distance.',
+    });
+  }
+});
+
+app.post('/auth/send-code', authSendCodeLimiter, async (req, res) => {
   try {
     cleanupExpiredOtps();
 
@@ -279,7 +452,7 @@ app.post('/auth/send-code', async (req, res) => {
   }
 });
 
-app.post('/auth/verify-code', async (req, res) => {
+app.post('/auth/verify-code', authVerifyCodeLimiter, async (req, res) => {
   try {
     cleanupExpiredOtps();
 
@@ -718,6 +891,8 @@ app.put('/db/incoming-order-status', async (req, res) => {
       statusKey: req.body?.statusKey,
       statusAr: req.body?.statusAr,
       statusEn: req.body?.statusEn,
+      noteAr: req.body?.noteAr,
+      noteEn: req.body?.noteEn,
       deliveryStatusKey: req.body?.deliveryStatusKey,
       deliveryStatusAr: req.body?.deliveryStatusAr,
       deliveryStatusEn: req.body?.deliveryStatusEn,
