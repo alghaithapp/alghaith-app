@@ -1279,7 +1279,7 @@ async function listMerchantStoresByService({
     const serviceIds = profileServiceIds(profile);
     const hasService = serviceIds.includes(String(serviceId));
     const isOpen = profile.is_open !== false;
-    if (!hasService || !isOpen) continue;
+    if (!isOpen) continue;
 
     const phoneVariants = getPhoneVariants(profile.phone);
     const products = await selectMany(
@@ -1296,6 +1296,8 @@ async function listMerchantStoresByService({
       if (!target) return true;
       return String(row.sub_category || '').trim() === target;
     });
+
+    if (!hasService && filteredProducts.length === 0) continue;
 
     result.push({
       profile,

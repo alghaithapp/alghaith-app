@@ -1091,19 +1091,37 @@ class AppProvider extends ChangeNotifier {
 
     try {
       final phone = _normalizeStoredPhone(_authPhone ?? merchantPhone);
-      if (phone.isNotEmpty) {
-        await SupabaseService.saveMerchantProfile(phone, {
+      if (phone.isEmpty) return;
+
+      final category = (_merchantStore?['category']?.toString() ?? '').trim();
+      var serviceIds = (_merchantStore?['serviceIds'] as List?)
+              ?.map((item) => item.toString())
+              .where((item) => item.isNotEmpty)
+              .toList() ??
+          (_merchantStore?['service_ids'] as List?)
+              ?.map((item) => item.toString())
+              .where((item) => item.isNotEmpty)
+              .toList() ??
+          <String>[];
+      if (serviceIds.isEmpty && category.isNotEmpty) {
+        serviceIds = [category];
+      }
+
+      await SupabaseService.saveMerchantProfile(phone, {
           'store_name': _merchantStore?['name'],
           'description': _merchantStore?['description'],
-          'primary_service_id': _merchantStore?['category'],
+          'primary_service_id': category.isNotEmpty
+              ? category
+              : _merchantStore?['primary_service_id'] ??
+                  _merchantStore?['primaryServiceId'],
           'whatsapp': _normalizeStoredPhone(_merchantStore?['whatsapp']?.toString() ?? ''),
           'address': _merchantStore?['address'],
           'open_time': _merchantStore?['openTime'] ?? _merchantStore?['open_time'],
           'close_time': _merchantStore?['closeTime'] ?? _merchantStore?['close_time'],
           'delivery_areas': _merchantStore?['deliveryAreas'] ?? _merchantStore?['delivery_areas'],
           'delivery_fee': _merchantStore?['deliveryFee'] ?? _merchantStore?['delivery_fee'],
-          'is_open': _merchantStore?['isOpen'] ?? _merchantStore?['is_open'],
-          'service_ids': _merchantStore?['serviceIds'] ?? _merchantStore?['service_ids'],
+          'is_open': _merchantStore?['isOpen'] ?? _merchantStore?['is_open'] ?? true,
+          'service_ids': serviceIds,
           'active_service_id': _merchantStore?['activeServiceId'],
           'professional_category_id': _merchantStore?['professionalCategoryId'],
           'professional_info': _merchantStore?['professionalInfo'],
@@ -1122,7 +1140,6 @@ class AppProvider extends ChangeNotifier {
             workSamples: merchantWorkSampleImagesBase64,
           ),
         });
-      }
     } catch (error) {
       debugPrint('Merchant store sync failed: $error');
       rethrow;
@@ -1139,6 +1156,7 @@ class AppProvider extends ChangeNotifier {
   }
 
   Future<void> _persistMerchantItems() async {
+    await _ensureMerchantProfileSynced();
     final phone = _normalizeStoredPhone(_authPhone ?? merchantPhone);
     if (phone.isNotEmpty) {
       for (final item in _items) {
@@ -1267,6 +1285,29 @@ class AppProvider extends ChangeNotifier {
       'type': 'taxi',
       'services': {'taxi': enabled, 'delivery': false},
     });
+  }
+
+  Future<void> _ensureMerchantProfileSynced() async {
+    if (_merchantStore == null || merchantStoreName.isEmpty) return;
+    await _persistMerchantStore();
+  }
+
+  Future<void> _syncMerchantDataBeforeLeavingMerchantMode() async {
+    if (_merchantStore == null && _items.isEmpty) return;
+    try {
+      await _ensureMerchantProfileSynced();
+      if (_items.isNotEmpty) {
+        await _persistMerchantItems();
+      }
+    } catch (error) {
+      debugPrint('MERCHANT_SYNC_BEFORE_SWITCH_ERROR: $error');
+      rethrow;
+    }
+  }
+
+  /// يرفع بيانات المتجر والمنتجات إلى السحابة ليظهرها الزبون.
+  Future<void> syncMerchantCatalogToCloud() async {
+    await _syncMerchantDataBeforeLeavingMerchantMode();
   }
 
   Future<void> setMerchantStore(Map<String, dynamic> storeData) async {
@@ -1687,18 +1728,16 @@ class AppProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  void addProduct(ListItem item) {
+  Future<void> addProduct(ListItem item) async {
     _items.insert(0, item);
-    final phone = _normalizeStoredPhone(_authPhone ?? merchantPhone);
-    if (phone.isNotEmpty) {
-      unawaited(
-        SupabaseService.saveMerchantProduct(
-          phone,
-          _productRowFromListItem(item),
-        ),
-      );
-    }
     notifyListeners();
+    final phone = _normalizeStoredPhone(_authPhone ?? merchantPhone);
+    if (phone.isEmpty) return;
+    await _ensureMerchantProfileSynced();
+    await SupabaseService.saveMerchantProduct(
+      phone,
+      _productRowFromListItem(item),
+    );
   }
 
   void updateProduct(ListItem updatedItem) {
@@ -1839,6 +1878,16 @@ class AppProvider extends ChangeNotifier {
       _accountType = lockedType;
     }
 
+    final previousRole = _userRole;
+    if (previousRole == 'merchant' && role != 'merchant') {
+      try {
+        await _syncMerchantDataBeforeLeavingMerchantMode();
+      } catch (error) {
+        debugPrint('MERCHANT_SYNC_BEFORE_ROLE_SWITCH: $error');
+        return false;
+      }
+    }
+
     _userRole = role;
     if (role == 'driver') {
       _normalizeDriverProfileForRole();
@@ -1857,6 +1906,14 @@ class AppProvider extends ChangeNotifier {
       await refreshCustomerCatalog();
       await refreshCustomerOrders();
     } else if (role == 'merchant') {
+      try {
+        await _ensureMerchantProfileSynced();
+        if (_items.isNotEmpty) {
+          await _persistMerchantItems();
+        }
+      } catch (error) {
+        debugPrint('MERCHANT_SYNC_ON_ENTER: $error');
+      }
       await _refreshMerchantIncomingOrders();
     } else if (role == 'delivery') {
       await refreshCourierOrders();
@@ -1874,6 +1931,9 @@ class AppProvider extends ChangeNotifier {
     await _persistAccountTypeIfNeeded();
     if (_merchantStore != null && merchantStoreName.isNotEmpty) {
       await _persistMerchantStoreAndState();
+      if (_items.isNotEmpty) {
+        await _persistMerchantItems();
+      }
     } else {
       final phone = _trimmedOrNull(_authPhone) ?? _trimmedOrNull(_customerPhone);
       if (phone != null) {
@@ -1950,6 +2010,7 @@ class AppProvider extends ChangeNotifier {
           'arrived',
           'picked_up',
           'in_progress',
+          'cancel_requested',
         }.contains(request.statusKey);
       }));
 
@@ -2104,6 +2165,48 @@ class AppProvider extends ChangeNotifier {
         'completed',
         'مكتمل',
         'Completed',
+      );
+
+  String? cancelTaxiRequestByCustomer(String requestId) {
+    final index = _taxiRequests.indexWhere((item) => item.id == requestId);
+    if (index == -1) return null;
+    final request = _taxiRequests[index];
+
+    if (request.statusKey == 'pending' || request.statusKey == 'new') {
+      _updateTaxiRequest(
+        requestId,
+        'cancelled',
+        'ملغي من الزبون',
+        'Cancelled by customer',
+      );
+      return 'cancelled';
+    }
+
+    if (request.statusKey == 'accepted') {
+      _updateTaxiRequest(
+        requestId,
+        'cancel_requested',
+        'طلب إلغاء من الزبون',
+        'Cancellation requested by customer',
+      );
+      return 'requested';
+    }
+
+    return null;
+  }
+
+  void approveTaxiCancellationByDriver(String requestId) => _updateTaxiRequest(
+        requestId,
+        'cancelled',
+        'تمت الموافقة على الإلغاء',
+        'Cancellation approved',
+      );
+
+  void rejectTaxiCancellationByDriver(String requestId) => _updateTaxiRequest(
+        requestId,
+        'accepted',
+        'الرحلة مستمرة',
+        'Trip continues',
       );
 
   Future<void> acceptDeliveryOrder(String orderId) async {
