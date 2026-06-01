@@ -40,7 +40,9 @@ const {
   getDeliveryPoolOrders,
   getCourierAssignedOrders,
   acceptDeliveryOrder,
+  rejectDeliveryOrder,
   updateCourierDeliveryStatus,
+  getAdminReports,
 } = require('./supabase_repo');
 
 const app = express();
@@ -732,7 +734,7 @@ app.get('/db/delivery-pool', async (req, res) => {
   try {
     const phone = requireAuthorizedPhone(req, res, { allowMissing: true });
     if (!phone) return;
-    const rows = await getDeliveryPoolOrders();
+    const rows = await getDeliveryPoolOrders(phone);
     return res.json(rows);
   } catch (error) {
     console.error('get delivery-pool error:', error);
@@ -788,6 +790,38 @@ app.put('/db/delivery-order/status', async (req, res) => {
     console.error('update delivery-order status error:', error);
     const message = error?.message || 'Failed to update delivery status.';
     const status = message.includes('not assigned') ? 403 : 500;
+    return res.status(status).json({ message });
+  }
+});
+
+app.put('/db/delivery-order/reject', async (req, res) => {
+  try {
+    const phone = requireAuthorizedPhone(req, res, { allowMissing: true });
+    if (!phone) return;
+    const orderId = String(req.body?.orderId || req.body?.id || '').trim();
+    if (!orderId) {
+      return res.status(400).json({ message: 'Order id is required.' });
+    }
+    const row = await rejectDeliveryOrder(phone, orderId);
+    return res.json(row);
+  } catch (error) {
+    console.error('reject delivery-order error:', error);
+    const message = error?.message || 'Failed to reject delivery order.';
+    const status = message.includes('not available') ? 409 : 500;
+    return res.status(status).json({ message });
+  }
+});
+
+app.get('/db/admin/reports', async (req, res) => {
+  try {
+    const phone = requireAuthorizedPhone(req, res, { allowMissing: true });
+    if (!phone) return;
+    const reports = await getAdminReports(phone);
+    return res.json(reports);
+  } catch (error) {
+    console.error('admin reports error:', error);
+    const message = error?.message || 'Failed to load admin reports.';
+    const status = message.includes('Admin access') ? 403 : 500;
     return res.status(status).json({ message });
   }
 });

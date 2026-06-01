@@ -742,13 +742,26 @@ function isDeliveryPoolOrder(meta) {
   );
 }
 
-async function getDeliveryPoolOrders() {
+async function getDeliveryPoolOrders(courierPhone = '') {
   const rows = await selectMany(
     'customer_orders',
     [],
     { column: 'updated_at', ascending: false }
   );
-  return rows.filter((row) => isDeliveryPoolOrder(readOrderMeta(row)));
+  let courierVariants = [];
+  if (courierPhone) {
+    const normalized = await resolvePhoneKey(courierPhone);
+    courierVariants = getPhoneVariants(normalized);
+  }
+  return rows.filter((row) => {
+    const meta = readOrderMeta(row);
+    if (!isDeliveryPoolOrder(meta)) return false;
+    if (!courierVariants.length) return true;
+    const rejected = Array.isArray(meta.payload.rejectedByCouriers)
+      ? meta.payload.rejectedByCouriers.map((item) => String(item).trim())
+      : [];
+    return !courierVariants.some((variant) => rejected.includes(variant));
+  });
 }
 
 async function getCourierAssignedOrders(courierPhone) {
@@ -850,6 +863,8 @@ async function updateCourierDeliveryStatus(courierPhone, orderId, updates = {}) 
   if (deliveryStatusKey === 'on_way') {
     nextOrder.deliveryStatusAr = 'المندوب في الطريق للزبون';
     nextOrder.deliveryStatusEn = 'Courier on the way';
+    nextOrder.estimatedArrivalMinutes = 20;
+    nextOrder.estimatedArrivalAt = new Date(Date.now() + 20 * 60 * 1000).toISOString();
   }
 
   if (deliveryStatusKey === 'delivered' || deliveryStatusKey === 'completed') {
@@ -868,6 +883,148 @@ async function updateCourierDeliveryStatus(courierPhone, orderId, updates = {}) 
     merchant_phone: meta.merchantPhone || null,
     courier_phone: normalizedCourier,
   });
+}
+
+async function rejectDeliveryOrder(courierPhone, orderId) {
+  const normalizedCourier = await resolvePhoneKey(courierPhone);
+  const id = String(orderId || '').trim();
+  if (!id) {
+    throw new Error('Order id is required.');
+  }
+
+  const row = await selectSingle('customer_orders', 'id', id);
+  if (!row) {
+    throw new Error('Order not found.');
+  }
+
+  const meta = readOrderMeta(row);
+  if (!isDeliveryPoolOrder(meta)) {
+    throw new Error('Order is not available for delivery.');
+  }
+
+  const rejected = Array.isArray(meta.payload.rejectedByCouriers)
+    ? meta.payload.rejectedByCouriers.map((item) => String(item).trim()).filter(Boolean)
+    : [];
+  const variants = getPhoneVariants(normalizedCourier);
+  const alreadyRejected = variants.some((variant) => rejected.includes(variant));
+  if (!alreadyRejected) {
+    rejected.push(normalizedCourier);
+  }
+
+  const nextOrder = {
+    ...meta.payload,
+    rejectedByCouriers: rejected,
+  };
+
+  return saveCustomerOrder(meta.customerPhone, {
+    order: nextOrder,
+    merchant_phone: meta.merchantPhone || null,
+    courier_phone: null,
+  });
+}
+
+async function getConfiguredAdminPhones() {
+  const envPhones = String(process.env.ADMIN_PHONES || '')
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+  const expanded = new Set();
+  for (const phone of envPhones) {
+    for (const variant of getPhoneVariants(phone)) {
+      expanded.add(variant);
+    }
+  }
+  return expanded;
+}
+
+async function assertAdminAccess(phone) {
+  const normalized = await resolvePhoneKey(phone);
+  const variants = getPhoneVariants(normalized);
+  const adminPhones = await getConfiguredAdminPhones();
+
+  if (variants.some((item) => adminPhones.has(item))) {
+    return normalized;
+  }
+
+  const appUser = await getAppUser(normalized);
+  const appUserRole = String(appUser?.role ?? '').trim();
+  if (appUserRole === 'admin') {
+    return normalized;
+  }
+
+  const state = await getUserState(normalized);
+  const role = String(state?.userRole ?? state?.user_role ?? '').trim();
+  if (role === 'admin') {
+    return normalized;
+  }
+
+  throw new Error('Admin access required.');
+}
+
+async function getAdminReports(phone) {
+  await assertAdminAccess(phone);
+
+  const [orders, merchants, users, products] = await Promise.all([
+    selectMany('customer_orders', [], { column: 'updated_at', ascending: false }),
+    selectMany('merchant_profiles', []),
+    selectMany('app_users', []),
+    selectMany('merchant_products', []),
+  ]);
+
+  let completedOrders = 0;
+  let pendingOrders = 0;
+  let deliveringOrders = 0;
+  let totalSales = 0;
+  let codCollected = 0;
+
+  for (const row of orders) {
+    const meta = readOrderMeta(row);
+    const price = Number(meta.payload.price) || 0;
+    if (meta.statusKey === 'completed') {
+      completedOrders += 1;
+      totalSales += price;
+      if (meta.payload.codConfirmed) {
+        codCollected += price;
+      }
+    } else if (meta.statusKey === 'pending' || meta.statusKey === 'preparing') {
+      pendingOrders += 1;
+    } else if (
+      meta.statusKey === 'delivering' ||
+      ['accepted', 'picked_up', 'on_way', 'waiting'].includes(meta.deliveryStatusKey)
+    ) {
+      deliveringOrders += 1;
+    }
+  }
+
+  const recentOrders = orders.slice(0, 12).map((row) => {
+    const meta = readOrderMeta(row);
+    return {
+      id: meta.id,
+      orderNumber: meta.payload.orderNumber,
+      statusKey: meta.statusKey,
+      statusAr: meta.payload.statusAr,
+      price: meta.payload.price,
+      merchantStoreName: meta.payload.merchantStoreName,
+      customerNameAr: meta.payload.customerNameAr,
+      deliveryStatusKey: meta.deliveryStatusKey,
+      updatedAt: row.updated_at,
+    };
+  });
+
+  return {
+    totalOrders: orders.length,
+    completedOrders,
+    pendingOrders,
+    deliveringOrders,
+    totalSales,
+    codCollected,
+    totalMerchants: merchants.length,
+    openMerchants: merchants.filter((row) => row.is_open !== false).length,
+    totalProducts: products.length,
+    totalUsers: users.length,
+    recentOrders,
+  };
 }
 
 async function getMerchantIncomingOrders(merchantPhone) {
@@ -1270,5 +1427,8 @@ module.exports = {
   getDeliveryPoolOrders,
   getCourierAssignedOrders,
   acceptDeliveryOrder,
+  rejectDeliveryOrder,
   updateCourierDeliveryStatus,
+  getAdminReports,
+  canonicalPhone,
 };
