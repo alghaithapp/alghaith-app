@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
@@ -6,6 +7,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
 import '../providers/app_provider.dart';
+import '../widgets/app_image.dart';
 import '../widgets/app_logo.dart';
 
 class CustomerSetupScreen extends StatefulWidget {
@@ -54,10 +56,25 @@ class _CustomerSetupScreenState extends State<CustomerSetupScreen> {
       imageQuality: 85,
     );
     if (picked == null) return;
-    final bytes = await picked.readAsBytes();
-    setState(() {
-      _avatarBase64 = base64Encode(bytes);
-    });
+    
+    // استخدام دالة الرفع لضمان المعالجة الصحيحة
+    final imageRef =
+        await context.read<AppProvider>().uploadImage(File(picked.path));
+    if (!mounted) return;
+    if (imageRef != null) {
+      setState(() {
+        _avatarBase64 = imageRef;
+      });
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'تعذر رفع الصورة. سيتم المحاولة بحفظ نسخة محلية عند الحفظ إن أمكن.',
+            style: TextStyle(fontFamily: 'Cairo'),
+          ),
+        ),
+      );
+    }
   }
 
   Future<void> _save() async {
@@ -73,19 +90,26 @@ class _CustomerSetupScreenState extends State<CustomerSetupScreen> {
     setState(() => _saving = true);
     try {
       final provider = context.read<AppProvider>();
-      try {
-        await provider.updateCustomerProfile(
-          name: name,
-          phone: phone,
-          address: _addressController.text.trim(),
-          avatarBase64: _avatarBase64,
-        );
-      } catch (error) {
-        debugPrint('Customer profile update skipped: $error');
-      }
+
       await provider.setUserRole('customer');
-      if (!mounted) return;
-      Navigator.of(context).pop();
+      await provider.updateCustomerProfile(
+        name: name,
+        phone: phone,
+        address: _addressController.text.trim(),
+        avatarBase64: _avatarBase64,
+      );
+      
+      // 3. إغلاق الصفحة والعودة للرئيسية
+      if (mounted) {
+        Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
+      }
+    } catch (error) {
+      debugPrint('Save error: $error');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('حدث خطأ أثناء الحفظ: $error')),
+        );
+      }
     } finally {
       if (mounted) {
         setState(() => _saving = false);
@@ -95,7 +119,8 @@ class _CustomerSetupScreenState extends State<CustomerSetupScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isAr = context.watch<AppProvider>().lang == 'ar';
+    final provider = context.watch<AppProvider>();
+    final isAr = provider.lang == 'ar';
 
     return Scaffold(
       backgroundColor: const Color(0xFF0F0F0F),
@@ -144,8 +169,8 @@ class _CustomerSetupScreenState extends State<CustomerSetupScreen> {
                         borderRadius: BorderRadius.circular(24),
                         child:
                             _avatarBase64 != null && _avatarBase64!.isNotEmpty
-                                ? Image.memory(
-                                    base64Decode(_avatarBase64!),
+                                ? AppImage(
+                                    imageData: _avatarBase64,
                                     fit: BoxFit.cover,
                                   )
                                 : const AppLogo(size: 72, fit: BoxFit.contain),

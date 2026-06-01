@@ -1,9 +1,11 @@
 import 'dart:convert';
-
+import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/app_models.dart';
+import 'image_storage_service.dart';
+import 'dart:io';
 
 class SupabaseService {
   static const Duration _backendTimeout = Duration(seconds: 15);
@@ -112,6 +114,21 @@ class SupabaseService {
     if (digits.length < 10) return [phone];
     final core = digits.substring(digits.length - 10);
     return ['+964$core', '964$core', '0$core', core];
+  }
+
+  static String _normalizePhoneForStorage(String phone) {
+    final digits = phone.trim().replaceAll(RegExp(r'\D'), '');
+    if (digits.isEmpty) return '';
+    if (digits.startsWith('0') && digits.length >= 11) {
+      return '+964${digits.substring(1)}';
+    }
+    if (digits.startsWith('964')) {
+      return '+$digits';
+    }
+    if (digits.length == 10 && digits.startsWith('7')) {
+      return '+964$digits';
+    }
+    return phone.trim().startsWith('+') ? phone.trim() : '+$digits';
   }
 
   static Future<Map<String, dynamic>?> loadAppUser(String phone) async {
@@ -258,7 +275,7 @@ class SupabaseService {
         'phone': phone,
         if (fullName != null) 'full_name': fullName,
         if (role != null) 'role': role,
-        if (avatarBase64 != null) 'avatar_base64': avatarBase64,
+        ...ImageStorageService.customerAvatarFields(avatarBase64),
       });
       return;
     }
@@ -266,12 +283,13 @@ class SupabaseService {
     if (supabase == null || phone.trim().isEmpty) return;
     
     try {
-      final cleanPhone = phone.trim();
+      final cleanPhone = _normalizePhoneForStorage(phone);
+      if (cleanPhone.isEmpty) return;
       await supabase.from('app_users').upsert({
         'phone': cleanPhone,
         if (fullName != null) 'full_name': fullName.trim(),
         if (role != null) 'role': role.trim(),
-        if (avatarBase64 != null) 'avatar_base64': avatarBase64,
+        ...ImageStorageService.customerAvatarFields(avatarBase64),
         'updated_at': DateTime.now().toIso8601String(),
       }, onConflict: 'phone');
       debugPrint('DB_SUCCESS: AppUser saved for $cleanPhone');
@@ -288,9 +306,23 @@ class SupabaseService {
     final supabase = client;
     if (supabase == null) return;
     
-    // حفظ شامل لكل تفاصيل المتجر لضمان عدم ضياع أي معلومة
+    final cleanPhone = _normalizePhoneForStorage(phone);
+    if (cleanPhone.isEmpty) return;
+    final profileImage = profile['profile_image_base64'] ??
+        profile['profileImageBase64'];
+    final coverImage = profile['cover_image_url'] ??
+        profile['coverImageUrl'] ??
+        profile['coverImageBase64'] ??
+        profile['coverImage'];
+    final logoImage = profile['logo_image_url'] ??
+        profile['logoImageUrl'] ??
+        profile['logoImageBase64'] ??
+        profile['logoImage'];
+    final workSamples = profile['work_sample_images_base64'] ??
+        profile['workSampleImagesBase64'];
+
     await supabase.from('merchant_profiles').upsert({
-      'phone': phone.trim(),
+      'phone': cleanPhone,
       'store_name': profile['store_name'],
       'description': profile['description'],
       'primary_service_id': profile['primary_service_id'],
@@ -301,15 +333,15 @@ class SupabaseService {
       'delivery_areas': profile['delivery_areas'],
       'delivery_fee': profile['delivery_fee'],
       'is_open': profile['is_open'] ?? true,
-      'profile_image_base64': profile['profile_image_base64'],
-      'cover_image_url': profile['cover_image_url'], // صورة الغلاف
-      'logo_image_url': profile['logo_image_url'],   // الشعار
+      if (profileImage != null) 'profile_image_base64': profileImage,
+      if (coverImage != null) 'cover_image_url': coverImage,
+      if (logoImage != null) 'logo_image_url': logoImage,
+      if (workSamples != null) 'work_sample_images_base64': workSamples,
       'service_ids': profile['service_ids'],
       'active_service_id': profile['active_service_id'],
       'professional_category_id': profile['professional_category_id'],
       'professional_info': profile['professional_info'],
-      'work_sample_images_base64': profile['work_sample_images_base64'],
-      'updated_at': DateTime.now().toIso8601String()
+      'updated_at': DateTime.now().toIso8601String(),
     });
   }
 
@@ -321,10 +353,18 @@ class SupabaseService {
     final supabase = client;
     if (supabase == null) return;
     
-    // رفع كامل التفاصيل لضمان ظهور المنتج بشكل صحيح بعد تسجيل الخروج
+    final cleanPhone = _normalizePhoneForStorage(phone);
+    if (cleanPhone.isEmpty) return;
+    final imageRef = product['image_base64']?.toString() ??
+        product['image']?.toString();
+    final imageFields = ImageStorageService.productImageFields(
+      imageRef,
+      fallbackAsset: product['image']?.toString(),
+    );
+
     await supabase.from('merchant_products').upsert({
       'id': product['id'] ?? DateTime.now().microsecondsSinceEpoch.toString(),
-      'phone': phone.trim(),
+      'phone': cleanPhone,
       'name_ar': product['name_ar'],
       'name_en': product['name_en'] ?? product['name_ar'],
       'description_ar': product['description_ar'],
@@ -332,9 +372,9 @@ class SupabaseService {
       'price': product['price'],
       'category': product['category'],
       'sub_category': product['sub_category'],
-      'image_base64': product['image_base64'],
+      ...imageFields,
       'is_available': product['is_available'] ?? true,
-      'updated_at': DateTime.now().toIso8601String()
+      'updated_at': DateTime.now().toIso8601String(),
     });
   }
 
@@ -345,7 +385,13 @@ class SupabaseService {
     }
     final supabase = client;
     if (supabase == null) return;
-    await supabase.from('app_state').upsert({'phone': phone, 'state': state, 'updated_at': DateTime.now().toIso8601String()});
+    final cleanPhone = _normalizePhoneForStorage(phone);
+    if (cleanPhone.isEmpty) return;
+    await supabase.from('app_state').upsert({
+      'phone': cleanPhone,
+      'state': state,
+      'updated_at': DateTime.now().toIso8601String(),
+    });
   }
 
   static Future<void> saveCustomerProfile(String phone, Map<String, dynamic> profile) async {
@@ -360,13 +406,15 @@ class SupabaseService {
     if (supabase == null || phone.trim().isEmpty) return;
     
     try {
-      final cleanPhone = phone.trim();
+      final cleanPhone = _normalizePhoneForStorage(phone);
+      if (cleanPhone.isEmpty) return;
+      final avatar = profile['avatar_base64'] ?? profile['avatarBase64'];
       await supabase.from('customer_profiles').upsert({
         'phone': cleanPhone,
         'display_name': profile['display_name'],
-        'avatar_base64': profile['avatar_base64'],
+        if (avatar != null) 'avatar_base64': avatar,
         'address': profile['address'],
-        'updated_at': DateTime.now().toIso8601String()
+        'updated_at': DateTime.now().toIso8601String(),
       }, onConflict: 'phone'); 
       debugPrint('DB_SUCCESS: Customer Profile saved for $cleanPhone');
     } catch (e) {
@@ -387,9 +435,9 @@ class SupabaseService {
     if (supabase == null || phone.trim().isEmpty) return;
     
     try {
-      final cleanPhone = phone.trim();
+      final cleanPhone = _normalizePhoneForStorage(phone);
       final cleanAddress = address.trim();
-      if (cleanAddress.isEmpty) return;
+      if (cleanPhone.isEmpty || cleanAddress.isEmpty) return;
 
       await supabase.from('customer_addresses').upsert({
         'phone': cleanPhone,
@@ -410,7 +458,11 @@ class SupabaseService {
     }
     final supabase = client;
     if (supabase == null) return;
-    await supabase.from('customer_addresses').delete().eq('phone', phone).eq('address_text', address);
+    await supabase
+        .from('customer_addresses')
+        .delete()
+        .inFilter('phone', _getPhoneVariants(phone))
+        .eq('address_text', address.trim());
   }
 
   static Future<void> saveCustomerFavorite(String phone, String productId, {required bool isFavorite}) async {
@@ -420,8 +472,19 @@ class SupabaseService {
     }
     final supabase = client;
     if (supabase == null) return;
-    if (!isFavorite) await supabase.from('customer_favorites').delete().eq('phone', phone).eq('product_id', productId);
-    else await supabase.from('customer_favorites').upsert({'phone': phone, 'product_id': productId});
+    final normalizedPhone = phone.trim();
+    if (!isFavorite) {
+      await supabase
+          .from('customer_favorites')
+          .delete()
+          .inFilter('phone', _getPhoneVariants(normalizedPhone))
+          .eq('product_id', productId);
+    } else {
+      await supabase.from('customer_favorites').upsert({
+        'phone': _normalizePhoneForStorage(normalizedPhone),
+        'product_id': productId,
+      });
+    }
   }
 
   static Future<void> saveCustomerOrder(String phone, ActiveOrder order) async {
@@ -431,7 +494,17 @@ class SupabaseService {
     }
     final supabase = client;
     if (supabase == null) return;
-    await supabase.from('customer_orders').upsert({'id': order.id, 'phone': phone, 'order_number': order.orderNumber, 'status_key': order.statusKey, 'delivery_status_key': order.deliveryStatusKey, 'order_payload': order.toMap(), 'updated_at': DateTime.now().toIso8601String()}, onConflict: 'id');
+    final cleanPhone = _normalizePhoneForStorage(phone);
+    if (cleanPhone.isEmpty) return;
+    await supabase.from('customer_orders').upsert({
+      'id': order.id,
+      'phone': cleanPhone,
+      'order_number': order.orderNumber,
+      'status_key': order.statusKey,
+      'delivery_status_key': order.deliveryStatusKey,
+      'order_payload': order.toMap(),
+      'updated_at': DateTime.now().toIso8601String(),
+    }, onConflict: 'id');
   }
 
   static Future<void> deleteMerchantProduct(String productId, {String? phone}) async {
@@ -445,5 +518,39 @@ class SupabaseService {
     final supabase = client;
     if (supabase == null) return;
     await supabase.from('merchant_products').delete().eq('id', productId);
+  }
+
+  static Future<String?> uploadImage(String bucket, String path, dynamic file) async {
+    final supabase = client;
+    if (supabase == null) return null;
+
+    try {
+      final segment = path.split('/').where((part) => part.isNotEmpty).toList();
+      final folder = segment.isNotEmpty ? segment.first : 'media';
+      final fileName =
+          '${DateTime.now().millisecondsSinceEpoch}_${segment.length > 1 ? segment.last : 'image.jpg'}';
+      final filePath = '$folder/$fileName';
+
+      if (file is File) {
+        await supabase.storage.from(bucket).upload(
+              filePath,
+              file,
+              fileOptions: const FileOptions(upsert: true),
+            );
+      } else if (file is Uint8List) {
+        await supabase.storage.from(bucket).uploadBinary(
+              filePath,
+              file,
+              fileOptions: const FileOptions(upsert: true),
+            );
+      } else {
+        return null;
+      }
+
+      return supabase.storage.from(bucket).getPublicUrl(filePath);
+    } catch (e) {
+      debugPrint('SUPABASE_STORAGE_ERROR: $e');
+      return null;
+    }
   }
 }

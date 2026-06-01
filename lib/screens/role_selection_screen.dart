@@ -87,7 +87,12 @@ class RoleSelectionScreen extends StatelessWidget {
                           'أنشئ حسابك الشخصي أولًا، ثم يمكنك الانتقال إلى حساب التاجر من داخل صفحة حسابي',
                       icon: CupertinoIcons.person_crop_circle_fill,
                       accentColor: const Color(0xFFE53935),
-                      onTap: () {
+                      onTap: () async {
+                        if (appProvider.hasCompletedCustomerProfile) {
+                          await appProvider.setUserRole('customer');
+                          return;
+                        }
+                        if (!context.mounted) return;
                         Navigator.of(context).push(
                           CupertinoPageRoute(
                             builder: (_) => const CustomerSetupScreen(),

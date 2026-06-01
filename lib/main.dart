@@ -15,6 +15,7 @@ import 'screens/driver/driver_setup_screen.dart';
 import 'screens/driver/driver_shell.dart';
 import 'screens/phone_login_screen.dart';
 import 'screens/role_selection_screen.dart';
+import 'screens/customer_setup_screen.dart';
 import 'screens/merchant/merchant_setup_screen.dart';
 import 'screens/merchant/merchant_shell.dart';
 import 'services/supabase_service.dart';
@@ -24,7 +25,11 @@ import 'widgets/startup_splash_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await SupabaseService.initialize();
+  try {
+    await SupabaseService.initialize();
+  } catch (e) {
+    debugPrint('Supabase Init Error: $e');
+  }
   runApp(
     MultiProvider(
       providers: [
@@ -161,57 +166,67 @@ class AlGhaithApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final appProvider = Provider.of<AppProvider>(context);
-    if (!appProvider.isReady) {
-      return const MaterialApp(
-        debugShowCheckedModeBanner: false,
-        home: StartupSplashScreen(),
-      );
-    }
 
-    Widget home;
-    if (appProvider.isLoggingIn) {
-      // شاشة تحميل إجبارية أثناء تسجيل الدخول لمنع الانتقال لصفحة اختيار الدور بالخطأ
-      home = const Scaffold(
-        body: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              AppLogo(size: 100),
-              SizedBox(height: 30),
-              CircularProgressIndicator(color: Colors.orange),
-              SizedBox(height: 20),
-              Text(
-                'جاري استعادة بياناتك من السحابة...',
-                style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold),
-              ),
-            ],
+    // واجهة اختيار الشاشة المناسبة بناءً على حالة الحساب
+    Widget getHome() {
+      if (!appProvider.isReady) {
+        return const StartupSplashScreen();
+      }
+
+      if (appProvider.isLoggingIn) {
+        return const Scaffold(
+          body: Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                AppLogo(size: 100),
+                SizedBox(height: 30),
+                CircularProgressIndicator(color: Colors.orange),
+                SizedBox(height: 20),
+                Text(
+                  'جاري استعادة بياناتك من السحابة...',
+                  style: TextStyle(
+                      fontFamily: 'Cairo', fontWeight: FontWeight.bold),
+                ),
+              ],
+            ),
           ),
-        ),
-      );
-    } else if (!appProvider.hasPhoneSession) {
-      home = const ExitConfirmScope(child: PhoneLoginScreen());
-    } else if (!appProvider.hasSelectedRole) {
-      home = const ExitConfirmScope(child: RoleSelectionScreen());
-    } else {
+        );
+      }
+
+      if (!appProvider.hasPhoneSession) {
+        return const ExitConfirmScope(child: PhoneLoginScreen());
+      }
+
+      if (!appProvider.hasSelectedRole) {
+        return const ExitConfirmScope(child: RoleSelectionScreen());
+      }
+
       if (appProvider.userRole == 'merchant') {
-        home = appProvider.merchantStore == null
+        return appProvider.merchantStore == null
             ? const ExitConfirmScope(child: MerchantSetupScreen())
             : const ExitConfirmScope(child: MerchantShell());
       } else if (appProvider.userRole == 'driver') {
-        home = appProvider.hasDriverProfile
+        return appProvider.hasDriverProfile
             ? const ExitConfirmScope(child: DriverShell())
             : const ExitConfirmScope(child: DriverSetupScreen());
       } else if (appProvider.userRole == 'delivery') {
-        home = const ExitConfirmScope(child: DeliveryShell());
-      } else {
-        home = const ExitConfirmScope(child: MainShell());
+        return const ExitConfirmScope(child: DeliveryShell());
       }
+
+      if (appProvider.isCustomer && !appProvider.hasCompletedCustomerProfile) {
+        return const ExitConfirmScope(child: CustomerSetupScreen());
+      }
+
+      return const ExitConfirmScope(child: MainShell());
     }
 
     return MaterialApp(
       title: 'الغيث',
       debugShowCheckedModeBanner: false,
       themeMode: appProvider.themeMode,
+      // تحديد لون الخلفية الافتراضي لمنع الشاشة الرصاصية
+      color: const Color(0xFFF2F2F7),
       theme: ThemeData(
         platform: TargetPlatform.iOS,
         primarySwatch: Colors.orange,
@@ -237,7 +252,7 @@ class AlGhaithApp extends StatelessWidget {
           ),
         );
       },
-      home: home,
+      home: getHome(),
     );
   }
 }

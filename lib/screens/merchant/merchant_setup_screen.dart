@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
@@ -668,45 +669,54 @@ class _MerchantSetupScreenState extends State<MerchantSetupScreen> {
   Future<void> _pickProfileImage() async {
     final picked = await AppHelpers.pickImage(context);
     if (picked == null) return;
-    final bytes = await picked.readAsBytes();
-    setState(() {
-      _profileImageBase64 = base64Encode(bytes);
-    });
+    final base64 = await context.read<AppProvider>().uploadImage(File(picked.path));
+    if (base64 != null) {
+      setState(() {
+        _profileImageBase64 = base64;
+      });
+    }
   }
 
   Future<void> _pickCoverImage() async {
     final picked = await AppHelpers.pickImage(context);
     if (picked == null) return;
-    final bytes = await picked.readAsBytes();
-    if (!mounted) return;
-    setState(() {
-      _coverImageBase64 = base64Encode(bytes);
-    });
+    final base64 = await context.read<AppProvider>().uploadImage(File(picked.path));
+    if (base64 != null) {
+      setState(() {
+        _coverImageBase64 = base64;
+      });
+    }
   }
 
   Future<void> _pickLogoImage() async {
     final picked = await AppHelpers.pickImage(context);
     if (picked == null) return;
-    final bytes = await picked.readAsBytes();
-    if (!mounted) return;
-    setState(() {
-      _logoImageBase64 = base64Encode(bytes);
-    });
+    final base64 = await context.read<AppProvider>().uploadImage(File(picked.path));
+    if (base64 != null) {
+      setState(() {
+        _logoImageBase64 = base64;
+      });
+    }
   }
 
   Future<void> _pickWorkSamples() async {
     final picked = await AppHelpers.pickMultiImage(context);
     if (picked.isEmpty) return;
+    
+    final provider = context.read<AppProvider>();
     final images = <String>[];
     for (final image in picked) {
-      final bytes = await image.readAsBytes();
-      images.add(base64Encode(bytes));
+      final base64 = await provider.uploadImage(File(image.path));
+      if (base64 != null) images.add(base64);
     }
-    setState(() {
-      _workSampleImagesBase64
-        ..clear()
-        ..addAll(images);
-    });
+    
+    if (images.isNotEmpty) {
+      setState(() {
+        _workSampleImagesBase64
+          ..clear()
+          ..addAll(images);
+      });
+    }
   }
 
   Widget _sectionTitle(String title) {

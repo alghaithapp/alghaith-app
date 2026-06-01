@@ -399,13 +399,13 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
     final picked = await AppHelpers.pickImage(context);
     if (picked == null) return;
     
-    // رفع الصورة فوراً لكلود فلير والحصول على الرابط
+    // رفع صورة المنتج للسحابة فوراً
     final provider = context.read<AppProvider>();
     final url = await provider.uploadImage(File(picked.path));
     
     if (url != null) {
       setState(() {
-        _imageBase64 = url; // سنخزن الرابط في نفس المتغير لسهولة التعامل
+        _imageBase64 = url; // تخزين الرابط (URL) في المتغير المخصص للصور
         _imageLabel = picked.name;
       });
     }
@@ -492,14 +492,16 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
           : widget.item?.subCategory,
       categoryLabelAr: labels.productsTitleAr,
       categoryLabelEn: labels.productsTitleEn,
-      image: widget.item?.image ??
-          (serviceId == 'restaurant'
-              ? 'assets/images/cat_restaurant.png'
-              : serviceId == 'cars'
-                  ? 'assets/images/cat_cars.png'
-                  : serviceId == 'real_estate'
-                      ? 'assets/images/re_house.png'
-                      : 'assets/images/cat_shopping.png'),
+      image: (_imageBase64 != null && _imageBase64!.startsWith('http'))
+          ? _imageBase64!
+          : widget.item?.image ??
+              (serviceId == 'restaurant'
+                  ? 'assets/images/cat_restaurant.png'
+                  : serviceId == 'cars'
+                      ? 'assets/images/cat_cars.png'
+                      : serviceId == 'real_estate'
+                          ? 'assets/images/re_house.png'
+                          : 'assets/images/cat_shopping.png'),
       imageBase64: _imageBase64,
       prepMinutes: serviceId == 'restaurant'
           ? int.tryParse(_prepController.text.trim())

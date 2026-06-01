@@ -38,33 +38,47 @@ class AppImage extends StatelessWidget {
       return _buildPlaceholder();
     }
 
+    final trimmedData = imageData!.trim();
+
     // 1. التحقق إذا كان رابط إنترنت (Cloudflare URL)
-    if (imageData!.startsWith('http')) {
+    if (trimmedData.startsWith('http')) {
       return CachedNetworkImage(
-        imageUrl: imageData!,
+        imageUrl: trimmedData,
         fit: fit,
         placeholder: (context, url) => _buildLoading(),
         errorWidget: (context, url, error) => _buildError(),
       );
     }
 
-    // 2. التحقق إذا كان Base64
-    if (imageData!.startsWith('iVBOR') || imageData!.startsWith('/9j/') || imageData!.length > 100) {
+    // 2. التحقق إذا كان Base64 (مع معالجة البادئة المحتملة)
+    String base64String = trimmedData;
+    if (base64String.contains('base64,')) {
+      base64String = base64String.split('base64,').last;
+    }
+
+    // التحقق من العلامات المميزة للصور أو الطول
+    if (base64String.startsWith('iVBOR') || // PNG
+        base64String.startsWith('/9j/') || // JPEG
+        base64String.startsWith('R0lG') || // GIF
+        base64String.startsWith('UklGR') || // WebP
+        base64String.length > 50) {
       try {
         return Image.memory(
-          base64Decode(imageData!),
+          base64Decode(base64String),
           fit: fit,
+          gaplessPlayback: true,
           errorBuilder: (context, error, stackTrace) => _buildError(),
         );
       } catch (e) {
+        debugPrint('AppImage Base64 Error: $e');
         return _buildError();
       }
     }
 
     // 3. التحقق إذا كان Asset Path
-    if (imageData!.startsWith('assets/')) {
+    if (trimmedData.startsWith('assets/')) {
       return Image.asset(
-        imageData!,
+        trimmedData,
         fit: fit,
         errorBuilder: (context, error, stackTrace) => _buildError(),
       );

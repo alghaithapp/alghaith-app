@@ -200,9 +200,74 @@ export default {
         return json({
           success: true,
           token,
-          phoneNumber: normalizedPhone,
+          phoneNumber: normalizedPhone.startsWith('+')
+            ? normalizedPhone
+            : `+${normalizedPhone}`,
           expiresInSeconds: 60 * 60 * 24 * 30,
         });
+      }
+
+      // --- Image Upload Endpoint ---
+      if (url.pathname === '/upload' && request.method === 'POST') {
+        const contentType = request.headers.get('content-type') || '';
+        if (!contentType.includes('multipart/form-data')) {
+          return json({ success: false, message: 'Invalid content type' }, 400);
+        }
+
+        const formData = await request.formData();
+        const file = formData.get('file');
+        const bucket = formData.get('bucket') || 'uploads';
+
+        if (!file || !(file instanceof File)) {
+          return json({ success: false, message: 'No file provided' }, 400);
+        }
+
+        // تنظيف الرابط لضمان عمله مع الاستورج
+        let supabaseUrl = env.SUPABASE_URL;
+        if (supabaseUrl.endsWith('/rest/v1/')) {
+          supabaseUrl = supabaseUrl.replace('/rest/v1/', '');
+        } else if (supabaseUrl.endsWith('/rest/v1')) {
+          supabaseUrl = supabaseUrl.replace('/rest/v1', '');
+        }
+        if (supabaseUrl.endsWith('/')) {
+          supabaseUrl = supabaseUrl.slice(0, -1);
+        }
+
+        const supabaseKey = env.SUPABASE_SERVICE_ROLE_KEY;
+
+        if (!supabaseUrl || !supabaseKey) {
+          return json({ success: false, message: 'Supabase not configured in Worker' }, 500);
+        }
+
+        const safeName = String(file.name || 'image.jpg')
+          .replace(/[^a-zA-Z0-9._-]/g, '_');
+        const fileName = `${Date.now()}_${safeName}`;
+        const objectPath = `${bucket}/${fileName}`;
+        const uploadUrl = `${supabaseUrl}/storage/v1/object/${objectPath}`;
+        const contentType = file.type || 'image/jpeg';
+
+        const uploadResponse = await fetch(uploadUrl, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${supabaseKey}`,
+            apikey: supabaseKey,
+            'Content-Type': contentType,
+            'x-upsert': 'true',
+            'cache-control': '3600',
+          },
+          body: await file.arrayBuffer(),
+        });
+
+        if (!uploadResponse.ok) {
+          const error = await uploadResponse.text();
+          return json(
+            { success: false, message: 'Upload failed', error },
+            uploadResponse.status
+          );
+        }
+
+        const publicUrl = `${supabaseUrl}/storage/v1/object/public/${objectPath}`;
+        return json({ success: true, url: publicUrl, bucket, path: fileName });
       }
 
       return new Response('Al-Ghaith API Active', {

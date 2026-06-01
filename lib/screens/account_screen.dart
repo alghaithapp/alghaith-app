@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -846,10 +847,25 @@ class _CustomerAccountView extends StatelessWidget {
                             final picked = await AppHelpers.pickImage(context);
                             if (picked == null) return;
 
-                            final bytes = await picked.readAsBytes();
-                            setStateDialog(() {
-                              selectedAvatarBase64 = base64Encode(bytes);
-                            });
+                            final imageRef =
+                                await provider.uploadImage(File(picked.path));
+                            if (!context.mounted) return;
+                            if (imageRef != null) {
+                              setStateDialog(() {
+                                selectedAvatarBase64 = imageRef;
+                              });
+                            } else {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(
+                                    isAr
+                                        ? 'تعذر رفع الصورة. تحقق من الاتصال وحاول مجدداً.'
+                                        : 'Could not upload the image. Check your connection and try again.',
+                                    style: const TextStyle(fontFamily: 'Cairo'),
+                                  ),
+                                ),
+                              );
+                            }
                           },
                           child: Container(
                             padding: const EdgeInsets.all(8),
@@ -891,6 +907,9 @@ class _CustomerAccountView extends StatelessWidget {
                     foregroundColor: Colors.white,
                   ),
                   onPressed: () async {
+                    if (selectedAvatarBase64 != null) {
+                      setStateDialog(() {}); // تحديث حالة الديالوج
+                    }
                     await provider.updateCustomerProfile(
                       name: nameController.text,
                       phone: phoneController.text,
