@@ -1884,7 +1884,8 @@ class AppProvider extends ChangeNotifier {
         await _syncMerchantDataBeforeLeavingMerchantMode();
       } catch (error) {
         debugPrint('MERCHANT_SYNC_BEFORE_ROLE_SWITCH: $error');
-        return false;
+        // لا نمنع المستخدم من تبديل الدور إذا تعثرت المزامنة.
+        // نكمل الانتقال محليًا ثم يحاول النظام المزامنة لاحقًا.
       }
     }
 

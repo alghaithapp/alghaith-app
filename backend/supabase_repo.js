@@ -1284,15 +1284,16 @@ async function listMerchantStoresByService({
     const phoneVariants = getPhoneVariants(profile.phone);
     const products = await selectMany(
       'merchant_products',
-      [
-        { method: 'in', column: 'phone', value: phoneVariants },
-        { method: 'eq', column: 'category', value: productCategory },
-      ],
+      [{ method: 'in', column: 'phone', value: phoneVariants }],
       { column: 'created_at', ascending: false }
     );
 
     const filteredProducts = products.filter((row) => {
       if (row.is_available === false) return false;
+      const productService = String(
+        row.category || row.service_id || ''
+      ).trim();
+      if (productService !== String(productCategory).trim()) return false;
       if (!target) return true;
       return String(row.sub_category || '').trim() === target;
     });
@@ -1331,29 +1332,38 @@ async function listCatalogProducts(category = '', subCategoryId = '') {
 
   const categoryFilter = String(category || '').trim();
   const target = String(subCategoryId || '').trim();
-  const filters = [];
-  if (categoryFilter) {
-    filters.push({ method: 'eq', column: 'category', value: categoryFilter });
-  }
-
   const products = await selectMany(
     'merchant_products',
-    filters,
+    [],
     { column: 'created_at', ascending: false }
   );
 
   return products
     .filter((row) => {
       if (row.is_available === false) return false;
+      const productService = String(
+        row.category || row.service_id || ''
+      ).trim();
+      if (categoryFilter && productService !== categoryFilter) {
+        return false;
+      }
       const phone = String(row.phone || '').trim();
       const profile = findProfileForPhone(profileByPhone, phone);
       if (!profile) return false;
 
       const serviceIds = profileServiceIds(profile);
-      if (categoryFilter === 'product' && !serviceIds.includes('product')) {
+      if (
+        categoryFilter === 'product' &&
+        !serviceIds.includes('product') &&
+        productService !== 'product'
+      ) {
         return false;
       }
-      if (categoryFilter === 'restaurant' && !serviceIds.includes('restaurant')) {
+      if (
+        categoryFilter === 'restaurant' &&
+        !serviceIds.includes('restaurant') &&
+        productService !== 'restaurant'
+      ) {
         return false;
       }
       if (target && String(row.sub_category || '').trim() !== target) {
