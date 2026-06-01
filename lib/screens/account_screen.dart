@@ -907,16 +907,27 @@ class _CustomerAccountView extends StatelessWidget {
                     foregroundColor: Colors.white,
                   ),
                   onPressed: () async {
-                    if (selectedAvatarBase64 != null) {
-                      setStateDialog(() {}); // تحديث حالة الديالوج
+                    try {
+                      await provider.updateCustomerProfile(
+                        name: nameController.text,
+                        phone: phoneController.text,
+                        avatarBase64: selectedAvatarBase64,
+                      );
+                      if (!dialogContext.mounted) return;
+                      Navigator.pop(dialogContext);
+                    } catch (error) {
+                      if (!dialogContext.mounted) return;
+                      ScaffoldMessenger.of(dialogContext).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            isAr
+                                ? 'تعذر حفظ الصورة: $error'
+                                : 'Could not save profile: $error',
+                            style: const TextStyle(fontFamily: 'Cairo'),
+                          ),
+                        ),
+                      );
                     }
-                    await provider.updateCustomerProfile(
-                      name: nameController.text,
-                      phone: phoneController.text,
-                      avatarBase64: selectedAvatarBase64,
-                    );
-                    if (!dialogContext.mounted) return;
-                    Navigator.pop(dialogContext);
                   },
                   child: Text(isAr ? 'حفظ' : 'Save'),
                 ),
@@ -970,16 +981,16 @@ class _CustomerAvatar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final avatarBase64 = appProvider.customerAvatarBase64;
-    return Container(
-      width: 70,
-      height: 70,
-      decoration: BoxDecoration(
-        color: Colors.orange.shade100,
-        shape: BoxShape.circle,
-      ),
-      child: AppImage(
-        imageData: avatarBase64,
-        borderRadius: BorderRadius.circular(35),
+    return ClipOval(
+      child: SizedBox(
+        width: 70,
+        height: 70,
+        child: AppImage(
+          imageData: avatarBase64,
+          width: 70,
+          height: 70,
+          fit: BoxFit.cover,
+        ),
       ),
     );
   }

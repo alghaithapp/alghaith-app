@@ -2,10 +2,8 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
-import 'package:http/http.dart' as http;
 
 import 'cloudflare_service.dart';
-import 'supabase_service.dart';
 
 /// مرجع صورة: رابط عام (مفضّل) أو Base64 مضغوط كاحتياط.
 class ImageStorageService {
@@ -33,7 +31,7 @@ class ImageStorageService {
         payload.length > 80;
   }
 
-  /// رفع مع احتياط: Worker → Supabase Storage → Base64 مضغوط.
+  /// رفع: Cloudflare Worker → Base64 مضغوط كاحتياط فقط للصور الصغيرة.
   static Future<String?> uploadImageFile(
     File file, {
     String bucket = 'uploads',
@@ -41,15 +39,6 @@ class ImageStorageService {
     final cloudUrl = await CloudflareService.uploadFile(file, bucket: bucket);
     if (cloudUrl != null && cloudUrl.trim().isNotEmpty) {
       return cloudUrl.trim();
-    }
-
-    final storageUrl = await SupabaseService.uploadImage(
-      bucket,
-      'profiles/${DateTime.now().millisecondsSinceEpoch}',
-      file,
-    );
-    if (storageUrl != null && storageUrl.trim().isNotEmpty) {
-      return storageUrl.trim();
     }
 
     final base64 = await encodeFileAsBase64(file);
@@ -154,6 +143,13 @@ class ImageStorageService {
       'image': fallbackAsset ?? '',
       'image_base64': value,
     };
+  }
+
+  static String? normalizeImageRef(String? value) {
+    final trimmed = value?.trim();
+    if (trimmed == null || trimmed.isEmpty) return null;
+    if (isRemoteUrl(trimmed)) return trimmed;
+    return trimmed;
   }
 
   static String? resolveDisplayImage({

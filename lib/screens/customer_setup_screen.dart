@@ -7,6 +7,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
 import '../providers/app_provider.dart';
+import '../services/image_storage_service.dart';
 import '../widgets/app_image.dart';
 import '../widgets/app_logo.dart';
 
@@ -65,16 +66,35 @@ class _CustomerSetupScreenState extends State<CustomerSetupScreen> {
       setState(() {
         _avatarBase64 = imageRef;
       });
-    } else {
+      return;
+    }
+
+    final localFallback =
+        await ImageStorageService.encodeFileAsBase64(File(picked.path));
+    if (!mounted) return;
+    if (localFallback != null) {
+      setState(() {
+        _avatarBase64 = localFallback;
+      });
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
-            'تعذر رفع الصورة. سيتم المحاولة بحفظ نسخة محلية عند الحفظ إن أمكن.',
+            'تعذر رفع الصورة للسحابة. سيتم حفظ نسخة محلية مؤقتاً.',
             style: TextStyle(fontFamily: 'Cairo'),
           ),
         ),
       );
+      return;
     }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+          'تعذر رفع الصورة. حاول مرة أخرى.',
+          style: TextStyle(fontFamily: 'Cairo'),
+        ),
+      ),
+    );
   }
 
   Future<void> _save() async {

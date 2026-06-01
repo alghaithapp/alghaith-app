@@ -327,6 +327,16 @@ async function saveCustomerProfile(phone, data = {}) {
     'avatar_base64',
     data.avatar_base64 ?? data.avatarBase64
   );
+  if (await hasColumn('customer_profiles', 'customer_avatar_base64')) {
+    assignIfDefined(
+      basePayload,
+      'customer_avatar_base64',
+      data.customer_avatar_base64 ??
+        data.customerAvatarBase64 ??
+        data.avatar_base64 ??
+        data.avatarBase64
+    );
+  }
   assignIfDefined(basePayload, 'address', data.address);
 
   const conflictColumn = (await hasColumn('customer_profiles', 'phone'))

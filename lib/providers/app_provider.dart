@@ -1,9 +1,11 @@
 import 'dart:async';
-import 'dart:convert';
 
-import 'dart:io'; // إضافة مكتبة الملفات
-import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:io';
 import 'package:flutter/material.dart';
+import '../core/config/app_config.dart';
+import '../core/utils/phone_utils.dart';
+import '../data/models/account_snapshot.dart';
+import '../data/repositories/account_repository.dart';
 import '../models/app_models.dart';
 import '../models/merchant_models.dart';
 import '../services/supabase_service.dart';
@@ -35,8 +37,7 @@ class AppProvider extends ChangeNotifier {
   bool _isReady = false;
   bool _isRestoring = false; 
   bool _isSyncing = false;   
-  bool _isLoggingIn = false; // حالة تتبع عملية الدخول الصارمة
-  Timer? _syncTimer;
+  bool _isLoggingIn = false;
   Timer? _bootWatchdog;
   String _customerName = '';
   String _customerPhone = '';
@@ -55,7 +56,9 @@ class AppProvider extends ChangeNotifier {
       final imageRef =
           await ImageStorageService.uploadImageFile(file, bucket: bucket);
       if (imageRef != null) {
-        debugPrint('UPLOAD_SUCCESS: Image stored as ${imageRef.length > 80 ? 'base64' : imageRef}');
+        debugPrint(
+          'UPLOAD_SUCCESS: Image stored as ${imageRef.length > 80 ? 'base64' : imageRef}',
+        );
       } else {
         debugPrint('UPLOAD_ERROR: All upload strategies failed');
       }
@@ -69,31 +72,6 @@ class AppProvider extends ChangeNotifier {
     }
   }
 
-  @override
-  void notifyListeners() {
-    super.notifyListeners();
-    // لا تسمح أبداً بالمزامنة إذا كان المستخدم قد سجل خروجه أو في وضع الاستعادة
-    if (_isHydrating || _isRestoring || _isLoggingIn || _authPhone == null) {
-      return;
-    }
-    _scheduleSync();
-  }
-
-  /// جدولة المزامنة مع السحابة بشكل ذكي
-  void _scheduleSync() {
-    if (_isHydrating ||
-        _isRestoring ||
-        !hasPhoneSession ||
-        !SupabaseService.isConfigured) {
-      return;
-    }
-
-    _syncTimer?.cancel();
-    _syncTimer = Timer(const Duration(seconds: 10), () {
-      _syncRemoteState();
-    });
-  }
-
   String get lang => _lang;
   bool get hasSelectedLanguage => true;
   String? get userRole => _userRole;
@@ -101,8 +79,9 @@ class AppProvider extends ChangeNotifier {
   String? get sessionToken => _sessionToken;
   bool get isLoggingIn => _isLoggingIn;
   bool get hasPhoneSession => _authPhone != null && _authPhone!.isNotEmpty;
-  String? get customerAvatarBase64 => _customerAvatarBase64;
-  String? get customerAvatarUrl => _customerAvatarBase64;
+  String? get customerAvatarBase64 =>
+      ImageStorageService.normalizeImageRef(_customerAvatarBase64);
+  String? get customerAvatarUrl => customerAvatarBase64;
 
   String? get merchantProfileImageBase64 {
     final store = _merchantStore;
@@ -254,24 +233,19 @@ class AppProvider extends ChangeNotifier {
 
   Future<void> _loadSettings() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final savedToken = prefs.getString('auth_session_token');
-      final normalizedToken = _trimmedOrNull(savedToken);
-      if (normalizedToken != null) {
-        _sessionToken = normalizedToken;
-        SupabaseService.setSessionToken(normalizedToken);
-      }
-      final savedPhone = prefs.getString('auth_phone');
-      if (savedPhone != null && savedPhone.trim().isNotEmpty) {
-        _authPhone = _normalizeStoredPhone(savedPhone);
+      final accountRepo = AccountRepository.instance;
+      final stored = await accountRepo.readStoredSession();
+      if (stored != null) {
+        _sessionToken = stored.token;
+        SupabaseService.setSessionToken(stored.token);
+        _authPhone = PhoneUtils.normalize(stored.phone);
         final restoredLocally = await _restoreLocalBackup(_authPhone!);
         if (restoredLocally && !_isReady) {
           _isHydrating = false;
           _isReady = true;
           notifyListeners();
         }
-        
-        // إجبار التطبيق على الانتظار حتى استعادة البيانات بالكامل
+
         _isRestoring = true;
         await _restoreRemoteSession(_authPhone!);
       }
@@ -300,47 +274,28 @@ class AppProvider extends ChangeNotifier {
   }
 
   /// توحيد رقم الهاتف للصيغة الدولية لضمان استرجاع البيانات القديمة (+964...)
-  String _normalizeStoredPhone(String phone) {
-    final digits = phone.trim().replaceAll(RegExp(r'\D'), '');
-    if (digits.isEmpty) return '';
-    if (digits.startsWith('0') && digits.length >= 11) {
-      return '+964${digits.substring(1)}';
-    }
-    if (digits.startsWith('964')) {
-      return '+$digits';
-    }
-    if (digits.length == 10 && digits.startsWith('7')) {
-      return '+964$digits';
-    }
-    return phone.startsWith('+') ? phone : '+$digits';
-  }
+  String _normalizeStoredPhone(String phone) => PhoneUtils.normalize(phone);
 
-  String _localBackupPrefsKey(String phone) {
-    final digits = _normalizeStoredPhone(phone).replaceAll(RegExp(r'\D'), '');
-    return 'local_account_backup_$digits';
-  }
-
-  Map<String, dynamic> _buildLocalBackupSnapshot() {
-    return {
-      'userRole': _userRole,
-      'customerName': _customerName,
-      'customerPhone': _customerPhone,
-      'customerAddress': _customerAddress,
-      'customerAvatarBase64': _customerAvatarBase64,
-      'darkMode': _darkMode,
-      'driverType': _driverType,
-      'driverProfile': _driverProfile,
-      'merchantStore': _merchantStore,
-      'merchantOffers': _merchantOffers.map((offer) => offer.toMap()).toList(),
-      'merchantReviews':
-          _merchantReviews.map((review) => review.toMap()).toList(),
-      'items': _items.map((item) => item.toMap()).toList(),
-      'orders': _orders.map((order) => order.toMap()).toList(),
-      'addresses': _addresses,
-      'favoriteItemIds': _favoriteItemIds.toList(),
-      'selectedCategory': _selectedCategory,
-      'activeSubCategory': _activeSubCategory,
-    };
+  AccountSnapshot _buildLocalBackupSnapshot() {
+    return AccountSnapshot(
+      userRole: _userRole,
+      customerName: _customerName,
+      customerPhone: _customerPhone,
+      customerAddress: _customerAddress,
+      customerAvatarRef: _customerAvatarBase64,
+      darkMode: _darkMode,
+      driverType: _driverType,
+      driverProfile: _driverProfile,
+      merchantStore: _merchantStore,
+      merchantOffers: _merchantOffers,
+      merchantReviews: _merchantReviews,
+      items: _items,
+      orders: _orders,
+      addresses: _addresses,
+      favoriteItemIds: _favoriteItemIds.toList(),
+      selectedCategory: _selectedCategory,
+      activeSubCategory: _activeSubCategory,
+    );
   }
 
   void _applyLocalBackupSnapshot(Map<String, dynamic> snapshot) {
@@ -352,7 +307,8 @@ class AppProvider extends ChangeNotifier {
     _customerAddress = _trimmedOrNull(snapshot['customerAddress']?.toString()) ??
         _customerAddress;
     _customerAvatarBase64 = _trimmedOrNull(
-            snapshot['customerAvatarBase64']?.toString()) ??
+            snapshot['customerAvatarBase64']?.toString() ??
+                snapshot['customerAvatarUrl']?.toString()) ??
         _customerAvatarBase64;
     _darkMode = snapshot['darkMode'] as bool? ?? _darkMode;
     _driverType = snapshot['driverType'] as String? ?? _driverType;
@@ -420,12 +376,10 @@ class AppProvider extends ChangeNotifier {
 
   Future<bool> _restoreLocalBackup(String phone) async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final raw = prefs.getString(_localBackupPrefsKey(phone));
-      if (raw == null || raw.trim().isEmpty) return false;
-      final decoded = jsonDecode(raw);
-      if (decoded is! Map) return false;
-      _applyLocalBackupSnapshot(Map<String, dynamic>.from(decoded));
+      final snapshot =
+          await AccountRepository.instance.readLocalSnapshot(phone);
+      if (snapshot == null) return false;
+      _applyLocalBackupSnapshot(snapshot.toJson());
       return _userRole != null ||
           _customerName.isNotEmpty ||
           _merchantStore != null ||
@@ -441,10 +395,9 @@ class AppProvider extends ChangeNotifier {
     final phone = _trimmedOrNull(_authPhone);
     if (phone == null) return;
     try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(
-        _localBackupPrefsKey(phone),
-        jsonEncode(_buildLocalBackupSnapshot()),
+      await AccountRepository.instance.writeLocalSnapshot(
+        phone,
+        _buildLocalBackupSnapshot(),
       );
     } catch (error) {
       debugPrint('LOCAL_BACKUP_SAVE_ERROR: $error');
@@ -453,44 +406,37 @@ class AppProvider extends ChangeNotifier {
 
   Future<void> _restoreRemoteSession(String phone) async {
     final normalizedPhone = _normalizeStoredPhone(phone);
-    if (normalizedPhone.isEmpty || !SupabaseService.isConfigured) return;
+    if (normalizedPhone.isEmpty || !AppConfig.isBackendConfigured) return;
 
     debugPrint('RESTORE: Loading data for $normalizedPhone');
 
     try {
-      final results = await Future.wait([
-        SupabaseService.loadAppUser(normalizedPhone),
-        SupabaseService.loadCustomerProfile(normalizedPhone),
-        SupabaseService.loadMerchantProfile(normalizedPhone),
-        SupabaseService.loadUserState(normalizedPhone),
-        SupabaseService.loadCustomerAddresses(normalizedPhone),
-        SupabaseService.loadCustomerFavoriteIds(normalizedPhone),
-        SupabaseService.loadCustomerOrders(normalizedPhone),
-        SupabaseService.loadMerchantProducts(normalizedPhone),
-      ]).timeout(const Duration(seconds: 15));
+      final bundle =
+          await AccountRepository.instance.fetchRemoteAccount(normalizedPhone);
 
-      final appUser = results[0];
-      final customerProfile = results[1];
-      final merchantProfile = results[2];
-      final userState = results[3];
-      final remoteAddresses = results[4];
-      final remoteFavoriteIds = results[5];
-      final remoteOrders = results[6];
-      final remoteProducts = results[7];
+      final appUser = bundle.appUser;
+      final customerProfile = bundle.customerProfile;
+      final merchantProfile = bundle.merchantProfile;
+      final userState = bundle.userState;
+      final remoteAddresses = bundle.addresses;
+      final remoteFavoriteIds = bundle.favoriteIds;
+      final remoteOrders = bundle.orders;
+      final remoteProducts = bundle.products;
 
-      if (appUser is Map<String, dynamic>) {
+      if (appUser != null) {
         _appUserRecord = appUser;
         _customerName = _trimmedOrNull(appUser['full_name']?.toString()) ??
             _customerName;
         _userRole = _trimmedOrNull(appUser['role']?.toString()) ?? _userRole;
         _customerAvatarBase64 = _trimmedOrNull(
               appUser['avatar_base64']?.toString() ??
-                  appUser['customer_avatar_base64']?.toString(),
+                  appUser['customer_avatar_base64']?.toString() ??
+                  appUser['avatar_url']?.toString(),
             ) ??
             _customerAvatarBase64;
       }
 
-      if (customerProfile is Map<String, dynamic>) {
+      if (customerProfile != null) {
         _customerName =
             _trimmedOrNull(customerProfile['display_name']?.toString()) ??
                 _customerName;
@@ -498,11 +444,12 @@ class AppProvider extends ChangeNotifier {
             _trimmedOrNull(customerProfile['address']?.toString()) ??
                 _customerAddress;
         _customerAvatarBase64 =
-            _trimmedOrNull(customerProfile['avatar_base64']?.toString()) ??
+            _trimmedOrNull(customerProfile['avatar_base64']?.toString() ??
+                    customerProfile['avatar_url']?.toString()) ??
                 _customerAvatarBase64;
       }
 
-      if (merchantProfile is Map<String, dynamic>) {
+      if (merchantProfile != null) {
         _merchantStore = {
           'name': merchantProfile['store_name']?.toString() ?? '',
           'category':
@@ -526,26 +473,25 @@ class AppProvider extends ChangeNotifier {
         }
       }
 
-      if (userState is Map<String, dynamic>) {
+      if (userState != null) {
         _applyRemoteState(userState);
       }
 
-      if (remoteAddresses is List<String> && remoteAddresses.isNotEmpty) {
+      if (remoteAddresses.isNotEmpty) {
         _addresses = List<String>.from(remoteAddresses);
       }
 
-      if (remoteFavoriteIds is List<String>) {
+      if (remoteFavoriteIds.isNotEmpty) {
         _favoriteItemIds
           ..clear()
           ..addAll(remoteFavoriteIds);
       }
 
-      if (remoteOrders is List<ActiveOrder> && remoteOrders.isNotEmpty) {
+      if (remoteOrders.isNotEmpty) {
         _orders = List<ActiveOrder>.from(remoteOrders);
       }
 
-      if (remoteProducts is List<Map<String, dynamic>> &&
-          remoteProducts.isNotEmpty) {
+      if (remoteProducts.isNotEmpty) {
         _items = remoteProducts
             .map((row) => _listItemFromProductRow(row))
             .toList();
@@ -659,6 +605,8 @@ class AppProvider extends ChangeNotifier {
       'customerPhone': _customerPhone,
       'userRole': _userRole,
       'customerName': _customerName,
+      'customerAvatarBase64': _customerAvatarBase64,
+      'customerAvatarUrl': _customerAvatarBase64,
       'profileComplete': hasCompletedCustomerProfile,
       'selectedCategory': _selectedCategory,
       'activeSubCategory': _activeSubCategory,
@@ -683,6 +631,11 @@ class AppProvider extends ChangeNotifier {
       _customerName =
           _trimmedOrNull(state['customerName']?.toString()) ?? _customerName;
     }
+    _customerAvatarBase64 = _trimmedOrNull(
+          state['customerAvatarBase64']?.toString() ??
+              state['customerAvatarUrl']?.toString(),
+        ) ??
+        _customerAvatarBase64;
     _selectedCategory =
         state['selectedCategory'] as String? ?? _selectedCategory;
     _activeSubCategory =
@@ -736,6 +689,7 @@ class AppProvider extends ChangeNotifier {
   Future<void> setDarkMode(bool enabled) async {
     _darkMode = enabled;
     notifyListeners();
+    await _syncRemoteState();
   }
 
   Future<void> toggleDarkMode() => setDarkMode(!_darkMode);
@@ -749,18 +703,19 @@ class AppProvider extends ChangeNotifier {
     if (name != null && name.trim().isNotEmpty) _customerName = name.trim();
     if (phone != null && phone.trim().isNotEmpty) _customerPhone = _normalizeStoredPhone(phone);
     if (address != null && address.trim().isNotEmpty) _customerAddress = address.trim();
-    if (avatarBase64 != null) _customerAvatarBase64 = avatarBase64;
+    if (avatarBase64 != null) {
+      _customerAvatarBase64 =
+          ImageStorageService.normalizeImageRef(avatarBase64);
+    }
 
     notifyListeners();
     await _persistLocalBackup();
 
-    // حفظ فوري ومباشر للسحابة دون انتظار المزامنة التلقائية
     if (_authPhone != null && _authPhone!.isNotEmpty) {
       try {
         final phoneId = _normalizeStoredPhone(_authPhone!);
         debugPrint('RESTORE_LOG: Force saving profile for $phoneId');
-        
-        // 1. تحديث الجدول الأساسي
+
         await SupabaseService.saveAppUser(
           phoneId,
           fullName: _customerName,
@@ -768,7 +723,6 @@ class AppProvider extends ChangeNotifier {
           role: _userRole,
         );
 
-        // 2. تحديث جدول الزبون
         await SupabaseService.saveCustomerProfile(phoneId, {
           'display_name': _customerName,
           'address': _customerAddress,
@@ -776,10 +730,11 @@ class AppProvider extends ChangeNotifier {
         });
         await SupabaseService.saveUserState(phoneId, _buildRemoteState());
         await _persistLocalBackup();
-        
+
         debugPrint('RESTORE_LOG: Profile saved successfully.');
       } catch (error) {
         debugPrint('RESTORE_LOG: Failed to save profile: $error');
+        rethrow;
       }
     }
   }
@@ -792,22 +747,18 @@ class AppProvider extends ChangeNotifier {
     _sessionToken = normalizedToken;
     SupabaseService.setSessionToken(normalizedToken);
 
-    _isLoggingIn = true; 
-    _isRestoring = true; 
-    _syncTimer?.cancel();
+    _isLoggingIn = true;
+    _isRestoring = true;
     notifyListeners();
-    
+
     _authPhone = normalized;
     _customerPhone = normalized;
-    
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('auth_phone', normalized);
-    if (normalizedToken != null) {
-      await prefs.setString('auth_session_token', normalizedToken);
-    } else {
-      await prefs.remove('auth_session_token');
-    }
-    
+
+    await AccountRepository.instance.persistSession(
+      phone: normalized,
+      token: normalizedToken,
+    );
+
     try {
       debugPrint('==== FULL RESTORATION STARTED for $normalized ====');
       // انتظار جلب كل شيء حرفياً من السحابة قبل الانتقال للخطوة التالية
@@ -1452,8 +1403,7 @@ class AppProvider extends ChangeNotifier {
   }
 
   void resetAll() {
-    _isRestoring = true; // قفل المزامنة فوراً ومنع أي رفع بيانات
-    _syncTimer?.cancel();
+    _isRestoring = true;
     final previousPhone = _authPhone;
     
     // مسح البيانات من الذاكرة فقط
@@ -1476,15 +1426,11 @@ class AppProvider extends ChangeNotifier {
     _customerAvatarBase64 = null;
     _favoriteItemIds.clear();
 
-    // مسح رقم الهاتف من التخزين الدائم
-    SharedPreferences.getInstance().then((prefs) {
-      prefs.remove('auth_phone');
-      prefs.remove('auth_session_token');
-      if (previousPhone != null && previousPhone.trim().isNotEmpty) {
-        prefs.remove(_localBackupPrefsKey(previousPhone));
-      }
-      debugPrint('LOGOUT: Local session cleared.');
-    });
+    unawaited(
+      AccountRepository.instance.clearSession(phone: previousPhone).then((_) {
+        debugPrint('LOGOUT: Local session cleared.');
+      }),
+    );
     SupabaseService.setSessionToken(null);
 
     // العودة لوضع البداية

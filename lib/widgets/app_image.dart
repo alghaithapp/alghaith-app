@@ -1,10 +1,13 @@
 import 'dart:convert';
-import 'package:flutter/material.dart';
+
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/material.dart';
+
+import '../services/image_storage_service.dart';
 
 class AppImage extends StatelessWidget {
-  final String? imageData; // يمكن أن يكون URL أو Base64 أو Asset Path
+  final String? imageData;
   final double? width;
   final double? height;
   final BoxFit fit;
@@ -21,50 +24,41 @@ class AppImage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final Widget imageWidget = _buildImage();
-    
+    final imageWidget = _buildImage(ImageStorageService.normalizeImageRef(imageData));
+
     if (borderRadius != null) {
       return ClipRRect(
         borderRadius: borderRadius!,
         child: SizedBox(width: width, height: height, child: imageWidget),
       );
     }
-    
+
     return SizedBox(width: width, height: height, child: imageWidget);
   }
 
-  Widget _buildImage() {
-    if (imageData == null || imageData!.isEmpty) {
+  Widget _buildImage(String? normalizedData) {
+    if (normalizedData == null || normalizedData.isEmpty) {
       return _buildPlaceholder();
     }
 
-    final trimmedData = imageData!.trim();
-
-    // 1. التحقق إذا كان رابط إنترنت (Cloudflare URL)
-    if (trimmedData.startsWith('http')) {
-      return CachedNetworkImage(
-        imageUrl: trimmedData,
-        fit: fit,
-        placeholder: (context, url) => _buildLoading(),
-        errorWidget: (context, url, error) => _buildError(),
-      );
+    if (ImageStorageService.isRemoteUrl(normalizedData)) {
+      return _buildNetworkImage(normalizedData);
     }
 
-    // 2. التحقق إذا كان Base64 (مع معالجة البادئة المحتملة)
-    String base64String = trimmedData;
+    var base64String = normalizedData;
     if (base64String.contains('base64,')) {
       base64String = base64String.split('base64,').last;
     }
 
-    // التحقق من العلامات المميزة للصور أو الطول
-    if (base64String.startsWith('iVBOR') || // PNG
-        base64String.startsWith('/9j/') || // JPEG
-        base64String.startsWith('R0lG') || // GIF
-        base64String.startsWith('UklGR') || // WebP
-        base64String.length > 50) {
+    if (base64String.startsWith('iVBOR') ||
+        base64String.startsWith('/9j/') ||
+        base64String.startsWith('R0lG') ||
+        base64String.startsWith('UklGR')) {
       try {
         return Image.memory(
           base64Decode(base64String),
+          width: width,
+          height: height,
           fit: fit,
           gaplessPlayback: true,
           errorBuilder: (context, error, stackTrace) => _buildError(),
@@ -75,10 +69,11 @@ class AppImage extends StatelessWidget {
       }
     }
 
-    // 3. التحقق إذا كان Asset Path
-    if (trimmedData.startsWith('assets/')) {
+    if (normalizedData.startsWith('assets/')) {
       return Image.asset(
-        trimmedData,
+        normalizedData,
+        width: width,
+        height: height,
         fit: fit,
         errorBuilder: (context, error, stackTrace) => _buildError(),
       );
@@ -87,26 +82,60 @@ class AppImage extends StatelessWidget {
     return _buildPlaceholder();
   }
 
+  Widget _buildNetworkImage(String url) {
+    return CachedNetworkImage(
+      imageUrl: url,
+      width: width,
+      height: height,
+      fit: fit,
+      placeholder: (context, _) => _buildLoading(),
+      errorWidget: (context, _, error) {
+        debugPrint('AppImage network error for $url: $error');
+        return Image.network(
+          url,
+          width: width,
+          height: height,
+          fit: fit,
+          errorBuilder: (context, _, __) => _buildError(),
+          loadingBuilder: (context, child, loadingProgress) {
+            if (loadingProgress == null) return child;
+            return _buildLoading();
+          },
+        );
+      },
+    );
+  }
+
   Widget _buildPlaceholder() {
     return Container(
+      width: width,
+      height: height,
       color: Colors.grey[200],
-      child: const Icon(CupertinoIcons.photo, color: Colors.grey),
+      child: const Icon(CupertinoIcons.person_fill, color: Colors.grey),
     );
   }
 
   Widget _buildLoading() {
     return Container(
+      width: width,
+      height: height,
       color: Colors.grey[100],
-      child: const Center(
-        child: CupertinoActivityIndicator(),
-      ),
+      child: const Center(child: CupertinoActivityIndicator()),
     );
   }
 
   Widget _buildError() {
     return Container(
-      color: Colors.red[50],
-      child: const Icon(Icons.broken_image_rounded, color: Colors.redAccent),
+      width: width,
+      height: height,
+      color: Colors.orange.shade50,
+      child: Icon(
+        CupertinoIcons.person_crop_circle,
+        color: Colors.orange.shade300,
+        size: (width != null && height != null)
+            ? (width! < height! ? width! * 0.55 : height! * 0.55)
+            : 32,
+      ),
     );
   }
 }
