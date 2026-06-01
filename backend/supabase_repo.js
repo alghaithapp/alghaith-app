@@ -1401,6 +1401,10 @@ async function listCatalogProducts(category = '', subCategoryId = '') {
           profile?.latitude ?? profile?.lat ?? null,
         merchant_longitude:
           profile?.longitude ?? profile?.lng ?? null,
+        merchant_open_time: profile?.open_time ?? null,
+        merchant_close_time: profile?.close_time ?? null,
+        merchant_is_open:
+          profile?.is_open === undefined ? true : Boolean(profile?.is_open),
       };
     });
 }

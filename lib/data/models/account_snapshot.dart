@@ -25,6 +25,7 @@ class AccountSnapshot {
     this.favoriteItemIds = const [],
     this.selectedCategory = 'all',
     this.activeSubCategory,
+    this.pendingOrderStatusSyncQueue = const [],
   });
 
   final String? userRole;
@@ -48,6 +49,7 @@ class AccountSnapshot {
   final List<String> favoriteItemIds;
   final String selectedCategory;
   final String? activeSubCategory;
+  final List<Map<String, dynamic>> pendingOrderStatusSyncQueue;
 
   Map<String, dynamic> toJson() {
     return {
@@ -72,6 +74,7 @@ class AccountSnapshot {
       'favoriteItemIds': favoriteItemIds,
       'selectedCategory': selectedCategory,
       'activeSubCategory': activeSubCategory,
+      'pendingOrderStatusSyncQueue': pendingOrderStatusSyncQueue,
     };
   }
 
@@ -104,6 +107,9 @@ class AccountSnapshot {
       favoriteItemIds: _parseStrings(json['favoriteItemIds']),
       selectedCategory: json['selectedCategory']?.toString() ?? 'all',
       activeSubCategory: json['activeSubCategory']?.toString(),
+      pendingOrderStatusSyncQueue: _parseDynamicMaps(
+        json['pendingOrderStatusSyncQueue'],
+      ),
     );
   }
 
@@ -142,6 +148,14 @@ class AccountSnapshot {
   static List<String> _parseStrings(dynamic value) {
     if (value is! List) return const [];
     return value.map((e) => e.toString()).toList();
+  }
+
+  static List<Map<String, dynamic>> _parseDynamicMaps(dynamic value) {
+    if (value is! List) return const [];
+    return value
+        .whereType<Map>()
+        .map((item) => Map<String, dynamic>.from(item))
+        .toList();
   }
 }
 

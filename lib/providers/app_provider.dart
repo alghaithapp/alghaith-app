@@ -13,6 +13,7 @@ import '../services/image_storage_service.dart';
 import '../utils/merchant_service_labels.dart';
 
 class AppProvider extends ChangeNotifier {
+  static const Duration _pendingApprovalTimeout = Duration(minutes: 20);
   String? _authPhone;
   String? _sessionToken;
   String? _driverType;
@@ -36,6 +37,7 @@ class AppProvider extends ChangeNotifier {
   List<TaxiRequest> _taxiRequests = [];
   List<String> _addresses = [];
   List<Map<String, String>> _notifications = [];
+  List<Map<String, dynamic>> _pendingOrderStatusSyncQueue = [];
   final Set<String> _favoriteItemIds = <String>{};
   String _selectedCategory = 'all';
   String? _activeSubCategory;
@@ -218,10 +220,27 @@ class AppProvider extends ChangeNotifier {
   double? get merchantLongitude =>
       _toDoubleValue(_merchantStore?['longitude']) ??
       _toDoubleValue(_merchantStore?['lng']);
+  bool requiresMerchantLocationForService(String serviceId) =>
+      serviceId == 'restaurant' || serviceId == 'product';
+  bool canPublishForService(String serviceId) =>
+      !requiresMerchantLocationForService(serviceId) ||
+      (merchantLatitude != null && merchantLongitude != null);
+  void assertCanPublishForService(String serviceId) {
+    if (canPublishForService(serviceId)) return;
+    throw StateError(
+      'يرجى تحديد موقع المتجر على الخريطة قبل نشر المنتجات.',
+    );
+  }
   String get merchantOpenTime =>
-      (_merchantStore?['openTime'] as String?)?.trim() ?? '';
+      ((_merchantStore?['openTime'] as String?) ??
+              (_merchantStore?['open_time'] as String?) ??
+              '')
+          .trim();
   String get merchantCloseTime =>
-      (_merchantStore?['closeTime'] as String?)?.trim() ?? '';
+      ((_merchantStore?['closeTime'] as String?) ??
+              (_merchantStore?['close_time'] as String?) ??
+              '')
+          .trim();
   int get merchantDeliveryFee => merchantActiveServiceId == 'professionals'
       ? 0
       : merchantActiveServiceId == 'restaurant'
@@ -237,6 +256,82 @@ class AppProvider extends ChangeNotifier {
   double? _toDoubleValue(dynamic value) {
     if (value is num) return value.toDouble();
     return double.tryParse(value?.toString() ?? '');
+  }
+
+  bool _isOrderActiveStatus(String statusKey) {
+    return statusKey != 'completed' &&
+        statusKey != 'cancelled' &&
+        statusKey != 'rejected';
+  }
+
+  DateTime? _parseOrderCreatedAt(ActiveOrder order) {
+    final raw = order.createdAt?.trim();
+    if (raw != null && raw.isNotEmpty) {
+      final parsed = DateTime.tryParse(raw);
+      if (parsed != null) return parsed.toLocal();
+    }
+    final idPrefix = order.id.split('-').first;
+    final ts = int.tryParse(idPrefix);
+    if (ts == null) return null;
+    return DateTime.fromMillisecondsSinceEpoch(ts).toLocal();
+  }
+
+  int? pendingApprovalRemainingSeconds(ActiveOrder order) {
+    if (order.statusKey != 'pending') return null;
+    final createdAt = _parseOrderCreatedAt(order);
+    if (createdAt == null) return null;
+    final elapsed = DateTime.now().difference(createdAt).inSeconds;
+    final remaining = _pendingApprovalTimeout.inSeconds - elapsed;
+    return remaining > 0 ? remaining : 0;
+  }
+
+  String? pendingApprovalRemainingLabelAr(ActiveOrder order) {
+    final remaining = pendingApprovalRemainingSeconds(order);
+    if (remaining == null) return null;
+    final minutes = (remaining ~/ 60).toString().padLeft(2, '0');
+    final seconds = (remaining % 60).toString().padLeft(2, '0');
+    return 'المهلة المتبقية: $minutes:$seconds';
+  }
+
+  DateTime? _parseTimeOfDay(String raw) {
+    final text = raw.trim();
+    if (text.isEmpty) return null;
+    final parts = text.split(':');
+    if (parts.length < 2) return null;
+    final h = int.tryParse(parts[0]);
+    final m = int.tryParse(parts[1]);
+    if (h == null || m == null) return null;
+    final now = DateTime.now();
+    return DateTime(now.year, now.month, now.day, h.clamp(0, 23), m.clamp(0, 59));
+  }
+
+  bool _isMerchantOpenNow({
+    required bool? isOpenFlag,
+    required String? openTime,
+    required String? closeTime,
+  }) {
+    if (isOpenFlag == false) return false;
+    final open = _parseTimeOfDay(openTime ?? '');
+    final close = _parseTimeOfDay(closeTime ?? '');
+    if (open == null || close == null) return true;
+    final now = DateTime.now();
+    if (close.isAfter(open)) {
+      return now.isAfter(open) && now.isBefore(close);
+    }
+    final closeNextDay = close.add(const Duration(days: 1));
+    if (now.isAfter(open)) return now.isBefore(closeNextDay);
+    final nowNextDay = now.add(const Duration(days: 1));
+    return nowNextDay.isBefore(closeNextDay);
+  }
+
+  String orderElapsedLabelAr(ActiveOrder order) {
+    final createdAt = _parseOrderCreatedAt(order);
+    if (createdAt == null) return 'الوقت غير متاح';
+    final diff = DateTime.now().difference(createdAt);
+    if (diff.inMinutes < 1) return 'منذ أقل من دقيقة';
+    if (diff.inMinutes < 60) return 'منذ ${diff.inMinutes} دقيقة';
+    if (diff.inHours < 24) return 'منذ ${diff.inHours} ساعة';
+    return 'منذ ${diff.inDays} يوم';
   }
   List<String> get merchantWorkSampleUrls {
     if (merchantActiveServiceId == 'restaurant') {
@@ -387,6 +482,7 @@ class AppProvider extends ChangeNotifier {
       favoriteItemIds: _favoriteItemIds.toList(),
       selectedCategory: _selectedCategory,
       activeSubCategory: _activeSubCategory,
+      pendingOrderStatusSyncQueue: _pendingOrderStatusSyncQueue,
     );
   }
 
@@ -478,6 +574,13 @@ class AppProvider extends ChangeNotifier {
         snapshot['selectedCategory'] as String? ?? _selectedCategory;
     _activeSubCategory =
         snapshot['activeSubCategory'] as String? ?? _activeSubCategory;
+    final pendingQueue = snapshot['pendingOrderStatusSyncQueue'];
+    if (pendingQueue is List) {
+      _pendingOrderStatusSyncQueue = pendingQueue
+          .whereType<Map>()
+          .map((item) => Map<String, dynamic>.from(item))
+          .toList();
+    }
   }
 
   Future<bool> _restoreLocalBackup(String phone) async {
@@ -879,6 +982,9 @@ class AppProvider extends ChangeNotifier {
     final fallbackStoreName = merchantStoreName;
     final fallbackLat = merchantLatitude;
     final fallbackLng = merchantLongitude;
+    final fallbackOpenTime = merchantOpenTime;
+    final fallbackCloseTime = merchantCloseTime;
+    final fallbackIsOpen = isMerchantStoreOpen;
     return _items
         .where((item) => item.isAvailable)
         .map((item) => item.copyWith(
@@ -890,8 +996,75 @@ class AppProvider extends ChangeNotifier {
                   : (fallbackStoreName.isNotEmpty ? fallbackStoreName : null),
               merchantLatitude: item.merchantLatitude ?? fallbackLat,
               merchantLongitude: item.merchantLongitude ?? fallbackLng,
+              merchantOpenTime: item.merchantOpenTime ?? fallbackOpenTime,
+              merchantCloseTime: item.merchantCloseTime ?? fallbackCloseTime,
+              merchantIsOpen: item.merchantIsOpen ?? fallbackIsOpen,
             ))
         .toList();
+  }
+
+  Future<bool> _autoCancelExpiredPendingOrders(List<ActiveOrder> orders) async {
+    var changed = false;
+    final now = DateTime.now();
+    for (final order in orders) {
+      if (order.statusKey != 'pending') continue;
+      final createdAt = _parseOrderCreatedAt(order);
+      if (createdAt == null) continue;
+      if (now.difference(createdAt) < _pendingApprovalTimeout) continue;
+      final updated = ActiveOrder(
+        id: order.id,
+        orderNumber: order.orderNumber,
+        dateAr: order.dateAr,
+        dateEn: order.dateEn,
+        customerNameAr: order.customerNameAr,
+        customerNameEn: order.customerNameEn,
+        customerPhone: order.customerPhone,
+        addressAr: order.addressAr,
+        addressEn: order.addressEn,
+        noteAr:
+            'انتهت مهلة قبول التاجر (${_pendingApprovalTimeout.inMinutes} دقيقة) وتم إلغاء الطلب تلقائيًا.',
+        noteEn:
+            'Order cancelled automatically after ${_pendingApprovalTimeout.inMinutes} minutes timeout.',
+        paymentMethodAr: order.paymentMethodAr,
+        paymentMethodEn: order.paymentMethodEn,
+        statusKey: 'cancelled',
+        statusAr: 'ملغي تلقائيًا',
+        statusEn: 'Auto cancelled',
+        price: order.price,
+        itemsCount: order.itemsCount,
+        itemsNameAr: order.itemsNameAr,
+        itemsNameEn: order.itemsNameEn,
+        lineItems: order.lineItems,
+        image: order.image,
+        iconName: order.iconName,
+        deliveryStatusKey: order.deliveryStatusKey,
+        deliveryStatusAr: order.deliveryStatusAr,
+        deliveryStatusEn: order.deliveryStatusEn,
+        assignedCourierName: order.assignedCourierName,
+        isRestaurantOrder: order.isRestaurantOrder,
+        merchantPhone: order.merchantPhone,
+        merchantStoreName: order.merchantStoreName,
+        requiresDelivery: order.requiresDelivery,
+        codConfirmed: order.codConfirmed,
+        deliveredAt: order.deliveredAt,
+        estimatedArrivalMinutes: order.estimatedArrivalMinutes,
+        estimatedArrivalAt: order.estimatedArrivalAt,
+        courierPhone: order.courierPhone,
+        customerLatitude: order.customerLatitude,
+        customerLongitude: order.customerLongitude,
+        createdAt: order.createdAt,
+        merchantReadAt: order.merchantReadAt,
+        merchantDecisionAt: order.merchantDecisionAt,
+        isPriceLocked: order.isPriceLocked,
+      );
+      try {
+        await SupabaseService.saveCustomerOrder(order.customerPhone, updated);
+        changed = true;
+      } catch (error) {
+        debugPrint('AUTO_CANCEL_TIMEOUT_ERROR: $error');
+      }
+    }
+    return changed;
   }
 
   Future<void> refreshMerchantIncomingOrders() => _refreshMerchantIncomingOrders();
@@ -900,8 +1073,17 @@ class AppProvider extends ChangeNotifier {
     final phone = _trimmedOrNull(_authPhone);
     if (phone == null || !SupabaseService.isConfigured) return;
     try {
-      _merchantIncomingOrders =
-          await SupabaseService.loadMerchantIncomingOrders(phone);
+      final previousById = {
+        for (final order in _merchantIncomingOrders) order.id: order,
+      };
+      var loaded = await SupabaseService.loadMerchantIncomingOrders(phone);
+      final changed = await _autoCancelExpiredPendingOrders(loaded);
+      if (changed) {
+        loaded = await SupabaseService.loadMerchantIncomingOrders(phone);
+      }
+      _merchantIncomingOrders = loaded;
+      _pushMerchantOrderNotifications(previousById, loaded);
+      await _flushPendingOrderStatusSyncQueue();
       notifyListeners();
     } catch (error) {
       debugPrint('MERCHANT_ORDERS_LOAD_ERROR: $error');
@@ -915,36 +1097,69 @@ class AppProvider extends ChangeNotifier {
       final previousById = {
         for (final order in _orders) order.id: order,
       };
-      final loaded = await SupabaseService.loadCustomerOrders(phone);
+      var loaded = await SupabaseService.loadCustomerOrders(phone);
+      final changed = await _autoCancelExpiredPendingOrders(loaded);
+      if (changed) {
+        loaded = await SupabaseService.loadCustomerOrders(phone);
+      }
       _orders = loaded;
-      _pushRejectedOrderNotifications(previousById, loaded);
+      _pushCustomerOrderStatusNotifications(previousById, loaded);
       notifyListeners();
     } catch (error) {
       debugPrint('CUSTOMER_ORDERS_LOAD_ERROR: $error');
     }
   }
 
-  void _pushRejectedOrderNotifications(
+  void _pushCustomerOrderStatusNotifications(
     Map<String, ActiveOrder> previousById,
     List<ActiveOrder> loaded,
   ) {
     if (previousById.isEmpty) return;
     for (final order in loaded) {
-      if (order.statusKey != 'cancelled') continue;
-      final reason = order.noteAr.trim();
-      if (reason.isEmpty) continue;
       final previous = previousById[order.id];
       if (previous == null) continue;
-      final statusChanged = previous.statusKey != 'cancelled';
-      final reasonChanged = previous.noteAr.trim() != reason;
-      if (!statusChanged && !reasonChanged) continue;
-      final title = 'تم رفض الطلب ${order.orderNumber}';
-      final body = reason;
+      final statusChanged = previous.statusKey != order.statusKey;
+      final deliveryChanged = previous.deliveryStatusKey != order.deliveryStatusKey;
+      if (!statusChanged && !deliveryChanged) continue;
+      final title = 'تحديث الطلب ${displayOrderNumber(order)}';
+      final body = statusChanged
+          ? 'الحالة الجديدة: ${order.statusAr}'
+          : 'حالة التوصيل: ${order.deliveryStatusAr ?? order.deliveryStatusKey ?? '-'}';
       final exists = _notifications.any(
         (item) => item['title'] == title && item['body'] == body,
       );
       if (!exists) {
         _notifications.insert(0, {'title': title, 'body': body});
+      }
+    }
+  }
+
+  void _pushMerchantOrderNotifications(
+    Map<String, ActiveOrder> previousById,
+    List<ActiveOrder> loaded,
+  ) {
+    for (final order in loaded) {
+      final previous = previousById[order.id];
+      if (previous == null) {
+        if (order.statusKey == 'pending') {
+          _notifications.insert(0, {
+            'title': 'طلب جديد ${displayOrderNumber(order)}',
+            'body': 'يوجد طلب جديد بانتظار المراجعة.',
+          });
+        }
+        continue;
+      }
+      if (previous.statusKey != order.statusKey && order.statusKey == 'cancel_requested') {
+        _notifications.insert(0, {
+          'title': 'طلب إلغاء ${displayOrderNumber(order)}',
+          'body': 'الزبون طلب إلغاء الطلب وبانتظار قرارك.',
+        });
+      }
+      if (previous.statusKey != order.statusKey && order.statusKey == 'cancelled') {
+        _notifications.insert(0, {
+          'title': 'إلغاء الطلب ${displayOrderNumber(order)}',
+          'body': order.noteAr.trim().isNotEmpty ? order.noteAr : 'تم إلغاء الطلب.',
+        });
       }
     }
   }
@@ -993,6 +1208,7 @@ class AppProvider extends ChangeNotifier {
       'merchantReviews':
           _merchantReviews.map((review) => review.toMap()).toList(),
       'items': _items.map((item) => item.toMap()).toList(),
+      'pendingOrderStatusSyncQueue': _pendingOrderStatusSyncQueue,
       if (_merchantStore != null) 'merchantStore': _merchantStore,
       'merchantProfileComplete': hasCompletedMerchantProfile,
     };
@@ -1104,6 +1320,13 @@ class AppProvider extends ChangeNotifier {
     if (storedMerchant is Map &&
         (_merchantStore == null || merchantStoreName.isEmpty)) {
       _applyMerchantStoreSnapshot(Map<String, dynamic>.from(storedMerchant));
+    }
+    final statusQueue = state['pendingOrderStatusSyncQueue'];
+    if (statusQueue is List) {
+      _pendingOrderStatusSyncQueue = statusQueue
+          .whereType<Map>()
+          .map((item) => Map<String, dynamic>.from(item))
+          .toList();
     }
   }
 
@@ -1599,10 +1822,9 @@ class AppProvider extends ChangeNotifier {
     final updated = <String>[...current, normalized];
     _merchantStore!['serviceIds'] = updated;
     _merchantStore!['activeServiceId'] = normalized;
+    final existingCategory = (_merchantStore?['category'] as String?)?.trim() ?? '';
     _merchantStore!['category'] =
-        (_merchantStore?['category'] as String?)?.trim().isNotEmpty == true
-            ? _merchantStore?['category']
-            : updated.first;
+        existingCategory.isNotEmpty ? existingCategory : updated.first;
     notifyListeners();
     await _persistMerchantStoreAndState();
   }
@@ -1631,6 +1853,52 @@ class AppProvider extends ChangeNotifier {
   int get merchantCompletedOrdersCount => _merchantIncomingOrders
       .where((o) => o.statusKey == 'completed')
       .length;
+  int get merchantAcceptedOrdersCount => _merchantIncomingOrders
+      .where((o) => o.statusKey == 'accepted' || o.statusKey == 'completed')
+      .length;
+  int get merchantRejectedOrdersCount => _merchantIncomingOrders
+      .where(_isMerchantRejectedOrder)
+      .length;
+  int get merchantDecidedOrdersCount =>
+      merchantAcceptedOrdersCount + merchantRejectedOrdersCount;
+  double get merchantAcceptanceRate => merchantDecidedOrdersCount == 0
+      ? 0
+      : (merchantAcceptedOrdersCount / merchantDecidedOrdersCount) * 100;
+  double get merchantRejectionRate => merchantDecidedOrdersCount == 0
+      ? 0
+      : (merchantRejectedOrdersCount / merchantDecidedOrdersCount) * 100;
+  double get merchantAverageResponseMinutes {
+    final minutes = _merchantIncomingOrders
+        .map(_orderResponseMinutes)
+        .whereType<double>()
+        .toList();
+    if (minutes.isEmpty) return 0;
+    final total = minutes.fold<double>(0, (sum, value) => sum + value);
+    return total / minutes.length;
+  }
+
+  bool _isMerchantRejectedOrder(ActiveOrder order) {
+    if (order.statusKey != 'cancelled') return false;
+    final noteAr = order.noteAr.trim();
+    final noteEn = order.noteEn.trim();
+    return noteAr.startsWith('سبب الرفض:') || noteEn.startsWith('Rejected reason:');
+  }
+
+  double? _orderResponseMinutes(ActiveOrder order) {
+    final isMerchantDecision =
+        order.statusKey == 'accepted' ||
+        order.statusKey == 'completed' ||
+        _isMerchantRejectedOrder(order);
+    if (!isMerchantDecision) return null;
+    final decisionRaw = order.merchantDecisionAt?.trim();
+    if (decisionRaw == null || decisionRaw.isEmpty) return null;
+    final createdAt = _parseOrderCreatedAt(order);
+    final decisionAt = DateTime.tryParse(decisionRaw)?.toLocal();
+    if (createdAt == null || decisionAt == null) return null;
+    final diff = decisionAt.difference(createdAt);
+    if (diff.isNegative) return null;
+    return diff.inSeconds / 60.0;
+  }
 
   Map<String, dynamic> _productRowFromListItem(ListItem item) {
     return {
@@ -1676,6 +1944,13 @@ class AppProvider extends ChangeNotifier {
           _toDoubleValue(row['merchant_latitude']) ?? _toDoubleValue(row['latitude']),
       merchantLongitude:
           _toDoubleValue(row['merchant_longitude']) ?? _toDoubleValue(row['longitude']),
+      merchantOpenTime: row['merchant_open_time']?.toString(),
+      merchantCloseTime: row['merchant_close_time']?.toString(),
+      merchantIsOpen: row['merchant_is_open'] is bool
+          ? row['merchant_is_open'] as bool
+          : (row['merchant_is_open']?.toString().toLowerCase() == 'true'
+              ? true
+              : null),
     );
   }
 
@@ -1722,6 +1997,15 @@ class AppProvider extends ChangeNotifier {
   List<String> get addresses => List<String>.unmodifiable(_addresses);
   List<Map<String, String>> get notifications =>
       List<Map<String, String>>.unmodifiable(_notifications);
+  String displayOrderNumber(ActiveOrder order) {
+    final raw = order.orderNumber.trim();
+    if (raw.isNotEmpty && raw.length <= 14) return raw;
+    final idSeed = order.id.split('-').first;
+    final seed = int.tryParse(idSeed);
+    if (seed == null) return raw.isNotEmpty ? raw : order.id;
+    final short = (seed % 1000000).toString().padLeft(6, '0');
+    return '#$short';
+  }
   String get selectedCategory => _selectedCategory;
   String? get activeSubCategory => _activeSubCategory;
 
@@ -1786,6 +2070,9 @@ class AppProvider extends ChangeNotifier {
         merchantAddress: item.address,
         merchantLatitude: item.merchantLatitude,
         merchantLongitude: item.merchantLongitude,
+        merchantOpenTime: item.merchantOpenTime,
+        merchantCloseTime: item.merchantCloseTime,
+        merchantIsOpen: item.merchantIsOpen,
       ));
     }
     notifyListeners();
@@ -1807,7 +2094,10 @@ class AppProvider extends ChangeNotifier {
     final row = Map<String, dynamic>.from(product)
       ..['merchant_phone'] = profile['phone']?.toString()
       ..['merchant_store_name'] = profile['store_name']?.toString() ?? ''
-      ..['merchant_address'] = profile['address']?.toString() ?? '';
+      ..['merchant_address'] = profile['address']?.toString() ?? ''
+      ..['merchant_open_time'] = profile['open_time']?.toString()
+      ..['merchant_close_time'] = profile['close_time']?.toString()
+      ..['merchant_is_open'] = profile['is_open'];
     return addToCart(_listItemFromCatalogRow(row));
   }
 
@@ -1834,6 +2124,37 @@ class AppProvider extends ChangeNotifier {
   void removeFromCart(String id) {
     _cart.removeWhere((i) => i.id == id);
     notifyListeners();
+  }
+
+  bool reorderFromPreviousOrder(ActiveOrder order) {
+    final merchant = _trimmedOrNull(order.merchantPhone);
+    if (merchant == null || order.lineItems.isEmpty) return false;
+    if (_hasActiveOrderForMerchant(merchant)) return false;
+    if (_cart.isNotEmpty) {
+      final existingMerchant = _trimmedOrNull(_cart.first.merchantPhone);
+      if (existingMerchant != null && existingMerchant != merchant) {
+        return false;
+      }
+    }
+    final category = order.isRestaurantOrder ? 'restaurant' : 'product';
+    for (var i = 0; i < order.lineItems.length; i++) {
+      final line = order.lineItems[i];
+      _cart.add(
+        CartItem(
+          id: 'reorder-${order.id}-$i',
+          nameAr: line.nameAr,
+          nameEn: line.nameEn,
+          price: line.price,
+          count: line.quantity,
+          image: line.image ?? '',
+          category: category,
+          merchantPhone: order.merchantPhone,
+          merchantStoreName: order.merchantStoreName,
+        ),
+      );
+    }
+    notifyListeners();
+    return true;
   }
 
   int get cartTotal =>
@@ -1936,6 +2257,19 @@ class AppProvider extends ChangeNotifier {
         order.statusKey == 'cancel_requested') {
       return false;
     }
+
+    if (order.statusKey == 'pending') {
+      updateOrderStatus(
+        orderId,
+        'cancelled',
+        'ملغي',
+        'Cancelled',
+        noteAr: 'تم إلغاء الطلب من الزبون قبل موافقة التاجر.',
+        noteEn: 'Cancelled by customer before merchant approval.',
+      );
+      return true;
+    }
+
     final noteEn = '__cancel_prev:${order.statusKey}__';
     updateOrderStatus(
       orderId,
@@ -1989,6 +2323,119 @@ class AppProvider extends ChangeNotifier {
     return true;
   }
 
+  Future<void> markMerchantOrderAsRead(String orderId) async {
+    final index = _merchantIncomingOrders.indexWhere((item) => item.id == orderId);
+    if (index == -1) return;
+    final order = _merchantIncomingOrders[index];
+    if (order.merchantReadAt != null && order.merchantReadAt!.trim().isNotEmpty) {
+      return;
+    }
+    final updated = ActiveOrder(
+      id: order.id,
+      orderNumber: order.orderNumber,
+      dateAr: order.dateAr,
+      dateEn: order.dateEn,
+      customerNameAr: order.customerNameAr,
+      customerNameEn: order.customerNameEn,
+      customerPhone: order.customerPhone,
+      addressAr: order.addressAr,
+      addressEn: order.addressEn,
+      noteAr: order.noteAr,
+      noteEn: order.noteEn,
+      paymentMethodAr: order.paymentMethodAr,
+      paymentMethodEn: order.paymentMethodEn,
+      statusKey: order.statusKey,
+      statusAr: order.statusAr,
+      statusEn: order.statusEn,
+      price: order.price,
+      itemsCount: order.itemsCount,
+      itemsNameAr: order.itemsNameAr,
+      itemsNameEn: order.itemsNameEn,
+      lineItems: order.lineItems,
+      image: order.image,
+      iconName: order.iconName,
+      deliveryStatusKey: order.deliveryStatusKey,
+      deliveryStatusAr: order.deliveryStatusAr,
+      deliveryStatusEn: order.deliveryStatusEn,
+      assignedCourierName: order.assignedCourierName,
+      isRestaurantOrder: order.isRestaurantOrder,
+      merchantPhone: order.merchantPhone,
+      merchantStoreName: order.merchantStoreName,
+      requiresDelivery: order.requiresDelivery,
+      codConfirmed: order.codConfirmed,
+      deliveredAt: order.deliveredAt,
+      estimatedArrivalMinutes: order.estimatedArrivalMinutes,
+      estimatedArrivalAt: order.estimatedArrivalAt,
+      courierPhone: order.courierPhone,
+      customerLatitude: order.customerLatitude,
+      customerLongitude: order.customerLongitude,
+      createdAt: order.createdAt,
+      merchantReadAt: DateTime.now().toIso8601String(),
+      merchantDecisionAt: order.merchantDecisionAt,
+      isPriceLocked: order.isPriceLocked,
+    );
+    _merchantIncomingOrders[index] = updated;
+    notifyListeners();
+    try {
+      await SupabaseService.saveCustomerOrder(order.customerPhone, updated);
+    } catch (error) {
+      debugPrint('MARK_ORDER_READ_ERROR: $error');
+    }
+  }
+
+  void _enqueuePendingOrderStatusSync({
+    required String orderId,
+    required String statusKey,
+    required String statusAr,
+    required String statusEn,
+    String? noteAr,
+    String? noteEn,
+  }) {
+    final existing = _pendingOrderStatusSyncQueue.indexWhere(
+      (item) => item['orderId'] == orderId,
+    );
+    final payload = <String, dynamic>{
+      'orderId': orderId,
+      'statusKey': statusKey,
+      'statusAr': statusAr,
+      'statusEn': statusEn,
+      'noteAr': noteAr,
+      'noteEn': noteEn,
+      'updatedAt': DateTime.now().toIso8601String(),
+    };
+    if (existing >= 0) {
+      _pendingOrderStatusSyncQueue[existing] = payload;
+    } else {
+      _pendingOrderStatusSyncQueue.add(payload);
+    }
+    unawaited(_persistLocalBackup());
+  }
+
+  Future<void> _flushPendingOrderStatusSyncQueue() async {
+    final phone = _trimmedOrNull(_authPhone);
+    if (phone == null || _pendingOrderStatusSyncQueue.isEmpty) return;
+    final pending = List<Map<String, dynamic>>.from(_pendingOrderStatusSyncQueue);
+    for (final item in pending) {
+      try {
+        await SupabaseService.updateIncomingOrderStatus(
+          phone,
+          item['orderId']?.toString() ?? '',
+          statusKey: item['statusKey']?.toString() ?? 'pending',
+          statusAr: item['statusAr']?.toString() ?? '',
+          statusEn: item['statusEn']?.toString() ?? '',
+          noteAr: item['noteAr']?.toString(),
+          noteEn: item['noteEn']?.toString(),
+        );
+        _pendingOrderStatusSyncQueue.removeWhere(
+          (queued) => queued['orderId'] == item['orderId'],
+        );
+      } catch (_) {
+        // نبقي العنصر في الطابور ونعيد المحاولة لاحقًا.
+      }
+    }
+    await _persistLocalBackup();
+  }
+
   void updateOrderStatus(
     String orderId,
     String newStatusKey,
@@ -2002,6 +2449,9 @@ class AppProvider extends ChangeNotifier {
     final index = list.indexWhere((o) => o.id == orderId);
     if (index == -1) return;
     final order = list[index];
+    final nowIso = DateTime.now().toIso8601String();
+    final isDecisionStatus = newStatusKey == 'accepted' || newStatusKey == 'cancelled';
+    final lockPrice = order.isPriceLocked || newStatusKey == 'accepted';
     final updated = ActiveOrder(
       id: order.id,
       orderNumber: order.orderNumber,
@@ -2035,22 +2485,47 @@ class AppProvider extends ChangeNotifier {
       merchantStoreName: order.merchantStoreName,
       requiresDelivery: order.requiresDelivery,
       codConfirmed: order.codConfirmed,
+      deliveredAt: order.deliveredAt,
+      estimatedArrivalMinutes: order.estimatedArrivalMinutes,
+      estimatedArrivalAt: order.estimatedArrivalAt,
+      courierPhone: order.courierPhone,
       customerLatitude: order.customerLatitude,
       customerLongitude: order.customerLongitude,
+      createdAt: order.createdAt,
+      merchantReadAt: order.merchantReadAt,
+      merchantDecisionAt:
+          isDecisionStatus ? (order.merchantDecisionAt ?? nowIso) : order.merchantDecisionAt,
+      isPriceLocked: lockPrice,
     );
     list[index] = updated;
     if (isMerchant) {
       final phone = _trimmedOrNull(_authPhone);
       if (phone != null) {
-        unawaited(SupabaseService.updateIncomingOrderStatus(
-          phone,
-          orderId,
-          statusKey: newStatusKey,
-          statusAr: statusAr,
-          statusEn: statusEn,
-          noteAr: noteAr,
-          noteEn: noteEn,
-        ).then((_) => _refreshMerchantIncomingOrders()));
+        unawaited(
+          SupabaseService.updateIncomingOrderStatus(
+            phone,
+            orderId,
+            statusKey: newStatusKey,
+            statusAr: statusAr,
+            statusEn: statusEn,
+            noteAr: noteAr,
+            noteEn: noteEn,
+          ).then((_) {
+            _pendingOrderStatusSyncQueue
+                .removeWhere((item) => item['orderId'] == orderId);
+            unawaited(_persistLocalBackup());
+            return _refreshMerchantIncomingOrders();
+          }).catchError((_) {
+            _enqueuePendingOrderStatusSync(
+              orderId: orderId,
+              statusKey: newStatusKey,
+              statusAr: statusAr,
+              statusEn: statusEn,
+              noteAr: noteAr,
+              noteEn: noteEn,
+            );
+          }),
+        );
       }
     } else {
       unawaited(_persistCustomerOrder(updated));
@@ -2059,6 +2534,7 @@ class AppProvider extends ChangeNotifier {
   }
 
   Future<void> addProduct(ListItem item) async {
+    assertCanPublishForService(item.category);
     _items.insert(0, item);
     notifyListeners();
     final phone = _normalizeStoredPhone(_authPhone ?? merchantPhone);
@@ -2106,6 +2582,30 @@ class AppProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  bool _hasActiveOrderForMerchant(String merchantPhone) {
+    return _orders.any((order) {
+      final sameMerchant =
+          _trimmedOrNull(order.merchantPhone) == _trimmedOrNull(merchantPhone);
+      if (!sameMerchant) return false;
+      if (order.statusKey == 'pending') {
+        final createdAt = _parseOrderCreatedAt(order);
+        if (createdAt != null &&
+            DateTime.now().difference(createdAt) >= _pendingApprovalTimeout) {
+          return false;
+        }
+      }
+      return _isOrderActiveStatus(order.statusKey);
+    });
+  }
+
+  bool _isMerchantAcceptingForCartItem(CartItem item) {
+    return _isMerchantOpenNow(
+      isOpenFlag: item.merchantIsOpen,
+      openTime: item.merchantOpenTime,
+      closeTime: item.merchantCloseTime,
+    );
+  }
+
   Future<int> checkout({int deliveryFeeIqd = 0}) async {
     if (_cart.isEmpty) return 0;
 
@@ -2126,7 +2626,24 @@ class AppProvider extends ChangeNotifier {
           items.fold(0, (sum, item) => sum + (item.price * item.count));
       final merchantPhone =
           entry.key == 'unknown' ? null : entry.key;
+      if (merchantPhone != null && _hasActiveOrderForMerchant(merchantPhone)) {
+        throw StateError('لديك طلب نشط بالفعل من نفس المتجر. أكمل الطلب الحالي أولاً.');
+      }
+      if (!_isMerchantAcceptingForCartItem(items.first)) {
+        final service = items.first.category;
+        if (service == 'restaurant') {
+          throw StateError('المطعم مغلق الآن ولا يستقبل الطلبات خارج أوقات العمل.');
+        }
+        if (service == 'product') {
+          throw StateError('المتجر مغلق الآن ولا يستقبل طلبات التسوق خارج أوقات العمل.');
+        }
+        throw StateError('الخدمة مغلقة الآن ولا تستقبل الطلبات خارج أوقات العمل.');
+      }
       final merchantStoreName = items.first.merchantStoreName;
+      final now = DateTime.now();
+      final createdAtIso = now.toIso8601String();
+      final idSeed = now.millisecondsSinceEpoch;
+      final shortOrder = (idSeed % 1000000).toString().padLeft(6, '0');
 
       String finalAddressAr = _addresses.isNotEmpty
           ? _addresses.first
@@ -2142,9 +2659,8 @@ class AppProvider extends ChangeNotifier {
       final orderDeliveryFee = createdCount == 0 ? deliveryFeeIqd : 0;
       final totalPrice = subtotal + (orderDeliveryFee > 0 ? orderDeliveryFee : 0);
       final newOrder = ActiveOrder(
-        id: '${DateTime.now().millisecondsSinceEpoch}-${createdCount + 1}',
-        orderNumber:
-            'ORD-${DateTime.now().millisecondsSinceEpoch}-${createdCount + 1}',
+        id: '$idSeed-${createdCount + 1}',
+        orderNumber: '#$shortOrder',
         dateAr: 'الآن',
         dateEn: 'Just now',
         customerNameAr:
@@ -2186,6 +2702,8 @@ class AppProvider extends ChangeNotifier {
         deliveryStatusEn: null,
         merchantPhone: merchantPhone,
         merchantStoreName: merchantStoreName,
+        createdAt: createdAtIso,
+        isPriceLocked: false,
       );
       _orders.insert(0, newOrder);
       unawaited(_persistCustomerOrder(newOrder));
