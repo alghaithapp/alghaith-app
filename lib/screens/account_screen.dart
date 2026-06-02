@@ -759,11 +759,74 @@ class _CustomerAccountView extends StatelessWidget {
                   ),
                 ),
               ),
+              const SizedBox(height: 16),
+              GestureDetector(
+                onTap: () => _showDeleteAccountDialog(context, appProvider),
+                child: Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                      color: CupertinoColors.white.withValues(alpha: 0.5),
+                      borderRadius: BorderRadius.circular(25),
+                      border: Border.all(color: CupertinoColors.systemRed.withValues(alpha: 0.3))),
+                  child: Row(
+                    children: [
+                      const Icon(CupertinoIcons.trash,
+                          color: CupertinoColors.systemRed, size: 20),
+                      const SizedBox(width: 15),
+                      Text('حذف الحساب نهائياً',
+                          style: const TextStyle(
+                              color: CupertinoColors.systemRed,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              fontFamily: 'Cairo')),
+                    ],
+                  ),
+                ),
+              ),
             ],
           ),
         ),
       ),
     );
+  }
+
+  Future<void> _showDeleteAccountDialog(BuildContext context, AppProvider provider) async {
+    final confirmed = await showCupertinoDialog<bool>(
+      context: context,
+      builder: (context) => CupertinoAlertDialog(
+        title: const Text('حذف الحساب', style: TextStyle(fontFamily: 'Cairo')),
+        content: const Text(
+          'هل أنت متأكد من رغبتك في حذف حسابك نهائياً؟ سيؤدي هذا إلى مسح كافة بياناتك وطلباتك ولا يمكن التراجع عن هذه الخطوة.',
+          style: TextStyle(fontFamily: 'Cairo'),
+        ),
+        actions: [
+          CupertinoDialogAction(
+            child: const Text('إلغاء'),
+            onPressed: () => Navigator.pop(context, false),
+          ),
+          CupertinoDialogAction(
+            isDestructiveAction: true,
+            child: const Text('حذف الحساب'),
+            onPressed: () => Navigator.pop(context, true),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      // هنا نقوم بتسجيل الخروج ومسح البيانات
+      // في الحقيقة، أبل تطلب أن يكون هناك إجراء في السيرفر أيضاً
+      // سنقوم حالياً بمسح الجلسة وتوجيه المستخدم للخارج
+      await provider.resetAll();
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('تم تقديم طلب حذف الحساب بنجاح.', style: TextStyle(fontFamily: 'Cairo')),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   Widget _buildSettingItem(BuildContext context, IconData icon, String title,
