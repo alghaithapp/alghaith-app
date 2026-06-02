@@ -1,10 +1,9 @@
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../providers/app_provider.dart';
 import '../../utils/helpers.dart';
+import '../../widgets/app_image.dart';
 import '../../widgets/app_logo.dart';
 import '../../widgets/whatsapp_icon.dart';
 import 'merchant_notifications_screen.dart';
@@ -20,15 +19,15 @@ class MerchantMoreScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<AppProvider>();
-    final isAr = provider.lang == 'ar';
     final labels = provider.merchantActiveLabels;
-    final profileImageBase64 = provider.merchantProfileImageBase64;
+    final profileImage = provider.merchantProfileImageBase64;
     final workSamples = provider.merchantWorkSampleImagesBase64;
     final showWorkSamples = provider.merchantActiveServiceId != 'restaurant' &&
         workSamples.isNotEmpty;
     final storeName = provider.merchantStoreName.trim().isNotEmpty
         ? provider.merchantStoreName
-        : (isAr ? 'حساب التاجر' : 'Merchant account');
+        : 'حساب التاجر';
+    final cardColor = Theme.of(context).colorScheme.surface;
 
     return ListView(
       padding: const EdgeInsets.all(16),
@@ -50,26 +49,26 @@ class MerchantMoreScreen extends StatelessWidget {
               const SizedBox(height: 12),
               Row(
                 children: [
-                  Container(
-                    width: 58,
-                    height: 58,
-                    decoration: BoxDecoration(
-                      color: Colors.deepOrange.withValues(alpha: 0.18),
-                      borderRadius: BorderRadius.circular(18),
-                      image: profileImageBase64 != null &&
-                              profileImageBase64.isNotEmpty
-                          ? DecorationImage(
-                              image:
-                                  MemoryImage(base64Decode(profileImageBase64)),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(18),
+                    child: SizedBox(
+                      width: 58,
+                      height: 58,
+                      child: profileImage != null && profileImage.isNotEmpty
+                          ? AppImage(
+                              imageData: profileImage,
+                              width: 58,
+                              height: 58,
                               fit: BoxFit.cover,
                             )
-                          : null,
+                          : Container(
+                              color: Colors.deepOrange.withValues(alpha: 0.18),
+                              child: const Icon(
+                                Icons.storefront_rounded,
+                                color: Colors.white,
+                              ),
+                            ),
                     ),
-                    child: profileImageBase64 != null &&
-                            profileImageBase64.isNotEmpty
-                        ? null
-                        : const Icon(Icons.storefront_rounded,
-                            color: Colors.white),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
@@ -87,9 +86,7 @@ class MerchantMoreScreen extends StatelessWidget {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          isAr
-                              ? '${labels.storeLabelAr} - القائمة الإضافية'
-                              : '${labels.storeLabelEn} - More options',
+                          '${labels.storeLabelAr} - القائمة الإضافية',
                           style: const TextStyle(
                             color: Colors.white70,
                             fontSize: 12,
@@ -106,7 +103,7 @@ class MerchantMoreScreen extends StatelessWidget {
         ),
         const SizedBox(height: 12),
         _MiniProfileCard(
-          isAr: isAr,
+          cardColor: cardColor,
           phone: provider.merchantPhone,
           whatsapp: provider.merchantWhatsApp,
           showWorkSamples: showWorkSamples,
@@ -118,80 +115,131 @@ class MerchantMoreScreen extends StatelessWidget {
             ),
           ),
         ),
+        const SizedBox(height: 12),
+        _SyncCatalogButton(cardColor: cardColor),
         const SizedBox(height: 16),
         _MoreTile(
-          title: isAr ? 'العروض والخصومات' : 'Offers & Discounts',
-          subtitle:
-              isAr ? 'أنشئ عروضًا وخصومات بسهولة' : 'Create and manage offers',
+          cardColor: cardColor,
+          title: 'العروض والخصومات',
+          subtitle: 'أنشئ عروضًا وخصومات بسهولة',
           icon: Icons.local_offer_rounded,
           onTap: () => Navigator.of(context).push(
               MaterialPageRoute(builder: (_) => const MerchantOffersScreen())),
         ),
         _MoreTile(
-          title: isAr ? 'التقييمات' : 'Reviews',
-          subtitle: isAr
-              ? 'اقرأ ورد على تقييمات العملاء'
-              : 'Read and reply to customer reviews',
+          cardColor: cardColor,
+          title: 'التقييمات',
+          subtitle: 'اقرأ ورد على تقييمات العملاء',
           icon: Icons.star_rounded,
           onTap: () => Navigator.of(context).push(
               MaterialPageRoute(builder: (_) => const MerchantReviewsScreen())),
         ),
         _MoreTile(
+          cardColor: cardColor,
           title:
-              isAr ? labels.storeSettingsTitleAr : labels.storeSettingsTitleEn,
-          subtitle: isAr
-              ? 'تعديل بيانات ${labels.storeLabelAr} وأوقات العمل'
-              : 'Edit store details and business hours',
+              labels.storeSettingsTitleAr,
+          subtitle: 'تعديل بيانات ${labels.storeLabelAr} وأوقات العمل',
           icon: Icons.settings_rounded,
           onTap: () => Navigator.of(context).push(MaterialPageRoute(
               builder: (_) => const MerchantStoreSettingsScreen())),
         ),
         _MoreTile(
-          title: isAr ? 'الإشعارات' : 'Notifications',
-          subtitle: isAr
-              ? 'تنبيهات ${labels.storeLabelAr} والطلبات والتقييمات'
-              : 'Orders, reviews and commission alerts',
+          cardColor: cardColor,
+          title: 'الإشعارات',
+          subtitle: 'تنبيهات ${labels.storeLabelAr} والطلبات والتقييمات',
           icon: Icons.notifications_rounded,
           onTap: () => Navigator.of(context).push(MaterialPageRoute(
               builder: (_) => const MerchantNotificationsScreen())),
         ),
         _MoreTile(
-          title: isAr ? 'الدعم الفني' : 'Support',
-          subtitle: isAr
-              ? 'تواصل سريع عبر واتساب أو الاتصال بخصوص ${labels.storeLabelAr}'
-              : 'Quick help via WhatsApp or phone',
+          cardColor: cardColor,
+          title: 'الدعم الفني',
+          subtitle: 'تواصل سريع عبر واتساب أو الاتصال بخصوص ${labels.storeLabelAr}',
           icon: Icons.support_agent_rounded,
           onTap: () => Navigator.of(context).push(
               MaterialPageRoute(builder: (_) => const MerchantSupportScreen())),
         ),
         _MoreTile(
-          title: isAr ? 'الانتقال إلى حساب الزبون' : 'Switch to customer',
-          subtitle: isAr
-              ? 'استخدم نفس التسجيل وانتقل لواجهة الزبون'
-              : 'Keep the same login and open the customer view',
+          cardColor: cardColor,
+          title: 'الانتقال إلى حساب الزبون',
+          subtitle: 'استخدم نفس التسجيل وانتقل لواجهة الزبون',
           icon: Icons.person_rounded,
-          onTap: () => provider.setUserRole('customer'),
+          onTap: () async {
+            BuildContext? loadingDialogContext;
+            showDialog<void>(
+              context: context,
+              useRootNavigator: true,
+              barrierDismissible: false,
+              builder: (dialogContext) {
+                loadingDialogContext = dialogContext;
+                return const AlertDialog(
+                  content: Row(
+                    children: [
+                      SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2.2),
+                      ),
+                      SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          'يرجى الانتظار... جارٍ التحويل إلى حساب الزبون',
+                          style: TextStyle(fontFamily: 'Cairo'),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ).then((_) {
+              loadingDialogContext = null;
+            });
+
+            final switchFuture = provider.setUserRole('customer');
+            var switched = false;
+            try {
+              await Future<void>.delayed(const Duration(milliseconds: 250));
+              if (provider.userRole == 'customer') {
+                final dialogCtx = loadingDialogContext;
+                if (dialogCtx != null) {
+                  Navigator.of(dialogCtx, rootNavigator: true).pop();
+                }
+              }
+              switched = await switchFuture;
+            } finally {
+              final dialogCtx = loadingDialogContext;
+              if (dialogCtx != null) {
+                Navigator.of(dialogCtx, rootNavigator: true).pop();
+              }
+            }
+
+            if (context.mounted && !switched) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('تعذر الانتقال إلى حساب الزبون حالياً.'),
+                ),
+              );
+            }
+          },
         ),
         _MoreTile(
-          title: isAr ? 'تسجيل الخروج' : 'Logout',
-          subtitle:
-              isAr ? 'العودة إلى شاشة الدخول' : 'Return to the login screen',
+          cardColor: cardColor,
+          title: 'تسجيل الخروج',
+          subtitle: 'العودة إلى شاشة الدخول',
           icon: Icons.logout_rounded,
           onTap: () async {
             final confirmed = await showDialog<bool>(
               context: context,
               builder: (context) => AlertDialog(
-                title: Text(isAr ? 'تسجيل الخروج' : 'Logout'),
-                content: Text(isAr
-                    ? 'هل تريد تسجيل الخروج من حساب التاجر؟'
-                    : 'Do you want to log out of the merchant account?'),
+                title: const Text('تسجيل الخروج'),
+                content: const Text('هل تريد تسجيل الخروج من حساب التاجر؟'),
                 actions: [
                   TextButton(
                       onPressed: () => Navigator.pop(context, false),
-                      child: Text(isAr ? 'إلغاء' : 'Cancel')),
+                      child: const Text('إلغاء')),
                   TextButton(
                       onPressed: () => Navigator.pop(context, true),
-                      child: Text(isAr ? 'خروج' : 'Logout')),
+                      child: const Text('خروج')),
                 ],
               ),
             );
@@ -211,11 +259,9 @@ class MerchantMoreScreen extends StatelessWidget {
           ),
           onPressed: () => AppHelpers.launchWhatsApp(
               AppHelpers.supportWhatsAppNumber,
-              isAr
-                  ? 'مرحبا، أحتاج إلى الدعم الفني في الغيث'
-                  : 'Hello, I need support for Al-Ghaith.'),
+              'مرحبا، أحتاج إلى الدعم الفني في الغيث'),
           icon: const WhatsAppIcon(size: 36),
-          label: Text(isAr ? 'واتساب الدعم' : 'Support WhatsApp'),
+          label: const Text('واتساب الدعم'),
         ),
       ],
     );
@@ -223,7 +269,7 @@ class MerchantMoreScreen extends StatelessWidget {
 }
 
 class _MiniProfileCard extends StatelessWidget {
-  final bool isAr;
+  final Color cardColor;
   final String phone;
   final String whatsapp;
   final bool showWorkSamples;
@@ -232,7 +278,7 @@ class _MiniProfileCard extends StatelessWidget {
   final VoidCallback onOpenProfile;
 
   const _MiniProfileCard({
-    required this.isAr,
+    required this.cardColor,
     required this.phone,
     required this.whatsapp,
     required this.showWorkSamples,
@@ -248,14 +294,14 @@ class _MiniProfileCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: cardColor,
         borderRadius: BorderRadius.circular(24),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            isAr ? 'ملخص الملف' : 'Profile summary',
+            'ملخص الملف',
             style: const TextStyle(
               fontFamily: 'Cairo',
               fontWeight: FontWeight.w900,
@@ -263,11 +309,11 @@ class _MiniProfileCard extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 10),
-          _RowInfo(label: isAr ? 'الهاتف' : 'Phone', value: phoneValue),
+          _RowInfo(label: 'الهاتف', value: phoneValue),
           _RowInfo(label: 'WhatsApp', value: whatsappValue),
           if (showWorkSamples)
             _RowInfo(
-                label: isAr ? 'نماذج الأعمال' : 'Work samples',
+                label: 'نماذج الأعمال',
                 value: workSamplesCount.toString()),
           const SizedBox(height: 10),
           if (showWorkSamples && samples.isNotEmpty) ...[
@@ -278,11 +324,10 @@ class _MiniProfileCard extends StatelessWidget {
                 itemCount: samples.take(4).length,
                 separatorBuilder: (_, __) => const SizedBox(width: 8),
                 itemBuilder: (context, index) {
-                  final image = samples[index];
                   return ClipRRect(
                     borderRadius: BorderRadius.circular(14),
-                    child: Image.memory(
-                      base64Decode(image),
+                    child: AppImage(
+                      imageData: samples[index],
                       width: 84,
                       height: 84,
                       fit: BoxFit.cover,
@@ -298,7 +343,7 @@ class _MiniProfileCard extends StatelessWidget {
             child: TextButton.icon(
               onPressed: onOpenProfile,
               icon: const Icon(Icons.badge_rounded, size: 18),
-              label: Text(isAr ? 'فتح الملف الكامل' : 'Open full profile'),
+              label: const Text('فتح الملف الكامل'),
             ),
           ),
         ],
@@ -344,12 +389,14 @@ class _RowInfo extends StatelessWidget {
 }
 
 class _MoreTile extends StatelessWidget {
+  final Color cardColor;
   final String title;
   final String subtitle;
   final IconData icon;
   final VoidCallback onTap;
 
   const _MoreTile({
+    required this.cardColor,
     required this.title,
     required this.subtitle,
     required this.icon,
@@ -361,7 +408,7 @@ class _MoreTile extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: Material(
-        color: Colors.white,
+        color: cardColor,
         borderRadius: BorderRadius.circular(22),
         child: InkWell(
           onTap: onTap,
@@ -407,6 +454,90 @@ class _MoreTile extends StatelessWidget {
                     size: 16, color: Colors.grey),
               ],
             ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SyncCatalogButton extends StatefulWidget {
+  final Color cardColor;
+
+  const _SyncCatalogButton({required this.cardColor});
+
+  @override
+  State<_SyncCatalogButton> createState() => _SyncCatalogButtonState();
+}
+
+class _SyncCatalogButtonState extends State<_SyncCatalogButton> {
+  bool _isSyncing = false;
+
+  String _syncErrorMessage(Object error) {
+    final raw = error.toString();
+    if (raw.contains('Missing authorization token') ||
+        raw.contains('Invalid authorization token') ||
+        raw.contains('401')) {
+      return 'انتهت جلسة الدخول. سجل الخروج ثم ادخل مرة أخرى.';
+    }
+    if (raw.contains('Network error')) {
+      return 'فشل الاتصال بالإنترنت أو بالخادم. حاول مرة أخرى.';
+    }
+    final cleaned = raw.replaceFirst('Exception: ', '').trim();
+    if (cleaned.isNotEmpty) return cleaned;
+    return 'تعذرت المزامنة الآن. تحقق من الاتصال ثم أعد المحاولة.';
+  }
+
+  Future<void> _syncNow() async {
+    if (_isSyncing) return;
+    setState(() => _isSyncing = true);
+    try {
+      await context.read<AppProvider>().syncMerchantCatalogToCloud();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('تمت مزامنة بيانات المطعم والمنتجات بنجاح.'),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(_syncErrorMessage(error))),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isSyncing = false);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: widget.cardColor,
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: SizedBox(
+        width: double.infinity,
+        child: OutlinedButton.icon(
+          onPressed: _isSyncing ? null : _syncNow,
+          icon: _isSyncing
+              ? const SizedBox(
+                  width: 14,
+                  height: 14,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.sync_rounded, size: 18),
+          label: Text(_isSyncing ? 'جاري المزامنة' : 'مزامنة بيانات المطعم والمنتجات'),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: Colors.deepOrange,
+            side: const BorderSide(color: Colors.deepOrange),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(14),
+            ),
+            padding: const EdgeInsets.symmetric(vertical: 12),
           ),
         ),
       ),

@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
+import '../core/network/api_client.dart';
 import 'phone_auth_api.dart';
 
 class CloudflareService {
@@ -21,7 +22,14 @@ class CloudflareService {
       }
 
       final uri = Uri.parse('$baseUrl/upload');
+      final token = ApiClient.instance.sessionToken;
+      if (token == null || token.isEmpty) {
+        debugPrint('CLOUDFLARE_UPLOAD: Missing session token');
+        return null;
+      }
+
       final request = http.MultipartRequest('POST', uri);
+      request.headers['Authorization'] = 'Bearer $token';
       request.fields['bucket'] = bucket;
 
       final mimeType = _mimeTypeForPath(file.path);

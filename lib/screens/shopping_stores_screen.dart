@@ -1,8 +1,5 @@
-﻿import 'dart:convert';
-
-import 'package:flutter/cupertino.dart';
+﻿import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-
 import 'package:provider/provider.dart';
 
 import '../models/app_models.dart';
@@ -11,6 +8,7 @@ import '../services/supabase_service.dart';
 import '../utils/extensions.dart';
 import '../utils/helpers.dart';
 import '../../widgets/app_image.dart';
+import 'cart_screen.dart';
 
 enum MerchantStoreKind { shopping, restaurant }
 
@@ -49,6 +47,61 @@ class _ShoppingStoresScreenState extends State<ShoppingStoresScreen> {
     });
   }
 
+  List<Map<String, dynamic>> _buildRestaurantFallbackStores(AppProvider provider) {
+    final targetSubCategory = widget.subCategory?.id;
+    final restaurantItems = provider.items.where((item) {
+      if (item.category != 'restaurant' || !item.isAvailable) return false;
+      if (targetSubCategory == null || targetSubCategory.isEmpty) return true;
+      return item.subCategory == targetSubCategory;
+    }).toList();
+
+    if (restaurantItems.isEmpty) return const [];
+
+    final profile = Map<String, dynamic>.from(provider.merchantStore ?? const {});
+    final storeName = (profile['name']?.toString().trim() ?? '').isNotEmpty
+        ? profile['name']?.toString().trim()
+        : 'مطعمك';
+    final description = profile['description']?.toString().trim() ?? '';
+    final phone = profile['phone']?.toString().trim() ?? provider.customerPhone;
+    final whatsapp = profile['whatsapp']?.toString().trim() ?? phone;
+    final address = profile['address']?.toString().trim() ?? '';
+    final openTime = profile['openTime']?.toString().trim() ?? '';
+    final closeTime = profile['closeTime']?.toString().trim() ?? '';
+    final profileImage = profile['profileImageBase64']?.toString().trim() ?? '';
+    final workSamples = provider.merchantWorkSampleImagesBase64;
+
+    return [
+      {
+        'profile': {
+          'store_name': storeName,
+          'description': description,
+          'phone': phone,
+          'whatsapp': whatsapp,
+          'address': address,
+          'open_time': openTime,
+          'close_time': closeTime,
+          'latitude': provider.merchantLatitude,
+          'longitude': provider.merchantLongitude,
+          'profile_image_base64': profileImage,
+          'work_sample_images_base64': workSamples,
+        },
+        'products': restaurantItems
+            .map((item) => {
+                  'id': item.id,
+                  'name_ar': item.nameAr,
+                  'description_ar': item.descriptionAr,
+                  'price': item.price,
+                  'category': item.category,
+                  'sub_category': item.subCategory,
+                  'image': item.image,
+                  'image_base64': item.imageBase64,
+                  'is_available': item.isAvailable,
+                })
+            .toList(),
+      },
+    ];
+  }
+
   @override
   void initState() {
     super.initState();
@@ -63,15 +116,12 @@ class _ShoppingStoresScreenState extends State<ShoppingStoresScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isAr = Directionality.of(context) == TextDirection.rtl;
     final query = _searchController.text.trim().toLowerCase();
 
     final isRestaurant = widget.storeKind == MerchantStoreKind.restaurant;
     final title = widget.subCategory != null
-        ? (isAr ? widget.subCategory!.titleAr : widget.subCategory!.titleEn)
-        : (isAr
-            ? (isRestaurant ? 'المطاعم' : 'التسوق')
-            : (isRestaurant ? 'Restaurants' : 'Shopping'));
+        ? widget.subCategory!.titleAr
+        : (isRestaurant ? 'المطاعم' : 'التسوق');
 
     return CupertinoPageScaffold(
       backgroundColor: const Color(0xFFF2F2F7),
@@ -83,7 +133,7 @@ class _ShoppingStoresScreenState extends State<ShoppingStoresScreen> {
             fontFamily: 'Cairo',
           ),
         ),
-        previousPageTitle: isAr ? 'الرجوع' : 'Back',
+        previousPageTitle: 'الرجوع',
         trailing: CupertinoButton(
           padding: EdgeInsets.zero,
           onPressed: _reloadStores,
@@ -97,13 +147,9 @@ class _ShoppingStoresScreenState extends State<ShoppingStoresScreen> {
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
               child: CupertinoSearchTextField(
                 controller: _searchController,
-                placeholder: isAr
-                    ? (isRestaurant
-                        ? 'ابحث عن مطعم'
-                        : 'ابحث عن سوق أو محل')
-                    : (isRestaurant
-                        ? 'Search a restaurant'
-                        : 'Search a store'),
+                placeholder: isRestaurant
+                    ? 'ابحث عن مطعم'
+                    : 'ابحث عن سوق أو محل',
                 onChanged: (_) => setState(() {}),
               ),
             ),
@@ -111,6 +157,7 @@ class _ShoppingStoresScreenState extends State<ShoppingStoresScreen> {
               child: FutureBuilder<List<Map<String, dynamic>>>(
                 future: _futureStores,
                 builder: (context, snapshot) {
+                  final provider = context.read<AppProvider>();
                   if (snapshot.connectionState == ConnectionState.waiting) {
                     return const Center(child: CupertinoActivityIndicator());
                   }
@@ -118,18 +165,16 @@ class _ShoppingStoresScreenState extends State<ShoppingStoresScreen> {
                   if (snapshot.hasError) {
                     return _EmptyState(
                       message: isRestaurant
-                          ? (isAr
-                              ? 'تعذر تحميل المطاعم'
-                              : 'Failed to load restaurants')
-                          : (isAr
-                              ? 'تعذر تحميل الأسواق'
-                              : 'Failed to load stores'),
-                      isAr: isAr,
+                          ? 'تعذر تحميل المطاعم'
+                          : 'تعذر تحميل الأسواق',
                       onRetry: _reloadStores,
                     );
                   }
 
-                  final stores = snapshot.data ?? const [];
+                  final remoteStores = snapshot.data ?? const [];
+                  final stores = remoteStores.isEmpty && isRestaurant
+                      ? _buildRestaurantFallbackStores(provider)
+                      : remoteStores;
                   final filtered = stores.where((store) {
                     final profile = Map<String, dynamic>.from(
                       store['profile'] as Map,
@@ -145,19 +190,12 @@ class _ShoppingStoresScreenState extends State<ShoppingStoresScreen> {
 
                   if (filtered.isEmpty) {
                     return _EmptyState(
-                      isAr: isAr,
                       onRetry: _reloadStores,
                       message: query.isEmpty
                           ? (isRestaurant
-                              ? (isAr
-                                  ? 'لا توجد مطاعم في هذا القسم بعد'
-                                  : 'No restaurants in this section yet')
-                              : (isAr
-                                  ? 'لا توجد أسواق أو محلات في هذا القسم بعد'
-                                  : 'No stores in this category yet'))
-                          : (isAr
-                              ? 'لا توجد نتائج مطابقة'
-                              : 'No matching stores'),
+                              ? 'لا توجد مطاعم في هذا القسم بعد'
+                              : 'لا توجد أسواق أو محلات في هذا القسم بعد')
+                          : 'لا توجد نتائج مطابقة',
                     );
                   }
 
@@ -168,17 +206,16 @@ class _ShoppingStoresScreenState extends State<ShoppingStoresScreen> {
                     },
                     child: ListView.separated(
                       physics: const AlwaysScrollableScrollPhysics(),
-                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
-                    itemCount: filtered.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 12),
-                    itemBuilder: (context, index) {
-                      return _StoreCard(
-                        isAr: isAr,
-                        data: filtered[index],
-                        subCategory: widget.subCategory,
-                        storeKind: widget.storeKind,
-                      );
-                    },
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
+                      itemCount: filtered.length,
+                      separatorBuilder: (_, __) => const SizedBox(height: 12),
+                      itemBuilder: (context, index) {
+                        return _StoreCard(
+                          data: filtered[index],
+                          subCategory: widget.subCategory,
+                          storeKind: widget.storeKind,
+                        );
+                      },
                     ),
                   );
                 },
@@ -192,13 +229,11 @@ class _ShoppingStoresScreenState extends State<ShoppingStoresScreen> {
 }
 
 class _StoreCard extends StatelessWidget {
-  final bool isAr;
   final Map<String, dynamic> data;
   final ServiceCategory? subCategory;
   final MerchantStoreKind storeKind;
 
   const _StoreCard({
-    required this.isAr,
     required this.data,
     required this.subCategory,
     required this.storeKind,
@@ -258,8 +293,7 @@ class _StoreCard extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        profile['store_name']?.toString() ??
-                            (isAr ? 'متجر' : 'Store'),
+                        profile['store_name']?.toString() ?? 'متجر',
                         style: const TextStyle(
                           fontFamily: 'Cairo',
                           fontWeight: FontWeight.w900,
@@ -269,9 +303,7 @@ class _StoreCard extends StatelessWidget {
                       const SizedBox(height: 4),
                       Text(
                         profile['description']?.toString() ??
-                            (isAr
-                                ? 'منيو حقيقي من نفس المتجر'
-                                : 'Live menu from the same store'),
+                            'منيو حقيقي من نفس المتجر',
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
@@ -298,9 +330,7 @@ class _StoreCard extends StatelessWidget {
                   children: [
                     _InfoChip(
                       icon: CupertinoIcons.location_solid,
-                      label: address.isNotEmpty
-                          ? address
-                          : (isAr ? 'بدون عنوان' : 'No address'),
+                      label: address.isNotEmpty ? address : 'بدون عنوان',
                     ),
                     _InfoChip(
                       icon: CupertinoIcons.time,
@@ -309,7 +339,7 @@ class _StoreCard extends StatelessWidget {
                     ),
                     _InfoChip(
                       icon: CupertinoIcons.cube_box_fill,
-                      label: '${products.length} ${isAr ? 'منتج' : 'products'}',
+                      label: '${products.length} منتج',
                     ),
                   ],
                 ),
@@ -349,7 +379,6 @@ class _StoreCard extends StatelessWidget {
                       Navigator.of(context).push(
                         MaterialPageRoute(
                           builder: (_) => ShoppingStoreMenuScreen(
-                            isAr: isAr,
                             profile: profile,
                             products: products,
                             subCategory: subCategory,
@@ -359,13 +388,11 @@ class _StoreCard extends StatelessWidget {
                       );
                     },
                     icon: const Icon(Icons.menu_book_rounded),
-                    label: Text(isAr
-                        ? (storeKind == MerchantStoreKind.restaurant
-                            ? 'عرض المنيو'
-                            : 'فتح المنيو')
-                        : (storeKind == MerchantStoreKind.restaurant
-                            ? 'View menu'
-                            : 'Open menu')),
+                    label: Text(
+                      storeKind == MerchantStoreKind.restaurant
+                          ? 'عرض المنيو'
+                          : 'فتح المنيو',
+                    ),
                   ),
                 ),
               ],
@@ -378,7 +405,6 @@ class _StoreCard extends StatelessWidget {
 }
 
 class ShoppingStoreMenuScreen extends StatefulWidget {
-  final bool isAr;
   final Map<String, dynamic> profile;
   final List<Map<String, dynamic>> products;
   final ServiceCategory? subCategory;
@@ -386,7 +412,6 @@ class ShoppingStoreMenuScreen extends StatefulWidget {
 
   const ShoppingStoreMenuScreen({
     super.key,
-    required this.isAr,
     required this.profile,
     required this.products,
     required this.subCategory,
@@ -398,31 +423,88 @@ class ShoppingStoreMenuScreen extends StatefulWidget {
       _ShoppingStoreMenuScreenState();
 }
 
-class _ShoppingStoreMenuScreenState extends State<ShoppingStoreMenuScreen> {
+class _ShoppingStoreMenuScreenState extends State<ShoppingStoreMenuScreen>
+    with SingleTickerProviderStateMixin {
   final TextEditingController _searchController = TextEditingController();
+  final GlobalKey _cartIconKey = GlobalKey();
+  final GlobalKey _stackKey = GlobalKey();
+  late final AnimationController _flyController;
+  Offset _flyStart = Offset.zero;
+  Offset _flyEnd = Offset.zero;
+  bool _showFlyDot = false;
+  int _cartPulseTick = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _flyController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 650),
+    )..addStatusListener((status) {
+        if (!mounted) return;
+        if (status == AnimationStatus.completed) {
+          setState(() {
+            _showFlyDot = false;
+            _cartPulseTick++;
+          });
+        }
+      });
+  }
 
   @override
   void dispose() {
+    _flyController.dispose();
     _searchController.dispose();
     super.dispose();
   }
 
+  Future<void> _animateAddToCart(BuildContext sourceContext) async {
+    final stackContext = _stackKey.currentContext;
+    final cartContext = _cartIconKey.currentContext;
+    if (stackContext == null || cartContext == null) return;
+    final stackBox = stackContext.findRenderObject() as RenderBox?;
+    final sourceBox = sourceContext.findRenderObject() as RenderBox?;
+    final cartBox = cartContext.findRenderObject() as RenderBox?;
+    if (stackBox == null || sourceBox == null || cartBox == null) return;
+
+    final sourceGlobal = sourceBox.localToGlobal(
+      Offset(sourceBox.size.width / 2, sourceBox.size.height / 2),
+    );
+    final cartGlobal = cartBox.localToGlobal(
+      Offset(cartBox.size.width / 2, cartBox.size.height / 2),
+    );
+
+    setState(() {
+      _flyStart = stackBox.globalToLocal(sourceGlobal);
+      _flyEnd = stackBox.globalToLocal(cartGlobal);
+      _showFlyDot = true;
+    });
+    await _flyController.forward(from: 0);
+  }
+
+  List<Map<String, dynamic>> _filterProducts(List<Map<String, dynamic>> rows) {
+    final query = _searchController.text.trim().toLowerCase();
+    if (query.isEmpty) return rows;
+
+    return rows.where((row) {
+      final searchable = [
+        row['name_ar']?.toString(),
+        row['name_en']?.toString(),
+        row['description_ar']?.toString(),
+        row['description_en']?.toString(),
+      ].whereType<String>().join(' ').toLowerCase();
+      return searchable.contains(query);
+    }).toList();
+  }
+
   @override
   Widget build(BuildContext context) {
+    final provider = context.watch<AppProvider>();
     final query = _searchController.text.trim().toLowerCase();
-    final products = widget.products.where((row) {
-      final nameAr = row['name_ar']?.toString().toLowerCase() ?? '';
-      final nameEn = row['name_en']?.toString().toLowerCase() ?? '';
-      final descriptionAr =
-          row['description_ar']?.toString().toLowerCase() ?? '';
-      final descriptionEn =
-          row['description_en']?.toString().toLowerCase() ?? '';
-      if (query.isEmpty) return true;
-      return nameAr.contains(query) ||
-          nameEn.contains(query) ||
-          descriptionAr.contains(query) ||
-          descriptionEn.contains(query);
-    }).toList();
+    final allProducts = widget.products
+        .map((row) => Map<String, dynamic>.from(row))
+        .toList();
+    final products = _filterProducts(allProducts);
 
     final whatsappText = widget.profile['whatsapp']?.toString().trim() ?? '';
     final whatsapp = whatsappText.isNotEmpty
@@ -431,68 +513,139 @@ class _ShoppingStoreMenuScreenState extends State<ShoppingStoreMenuScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFFF5F6FA),
       appBar: AppBar(
+        backgroundColor: Colors.white,
+        surfaceTintColor: Colors.white,
         title: Text(
-          widget.isAr
-              ? (widget.profile['store_name']?.toString() ?? 'المحل')
-              : (widget.profile['store_name']?.toString() ?? 'Store'),
+          widget.profile['store_name']?.toString() ?? 'المحل',
           style:
               const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w900),
         ),
-      ),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          _StoreHeader(
-            isAr: widget.isAr,
-            profile: widget.profile,
-            whatsapp: whatsapp,
+        actions: [
+          Padding(
+            padding: const EdgeInsetsDirectional.only(end: 8),
+            child: _StoreCartNavButton(
+              key: _cartIconKey,
+              count: provider.cartCount,
+              pulseTick: _cartPulseTick,
+              onTap: () {
+                Navigator.of(context).push(
+                  CupertinoPageRoute(builder: (_) => const CartScreen()),
+                );
+              },
+            ),
           ),
-          const SizedBox(height: 12),
-          CupertinoSearchTextField(
-            controller: _searchController,
-            placeholder: widget.isAr ? 'ابحث داخل المتجر' : 'Search this store',
-            onChanged: (_) => setState(() {}),
-          ),
-          const SizedBox(height: 12),
-          if (products.isEmpty)
-            _EmptyState(
-              isAr: widget.isAr,
-              message: widget.storeKind == MerchantStoreKind.restaurant
-                  ? (widget.isAr
-                      ? 'لا توجد أصناف في منيو هذا المطعم بعد'
-                      : 'No menu items in this restaurant yet')
-                  : (widget.isAr
-                      ? 'لا توجد منتجات في هذا المتجر بعد'
-                      : 'No products in this store yet'),
-            )
-          else
-            ...products.map((row) {
-              final item = Map<String, dynamic>.from(row);
-              return _ProductCard(
-                isAr: widget.isAr,
-                item: item,
-                profile: widget.profile,
-                onWhatsApp: () => AppHelpers.launchWhatsApp(
-                  whatsapp,
-                  widget.isAr
-                      ? 'مرحبًا، أريد الاستفسار عن ${item['name_ar']?.toString() ?? ''}'
-                      : 'Hello, I want to ask about ${item['name_en']?.toString() ?? ''}',
-                ),
-              );
-            }),
         ],
+      ),
+      body: SafeArea(
+        child: Stack(
+          key: _stackKey,
+          children: [
+          ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              _StoreHeader(
+                profile: widget.profile,
+                whatsapp: whatsapp,
+              ),
+              const SizedBox(height: 12),
+              CupertinoSearchTextField(
+                controller: _searchController,
+                placeholder: 'ابحث داخل المتجر',
+                onChanged: (_) => setState(() {}),
+                onSubmitted: (_) => setState(() {}),
+              ),
+              const SizedBox(height: 12),
+              if (products.isEmpty)
+                _StoreMenuEmptyState(
+                  hasSearch: query.isNotEmpty,
+                  isRestaurant: widget.storeKind == MerchantStoreKind.restaurant,
+                )
+              else
+                ...products.map((item) {
+                  return _ProductCard(
+                    item: item,
+                    profile: widget.profile,
+                    onWhatsApp: () => AppHelpers.launchWhatsApp(
+                      whatsapp,
+                      'مرحبًا، أريد الاستفسار عن ${item['name_ar']?.toString() ?? ''}',
+                    ),
+                    onAdd: (buttonContext) async {
+                      final added = provider.addStoreProductToCart(
+                        item,
+                        widget.profile,
+                      );
+                      if (!added) {
+                        if (!context.mounted) return;
+                        showCupertinoDialog(
+                          context: context,
+                          builder: (dialogContext) => CupertinoAlertDialog(
+                            title: const Text('تنبيه'),
+                            content: const Text(
+                              'السلة تحتوي منتجات من متجر آخر. أكمل طلبك الحالي أو افرغ السلة أولاً.',
+                            ),
+                            actions: [
+                              CupertinoDialogAction(
+                                child: const Text('حسنًا'),
+                                onPressed: () => Navigator.pop(dialogContext),
+                              ),
+                            ],
+                          ),
+                        );
+                        return;
+                      }
+                      await _animateAddToCart(buttonContext);
+                    },
+                  );
+                }),
+            ],
+          ),
+          if (_showFlyDot)
+            IgnorePointer(
+              child: AnimatedBuilder(
+                animation: _flyController,
+                builder: (_, __) {
+                  final t =
+                      Curves.easeInOutCubic.transform(_flyController.value);
+                  final x = _flyStart.dx + ((_flyEnd.dx - _flyStart.dx) * t);
+                  final yBase = _flyStart.dy + ((_flyEnd.dy - _flyStart.dy) * t);
+                  final arc = -70 * (1 - (2 * t - 1).abs());
+                  final scale = 1 - (t * 0.4);
+                  return Positioned(
+                    left: x - 10,
+                    top: yBase + arc - 10,
+                    child: Transform.scale(
+                      scale: scale,
+                      child: Container(
+                        width: 20,
+                        height: 20,
+                        decoration: BoxDecoration(
+                          color: Colors.deepOrange,
+                          shape: BoxShape.circle,
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.deepOrange.withValues(alpha: 0.4),
+                              blurRadius: 10,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 }
 
 class _StoreHeader extends StatelessWidget {
-  final bool isAr;
   final Map<String, dynamic> profile;
   final String whatsapp;
 
   const _StoreHeader({
-    required this.isAr,
     required this.profile,
     required this.whatsapp,
   });
@@ -534,9 +687,7 @@ class _StoreHeader extends StatelessWidget {
             children: [
               _InfoChip(
                 icon: CupertinoIcons.location_solid,
-                label: address.isNotEmpty
-                    ? address
-                    : (isAr ? 'بدون عنوان' : 'No address'),
+                label: address.isNotEmpty ? address : 'بدون عنوان',
               ),
               _InfoChip(
                 icon: CupertinoIcons.time,
@@ -552,12 +703,10 @@ class _StoreHeader extends StatelessWidget {
                 child: OutlinedButton.icon(
                   onPressed: () => AppHelpers.launchWhatsApp(
                     whatsapp,
-                    isAr
-                        ? 'مرحبًا، أريد الاستفسار عن المحل.'
-                        : 'Hello, I want to inquire about the store.',
+                    'مرحبًا، أريد الاستفسار عن المحل.',
                   ),
                   icon: const Icon(Icons.chat_rounded),
-                  label: Text(isAr ? 'واتساب' : 'WhatsApp'),
+                  label: const Text('واتساب'),
                   style: OutlinedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 12),
                     foregroundColor: Colors.deepOrange,
@@ -575,7 +724,7 @@ class _StoreHeader extends StatelessWidget {
                     phone.isNotEmpty ? phone : whatsapp,
                   ),
                   icon: const Icon(Icons.call_rounded),
-                  label: Text(isAr ? 'اتصال' : 'Call'),
+                  label: const Text('اتصال'),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.deepOrange,
                     foregroundColor: Colors.white,
@@ -595,20 +744,23 @@ class _StoreHeader extends StatelessWidget {
 }
 
 class _ProductCard extends StatelessWidget {
-  final bool isAr;
   final Map<String, dynamic> item;
   final Map<String, dynamic> profile;
   final VoidCallback onWhatsApp;
+  final Future<void> Function(BuildContext buttonContext) onAdd;
 
   const _ProductCard({
-    required this.isAr,
     required this.item,
     required this.profile,
     required this.onWhatsApp,
+    required this.onAdd,
   });
 
   @override
   Widget build(BuildContext context) {
+    final provider = context.watch<AppProvider>();
+    final productId = item['id']?.toString() ?? '';
+    final isFavorite = provider.isFavoriteId(productId);
     final price = (item['price'] as num?)?.toInt() ?? 0;
     final imageBase64 = item['image_base64']?.toString();
     final image = AppImage(
@@ -629,7 +781,40 @@ class _ProductCard extends StatelessWidget {
           ClipRRect(
             borderRadius:
                 const BorderRadius.horizontal(right: Radius.circular(22)),
-            child: SizedBox(width: 110, height: 120, child: image),
+            child: SizedBox(
+              width: 110,
+              height: 120,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  image,
+                  Positioned(
+                    top: 8,
+                    left: 8,
+                    child: GestureDetector(
+                      onTap: () => provider.toggleFavoriteStoreProduct(
+                        item,
+                        profile,
+                      ),
+                      child: Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.92),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          isFavorite
+                              ? CupertinoIcons.heart_fill
+                              : CupertinoIcons.heart,
+                          size: 18,
+                          color: isFavorite ? Colors.red : Colors.grey,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
           Expanded(
             child: Padding(
@@ -638,9 +823,7 @@ class _ProductCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    isAr
-                        ? (item['name_ar']?.toString() ?? '')
-                        : (item['name_en']?.toString() ?? ''),
+                    item['name_ar']?.toString() ?? '',
                     style: const TextStyle(
                       fontFamily: 'Cairo',
                       fontWeight: FontWeight.w900,
@@ -651,9 +834,7 @@ class _ProductCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 6),
                   Text(
-                    isAr
-                        ? (item['description_ar']?.toString() ?? '')
-                        : (item['description_en']?.toString() ?? ''),
+                    item['description_ar']?.toString() ?? '',
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
@@ -675,65 +856,24 @@ class _ProductCard extends StatelessWidget {
                         ),
                       ),
                       const Spacer(),
-                      CupertinoButton(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 14,
-                          vertical: 7,
-                        ),
-                        minSize: 0,
-                        color: Colors.deepOrange,
-                        borderRadius: BorderRadius.circular(12),
-                        onPressed: () {
-                          final provider = context.read<AppProvider>();
-                          final added = provider.addStoreProductToCart(
-                            item,
-                            profile,
-                          );
-                          if (!added) {
-                            showCupertinoDialog(
-                              context: context,
-                              builder: (context) => CupertinoAlertDialog(
-                                title: Text(isAr ? 'تنبيه' : 'Notice'),
-                                content: Text(
-                                  isAr
-                                      ? 'السلة تحتوي منتجات من متجر آخر. أكمل طلبك الحالي أو افرغ السلة أولاً.'
-                                      : 'Your cart has items from another store. Complete or clear it first.',
-                                ),
-                                actions: [
-                                  CupertinoDialogAction(
-                                    child: Text(isAr ? 'حسنًا' : 'OK'),
-                                    onPressed: () => Navigator.pop(context),
-                                  ),
-                                ],
-                              ),
-                            );
-                            return;
-                          }
-                          showCupertinoDialog(
-                            context: context,
-                            builder: (context) => CupertinoAlertDialog(
-                              title: Text(isAr ? 'تمت الإضافة' : 'Added'),
-                              content: Text(
-                                isAr
-                                    ? 'تمت إضافة المنتج إلى السلة.'
-                                    : 'Item added to cart.',
-                              ),
-                              actions: [
-                                CupertinoDialogAction(
-                                  child: Text(isAr ? 'حسنًا' : 'OK'),
-                                  onPressed: () => Navigator.pop(context),
-                                ),
-                              ],
+                      Builder(
+                        builder: (buttonContext) => CupertinoButton(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 7,
+                          ),
+                          minSize: 0,
+                          color: Colors.deepOrange,
+                          borderRadius: BorderRadius.circular(12),
+                          onPressed: () => onAdd(buttonContext),
+                          child: const Text(
+                            'أضف للسلة',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w800,
+                              fontFamily: 'Cairo',
                             ),
-                          );
-                        },
-                        child: Text(
-                          isAr ? 'أضف للسلة' : 'Add to cart',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w800,
-                            fontFamily: 'Cairo',
                           ),
                         ),
                       ),
@@ -785,13 +925,145 @@ class _InfoChip extends StatelessWidget {
   }
 }
 
+class _StoreCartNavButton extends StatelessWidget {
+  final int count;
+  final int pulseTick;
+  final VoidCallback onTap;
+
+  const _StoreCartNavButton({
+    super.key,
+    required this.count,
+    required this.pulseTick,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final scale = count > 0 && pulseTick.isOdd ? 1.12 : 1.0;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: onTap,
+        child: AnimatedScale(
+          scale: scale,
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.easeOutBack,
+          child: SizedBox(
+            width: 40,
+            height: 40,
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                const Center(
+                  child: Icon(
+                    CupertinoIcons.cart_fill,
+                    size: 24,
+                    color: Colors.deepOrange,
+                  ),
+                ),
+                if (count > 0)
+                  Positioned(
+                    top: -2,
+                    left: -2,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 5,
+                        vertical: 1,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.red,
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text(
+                        '$count',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w800,
+                          fontFamily: 'Cairo',
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _StoreMenuEmptyState extends StatelessWidget {
+  final bool hasSearch;
+  final bool isRestaurant;
+
+  const _StoreMenuEmptyState({
+    required this.hasSearch,
+    required this.isRestaurant,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 32),
+      child: Column(
+        children: [
+          Container(
+            width: 80,
+            height: 80,
+            decoration: BoxDecoration(
+              color: Colors.deepOrange.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(22),
+            ),
+            child: Icon(
+              hasSearch
+                  ? CupertinoIcons.search
+                  : (isRestaurant
+                      ? Icons.restaurant_menu_rounded
+                      : Icons.storefront_rounded),
+              color: Colors.deepOrange,
+              size: 40,
+            ),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            hasSearch
+                ? 'لا توجد نتائج مطابقة'
+                : (isRestaurant
+                    ? 'لا توجد أصناف في منيو هذا المطعم بعد'
+                    : 'لا توجد منتجات في هذا المتجر بعد'),
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              fontFamily: 'Cairo',
+              fontWeight: FontWeight.w900,
+              fontSize: 17,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            hasSearch
+                ? 'جرّب كلمة بحث مختلفة'
+                : 'سيظهر المنيو هنا عندما يضيف التاجر منتجاته.',
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              fontFamily: 'Cairo',
+              color: Colors.grey,
+              height: 1.4,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _EmptyState extends StatelessWidget {
-  final bool isAr;
   final String message;
   final VoidCallback? onRetry;
 
   const _EmptyState({
-    required this.isAr,
     required this.message,
     this.onRetry,
   });
@@ -812,7 +1084,7 @@ class _EmptyState extends StatelessWidget {
                 borderRadius: BorderRadius.circular(24),
               ),
               child: Icon(
-                message.contains('مطاعم') || message.contains('restaurant')
+                message.contains('مطاعم')
                     ? Icons.restaurant_rounded
                     : Icons.storefront_rounded,
                 color: Colors.deepOrange,
@@ -830,12 +1102,10 @@ class _EmptyState extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 8),
-            Text(
-              isAr
-                  ? 'عندما يسجّل تاجر مطعمه ويضيف منتجات، ستظهر هنا للزبائن.'
-                  : 'When a merchant registers and adds products, they will appear here.',
+            const Text(
+              'عندما يسجّل تاجر مطعمه ويضيف منتجات، ستظهر هنا للزبائن.',
               textAlign: TextAlign.center,
-              style: const TextStyle(
+              style: TextStyle(
                 fontFamily: 'Cairo',
                 color: Colors.grey,
                 height: 1.45,
@@ -847,9 +1117,9 @@ class _EmptyState extends StatelessWidget {
                 color: Colors.deepOrange,
                 borderRadius: BorderRadius.circular(14),
                 onPressed: onRetry,
-                child: Text(
-                  isAr ? 'تحديث' : 'Refresh',
-                  style: const TextStyle(fontFamily: 'Cairo'),
+                child: const Text(
+                  'تحديث',
+                  style: TextStyle(fontFamily: 'Cairo'),
                 ),
               ),
             ],

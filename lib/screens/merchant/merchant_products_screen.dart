@@ -7,9 +7,8 @@ import '../../models/app_models.dart';
 import '../../providers/app_provider.dart';
 import '../../utils/extensions.dart';
 import '../../utils/dummy_data.dart';
-import '../../utils/merchant_service_labels.dart';
 import '../../widgets/app_image.dart';
-import '../merchant/merchant_store_settings_screen.dart';
+import '../../widgets/merchant/quick_publish_panel.dart';
 import '../real_estate_form_screen.dart';
 import 'product_form_screen.dart';
 
@@ -22,6 +21,55 @@ class MerchantProductsScreen extends StatefulWidget {
 
 class _MerchantProductsScreenState extends State<MerchantProductsScreen> {
   final _searchController = TextEditingController();
+  bool _isSyncingCatalog = false;
+
+  bool _ensureCanPublish(AppProvider provider, String serviceId) {
+    if (provider.canPublishForService(serviceId)) return true;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('حدد موقع المتجر على الخريطة قبل نشر المنتجات.'),
+      ),
+    );
+    return false;
+  }
+
+  String _syncErrorMessage(Object error) {
+    final raw = error.toString();
+    if (raw.contains('Missing authorization token') ||
+        raw.contains('Invalid authorization token') ||
+        raw.contains('401')) {
+      return 'انتهت جلسة الدخول. سجل الخروج ثم ادخل مرة أخرى.';
+    }
+    if (raw.contains('Network error')) {
+      return 'فشل الاتصال بالإنترنت أو بالخادم. حاول مرة أخرى.';
+    }
+    final cleaned = raw.replaceFirst('Exception: ', '').trim();
+    if (cleaned.isNotEmpty) return cleaned;
+    return 'تعذرت المزامنة الآن. تحقق من الاتصال ثم أعد المحاولة.';
+  }
+
+  Future<void> _syncCatalogNow(AppProvider provider) async {
+    if (_isSyncingCatalog) return;
+    setState(() => _isSyncingCatalog = true);
+    try {
+      await provider.syncMerchantCatalogToCloud();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('تمت مزامنة بيانات المطعم والمنتجات بنجاح.'),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(_syncErrorMessage(error))),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isSyncingCatalog = false);
+      }
+    }
+  }
 
   @override
   void dispose() {
@@ -32,7 +80,6 @@ class _MerchantProductsScreenState extends State<MerchantProductsScreen> {
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<AppProvider>();
-    final isAr = provider.lang == 'ar';
     final labels = provider.merchantActiveLabels;
     final serviceId = provider.merchantActiveServiceId;
     final serviceIds = provider.merchantServiceIds;
@@ -68,7 +115,7 @@ class _MerchantProductsScreenState extends State<MerchantProductsScreen> {
                       final selected = currentId == serviceId;
                       return ChoiceChip(
                         label: Text(
-                          isAr ? service.titleAr : service.titleEn,
+                          service.titleAr,
                           style: const TextStyle(fontFamily: 'Cairo'),
                         ),
                         selected: selected,
@@ -93,7 +140,7 @@ class _MerchantProductsScreenState extends State<MerchantProductsScreen> {
                 children: [
                   Expanded(
                     child: _MiniStat(
-                      label: isAr ? 'الإجمالي' : 'Total',
+                      label: 'الإجمالي',
                       value: '${provider.merchantProductCount}',
                       color: Colors.deepOrange,
                     ),
@@ -101,7 +148,7 @@ class _MerchantProductsScreenState extends State<MerchantProductsScreen> {
                   const SizedBox(width: 10),
                   Expanded(
                     child: _MiniStat(
-                      label: isAr ? 'المتاح' : 'Available',
+                      label: 'المتاح',
                       value: '${items.where((e) => e.isAvailable).length}',
                       color: Colors.green,
                     ),
@@ -109,7 +156,7 @@ class _MerchantProductsScreenState extends State<MerchantProductsScreen> {
                   const SizedBox(width: 10),
                   Expanded(
                     child: _MiniStat(
-                      label: isAr ? 'غير متاح' : 'Hidden',
+                      label: 'غير متاح',
                       value: '${items.where((e) => !e.isAvailable).length}',
                       color: Colors.red,
                     ),
@@ -122,9 +169,7 @@ class _MerchantProductsScreenState extends State<MerchantProductsScreen> {
                 onChanged: (_) => setState(() {}),
                 decoration: InputDecoration(
                   prefixIcon: const Icon(Icons.search_rounded),
-                  hintText: isAr
-                      ? labels.searchPlaceholderAr
-                      : labels.searchPlaceholderEn,
+                  hintText: labels.searchPlaceholderAr,
                   filled: true,
                   fillColor: const Color(0xFFF6F6F8),
                   border: OutlineInputBorder(
@@ -137,15 +182,16 @@ class _MerchantProductsScreenState extends State<MerchantProductsScreen> {
           ),
         ),
         const SizedBox(height: 14),
-        _QuickPublishPanel(
-          isAr: isAr,
+        MerchantQuickPublishPanel(
           serviceIds: provider.merchantServiceIds,
           activeServiceId: serviceId,
           onActivate: provider.setMerchantActiveService,
+          subtitle: 'اختر الخدمة ثم ابدأ النشر مباشرة من هنا.',
           onPublish: (selectedServiceId) async {
             await provider.setMerchantActiveService(selectedServiceId);
             if (!context.mounted) return;
-            _openPublisher(context, selectedServiceId);
+            if (!_ensureCanPublish(provider, selectedServiceId)) return;
+            openMerchantPublisher(context, selectedServiceId);
           },
         ),
         const SizedBox(height: 16),
@@ -153,7 +199,7 @@ class _MerchantProductsScreenState extends State<MerchantProductsScreen> {
           children: [
             Expanded(
               child: Text(
-                isAr ? labels.productsTitleAr : labels.productsTitleEn,
+                labels.productsTitleAr,
                 style: const TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.w900,
@@ -161,6 +207,27 @@ class _MerchantProductsScreenState extends State<MerchantProductsScreen> {
                 ),
               ),
             ),
+            OutlinedButton.icon(
+              onPressed: _isSyncingCatalog
+                  ? null
+                  : () => _syncCatalogNow(provider),
+              icon: _isSyncingCatalog
+                  ? const SizedBox(
+                      width: 14,
+                      height: 14,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.sync_rounded, size: 18),
+              label: Text(_isSyncingCatalog ? 'جاري' : 'مزامنة'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: Colors.deepOrange,
+                side: const BorderSide(color: Colors.deepOrange),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
             ElevatedButton.icon(
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.deepOrange,
@@ -169,6 +236,7 @@ class _MerchantProductsScreenState extends State<MerchantProductsScreen> {
                     borderRadius: BorderRadius.circular(14)),
               ),
               onPressed: () {
+                if (!_ensureCanPublish(provider, serviceId)) return;
                 Navigator.of(context).push(
                   MaterialPageRoute(
                     builder: (_) => serviceId == 'real_estate'
@@ -181,7 +249,7 @@ class _MerchantProductsScreenState extends State<MerchantProductsScreen> {
                 );
               },
               icon: const Icon(Icons.add_rounded),
-              label: Text(isAr ? labels.addItemAr : labels.addItemEn),
+              label: Text(labels.addItemAr),
             ),
           ],
         ),
@@ -195,9 +263,7 @@ class _MerchantProductsScreenState extends State<MerchantProductsScreen> {
             ),
             child: Center(
               child: Text(
-                isAr
-                    ? 'لا توجد ${labels.itemPluralAr} هنا'
-                    : 'No ${labels.itemPluralEn} here',
+                'لا توجد ${labels.itemPluralAr} هنا',
                 style: const TextStyle(fontFamily: 'Cairo', color: Colors.grey),
               ),
             ),
@@ -208,7 +274,6 @@ class _MerchantProductsScreenState extends State<MerchantProductsScreen> {
               padding: const EdgeInsets.only(bottom: 12),
               child: _ProductCard(
                 item: item,
-                isAr: isAr,
                 onToggleAvailability: () {
                   item.isAvailable = !item.isAvailable;
                   provider.updateProduct(item);
@@ -238,225 +303,14 @@ class _MerchantProductsScreenState extends State<MerchantProductsScreen> {
   }
 }
 
-void _openPublisher(BuildContext context, String serviceId) {
-  Widget page;
-  if (serviceId == 'professionals') {
-    page = const MerchantStoreSettingsScreen();
-  } else if (serviceId == 'real_estate') {
-    page = const RealEstateFormScreen(mode: 'sell');
-  } else {
-    page = ProductFormScreen(
-      isRestaurant: serviceId == 'restaurant',
-      serviceId: serviceId,
-    );
-  }
-  Navigator.of(context).push(MaterialPageRoute(builder: (_) => page));
-}
-
-class _QuickPublishPanel extends StatelessWidget {
-  final bool isAr;
-  final List<String> serviceIds;
-  final String activeServiceId;
-  final Future<void> Function(String serviceId) onActivate;
-  final Future<void> Function(String serviceId) onPublish;
-
-  const _QuickPublishPanel({
-    required this.isAr,
-    required this.serviceIds,
-    required this.activeServiceId,
-    required this.onActivate,
-    required this.onPublish,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    if (serviceIds.isEmpty) return const SizedBox.shrink();
-
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            isAr ? 'نشر سريع حسب الخدمة' : 'Quick publish by service',
-            style: const TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.w900,
-              fontFamily: 'Cairo',
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            isAr
-                ? 'اختر الخدمة ثم ابدأ النشر مباشرة من هنا.'
-                : 'Choose a service and start publishing from here.',
-            style: const TextStyle(
-              color: Colors.grey,
-              fontSize: 12,
-              height: 1.4,
-              fontFamily: 'Cairo',
-            ),
-          ),
-          const SizedBox(height: 12),
-          ...serviceIds.map((serviceId) {
-            final labels = merchantServiceLabels(serviceId);
-            final selected = serviceId == activeServiceId;
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: GestureDetector(
-                onTap: selected ? null : () => onActivate(serviceId),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                  decoration: BoxDecoration(
-                    color: selected
-                        ? Colors.deepOrange.withValues(alpha: 0.06)
-                        : const Color(0xFFF8F9FC),
-                    borderRadius: BorderRadius.circular(18),
-                    border: Border.all(
-                      color: selected
-                          ? Colors.deepOrange.withValues(alpha: 0.25)
-                          : const Color(0xFFE6E8F0),
-                    ),
-                  ),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: Text(
-                                    isAr ? labels.storeLabelAr : labels.storeLabelEn,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(
-                                      fontFamily: 'Cairo',
-                                      fontWeight: FontWeight.w900,
-                                      fontSize: 14,
-                                    ),
-                                  ),
-                                ),
-                                Container(
-                                  margin: const EdgeInsetsDirectional.only(end: 8),
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-                                  decoration: BoxDecoration(
-                                    color: selected
-                                        ? Colors.deepOrange.withValues(alpha: 0.12)
-                                        : Colors.green.withValues(alpha: 0.12),
-                                    borderRadius: BorderRadius.circular(999),
-                                  ),
-                                  child: Text(
-                                    selected
-                                        ? (isAr ? 'الحالية' : 'Current')
-                                        : (isAr ? 'مفعلة' : 'Enabled'),
-                                    style: TextStyle(
-                                      fontFamily: 'Cairo',
-                                      fontWeight: FontWeight.w700,
-                                      color: selected ? Colors.deepOrange : Colors.green,
-                                      fontSize: 11,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              _publishSubtitle(serviceId, isAr),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                fontFamily: 'Cairo',
-                                color: Colors.grey,
-                                fontSize: 11,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 4),
-                      IconButton.filled(
-                        onPressed: () async => onPublish(serviceId),
-                        icon: const Icon(Icons.add_rounded, size: 18),
-                        tooltip: _publishLabel(serviceId, isAr),
-                        style: IconButton.styleFrom(
-                          backgroundColor: Colors.deepOrange,
-                          foregroundColor: Colors.white,
-                          visualDensity: VisualDensity.compact,
-                          padding: const EdgeInsets.all(10),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            );
-          }),
-        ],
-      ),
-    );
-  }
-}
-String _publishLabel(String serviceId, bool isAr) {
-  switch (serviceId) {
-    case 'restaurant':
-      return isAr ? 'نشر منيو' : 'Publish menu';
-    case 'product':
-      return isAr ? 'نشر منتجات' : 'Publish products';
-    case 'real_estate':
-      return isAr ? 'نشر عقار' : 'Publish property';
-    case 'professionals':
-      return isAr ? 'تحديث الملف' : 'Update profile';
-    case 'cars':
-      return isAr ? 'نشر سيارة' : 'Publish car';
-    default:
-      return isAr ? 'نشر الآن' : 'Publish now';
-  }
-}
-
-String _publishSubtitle(String serviceId, bool isAr) {
-  switch (serviceId) {
-    case 'restaurant':
-      return isAr
-          ? 'أضف وجباتك ومنيو مطعمك مباشرة.'
-          : 'Add your meals and restaurant menu directly.';
-    case 'product':
-      return isAr
-          ? 'أنشئ منتجًا واختر القسم الفرعي المناسب.'
-          : 'Create a product and choose the right sub-category.';
-    case 'real_estate':
-      return isAr
-          ? 'أنشئ إعلان بيع أو إيجار للعقار.'
-          : 'Create a sale or rent property listing.';
-    case 'professionals':
-      return isAr
-          ? 'حدّث ملفك المهني وبيانات التواصل.'
-          : 'Update your professional profile and contact details.';
-    case 'cars':
-      return isAr
-          ? 'أنشئ إعلانًا أو خدمة خاصة بالسيارات.'
-          : 'Create a car listing or related service.';
-    default:
-      return isAr ? 'ابدأ النشر في هذه الخدمة.' : 'Start publishing here.';
-  }
-}
-
 class _ProductCard extends StatelessWidget {
   final ListItem item;
-  final bool isAr;
   final VoidCallback onToggleAvailability;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
 
   const _ProductCard({
     required this.item,
-    required this.isAr,
     required this.onToggleAvailability,
     required this.onEdit,
     required this.onDelete,
@@ -513,7 +367,7 @@ class _ProductCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  isAr ? item.nameAr : item.nameEn,
+                  item.nameAr,
                   style: const TextStyle(
                     fontWeight: FontWeight.w900,
                     fontFamily: 'Cairo',
@@ -521,7 +375,7 @@ class _ProductCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  isAr ? item.descriptionAr : item.descriptionEn,
+                  item.descriptionAr,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
@@ -552,8 +406,8 @@ class _ProductCard extends StatelessWidget {
                       ),
                       child: Text(
                         item.isAvailable
-                            ? (isAr ? 'متوفر' : 'Available')
-                            : (isAr ? 'غير متوفر' : 'Unavailable'),
+                            ? 'متوفر'
+                            : 'غير متوفر',
                         style: TextStyle(
                           color: item.isAvailable ? Colors.green : Colors.red,
                           fontSize: 11,

@@ -68,7 +68,7 @@ class _PhoneLoginScreenState extends State<PhoneLoginScreen> {
 
   bool _isPhoneValid(String phone) {
     final digitsOnly = phone.replaceAll(RegExp(r'\D'), '');
-    return digitsOnly.length >= 10;
+    return digitsOnly.length == 11;
   }
 
   String _toE164(String phone) {
@@ -117,7 +117,7 @@ class _PhoneLoginScreenState extends State<PhoneLoginScreen> {
   Future<void> _sendCode() async {
     final phone = _phoneController.text.trim();
     if (!_isPhoneValid(phone)) {
-      _showSnack('أدخل رقم هاتف صحيح');
+      _showSnack('أدخل رقم هاتف من 11 رقم');
       return;
     }
 
@@ -408,28 +408,91 @@ class _LoginCard extends StatelessWidget {
   }
 }
 
-class _PhoneField extends StatelessWidget {
+class _PhoneField extends StatefulWidget {
   final TextEditingController controller;
 
   const _PhoneField({required this.controller});
 
   @override
+  State<_PhoneField> createState() => _PhoneFieldState();
+}
+
+class _PhoneFieldState extends State<_PhoneField> {
+  static const _validColor = Color(0xFF16A34A);
+  static const _invalidColor = Color(0xFFDC2626);
+  static const _neutralBorderColor = Color(0xFFF2D8CF);
+  static const _neutralTextColor = Color(0xFF261816);
+
+  @override
+  void initState() {
+    super.initState();
+    widget.controller.addListener(_onPhoneChanged);
+  }
+
+  @override
+  void dispose() {
+    widget.controller.removeListener(_onPhoneChanged);
+    super.dispose();
+  }
+
+  void _onPhoneChanged() => setState(() {});
+
+  @override
   Widget build(BuildContext context) {
-    return Container(
+    final digitCount =
+        widget.controller.text.replaceAll(RegExp(r'\D'), '').length;
+    final isComplete = digitCount == 11;
+    final hasInput = digitCount > 0;
+
+    final textColor = isComplete
+        ? _validColor
+        : hasInput
+            ? _invalidColor
+            : _neutralTextColor;
+    final borderColor = isComplete
+        ? _validColor
+        : hasInput
+            ? _invalidColor
+            : _neutralBorderColor;
+    final iconColor = isComplete
+        ? _validColor
+        : hasInput
+            ? _invalidColor
+            : const Color(0xFFE84A3A);
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 200),
+      curve: Curves.easeOut,
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFFF2D8CF)),
+        border: Border.all(color: borderColor, width: hasInput || isComplete ? 1.6 : 1),
       ),
       child: TextField(
-        controller: controller,
+        controller: widget.controller,
         keyboardType: TextInputType.phone,
-        style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold),
-        decoration: const InputDecoration(
-          hintText: 'رقم الهاتف (مثلاً 0770...)',
-          prefixIcon: Icon(CupertinoIcons.phone_fill, color: Color(0xFFE84A3A)),
+        maxLength: 11,
+        inputFormatters: [
+          FilteringTextInputFormatter.digitsOnly,
+          LengthLimitingTextInputFormatter(11),
+        ],
+        style: TextStyle(
+          fontFamily: 'Cairo',
+          fontWeight: FontWeight.bold,
+          color: textColor,
+        ),
+        decoration: InputDecoration(
+          hintText: 'رقم الهاتف (مثلاً 07701234567)',
+          hintStyle: const TextStyle(
+            fontFamily: 'Cairo',
+            color: Color(0xFFBCA59C),
+            fontWeight: FontWeight.w600,
+          ),
+          prefixIcon: Icon(CupertinoIcons.phone_fill, color: iconColor),
+          counterText: '',
           border: InputBorder.none,
-          contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 15),
+          contentPadding:
+              const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
         ),
       ),
     );

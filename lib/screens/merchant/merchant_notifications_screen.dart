@@ -9,7 +9,6 @@ class MerchantNotificationsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<AppProvider>();
-    final isAr = provider.lang == 'ar';
     final labels = provider.merchantLabels;
     final items = provider.notifications;
 
@@ -17,13 +16,8 @@ class MerchantNotificationsScreen extends StatelessWidget {
       backgroundColor: const Color(0xFFF4F4F6),
       appBar: AppBar(
         title: Text(
-          isAr
-              ? 'إشعارات ${labels.storeLabelAr}'
-              : '${labels.storeLabelEn} Notifications',
-          style: const TextStyle(
-            fontFamily: 'Cairo',
-            fontWeight: FontWeight.w900,
-          ),
+          'إشعارات ${labels.storeLabelAr}',
+          style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w900),
         ),
       ),
       body: ListView(
@@ -32,58 +26,31 @@ class MerchantNotificationsScreen extends StatelessWidget {
           if (items.isEmpty)
             Container(
               padding: const EdgeInsets.all(18),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(24),
-              ),
-              child: Text(
-                isAr ? 'لا توجد إشعارات بعد.' : 'No notifications yet.',
-                style: const TextStyle(fontFamily: 'Cairo'),
-              ),
+              decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(24)),
+              child: const Text('لا توجد إشعارات بعد.', style: TextStyle(fontFamily: 'Cairo')),
             )
           else
             ...items.map((item) {
               final title = item['title']?.toString() ?? '';
-              final body = item['body']?.toString() ?? '';
+              final body  = item['body']?.toString()  ?? '';
               return Container(
                 margin: const EdgeInsets.only(bottom: 12),
                 padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(24),
-                ),
+                decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(24)),
                 child: Row(
                   children: [
                     CircleAvatar(
-                      backgroundColor:
-                          Colors.deepOrange.withValues(alpha: 0.10),
-                      child: const Icon(
-                        Icons.campaign_rounded,
-                        color: Colors.deepOrange,
-                      ),
+                      backgroundColor: Colors.deepOrange.withValues(alpha: 0.10),
+                      child: const Icon(Icons.campaign_rounded, color: Colors.deepOrange),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            title,
-                            style: const TextStyle(
-                              fontWeight: FontWeight.w900,
-                              fontFamily: 'Cairo',
-                            ),
-                          ),
+                          Text(title, style: const TextStyle(fontWeight: FontWeight.w900, fontFamily: 'Cairo')),
                           const SizedBox(height: 4),
-                          Text(
-                            body,
-                            style: const TextStyle(
-                              color: Colors.grey,
-                              fontSize: 12,
-                              height: 1.4,
-                              fontFamily: 'Cairo',
-                            ),
-                          ),
+                          Text(body, style: const TextStyle(color: Colors.grey, fontSize: 12, height: 1.4, fontFamily: 'Cairo')),
                         ],
                       ),
                     ),

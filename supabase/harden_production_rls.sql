@@ -13,6 +13,7 @@ revoke all on table public.customer_addresses from anon, authenticated;
 revoke all on table public.customer_favorites from anon, authenticated;
 revoke all on table public.customer_orders from anon, authenticated;
 revoke all on table public.app_state from anon, authenticated;
+revoke all on table public.otp_requests from anon, authenticated;
 
 -- Make row-level security the default posture on every app table.
 alter table if exists public.app_users enable row level security;
@@ -23,6 +24,7 @@ alter table if exists public.customer_addresses enable row level security;
 alter table if exists public.customer_favorites enable row level security;
 alter table if exists public.customer_orders enable row level security;
 alter table if exists public.app_state enable row level security;
+alter table if exists public.otp_requests enable row level security;
 
 -- Remove any broad client policies that may have been added earlier.
 drop policy if exists "anon_full_access_app_users" on public.app_users;
@@ -33,6 +35,7 @@ drop policy if exists "anon_full_access_customer_addresses" on public.customer_a
 drop policy if exists "anon_full_access_customer_favorites" on public.customer_favorites;
 drop policy if exists "anon_full_access_customer_orders" on public.customer_orders;
 drop policy if exists "anon_full_access_app_state" on public.app_state;
+drop policy if exists "anon_full_access_otp_requests" on public.otp_requests;
 
 -- Optional safety check for dashboards: service_role bypasses RLS already, so
 -- the backend keeps working while anon/authenticated lose direct access.

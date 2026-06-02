@@ -41,6 +41,11 @@ class ListItem {
   bool isAvailable;
   final String? merchantPhone;
   final String? merchantStoreName;
+  final double? merchantLatitude;
+  final double? merchantLongitude;
+  final String? merchantOpenTime;
+  final String? merchantCloseTime;
+  final bool? merchantIsOpen;
 
   ListItem({
     required this.id,
@@ -71,6 +76,11 @@ class ListItem {
     this.isAvailable = true,
     this.merchantPhone,
     this.merchantStoreName,
+    this.merchantLatitude,
+    this.merchantLongitude,
+    this.merchantOpenTime,
+    this.merchantCloseTime,
+    this.merchantIsOpen,
   });
 
   ListItem copyWith({
@@ -102,6 +112,11 @@ class ListItem {
     bool? isAvailable,
     String? merchantPhone,
     String? merchantStoreName,
+    double? merchantLatitude,
+    double? merchantLongitude,
+    String? merchantOpenTime,
+    String? merchantCloseTime,
+    bool? merchantIsOpen,
   }) {
     return ListItem(
       id: id ?? this.id,
@@ -132,6 +147,11 @@ class ListItem {
       isAvailable: isAvailable ?? this.isAvailable,
       merchantPhone: merchantPhone ?? this.merchantPhone,
       merchantStoreName: merchantStoreName ?? this.merchantStoreName,
+      merchantLatitude: merchantLatitude ?? this.merchantLatitude,
+      merchantLongitude: merchantLongitude ?? this.merchantLongitude,
+      merchantOpenTime: merchantOpenTime ?? this.merchantOpenTime,
+      merchantCloseTime: merchantCloseTime ?? this.merchantCloseTime,
+      merchantIsOpen: merchantIsOpen ?? this.merchantIsOpen,
     );
   }
 
@@ -165,6 +185,11 @@ class ListItem {
       'isAvailable': isAvailable,
       'merchantPhone': merchantPhone,
       'merchantStoreName': merchantStoreName,
+      'merchantLatitude': merchantLatitude,
+      'merchantLongitude': merchantLongitude,
+      'merchantOpenTime': merchantOpenTime,
+      'merchantCloseTime': merchantCloseTime,
+      'merchantIsOpen': merchantIsOpen,
     };
   }
 
@@ -198,6 +223,11 @@ class ListItem {
       isAvailable: (map['isAvailable'] as bool?) ?? true,
       merchantPhone: map['merchantPhone'] as String?,
       merchantStoreName: map['merchantStoreName'] as String?,
+      merchantLatitude: (map['merchantLatitude'] as num?)?.toDouble(),
+      merchantLongitude: (map['merchantLongitude'] as num?)?.toDouble(),
+      merchantOpenTime: map['merchantOpenTime'] as String?,
+      merchantCloseTime: map['merchantCloseTime'] as String?,
+      merchantIsOpen: map['merchantIsOpen'] as bool?,
     );
   }
 }
@@ -248,6 +278,12 @@ class CartItem {
   final String category;
   final String? merchantPhone;
   final String? merchantStoreName;
+  final String? merchantAddress;
+  final double? merchantLatitude;
+  final double? merchantLongitude;
+  final String? merchantOpenTime;
+  final String? merchantCloseTime;
+  final bool? merchantIsOpen;
   final String? optionAr;
   final String? optionEn;
 
@@ -261,6 +297,12 @@ class CartItem {
     required this.category,
     this.merchantPhone,
     this.merchantStoreName,
+    this.merchantAddress,
+    this.merchantLatitude,
+    this.merchantLongitude,
+    this.merchantOpenTime,
+    this.merchantCloseTime,
+    this.merchantIsOpen,
     this.optionAr,
     this.optionEn,
   });
@@ -299,6 +341,16 @@ class ActiveOrder {
   final String? merchantStoreName;
   final bool requiresDelivery;
   final bool codConfirmed;
+  final String? deliveredAt;
+  final int? estimatedArrivalMinutes;
+  final String? estimatedArrivalAt;
+  final String? courierPhone;
+  final double? customerLatitude;
+  final double? customerLongitude;
+  final String? createdAt;
+  final String? merchantReadAt;
+  final String? merchantDecisionAt;
+  final bool isPriceLocked;
 
   ActiveOrder({
     required this.id,
@@ -333,6 +385,16 @@ class ActiveOrder {
     this.merchantStoreName,
     this.requiresDelivery = true,
     this.codConfirmed = false,
+    this.deliveredAt,
+    this.estimatedArrivalMinutes,
+    this.estimatedArrivalAt,
+    this.courierPhone,
+    this.customerLatitude,
+    this.customerLongitude,
+    this.createdAt,
+    this.merchantReadAt,
+    this.merchantDecisionAt,
+    this.isPriceLocked = false,
   });
 
   Map<String, dynamic> toMap() {
@@ -369,6 +431,16 @@ class ActiveOrder {
       'merchantStoreName': merchantStoreName,
       'requiresDelivery': requiresDelivery,
       'codConfirmed': codConfirmed,
+      'deliveredAt': deliveredAt,
+      'estimatedArrivalMinutes': estimatedArrivalMinutes,
+      'estimatedArrivalAt': estimatedArrivalAt,
+      'courierPhone': courierPhone,
+      'customerLatitude': customerLatitude,
+      'customerLongitude': customerLongitude,
+      'createdAt': createdAt,
+      'merchantReadAt': merchantReadAt,
+      'merchantDecisionAt': merchantDecisionAt,
+      'isPriceLocked': isPriceLocked,
     };
   }
 
@@ -414,6 +486,16 @@ class ActiveOrder {
       merchantStoreName: map['merchantStoreName'] as String?,
       requiresDelivery: (map['requiresDelivery'] as bool?) ?? true,
       codConfirmed: (map['codConfirmed'] as bool?) ?? false,
+      deliveredAt: map['deliveredAt'] as String?,
+      estimatedArrivalMinutes: (map['estimatedArrivalMinutes'] as num?)?.toInt(),
+      estimatedArrivalAt: map['estimatedArrivalAt'] as String?,
+      courierPhone: map['courierPhone'] as String?,
+      customerLatitude: (map['customerLatitude'] as num?)?.toDouble(),
+      customerLongitude: (map['customerLongitude'] as num?)?.toDouble(),
+      createdAt: map['createdAt'] as String?,
+      merchantReadAt: map['merchantReadAt'] as String?,
+      merchantDecisionAt: map['merchantDecisionAt'] as String?,
+      isPriceLocked: (map['isPriceLocked'] as bool?) ?? false,
     );
   }
 }

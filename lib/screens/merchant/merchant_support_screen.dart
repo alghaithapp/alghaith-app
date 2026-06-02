@@ -11,14 +11,13 @@ class MerchantSupportScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<AppProvider>();
-    final isAr = provider.lang == 'ar';
     final labels = provider.merchantLabels;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF4F4F6),
       appBar: AppBar(
         title: Text(
-          isAr ? 'دعم ${labels.storeLabelAr}' : '${labels.storeLabelEn} Support',
+          'دعم ${labels.storeLabelAr}',
           style: const TextStyle(
             fontFamily: 'Cairo',
             fontWeight: FontWeight.w900,
@@ -29,23 +28,17 @@ class MerchantSupportScreen extends StatelessWidget {
         padding: const EdgeInsets.all(16),
         children: [
           _SupportCard(
-            title: isAr ? 'واتساب' : 'WhatsApp',
-            subtitle: isAr
-                ? 'تواصل سريع مع فريق دعم ${labels.storeLabelAr}'
-                : 'Fast contact with the support team',
+            title: 'واتساب',
+            subtitle: 'تواصل سريع مع فريق دعم ${labels.storeLabelAr}',
             iconWidget: const WhatsAppIcon(size: 36),
             onTap: () => AppHelpers.launchWhatsApp(
               AppHelpers.supportWhatsAppNumber,
-              isAr
-                  ? 'مرحبا، لدي مشكلة في حساب ${labels.storeLabelAr}'
-                  : 'Hello, I need help with my merchant account',
+              'مرحبا، لدي مشكلة في حساب ${labels.storeLabelAr}',
             ),
           ),
           _SupportCard(
-            title: isAr ? 'اتصال' : 'Call',
-            subtitle: isAr
-                ? 'اتصل مباشرة بالدعم بخصوص ${labels.storeLabelAr}'
-                : 'Call support directly',
+            title: 'اتصال',
+            subtitle: 'اتصل مباشرة بالدعم بخصوص ${labels.storeLabelAr}',
             icon: Icons.phone_rounded,
             onTap: () => AppHelpers.makePhoneCall('07701234567'),
           ),

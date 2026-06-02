@@ -10,7 +10,6 @@ class MerchantOffersScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<AppProvider>();
-    final isAr = provider.lang == 'ar';
     final labels = provider.merchantLabels;
     final offers = provider.merchantOffers;
 
@@ -18,7 +17,7 @@ class MerchantOffersScreen extends StatelessWidget {
       backgroundColor: const Color(0xFFF4F4F6),
       appBar: AppBar(
         title: Text(
-          isAr ? 'عروض ${labels.storeLabelAr}' : '${labels.storeLabelEn} Offers',
+          'عروض ${labels.storeLabelAr}',
           style: const TextStyle(
             fontFamily: 'Cairo',
             fontWeight: FontWeight.w900,
@@ -40,7 +39,7 @@ class MerchantOffersScreen extends StatelessWidget {
             onPressed: () => _showOfferDialog(context),
             icon: const Icon(Icons.add_rounded),
             label: Text(
-              isAr ? 'إنشاء عرض جديد' : 'Create new offer',
+              'إنشاء عرض جديد',
               style: const TextStyle(
                 fontFamily: 'Cairo',
                 fontWeight: FontWeight.w800,
@@ -61,7 +60,7 @@ class MerchantOffersScreen extends StatelessWidget {
                       size: 42, color: Colors.deepOrange),
                   const SizedBox(height: 10),
                   Text(
-                    isAr ? 'لا توجد عروض بعد' : 'No offers yet',
+                    'لا توجد عروض بعد',
                     style: const TextStyle(
                       fontFamily: 'Cairo',
                       fontWeight: FontWeight.w900,
@@ -70,9 +69,7 @@ class MerchantOffersScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 6),
                   Text(
-                    isAr
-                        ? 'أنشئ أول عرض أو خصم واختر المنتجات من قائمة متجرك.'
-                        : 'Create your first offer and pick items from your store menu.',
+                    'أنشئ أول عرض أو خصم واختر المنتجات من قائمة متجرك.',
                     textAlign: TextAlign.center,
                     style: const TextStyle(
                       fontFamily: 'Cairo',
@@ -86,7 +83,6 @@ class MerchantOffersScreen extends StatelessWidget {
             ...offers.map(
               (offer) => _OfferCard(
                 offer: offer,
-                isAr: isAr,
                 onEdit: () => _showOfferDialog(context, offer: offer),
                 onToggle: () => context
                     .read<AppProvider>()
@@ -105,7 +101,6 @@ class MerchantOffersScreen extends StatelessWidget {
   }) async {
     final provider = context.read<AppProvider>();
     final isEdit = offer != null;
-    final isAr = provider.lang == 'ar';
     final availableProducts = provider.merchantItems;
 
     final formKey = GlobalKey<FormState>();
@@ -159,8 +154,8 @@ class MerchantOffersScreen extends StatelessWidget {
             return AlertDialog(
               title: Text(
                 isEdit
-                    ? (isAr ? 'تعديل العرض' : 'Edit offer')
-                    : (isAr ? 'إنشاء عرض جديد' : 'Create offer'),
+                    ? 'تعديل العرض'
+                    : 'إنشاء عرض جديد',
                 style: const TextStyle(fontFamily: 'Cairo'),
               ),
               content: SingleChildScrollView(
@@ -173,15 +168,11 @@ class MerchantOffersScreen extends StatelessWidget {
                       TextFormField(
                         controller: titleArController,
                         decoration: InputDecoration(
-                          labelText: isAr
-                              ? 'عنوان العرض بالعربية'
-                              : 'Offer title in Arabic',
+                          labelText: 'عنوان العرض',
                         ),
                         validator: (value) {
                           if (value == null || value.trim().isEmpty) {
-                            return isAr
-                                ? 'اكتب عنوان العرض'
-                                : 'Enter offer title';
+                            return 'اكتب عنوان العرض';
                           }
                           return null;
                         },
@@ -189,10 +180,8 @@ class MerchantOffersScreen extends StatelessWidget {
                       const SizedBox(height: 12),
                       TextFormField(
                         controller: titleEnController,
-                        decoration: InputDecoration(
-                          labelText: isAr
-                              ? 'العنوان بالإنجليزية'
-                              : 'Offer title in English',
+                        decoration: const InputDecoration(
+                          labelText: 'العنوان (اختياري)',
                         ),
                       ),
                       const SizedBox(height: 12),
@@ -201,22 +190,20 @@ class MerchantOffersScreen extends StatelessWidget {
                         keyboardType: TextInputType.number,
                         decoration: InputDecoration(
                           labelText:
-                              isAr ? 'نسبة الخصم' : 'Discount percent',
+                              'نسبة الخصم',
                           suffixText: '%',
                         ),
                         validator: (value) {
                           final parsed = int.tryParse((value ?? '').trim());
                           if (parsed == null || parsed <= 0 || parsed > 100) {
-                            return isAr
-                                ? 'أدخل نسبة صحيحة بين 1 و100'
-                                : 'Enter a valid percent from 1 to 100';
+                            return 'أدخل نسبة صحيحة بين 1 و100';
                           }
                           return null;
                         },
                       ),
                       const SizedBox(height: 14),
                       Text(
-                        isAr ? 'اختر من قائمة المنتجات' : 'Choose products',
+                        'اختر من قائمة المنتجات',
                         style: const TextStyle(
                           fontFamily: 'Cairo',
                           fontWeight: FontWeight.w800,
@@ -225,9 +212,7 @@ class MerchantOffersScreen extends StatelessWidget {
                       const SizedBox(height: 8),
                       if (availableProducts.isEmpty)
                         Text(
-                          isAr
-                              ? 'لا توجد منتجات بعد. أضف منتجات أولًا ثم أنشئ العرض.'
-                              : 'No products yet. Add products first.',
+                          'لا توجد منتجات بعد. أضف منتجات أولًا ثم أنشئ العرض.',
                           style: const TextStyle(
                             fontFamily: 'Cairo',
                             color: Colors.grey,
@@ -247,7 +232,7 @@ class MerchantOffersScreen extends StatelessWidget {
                               });
                             },
                             title: Text(
-                              isAr ? product.nameAr : product.nameEn,
+                              product.nameAr,
                               style: const TextStyle(fontFamily: 'Cairo'),
                             ),
                             controlAffinity: ListTileControlAffinity.leading,
@@ -260,7 +245,7 @@ class MerchantOffersScreen extends StatelessWidget {
                         onChanged: (value) =>
                             setDialogState(() => isActive = value),
                         title: Text(
-                          isAr ? 'العرض فعال' : 'Offer is active',
+                          'العرض فعال',
                           style: const TextStyle(fontFamily: 'Cairo'),
                         ),
                         contentPadding: EdgeInsets.zero,
@@ -274,9 +259,7 @@ class MerchantOffersScreen extends StatelessWidget {
                             onPressed: pickStartDate,
                             icon: const Icon(Icons.calendar_today_rounded),
                             label: Text(
-                              isAr
-                                  ? 'البداية: ${_formatDate(startDate)}'
-                                  : 'Start: ${_formatDate(startDate)}',
+                              'البداية: ${_formatDate(startDate)}',
                               style: const TextStyle(fontFamily: 'Cairo'),
                             ),
                           ),
@@ -284,9 +267,7 @@ class MerchantOffersScreen extends StatelessWidget {
                             onPressed: pickEndDate,
                             icon: const Icon(Icons.event_available_rounded),
                             label: Text(
-                              isAr
-                                  ? 'النهاية: ${_formatDate(endDate)}'
-                                  : 'End: ${_formatDate(endDate)}',
+                              'النهاية: ${_formatDate(endDate)}',
                               style: const TextStyle(fontFamily: 'Cairo'),
                             ),
                           ),
@@ -299,7 +280,7 @@ class MerchantOffersScreen extends StatelessWidget {
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(dialogContext),
-                  child: Text(isAr ? 'إلغاء' : 'Cancel'),
+                  child: const Text('إلغاء'),
                 ),
                 FilledButton(
                   onPressed: () {
@@ -308,9 +289,7 @@ class MerchantOffersScreen extends StatelessWidget {
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
                           content: Text(
-                            isAr
-                                ? 'اختر منتجًا واحدًا على الأقل'
-                                : 'Select at least one product',
+                            'اختر منتجًا واحدًا على الأقل',
                           ),
                         ),
                       );
@@ -339,7 +318,7 @@ class MerchantOffersScreen extends StatelessWidget {
 
                     Navigator.pop(dialogContext);
                   },
-                  child: Text(isAr ? 'حفظ' : 'Save'),
+                  child: const Text('حفظ'),
                 ),
               ],
             );
@@ -354,28 +333,25 @@ class MerchantOffersScreen extends StatelessWidget {
     MerchantOffer offer,
   ) async {
     final provider = context.read<AppProvider>();
-    final isAr = provider.lang == 'ar';
     final result = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: Text(
-          isAr ? 'حذف العرض' : 'Delete offer',
+          'حذف العرض',
           style: const TextStyle(fontFamily: 'Cairo'),
         ),
         content: Text(
-          isAr
-              ? 'هل تريد حذف هذا العرض نهائيًا؟'
-              : 'Do you want to delete this offer permanently?',
+          'هل تريد حذف هذا العرض نهائيًا؟',
           style: const TextStyle(fontFamily: 'Cairo'),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext, false),
-            child: Text(isAr ? 'إلغاء' : 'Cancel'),
+            child: const Text('إلغاء'),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(dialogContext, true),
-            child: Text(isAr ? 'حذف' : 'Delete'),
+            child: const Text('حذف'),
           ),
         ],
       ),
@@ -400,14 +376,12 @@ class MerchantOffersScreen extends StatelessWidget {
 
 class _OfferCard extends StatelessWidget {
   final MerchantOffer offer;
-  final bool isAr;
   final VoidCallback onEdit;
   final VoidCallback onToggle;
   final VoidCallback onDelete;
 
   const _OfferCard({
     required this.offer,
-    required this.isAr,
     required this.onEdit,
     required this.onToggle,
     required this.onDelete,
@@ -429,7 +403,7 @@ class _OfferCard extends StatelessWidget {
             children: [
               Expanded(
                 child: Text(
-                  isAr ? offer.titleAr : offer.titleEn,
+                  offer.titleAr,
                   style: const TextStyle(
                     fontFamily: 'Cairo',
                     fontWeight: FontWeight.w900,
@@ -445,9 +419,7 @@ class _OfferCard extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            isAr
-                ? 'خصم ${offer.discountPercent}%'
-                : '${offer.discountPercent}% discount',
+            'خصم ${offer.discountPercent}%',
             style: const TextStyle(
               fontFamily: 'Cairo',
               color: Colors.deepOrange,
@@ -456,9 +428,7 @@ class _OfferCard extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            isAr
-                ? 'من ${offer.startDate} إلى ${offer.endDate}'
-                : 'From ${offer.startDate} to ${offer.endDate}',
+            'من ${offer.startDate} إلى ${offer.endDate}',
             style: const TextStyle(
               fontFamily: 'Cairo',
               color: Colors.grey,
@@ -496,7 +466,7 @@ class _OfferCard extends StatelessWidget {
                 onPressed: onEdit,
                 icon: const Icon(Icons.edit_outlined),
                 label: Text(
-                  isAr ? 'تعديل' : 'Edit',
+                  'تعديل',
                   style: const TextStyle(fontFamily: 'Cairo'),
                 ),
               ),
@@ -505,7 +475,7 @@ class _OfferCard extends StatelessWidget {
                 onPressed: onDelete,
                 icon: const Icon(Icons.delete_outline),
                 label: Text(
-                  isAr ? 'حذف' : 'Delete',
+                  'حذف',
                   style: const TextStyle(fontFamily: 'Cairo'),
                 ),
               ),

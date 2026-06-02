@@ -139,9 +139,6 @@ class _CustomerSetupScreenState extends State<CustomerSetupScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final provider = context.watch<AppProvider>();
-    final isAr = provider.lang == 'ar';
-
     return Scaffold(
       backgroundColor: const Color(0xFF0F0F0F),
       appBar: AppBar(
@@ -149,7 +146,7 @@ class _CustomerSetupScreenState extends State<CustomerSetupScreen> {
         elevation: 0,
         iconTheme: const IconThemeData(color: Colors.white),
         title: Text(
-          isAr ? 'إكمال ملف الزبون' : 'Complete customer profile',
+          'إكمال ملف الزبون',
           style: const TextStyle(
             fontFamily: 'Cairo',
             color: Colors.white,
@@ -199,7 +196,7 @@ class _CustomerSetupScreenState extends State<CustomerSetupScreen> {
                   ),
                   const SizedBox(height: 12),
                   Text(
-                    isAr ? 'الصورة الشخصية' : 'Profile photo',
+                    'الصورة الشخصية',
                     style: const TextStyle(
                       color: Colors.white,
                       fontFamily: 'Cairo',
@@ -208,18 +205,18 @@ class _CustomerSetupScreenState extends State<CustomerSetupScreen> {
                   ),
                   const SizedBox(height: 18),
                   _Field(
-                    label: isAr ? 'الاسم الكامل' : 'Full name',
+                    label: 'الاسم الكامل',
                     controller: _nameController,
                   ),
                   const SizedBox(height: 14),
                   _Field(
-                    label: isAr ? 'رقم الهاتف' : 'Phone number',
+                    label: 'رقم الهاتف',
                     controller: _phoneController,
                     keyboardType: TextInputType.phone,
                   ),
                   const SizedBox(height: 14),
                   _Field(
-                    label: isAr ? 'العنوان' : 'Address',
+                    label: 'العنوان',
                     controller: _addressController,
                     maxLines: 2,
                   ),
@@ -256,7 +253,7 @@ class _CustomerSetupScreenState extends State<CustomerSetupScreen> {
                                   ),
                                 )
                               : Text(
-                                  isAr ? 'حفظ ومتابعة' : 'Save and continue',
+                                  'حفظ ومتابعة',
                                   style: const TextStyle(
                                     color: Colors.white,
                                     fontFamily: 'Cairo',
@@ -269,9 +266,7 @@ class _CustomerSetupScreenState extends State<CustomerSetupScreen> {
                   ),
                   const SizedBox(height: 10),
                   Text(
-                    isAr
-                        ? 'لن يظهر الحساب الكامل إلا بعد إدخال بياناتك الشخصية.'
-                        : 'Your account will be ready after completing your personal details.',
+                    'لن يظهر الحساب الكامل إلا بعد إدخال بياناتك الشخصية.',
                     textAlign: TextAlign.center,
                     style: const TextStyle(
                       color: Color(0xFFB5B5B5),

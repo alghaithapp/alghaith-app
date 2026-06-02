@@ -15,7 +15,6 @@ class AccountFullScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<AppProvider>();
-    final isAr = provider.lang == 'ar';
     final appUser = provider.appUserRecord ?? const <String, dynamic>{};
     final isMerchant = provider.isMerchant;
     final workSamples = provider.merchantWorkSampleImagesBase64;
@@ -28,10 +27,10 @@ class AccountFullScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: const Color(0xFFF5F6FA),
       appBar: AppBar(
-        title: Text(
-          isAr ? 'بيانات الحساب الكامل' : 'Full account data',
+        title: const Text(
+          'بيانات الحساب الكامل',
           style:
-              const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w900),
+              TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w900),
         ),
       ),
       body: ListView(
@@ -69,9 +68,7 @@ class AccountFullScreen extends StatelessWidget {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        isAr
-                            ? 'رقم الهاتف: ${provider.authPhone ?? '-'}'
-                            : 'Phone: ${provider.authPhone ?? '-'}',
+                        'رقم الهاتف: ${provider.authPhone ?? '-'}',
                         style: const TextStyle(
                           color: Colors.white70,
                           fontSize: 12,
@@ -81,9 +78,7 @@ class AccountFullScreen extends StatelessWidget {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        isAr
-                            ? 'الدور الحالي: ${provider.userRole ?? '-'}'
-                            : 'Current role: ${provider.userRole ?? '-'}',
+                        'الدور الحالي: ${provider.userRole ?? '-'}',
                         style: const TextStyle(
                           color: Colors.white70,
                           fontSize: 12,
@@ -99,75 +94,72 @@ class AccountFullScreen extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           _SectionCard(
-            title: isAr ? 'app_users' : 'app_users',
+            title: 'app_users',
             children: [
+              _InfoRow(label: 'الاسم', value: provider.customerName),
               _InfoRow(
-                  label: isAr ? 'الاسم' : 'Name', value: provider.customerName),
+                  label: 'رقم الهاتف', value: provider.authPhone ?? '-'),
               _InfoRow(
-                  label: isAr ? 'رقم الهاتف' : 'Phone',
-                  value: provider.authPhone ?? '-'),
+                  label: 'الدور', value: provider.userRole ?? '-'),
               _InfoRow(
-                  label: isAr ? 'الدور' : 'Role',
-                  value: provider.userRole ?? '-'),
-              _InfoRow(
-                label: isAr ? 'آخر دخول' : 'Last seen',
+                label: 'آخر دخول',
                 value: lastSeen ?? '-',
               ),
             ],
           ),
           const SizedBox(height: 12),
           _SectionCard(
-            title: isAr ? 'ملف الزبون' : 'Customer profile',
+            title: 'ملف الزبون',
             children: [
               _InfoRow(
-                label: isAr ? 'الاسم الظاهر' : 'Display name',
+                label: 'الاسم الظاهر',
                 value: provider.customerName,
               ),
               _InfoRow(
-                label: isAr ? 'رقم الزبون' : 'Customer phone',
+                label: 'رقم الزبون',
                 value: provider.customerPhone,
               ),
               _InfoRow(
-                label: isAr ? 'العنوان' : 'Address',
+                label: 'العنوان',
                 value: provider.customerAddress.isNotEmpty
                     ? provider.customerAddress
                     : '-',
               ),
               _InfoRow(
-                label: isAr ? 'الصورة' : 'Avatar',
+                label: 'الصورة',
                 value: provider.customerAvatarBase64 != null &&
                         provider.customerAvatarBase64!.isNotEmpty
-                    ? (isAr ? 'موجودة' : 'Available')
-                    : (isAr ? 'غير موجودة' : 'Not set'),
+                    ? 'موجودة'
+                    : 'غير موجودة',
               ),
             ],
           ),
           const SizedBox(height: 12),
           _SectionCard(
-            title: isAr ? 'ملف التاجر' : 'Merchant profile',
+            title: 'ملف التاجر',
             children: [
               _InfoRow(
-                label: isAr ? 'اسم المتجر' : 'Store name',
+                label: 'اسم المتجر',
                 value: showOrDash(provider.merchantStoreName),
               ),
               _InfoRow(
-                label: isAr ? 'واتساب' : 'WhatsApp',
+                label: 'واتساب',
                 value: showOrDash(provider.merchantWhatsApp),
               ),
               _InfoRow(
-                label: isAr ? 'العنوان' : 'Address',
+                label: 'العنوان',
                 value: showOrDash(provider.merchantAddress),
               ),
               _InfoRow(
-                label: isAr ? 'أوقات العمل' : 'Working hours',
+                label: 'أوقات العمل',
                 value:
                     '${showOrDash(provider.merchantOpenTime)} - ${showOrDash(provider.merchantCloseTime)}',
               ),
               const SizedBox(height: 8),
               if (services.isEmpty)
-                Text(
-                  isAr ? 'لا توجد خدمات مفعلة بعد.' : 'No services enabled yet.',
-                  style: const TextStyle(fontFamily: 'Cairo'),
+                const Text(
+                  'لا توجد خدمات مفعلة بعد.',
+                  style: TextStyle(fontFamily: 'Cairo'),
                 )
               else
                 Wrap(
@@ -177,7 +169,7 @@ class AccountFullScreen extends StatelessWidget {
                     final labels = merchantServiceLabels(serviceId);
                     return Chip(
                       label: Text(
-                        isAr ? labels.storeLabelAr : labels.storeLabelEn,
+                        labels.storeLabelAr,
                         style: const TextStyle(fontFamily: 'Cairo'),
                       ),
                     );
@@ -188,12 +180,12 @@ class AccountFullScreen extends StatelessWidget {
           if (showWorkSamples) ...[
             const SizedBox(height: 12),
             _SectionCard(
-              title: isAr ? 'صور الأعمال' : 'Work samples',
+              title: 'صور الأعمال',
               children: [
                 if (workSamples.isEmpty)
-                  Text(
-                    isAr ? 'لا توجد صور أعمال.' : 'No work sample images.',
-                    style: const TextStyle(fontFamily: 'Cairo'),
+                  const Text(
+                    'لا توجد صور أعمال.',
+                    style: TextStyle(fontFamily: 'Cairo'),
                   )
                 else
                   GridView.builder(
@@ -224,18 +216,15 @@ class AccountFullScreen extends StatelessWidget {
           const SizedBox(height: 12),
           if (isMerchant)
             _SectionCard(
-              title: isAr ? 'روابط سريعة' : 'Quick actions',
+              title: 'روابط سريعة',
               children: [
                 ElevatedButton.icon(
                   onPressed: () => AppHelpers.launchWhatsApp(
                     provider.merchantWhatsApp,
-                    isAr
-                        ? 'مرحباً، هذا ملفي الكامل'
-                        : 'Hello, this is my full profile.',
+                    'مرحباً، هذا ملفي الكامل',
                   ),
                   icon: const Icon(Icons.chat_rounded),
-                  label:
-                      Text(isAr ? 'مشاركة عبر واتساب' : 'Share via WhatsApp'),
+                  label: const Text('مشاركة عبر واتساب'),
                 ),
               ],
             ),

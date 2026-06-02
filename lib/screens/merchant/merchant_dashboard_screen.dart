@@ -4,17 +4,15 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../providers/app_provider.dart';
+import '../../services/image_storage_service.dart';
 import '../../utils/extensions.dart';
 import '../../utils/helpers.dart';
-import '../../utils/merchant_service_labels.dart';
 import '../../widgets/app_image.dart';
 import '../../widgets/app_logo.dart';
 import '../../widgets/merchant/merchant_components.dart';
+import '../../widgets/merchant/quick_publish_panel.dart';
 import 'merchant_profile_screen.dart';
 import 'order_details_screen.dart';
-import 'merchant_store_settings_screen.dart';
-import '../real_estate_form_screen.dart';
-import 'product_form_screen.dart';
 
 class MerchantDashboardScreen extends StatelessWidget {
   const MerchantDashboardScreen({super.key});
@@ -22,9 +20,8 @@ class MerchantDashboardScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<AppProvider>();
-    final isAr = provider.lang == 'ar';
     final labels = provider.merchantActiveLabels;
-    final recentOrders = provider.orders.take(3).toList();
+    final recentOrders = provider.merchantIncomingOrders.take(3).toList();
     final alerts = provider.notifications.take(3).toList();
     final profileImageBase64 = provider.merchantProfileImageBase64;
     final workSamples = provider.merchantWorkSampleImagesBase64;
@@ -32,15 +29,22 @@ class MerchantDashboardScreen extends StatelessWidget {
         workSamples.isNotEmpty;
     final storeName = provider.merchantStoreName.trim().isNotEmpty
         ? provider.merchantStoreName
-        : (isAr ? 'حساب التاجر' : 'Merchant account');
+        : 'حساب التاجر';
     final coverImage = provider.merchantCoverImage.trim();
     DecorationImage? headerImage;
     if (coverImage.isNotEmpty) {
-      final looksBase64 =
-          coverImage.startsWith('iVBOR') || coverImage.startsWith('/9j/');
-      if (looksBase64) {
+      if (ImageStorageService.isRemoteUrl(coverImage)) {
         headerImage =
-            DecorationImage(image: MemoryImage(base64Decode(coverImage)), fit: BoxFit.cover);
+            DecorationImage(image: NetworkImage(coverImage), fit: BoxFit.cover);
+      } else {
+        final looksBase64 =
+            coverImage.startsWith('iVBOR') || coverImage.startsWith('/9j/');
+        if (looksBase64) {
+          headerImage = DecorationImage(
+            image: MemoryImage(base64Decode(coverImage)),
+            fit: BoxFit.cover,
+          );
+        }
       }
     }
 
@@ -89,7 +93,9 @@ class MerchantDashboardScreen extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            '${isAr ? 'أهلاً' : 'Welcome'} $storeName',
+                            'أهلاً $storeName',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
                               color: Colors.white,
                               fontSize: 18,
@@ -99,9 +105,9 @@ class MerchantDashboardScreen extends StatelessWidget {
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            isAr
-                                ? labels.dashboardIntroAr
-                                : labels.dashboardIntroEn,
+                            labels.dashboardIntroAr,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
                               color: Colors.white70,
                               fontSize: 12,
@@ -111,7 +117,6 @@ class MerchantDashboardScreen extends StatelessWidget {
                           ),
                           const SizedBox(height: 10),
                           _OpenStatusChip(
-                            isAr: isAr,
                             isOpen: provider.isMerchantStoreOpen,
                             onTap: provider.toggleMerchantOpenStatus,
                           ),
@@ -122,7 +127,6 @@ class MerchantDashboardScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 12),
                 _MerchantQuickInfoRow(
-                  isAr: isAr,
                   phone: provider.merchantPhone,
                   whatsapp: provider.merchantWhatsApp.isNotEmpty ? provider.merchantWhatsApp : provider.merchantPhone,
                   showWorkSamples: showWorkSamples,
@@ -131,7 +135,6 @@ class MerchantDashboardScreen extends StatelessWidget {
                 if (showWorkSamples) ...[
                   const SizedBox(height: 10),
                   _WorkSamplesStrip(
-                    isAr: isAr,
                     samples: workSamples,
                     onTap: () => Navigator.of(context).push(
                       MaterialPageRoute(
@@ -151,7 +154,7 @@ class MerchantDashboardScreen extends StatelessWidget {
                     ),
                     icon: const Icon(Icons.badge_rounded, size: 18),
                     label:
-                        Text(isAr ? 'عرض الملف الكامل' : 'Open full profile'),
+                        const Text('عرض الملف الكامل'),
                     style: TextButton.styleFrom(
                       foregroundColor: Colors.white,
                     ),
@@ -164,39 +167,30 @@ class MerchantDashboardScreen extends StatelessWidget {
         SliverToBoxAdapter(
           child: Padding(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-            child: _QuickPublishPanel(
-              isAr: isAr,
+            child: MerchantQuickPublishPanel(
               serviceIds: provider.merchantServiceIds,
               activeServiceId: provider.merchantActiveServiceId,
               onActivate: provider.setMerchantActiveService,
               onPublish: (serviceId) async {
                 await provider.setMerchantActiveService(serviceId);
-                if (serviceId == 'professionals') {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => const MerchantStoreSettingsScreen(),
+                if (!context.mounted) return;
+                if (!provider.canPublishForService(serviceId)) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('حدد موقع المتجر على الخريطة قبل نشر المنتجات.'),
                     ),
                   );
                   return;
                 }
-                if (serviceId == 'real_estate') {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => const RealEstateFormScreen(mode: 'sell'),
-                    ),
-                  );
-                  return;
-                }
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => ProductFormScreen(
-                      isRestaurant: serviceId == 'restaurant',
-                      serviceId: serviceId,
-                    ),
-                  ),
-                );
+                openMerchantPublisher(context, serviceId);
               },
             ),
+          ),
+        ),
+        const SliverToBoxAdapter(
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(16, 12, 16, 0),
+            child: _DashboardSyncCatalogButton(),
           ),
         ),
         SliverToBoxAdapter(
@@ -206,30 +200,30 @@ class MerchantDashboardScreen extends StatelessWidget {
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
               crossAxisCount: 2,
-              childAspectRatio: 1.35,
+              childAspectRatio: 1.2,
               crossAxisSpacing: 12,
               mainAxisSpacing: 12,
               children: [
                 MerchantMetricCard(
-                  label: isAr ? 'إجمالي ${labels.itemPluralAr}' : 'Total ${labels.itemPluralEn}',
+                  label: 'إجمالي ${labels.itemPluralAr}',
                   value: '${provider.merchantProductCount}',
                   icon: Icons.inventory_2_rounded,
                   color: Colors.blue,
                 ),
                 MerchantMetricCard(
-                  label: isAr ? 'طلبات جديدة' : 'New Orders',
+                  label: 'طلبات جديدة',
                   value: '${provider.merchantPendingOrdersCount}',
                   icon: Icons.notifications_active_rounded,
                   color: Colors.orange,
                 ),
                 MerchantMetricCard(
-                  label: isAr ? 'المكتملة' : 'Completed',
+                  label: 'المكتملة',
                   value: '${provider.merchantCompletedOrdersCount}',
                   icon: Icons.check_circle_rounded,
                   color: Colors.green,
                 ),
                 MerchantMetricCard(
-                  label: isAr ? 'مبيعات اليوم' : 'Today Sales',
+                  label: 'مبيعات اليوم',
                   value: '${provider.totalSales.toPrice()} د.ع',
                   icon: Icons.payments_rounded,
                   color: Colors.purple,
@@ -240,14 +234,52 @@ class MerchantDashboardScreen extends StatelessWidget {
         ),
         SliverToBoxAdapter(
           child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+            child: Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(18),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: _MiniStat(
+                      label: 'معدل القبول',
+                      value:
+                          '${provider.merchantAcceptanceRate.toStringAsFixed(1)}%',
+                      color: Colors.green,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: _MiniStat(
+                      label: 'معدل الرفض',
+                      value:
+                          '${provider.merchantRejectionRate.toStringAsFixed(1)}%',
+                      color: Colors.red,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: _MiniStat(
+                      label: 'متوسط الرد',
+                      value:
+                          '${provider.merchantAverageResponseMinutes.toStringAsFixed(1)} د',
+                      color: Colors.blue,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        SliverToBoxAdapter(
+          child: Padding(
             padding: const EdgeInsets.fromLTRB(16, 20, 16, 0),
             child: MerchantSectionHeader(
-              title: isAr
-                  ? 'آخر طلبات ${labels.storeLabelAr}'
-                  : 'Latest ${labels.storeLabelEn} Orders',
-              subtitle: isAr
-                  ? 'اضغط على أي طلب لعرض التفاصيل وتنفيذ الإجراءات.'
-                  : 'Tap an order to view details and act fast.',
+              title: 'آخر طلبات ${labels.storeLabelAr}',
+              subtitle: 'اضغط على أي طلب لعرض التفاصيل وتنفيذ الإجراءات.',
             ),
           ),
         ),
@@ -267,9 +299,9 @@ class MerchantDashboardScreen extends StatelessWidget {
               return Padding(
                 padding: EdgeInsets.fromLTRB(16, index == 0 ? 12 : 0, 16, 0),
                 child: _RecentOrderCard(
-                  orderNumber: order.orderNumber,
-                  title: isAr ? order.itemsNameAr : order.itemsNameEn,
-                  subtitle: isAr ? order.dateAr : order.dateEn,
+                  orderNumber: provider.displayOrderNumber(order),
+                  title: order.itemsNameAr,
+                  subtitle: order.dateAr,
                   price: order.price,
                   onTap: () {
                     Navigator.of(context).push(
@@ -289,7 +321,7 @@ class MerchantDashboardScreen extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 MerchantSectionHeader(
-                  title: isAr ? 'تنبيهات مهمة' : 'Important Alerts',
+                  title: 'تنبيهات مهمة',
                 ),
                 const SizedBox(height: 12),
                 ...alerts.map(
@@ -363,249 +395,59 @@ class MerchantDashboardScreen extends StatelessWidget {
   }
 }
 
-class _QuickPublishPanel extends StatelessWidget {
-  final bool isAr;
-  final List<String> serviceIds;
-  final String activeServiceId;
-  final Future<void> Function(String serviceId) onActivate;
-  final Future<void> Function(String serviceId) onPublish;
+class _MiniStat extends StatelessWidget {
+  final String label;
+  final String value;
+  final Color color;
 
-  const _QuickPublishPanel({
-    required this.isAr,
-    required this.serviceIds,
-    required this.activeServiceId,
-    required this.onActivate,
-    required this.onPublish,
+  const _MiniStat({
+    required this.label,
+    required this.value,
+    required this.color,
   });
 
   @override
   Widget build(BuildContext context) {
-    if (serviceIds.isEmpty) return const SizedBox.shrink();
-
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(12),
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            isAr ? 'نشر سريع حسب الخدمة' : 'Quick publish by service',
-            style: const TextStyle(
-              fontSize: 16,
+            value,
+            style: TextStyle(
+              fontSize: 15,
               fontWeight: FontWeight.w900,
+              color: color,
               fontFamily: 'Cairo',
             ),
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 4),
           Text(
-            isAr
-                ? 'اضغط على الخدمة المناسبة ثم ابدأ النشر مباشرة.'
-                : 'Tap the right service and start publishing immediately.',
+            label,
             style: const TextStyle(
-              color: Colors.grey,
-              fontSize: 12,
-              height: 1.4,
+              fontSize: 11,
+              color: Colors.black54,
               fontFamily: 'Cairo',
             ),
+            textAlign: TextAlign.center,
           ),
-          const SizedBox(height: 14),
-          ...serviceIds.map((serviceId) {
-            final labels = merchantServiceLabels(serviceId);
-            final selected = serviceId == activeServiceId;
-            final publishLabel = _publishLabel(serviceId, isAr);
-            final subtitle = _publishSubtitle(serviceId, isAr);
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: _ServicePublishCard(
-                isAr: isAr,
-                title: isAr ? labels.storeLabelAr : labels.storeLabelEn,
-                subtitle: subtitle,
-                active: selected,
-                publishLabel: publishLabel,
-                onActivate: selected ? null : () => onActivate(serviceId),
-                onPublish: () async => onPublish(serviceId),
-              ),
-            );
-          }),
         ],
       ),
     );
   }
 }
 
-class _ServicePublishCard extends StatelessWidget {
-  final bool isAr;
-  final String title;
-  final String subtitle;
-  final bool active;
-  final String publishLabel;
-  final VoidCallback? onActivate;
-  final Future<void> Function() onPublish;
-
-  const _ServicePublishCard({
-    required this.isAr,
-    required this.title,
-    required this.subtitle,
-    required this.active,
-    required this.publishLabel,
-    required this.onActivate,
-    required this.onPublish,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onActivate,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        decoration: BoxDecoration(
-          color: active
-              ? Colors.deepOrange.withValues(alpha: 0.06)
-              : const Color(0xFFF8F9FC),
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(
-            color: active
-                ? Colors.deepOrange.withValues(alpha: 0.25)
-                : const Color(0xFFE6E8F0),
-          ),
-        ),
-        child: Row(
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          title,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontFamily: 'Cairo',
-                            fontWeight: FontWeight.w900,
-                            fontSize: 14,
-                          ),
-                        ),
-                      ),
-                      Container(
-                        margin: const EdgeInsetsDirectional.only(end: 8),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 5,
-                        ),
-                        decoration: BoxDecoration(
-                          color: active
-                              ? Colors.deepOrange.withValues(alpha: 0.12)
-                              : Colors.green.withValues(alpha: 0.12),
-                          borderRadius: BorderRadius.circular(999),
-                        ),
-                        child: Text(
-                          active
-                              ? (isAr ? 'الحالية' : 'Current')
-                              : (isAr ? 'مفعلة' : 'Enabled'),
-                          style: TextStyle(
-                            fontFamily: 'Cairo',
-                            fontWeight: FontWeight.w700,
-                            color: active ? Colors.deepOrange : Colors.green,
-                            fontSize: 11,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    subtitle,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontFamily: 'Cairo',
-                      color: Colors.grey,
-                      fontSize: 11,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 4),
-            IconButton.filled(
-              onPressed: () async => onPublish(),
-              icon: const Icon(Icons.add_rounded, size: 18),
-              tooltip: publishLabel,
-              style: IconButton.styleFrom(
-                backgroundColor: Colors.deepOrange,
-                foregroundColor: Colors.white,
-                visualDensity: VisualDensity.compact,
-                padding: const EdgeInsets.all(10),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-String _publishLabel(String serviceId, bool isAr) {
-  switch (serviceId) {
-    case 'restaurant':
-      return isAr ? 'نشر منيو' : 'Publish menu';
-    case 'product':
-      return isAr ? 'نشر منتجات' : 'Publish products';
-    case 'real_estate':
-      return isAr ? 'نشر عقار' : 'Publish property';
-    case 'professionals':
-      return isAr ? 'تحديث الملف' : 'Update profile';
-    case 'cars':
-      return isAr ? 'نشر سيارة' : 'Publish car';
-    default:
-      return isAr ? 'نشر الآن' : 'Publish now';
-  }
-}
-
-String _publishSubtitle(String serviceId, bool isAr) {
-  switch (serviceId) {
-    case 'restaurant':
-      return isAr
-          ? 'أضف وجباتك ومنيو مطعمك مباشرة.'
-          : 'Add your meals and restaurant menu directly.';
-    case 'product':
-      return isAr
-          ? 'أنشئ منتجًا واختر القسم الفرعي المناسب.'
-          : 'Create a product and choose the right sub-category.';
-    case 'real_estate':
-      return isAr
-          ? 'أنشئ إعلان بيع أو إيجار للعقار.'
-          : 'Create a sale or rent property listing.';
-    case 'professionals':
-      return isAr
-          ? 'حدّث ملفك المهني وبيانات التواصل.'
-          : 'Update your professional profile and contact details.';
-    case 'cars':
-      return isAr
-          ? 'أنشئ إعلانًا أو خدمة خاصة بالسيارات.'
-          : 'Create a car listing or related service.';
-    default:
-      return isAr
-          ? 'ابدأ النشر في هذه الخدمة.'
-          : 'Start publishing in this service.';
-  }
-}
-
 class _MerchantQuickInfoRow extends StatelessWidget {
-  final bool isAr;
   final String phone;
   final String whatsapp;
   final bool showWorkSamples;
   final int workSamplesCount;
 
   const _MerchantQuickInfoRow({
-    required this.isAr,
     required this.phone,
     required this.whatsapp,
     required this.showWorkSamples,
@@ -621,7 +463,7 @@ class _MerchantQuickInfoRow extends StatelessWidget {
       runSpacing: 10,
       children: [
         _MiniInfoChip(
-          label: isAr ? 'الهاتف' : 'Phone',
+          label: 'الهاتف',
           value: phoneValue,
           icon: Icons.call_rounded,
         ),
@@ -633,11 +475,88 @@ class _MerchantQuickInfoRow extends StatelessWidget {
         ),
         if (showWorkSamples)
           _MiniInfoChip(
-            label: isAr ? 'نماذج الأعمال' : 'Samples',
+            label: 'نماذج الأعمال',
             value: workSamplesCount.toString(),
             icon: Icons.photo_library_rounded,
           ),
       ],
+    );
+  }
+}
+
+class _DashboardSyncCatalogButton extends StatefulWidget {
+  const _DashboardSyncCatalogButton();
+
+  @override
+  State<_DashboardSyncCatalogButton> createState() =>
+      _DashboardSyncCatalogButtonState();
+}
+
+class _DashboardSyncCatalogButtonState extends State<_DashboardSyncCatalogButton> {
+  bool _isSyncing = false;
+
+  String _syncErrorMessage(Object error) {
+    final raw = error.toString();
+    if (raw.contains('Missing authorization token') ||
+        raw.contains('Invalid authorization token') ||
+        raw.contains('401')) {
+      return 'انتهت جلسة الدخول. سجل الخروج ثم ادخل مرة أخرى.';
+    }
+    if (raw.contains('Network error')) {
+      return 'فشل الاتصال بالإنترنت أو بالخادم. حاول مرة أخرى.';
+    }
+    final cleaned = raw.replaceFirst('Exception: ', '').trim();
+    if (cleaned.isNotEmpty) return cleaned;
+    return 'تعذرت المزامنة الآن. تحقق من الاتصال ثم أعد المحاولة.';
+  }
+
+  Future<void> _syncNow() async {
+    if (_isSyncing) return;
+    setState(() => _isSyncing = true);
+    try {
+      await context.read<AppProvider>().syncMerchantCatalogToCloud();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('تمت مزامنة بيانات المطعم والمنتجات بنجاح.'),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(_syncErrorMessage(error))),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isSyncing = false);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: double.infinity,
+      child: OutlinedButton.icon(
+        onPressed: _isSyncing ? null : _syncNow,
+        icon: _isSyncing
+            ? const SizedBox(
+                width: 14,
+                height: 14,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : const Icon(Icons.sync_rounded, size: 18),
+        label: Text(_isSyncing ? 'جاري المزامنة' : 'مزامنة بيانات المطعم والمنتجات'),
+        style: OutlinedButton.styleFrom(
+          foregroundColor: Colors.deepOrange,
+          side: const BorderSide(color: Colors.deepOrange),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+          ),
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          backgroundColor: Colors.white,
+        ),
+      ),
     );
   }
 }
@@ -657,46 +576,59 @@ class _MiniInfoChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isActionChip = onTap != null;
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        constraints: const BoxConstraints(maxWidth: 180),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
         decoration: BoxDecoration(
           color: Colors.white.withValues(alpha: 0.10),
           borderRadius: BorderRadius.circular(18),
           border: Border.all(
-            color: onTap != null 
-              ? Colors.green.withValues(alpha: 0.3) 
-              : Colors.white.withValues(alpha: 0.10)
+            color: isActionChip
+                ? Colors.green.withValues(alpha: 0.3)
+                : Colors.white.withValues(alpha: 0.10),
           ),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, color: onTap != null ? Colors.greenAccent : Colors.white, size: 18),
+            Icon(
+              icon,
+              color: isActionChip ? Colors.greenAccent : Colors.white,
+              size: 18,
+            ),
             const SizedBox(width: 8),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  label,
-                  style: const TextStyle(
-                    color: Colors.white70,
-                    fontSize: 11,
-                    fontFamily: 'Cairo',
+            Flexible(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Colors.white70,
+                      fontSize: 11,
+                      fontFamily: 'Cairo',
+                    ),
                   ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  value,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w800,
-                    fontSize: 12,
-                    fontFamily: 'Cairo',
+                  const SizedBox(height: 2),
+                  Text(
+                    value,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 12,
+                      fontFamily: 'Cairo',
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ],
         ),
@@ -706,12 +638,10 @@ class _MiniInfoChip extends StatelessWidget {
 }
 
 class _WorkSamplesStrip extends StatelessWidget {
-  final bool isAr;
   final List<String> samples;
   final VoidCallback onTap;
 
   const _WorkSamplesStrip({
-    required this.isAr,
     required this.samples,
     required this.onTap,
   });
@@ -729,11 +659,9 @@ class _WorkSamplesStrip extends StatelessWidget {
             borderRadius: BorderRadius.circular(18),
             border: Border.all(color: Colors.white.withValues(alpha: 0.10)),
           ),
-          child: Text(
-            isAr
-                ? 'لا توجد صور أعمال بعد. اضغط لفتح الملف الكامل.'
-                : 'No work samples yet. Tap to open the full profile.',
-            style: const TextStyle(
+          child: const Text(
+            'لا توجد صور أعمال بعد. اضغط لفتح الملف الكامل.',
+            style: TextStyle(
               color: Colors.white70,
               fontSize: 12,
               fontFamily: 'Cairo',
@@ -750,7 +678,7 @@ class _WorkSamplesStrip extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            isAr ? 'معاينة صور الأعمال' : 'Work samples preview',
+            'معاينة صور الأعمال',
             style: const TextStyle(
               color: Colors.white70,
               fontSize: 12,
@@ -767,8 +695,8 @@ class _WorkSamplesStrip extends StatelessWidget {
               itemBuilder: (context, index) {
                 return ClipRRect(
                   borderRadius: BorderRadius.circular(14),
-                  child: Image.memory(
-                    base64Decode(displaySamples[index]),
+                  child: AppImage(
+                    imageData: displaySamples[index],
                     width: 78,
                     height: 78,
                     fit: BoxFit.cover,
@@ -784,12 +712,10 @@ class _WorkSamplesStrip extends StatelessWidget {
 }
 
 class _OpenStatusChip extends StatelessWidget {
-  final bool isAr;
   final bool isOpen;
   final VoidCallback onTap;
 
   const _OpenStatusChip({
-    required this.isAr,
     required this.isOpen,
     required this.onTap,
   });
@@ -819,8 +745,8 @@ class _OpenStatusChip extends StatelessWidget {
             const SizedBox(width: 8),
             Text(
               isOpen
-                  ? (isAr ? 'المتجر مفتوح' : 'Store Open')
-                  : (isAr ? 'المتجر مغلق' : 'Store Closed'),
+                  ? 'المتجر مفتوح'
+                  : 'المتجر مغلق',
               style: const TextStyle(
                 color: Colors.white,
                 fontWeight: FontWeight.w800,

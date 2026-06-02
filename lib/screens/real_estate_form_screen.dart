@@ -73,7 +73,6 @@ class _RealEstateFormScreenState extends State<RealEstateFormScreen> {
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<AppProvider>();
-    final isAr = provider.lang == 'ar';
     final isEdit = widget.item != null;
     final subCategories = DummyData.realEstateSubCategories;
     final selectedSubCategory = subCategories.firstWhere(
@@ -84,11 +83,13 @@ class _RealEstateFormScreenState extends State<RealEstateFormScreen> {
     if (!provider.isMerchant) {
       return CupertinoPageScaffold(
         backgroundColor: const Color(0xFFF2F2F7),
-        navigationBar: CupertinoNavigationBar(
+        navigationBar: const CupertinoNavigationBar(
           middle: Text(
-            isAr ? 'العقارات' : 'Real Estate',
-            style: const TextStyle(
-                fontWeight: FontWeight.bold, fontFamily: 'Cairo'),
+            'العقارات',
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              fontFamily: 'Cairo',
+            ),
           ),
         ),
         child: SafeArea(
@@ -104,24 +105,20 @@ class _RealEstateFormScreenState extends State<RealEstateFormScreen> {
                     color: Colors.orange,
                   ),
                   const SizedBox(height: 16),
-                  Text(
-                    isAr
-                        ? 'هذا القسم خاص بالتجار فقط'
-                        : 'This section is for merchants only',
+                  const Text(
+                    'هذا القسم خاص بالتجار فقط',
                     textAlign: TextAlign.center,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.w800,
                       fontFamily: 'Cairo',
                     ),
                   ),
                   const SizedBox(height: 8),
-                  Text(
-                    isAr
-                        ? 'يمكنك فقط تصفح العقارات كزبون، أما النشر فهو للتاجر.'
-                        : 'Customers can only browse properties. Publishing is reserved for merchants.',
+                  const Text(
+                    'يمكنك فقط تصفح العقارات كزبون، أما النشر فهو للتاجر.',
                     textAlign: TextAlign.center,
-                    style: const TextStyle(
+                    style: TextStyle(
                       color: CupertinoColors.systemGrey,
                       height: 1.5,
                       fontFamily: 'Cairo',
@@ -130,9 +127,9 @@ class _RealEstateFormScreenState extends State<RealEstateFormScreen> {
                   const SizedBox(height: 24),
                   CupertinoButton.filled(
                     onPressed: () => Navigator.pop(context),
-                    child: Text(
-                      isAr ? 'رجوع' : 'Back',
-                      style: const TextStyle(fontFamily: 'Cairo'),
+                    child: const Text(
+                      'رجوع',
+                      style: TextStyle(fontFamily: 'Cairo'),
                     ),
                   ),
                 ],
@@ -148,10 +145,10 @@ class _RealEstateFormScreenState extends State<RealEstateFormScreen> {
       appBar: AppBar(
         title: Text(
           isEdit
-              ? (isAr ? 'تعديل العقار' : 'Edit Property')
+              ? 'تعديل العقار'
               : (widget.mode == 'sell'
-                  ? (isAr ? 'عرض عقار للبيع' : 'List Property for Sale')
-                  : (isAr ? 'عرض عقار للإيجار' : 'List Property for Rent')),
+                  ? 'عرض عقار للبيع'
+                  : 'عرض عقار للإيجار'),
           style:
               const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w900),
         ),
@@ -162,7 +159,7 @@ class _RealEstateFormScreenState extends State<RealEstateFormScreen> {
           padding: const EdgeInsets.all(16),
           children: [
             _SectionCard(
-              title: isAr ? 'نوع العقار' : 'Property type',
+              title: 'نوع العقار',
               child: DropdownButtonFormField<String>(
                 value: subCategories
                         .any((item) => item.id == _selectedSubCategoryId)
@@ -172,7 +169,7 @@ class _RealEstateFormScreenState extends State<RealEstateFormScreen> {
                   return DropdownMenuItem<String>(
                     value: sub.id,
                     child: Text(
-                      isAr ? sub.titleAr : sub.titleEn,
+                      sub.titleAr,
                       style: const TextStyle(fontFamily: 'Cairo'),
                     ),
                   );
@@ -182,7 +179,7 @@ class _RealEstateFormScreenState extends State<RealEstateFormScreen> {
                 },
                 validator: (value) {
                   if (value == null || value.isEmpty) {
-                    return isAr ? 'اختر نوع العقار' : 'Choose a property type';
+                    return 'اختر نوع العقار';
                   }
                   return null;
                 },
@@ -198,53 +195,49 @@ class _RealEstateFormScreenState extends State<RealEstateFormScreen> {
             ),
             const SizedBox(height: 12),
             _SectionCard(
-              title: isAr ? 'بيانات العقار' : 'Property details',
+              title: 'بيانات العقار',
               child: Column(
                 children: [
                   _buildField(
-                    label: isAr ? 'عنوان الإعلان' : 'Ad title',
+                    label: 'عنوان الإعلان',
                     controller: _titleController,
                     validator: (value) {
                       if (value == null || value.trim().isEmpty) {
-                        return isAr
-                            ? 'هذا الحقل مطلوب'
-                            : 'This field is required';
+                        return 'هذا الحقل مطلوب';
                       }
                       return null;
                     },
                   ),
                   _buildField(
-                    label: isAr ? 'السعر (د.ع)' : 'Price (IQD)',
+                    label: 'السعر (د.ع)',
                     controller: _priceController,
                     keyboardType: TextInputType.number,
                     validator: (value) {
                       final parsed = int.tryParse(value?.trim() ?? '');
                       if (parsed == null || parsed <= 0) {
-                        return isAr
-                            ? 'أدخل سعرًا صحيحًا'
-                            : 'Enter a valid price';
+                        return 'أدخل سعرًا صحيحًا';
                       }
                       return null;
                     },
                   ),
                   _buildField(
-                    label: isAr ? 'العنوان' : 'Address',
+                    label: 'العنوان',
                     controller: _addressController,
                     validator: (value) {
                       if (value == null || value.trim().isEmpty) {
-                        return isAr ? 'أدخل العنوان' : 'Enter the address';
+                        return 'أدخل العنوان';
                       }
                       return null;
                     },
                   ),
                   _buildField(
-                    label: isAr ? 'المساحة (م²)' : 'Area (m²)',
+                    label: 'المساحة (م²)',
                     controller: _areaController,
                     keyboardType: TextInputType.number,
                     validator: (value) {
                       final parsed = int.tryParse(value?.trim() ?? '');
                       if (parsed == null || parsed <= 0) {
-                        return isAr ? 'أدخل المساحة' : 'Enter the area';
+                        return 'أدخل المساحة';
                       }
                       return null;
                     },
@@ -254,15 +247,13 @@ class _RealEstateFormScreenState extends State<RealEstateFormScreen> {
                       children: [
                         Expanded(
                           child: _buildField(
-                            label: isAr ? 'عدد الغرف' : 'Bedrooms',
+                            label: 'عدد الغرف',
                             controller: _bedroomsController,
                             keyboardType: TextInputType.number,
                             validator: (value) {
                               final parsed = int.tryParse(value?.trim() ?? '');
                               if (parsed == null || parsed <= 0) {
-                                return isAr
-                                    ? 'أدخل عدد الغرف'
-                                    : 'Enter bedrooms';
+                                return 'أدخل عدد الغرف';
                               }
                               return null;
                             },
@@ -271,15 +262,13 @@ class _RealEstateFormScreenState extends State<RealEstateFormScreen> {
                         const SizedBox(width: 12),
                         Expanded(
                           child: _buildField(
-                            label: isAr ? 'عدد الطوابق' : 'Floors',
+                            label: 'عدد الطوابق',
                             controller: _floorsController,
                             keyboardType: TextInputType.number,
                             validator: (value) {
                               final parsed = int.tryParse(value?.trim() ?? '');
                               if (parsed == null || parsed <= 0) {
-                                return isAr
-                                    ? 'أدخل عدد الطوابق'
-                                    : 'Enter floors';
+                                return 'أدخل عدد الطوابق';
                               }
                               return null;
                             },
@@ -288,12 +277,12 @@ class _RealEstateFormScreenState extends State<RealEstateFormScreen> {
                       ],
                     ),
                   _buildField(
-                    label: isAr ? 'الوصف' : 'Description',
+                    label: 'الوصف',
                     controller: _descController,
                     maxLines: 4,
                     validator: (value) {
                       if (value == null || value.trim().isEmpty) {
-                        return isAr ? 'أدخل الوصف' : 'Enter a description';
+                        return 'أدخل الوصف';
                       }
                       return null;
                     },
@@ -361,9 +350,9 @@ class _RealEstateFormScreenState extends State<RealEstateFormScreen> {
                   categoryLabelEn: 'Real Estate',
                   image: _imageForSubCategory(selectedSubCategory.id),
                   imageBase64: _imageBase64,
-                  avgPriceLabelAr: isAr ? 'السعر' : 'Price',
+                  avgPriceLabelAr: 'السعر',
                   avgPriceLabelEn: 'Price',
-                  actionLabelAr: isAr ? 'تواصل' : 'Contact',
+                  actionLabelAr: 'تواصل',
                   actionLabelEn: 'Contact',
                   address: address,
                   bedrooms: bedrooms,
@@ -381,9 +370,7 @@ class _RealEstateFormScreenState extends State<RealEstateFormScreen> {
                 Navigator.pop(context);
               },
               child: Text(
-                isEdit
-                    ? (isAr ? 'حفظ التعديل' : 'Save changes')
-                    : (isAr ? 'نشر العقار' : 'Publish property'),
+                isEdit ? 'حفظ التعديل' : 'نشر العقار',
                 style: const TextStyle(
                   fontFamily: 'Cairo',
                   fontWeight: FontWeight.w900,

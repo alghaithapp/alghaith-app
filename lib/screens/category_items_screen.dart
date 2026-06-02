@@ -14,6 +14,7 @@ import 'real_estate_listings_screen.dart';
 import 'restaurant_menu_screen.dart';
 import 'shopping_stores_screen.dart';
 import 'sub_category_items_screen.dart';
+import 'taxi_request_screen.dart';
 
 class CategoryItemsScreen extends StatelessWidget {
   final ServiceCategory category;
@@ -23,15 +24,12 @@ class CategoryItemsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final appProvider = context.watch<AppProvider>();
-    final isAr = appProvider.lang == 'ar';
 
     switch (category.id) {
       case 'product':
         return _buildSubCategoryGallery(
           context,
-          isAr: isAr,
-          titleAr: 'أقسام التسوق',
-          titleEn: 'Shopping Categories',
+          title: 'أقسام التسوق',
           categories: DummyData.shoppingSubCategories,
           onTap: (sub) => Navigator.of(context).push(
             CupertinoPageRoute(
@@ -41,14 +39,16 @@ class CategoryItemsScreen extends StatelessWidget {
           fallbackColor: Colors.orange,
           fallbackIcon: CupertinoIcons.bag_fill,
         );
+      case 'restaurant':
+        return ShoppingStoresScreen(
+          storeKind: MerchantStoreKind.restaurant,
+        );
       case 'cars':
-        return _buildCarsSubCategories(context, isAr);
+        return _buildCarsSubCategories(context);
       case 'tourism':
         return _buildSubCategoryGallery(
           context,
-          isAr: isAr,
-          titleAr: 'السياحة والسفر',
-          titleEn: 'Tourism & Travel',
+          title: 'السياحة والسفر',
           categories: DummyData.tourismSubCategories,
           onTap: (sub) => Navigator.of(context).push(
             CupertinoPageRoute(
@@ -65,9 +65,7 @@ class CategoryItemsScreen extends StatelessWidget {
       case 'beauty':
         return _buildSubCategoryGallery(
           context,
-          isAr: isAr,
-          titleAr: 'الصحة والجمال',
-          titleEn: 'Health & Beauty',
+          title: 'الصحة والجمال',
           categories: DummyData.healthSubCategories,
           onTap: (sub) => Navigator.of(context).push(
             CupertinoPageRoute(
@@ -87,14 +85,12 @@ class CategoryItemsScreen extends StatelessWidget {
         );
       case 'real_estate':
         return appProvider.isMerchant
-            ? _buildRealEstateInitial(context, isAr)
+            ? _buildRealEstateInitial(context)
             : const RealEstateListingsScreen();
       case 'global_shopping':
         return _buildSubCategoryGallery(
           context,
-          isAr: isAr,
-          titleAr: 'التسوق العالمي',
-          titleEn: 'Global Shopping',
+          title: 'التسوق العالمي',
           categories: DummyData.globalShoppingSubCategories,
           onTap: (sub) => Navigator.of(context).push(
             CupertinoPageRoute(
@@ -107,9 +103,7 @@ class CategoryItemsScreen extends StatelessWidget {
       case 'professionals':
         return _buildSubCategoryGallery(
           context,
-          isAr: isAr,
-          titleAr: 'المهنيين',
-          titleEn: 'Professionals',
+          title: 'المهنيين',
           categories: DummyData.professionalsSubCategories,
           onTap: (sub) => Navigator.of(context).push(
             CupertinoPageRoute(
@@ -121,14 +115,13 @@ class CategoryItemsScreen extends StatelessWidget {
           fallbackIcon: CupertinoIcons.person_2_fill,
         );
       default:
-        return _buildCategoryItems(context, appProvider, isAr);
+        return _buildCategoryItems(context, appProvider);
     }
   }
 
   Widget _buildCategoryItems(
     BuildContext context,
     AppProvider appProvider,
-    bool isAr,
   ) {
     final filteredItems = appProvider.items
         .where((item) => item.category == category.id)
@@ -138,19 +131,17 @@ class CategoryItemsScreen extends StatelessWidget {
       backgroundColor: const Color(0xFFF2F2F7),
       navigationBar: CupertinoNavigationBar(
         middle: Text(
-          isAr ? category.titleAr : category.titleEn,
+          category.titleAr,
           style: const TextStyle(
             fontWeight: FontWeight.bold,
             fontFamily: 'Cairo',
           ),
         ),
-        previousPageTitle: isAr ? 'الرئيسية' : 'Home',
+        previousPageTitle: 'الرئيسية',
       ),
       child: SafeArea(
         child: filteredItems.isEmpty
-            ? _buildEmptyState(
-                isAr ? 'لا توجد نتائج حاليًا' : 'No items found',
-              )
+            ? _buildEmptyState('لا توجد نتائج حاليًا')
             : ListView.builder(
                 padding: const EdgeInsets.all(16),
                 itemCount: filteredItems.length,
@@ -197,7 +188,7 @@ class CategoryItemsScreen extends StatelessWidget {
                                   children: [
                                     Expanded(
                                       child: Text(
-                                        isAr ? item.nameAr : item.nameEn,
+                                        item.nameAr,
                                         style: const TextStyle(
                                           fontWeight: FontWeight.bold,
                                           fontSize: 18,
@@ -240,9 +231,7 @@ class CategoryItemsScreen extends StatelessWidget {
                                 ),
                                 const SizedBox(height: 8),
                                 Text(
-                                  isAr
-                                      ? item.descriptionAr
-                                      : item.descriptionEn,
+                                  item.descriptionAr,
                                   style: const TextStyle(
                                     color: CupertinoColors.systemGrey,
                                     fontSize: 13,
@@ -261,9 +250,7 @@ class CategoryItemsScreen extends StatelessWidget {
                                           CrossAxisAlignment.start,
                                       children: [
                                         Text(
-                                          isAr
-                                              ? item.avgPriceLabelAr
-                                              : item.avgPriceLabelEn,
+                                          item.avgPriceLabelAr,
                                           style: const TextStyle(
                                             color:
                                                 CupertinoColors.systemGrey,
@@ -311,19 +298,12 @@ class CategoryItemsScreen extends StatelessWidget {
                                                     context: context,
                                                     builder: (context) =>
                                                         CupertinoAlertDialog(
-                                                      title: Text(isAr
-                                                          ? 'تمت الإضافة'
-                                                          : 'Added'),
-                                                      content: Text(isAr
-                                                          ? 'تمت إضافة المنتج إلى السلة بنجاح'
-                                                          : 'Item added to cart successfully'),
+                                                      title: const Text('تمت الإضافة'),
+                                                      content: const Text(
+                                                          'تمت إضافة المنتج إلى السلة بنجاح'),
                                                       actions: [
                                                         CupertinoDialogAction(
-                                                          child: Text(
-                                                            isAr
-                                                                ? 'حسنًا'
-                                                                : 'OK',
-                                                          ),
+                                                          child: const Text('حسنًا'),
                                                           onPressed: () =>
                                                               Navigator.pop(
                                                                   context),
@@ -334,12 +314,8 @@ class CategoryItemsScreen extends StatelessWidget {
                                                 }),
                                       child: Text(
                                         category.id == 'restaurant'
-                                            ? (isAr
-                                                ? 'عرض المنيو'
-                                                : 'View Menu')
-                                            : (isAr
-                                                ? item.actionLabelAr
-                                                : item.actionLabelEn),
+                                            ? 'عرض المنيو'
+                                            : item.actionLabelAr,
                                         style: const TextStyle(
                                           fontSize: 14,
                                           fontWeight: FontWeight.bold,
@@ -365,9 +341,7 @@ class CategoryItemsScreen extends StatelessWidget {
 
   Widget _buildSubCategoryGallery(
     BuildContext context, {
-    required bool isAr,
-    required String titleAr,
-    required String titleEn,
+    required String title,
     required List<ServiceCategory> categories,
     required ValueChanged<ServiceCategory> onTap,
     required Color fallbackColor,
@@ -378,7 +352,7 @@ class CategoryItemsScreen extends StatelessWidget {
       backgroundColor: const Color(0xFFF2F2F7),
       navigationBar: CupertinoNavigationBar(
         middle: Text(
-          isAr ? titleAr : titleEn,
+          title,
           style: const TextStyle(
             fontWeight: FontWeight.bold,
             fontFamily: 'Cairo',
@@ -421,13 +395,13 @@ class CategoryItemsScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildRealEstateInitial(BuildContext context, bool isAr) {
+  Widget _buildRealEstateInitial(BuildContext context) {
     return CupertinoPageScaffold(
       backgroundColor: const Color(0xFFF2F2F7),
-      navigationBar: CupertinoNavigationBar(
+      navigationBar: const CupertinoNavigationBar(
         middle: Text(
-          isAr ? 'العقارات' : 'Real Estate',
-          style: const TextStyle(
+          'العقارات',
+          style: TextStyle(
             fontWeight: FontWeight.bold,
             fontFamily: 'Cairo',
           ),
@@ -439,11 +413,8 @@ class CategoryItemsScreen extends StatelessWidget {
           children: [
             _buildRealEstateMainCard(
               context,
-              isAr: isAr,
-              title: isAr ? 'شراء عقار' : 'Buy Property',
-              subtitle: isAr
-                  ? 'استعرض عروض العقارات المعروضة للشراء'
-                  : 'Browse properties available for purchase',
+              title: 'شراء عقار',
+              subtitle: 'استعرض عروض العقارات المعروضة للشراء',
               imagePath: 'assets/images/re_buy.png',
               icon: CupertinoIcons.house_fill,
               color: Colors.green,
@@ -456,11 +427,8 @@ class CategoryItemsScreen extends StatelessWidget {
             const SizedBox(height: 16),
             _buildRealEstateMainCard(
               context,
-              isAr: isAr,
-              title: isAr ? 'بيع عقار' : 'Sell Property',
-              subtitle: isAr
-                  ? 'اعرض عقارك للبيع الآن'
-                  : 'List your property for sale',
+              title: 'بيع عقار',
+              subtitle: 'اعرض عقارك للبيع الآن',
               imagePath: 'assets/images/re_sell.png',
               icon: CupertinoIcons.square_pencil,
               color: Colors.blueAccent,
@@ -474,11 +442,8 @@ class CategoryItemsScreen extends StatelessWidget {
             const SizedBox(height: 16),
             _buildRealEstateMainCard(
               context,
-              isAr: isAr,
-              title: isAr ? 'استئجار عقار' : 'Rent Property',
-              subtitle: isAr
-                  ? 'ابحث عن عقار مناسب للإيجار'
-                  : 'Find a property to rent',
+              title: 'استئجار عقار',
+              subtitle: 'ابحث عن عقار مناسب للإيجار',
               imagePath: 'assets/images/re_rent.png',
               icon: CupertinoIcons.calendar,
               color: Colors.orangeAccent,
@@ -497,7 +462,6 @@ class CategoryItemsScreen extends StatelessWidget {
 
   Widget _buildRealEstateMainCard(
     BuildContext context, {
-    required bool isAr,
     required String title,
     required String subtitle,
     required String imagePath,
@@ -578,23 +542,16 @@ class CategoryItemsScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildCarsSubCategories(BuildContext context, bool isAr) {
+  Widget _buildCarsSubCategories(BuildContext context) {
     return _buildSubCategoryGallery(
       context,
-      isAr: isAr,
-      titleAr: 'قسم السيارات',
-      titleEn: 'Cars Section',
+      title: 'قسم السيارات',
       categories: DummyData.carsSubCategories,
       onTap: (sub) {
         if (sub.id == 'taxi_request') {
           Navigator.of(context).push(
             CupertinoPageRoute(
-              builder: (context) => const _ComingSoonFeatureScreen(
-                titleAr: 'طلب تكسي',
-                titleEn: 'Taxi Request',
-                subtitleAr: 'قريبًا',
-                subtitleEn: 'Coming soon',
-              ),
+              builder: (context) => const TaxiRequestScreen(),
             ),
           );
           return;
@@ -604,10 +561,8 @@ class CategoryItemsScreen extends StatelessWidget {
           Navigator.of(context).push(
             CupertinoPageRoute(
               builder: (context) => const _ComingSoonFeatureScreen(
-                titleAr: 'طلب سيارة',
-                titleEn: 'Request Car',
-                subtitleAr: 'قريبًا',
-                subtitleEn: 'Coming soon',
+                title: 'طلب سيارة',
+                subtitle: 'قريبًا',
               ),
             ),
           );
@@ -650,27 +605,21 @@ class CategoryItemsScreen extends StatelessWidget {
 }
 
 class _ComingSoonFeatureScreen extends StatelessWidget {
-  final String titleAr;
-  final String titleEn;
-  final String subtitleAr;
-  final String subtitleEn;
+  final String title;
+  final String subtitle;
 
   const _ComingSoonFeatureScreen({
-    required this.titleAr,
-    required this.titleEn,
-    required this.subtitleAr,
-    required this.subtitleEn,
+    required this.title,
+    required this.subtitle,
   });
 
   @override
   Widget build(BuildContext context) {
-    final isAr = Directionality.of(context) == TextDirection.rtl;
-
     return CupertinoPageScaffold(
       backgroundColor: const Color(0xFFF2F2F7),
       navigationBar: CupertinoNavigationBar(
         middle: Text(
-          isAr ? titleAr : titleEn,
+          title,
           style: const TextStyle(
             fontWeight: FontWeight.bold,
             fontFamily: 'Cairo',
@@ -696,7 +645,7 @@ class _ComingSoonFeatureScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 14),
                 Text(
-                  isAr ? titleAr : titleEn,
+                  title,
                   textAlign: TextAlign.center,
                   style: const TextStyle(
                     fontSize: 18,
@@ -706,7 +655,7 @@ class _ComingSoonFeatureScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  isAr ? subtitleAr : subtitleEn,
+                  subtitle,
                   textAlign: TextAlign.center,
                   style: const TextStyle(
                     color: Colors.grey,

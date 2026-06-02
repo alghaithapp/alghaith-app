@@ -9,16 +9,15 @@ class NotificationsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final appProvider = Provider.of<AppProvider>(context);
-    final isAr = appProvider.lang == 'ar';
 
     return CupertinoPageScaffold(
       backgroundColor: const Color(0xFFF2F2F7),
       navigationBar: CupertinoNavigationBar(
-        middle: Text(isAr ? "الإشعارات" : "Notifications", style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
+        middle: Text("الإشعارات", style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
       ),
       child: SafeArea(
         child: appProvider.notifications.isEmpty
-            ? Center(child: Text(isAr ? "لا توجد إشعارات" : "No notifications", style: const TextStyle(fontFamily: 'Cairo')))
+            ? Center(child: Text("لا توجد إشعارات", style: const TextStyle(fontFamily: 'Cairo')))
             : ListView.builder(
                 padding: const EdgeInsets.all(16),
                 itemCount: appProvider.notifications.length,

@@ -2,6 +2,8 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
+import '../core/config/app_config.dart';
+
 class PhoneAuthSession {
   const PhoneAuthSession({
     required this.token,
@@ -17,15 +19,7 @@ class PhoneAuthApi {
 
   final String baseUrl;
 
-  static String _defaultBaseUrl() {
-    const compiledBaseUrl =
-        String.fromEnvironment('PHONE_AUTH_BASE_URL', defaultValue: '');
-    if (compiledBaseUrl.isNotEmpty) {
-      return compiledBaseUrl;
-    }
-    // الرابط المباشر للسيرفر الجديد بدون مائل في النهاية
-    return 'https://lively-wind-9d98.alghaithapp.workers.dev';
-  }
+  static String _defaultBaseUrl() => AppConfig.normalizedPhoneAuthUrl;
 
   Uri _uri(String path) => Uri.parse('$baseUrl$path');
 

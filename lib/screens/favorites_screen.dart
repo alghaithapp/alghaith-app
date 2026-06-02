@@ -11,7 +11,6 @@ class FavoritesScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final appProvider = Provider.of<AppProvider>(context);
-    final isAr = appProvider.lang == 'ar';
 
     // جلب العناصر المفضلة فقط من الـ Provider
     final favoriteItems = appProvider.items.where((item) => item.isFavorite).toList();
@@ -19,7 +18,7 @@ class FavoritesScreen extends StatelessWidget {
     return CupertinoPageScaffold(
       backgroundColor: const Color(0xFFF2F2F7),
       navigationBar: CupertinoNavigationBar(
-        middle: Text(isAr ? "المفضلة" : "Favorites", style: const TextStyle(fontWeight: FontWeight.bold, fontFamily: 'Cairo')),
+        middle: Text("المفضلة", style: const TextStyle(fontWeight: FontWeight.bold, fontFamily: 'Cairo')),
       ),
       child: SafeArea(
         child: favoriteItems.isEmpty
@@ -30,7 +29,7 @@ class FavoritesScreen extends StatelessWidget {
                     const Icon(CupertinoIcons.heart_slash, size: 60, color: CupertinoColors.systemGrey4),
                     const SizedBox(height: 16),
                     Text(
-                      isAr ? "قائمة المفضلة فارغة" : "Your favorites list is empty",
+                      "قائمة المفضلة فارغة",
                       style: const TextStyle(color: CupertinoColors.systemGrey, fontFamily: 'Cairo'),
                     ),
                   ],
@@ -51,7 +50,7 @@ class FavoritesScreen extends StatelessWidget {
                     child: Row(
                       children: [
                         AppImage(
-                          imageData: item.image,
+                          imageData: item.imageBase64 ?? item.image,
                           width: 100,
                           height: 100,
                           borderRadius: const BorderRadius.horizontal(right: Radius.circular(20)),
@@ -61,7 +60,7 @@ class FavoritesScreen extends StatelessWidget {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(isAr ? item.nameAr : item.nameEn, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, fontFamily: 'Cairo')),
+                              Text(item.nameAr, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, fontFamily: 'Cairo')),
                               Text("${item.price.toLocaleString()} د.ع", style: const TextStyle(color: Colors.orange, fontWeight: FontWeight.bold, fontSize: 14)),
                             ],
                           ),

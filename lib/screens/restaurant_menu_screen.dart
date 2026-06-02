@@ -1,5 +1,3 @@
-import 'dart:convert';
-
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -8,6 +6,7 @@ import '../models/app_models.dart';
 import '../providers/app_provider.dart';
 import '../utils/extensions.dart';
 import '../widgets/app_image.dart';
+import 'cart_screen.dart';
 
 class RestaurantMenuScreen extends StatefulWidget {
   final ListItem restaurant;
@@ -18,30 +17,108 @@ class RestaurantMenuScreen extends StatefulWidget {
   State<RestaurantMenuScreen> createState() => _RestaurantMenuScreenState();
 }
 
-class _RestaurantMenuScreenState extends State<RestaurantMenuScreen> {
+class _RestaurantMenuScreenState extends State<RestaurantMenuScreen>
+    with SingleTickerProviderStateMixin {
   final TextEditingController _searchController = TextEditingController();
+  final GlobalKey _cartIconKey = GlobalKey();
+  final GlobalKey _stackKey = GlobalKey();
+  late final AnimationController _flyController;
+  Offset _flyStart = Offset.zero;
+  Offset _flyEnd = Offset.zero;
+  bool _showFlyDot = false;
+  int _cartPulseTick = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _flyController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 650),
+    )
+      ..addStatusListener((status) {
+        if (!mounted) return;
+        if (status == AnimationStatus.completed) {
+          setState(() {
+            _showFlyDot = false;
+            _cartPulseTick++;
+          });
+        }
+      });
+  }
 
   @override
   void dispose() {
+    _flyController.dispose();
     _searchController.dispose();
     super.dispose();
+  }
+
+  Future<void> _animateAddToCart(BuildContext sourceContext) async {
+    final stackContext = _stackKey.currentContext;
+    final cartContext = _cartIconKey.currentContext;
+    if (stackContext == null || cartContext == null) return;
+    final stackBox = stackContext.findRenderObject() as RenderBox?;
+    final sourceBox = sourceContext.findRenderObject() as RenderBox?;
+    final cartBox = cartContext.findRenderObject() as RenderBox?;
+    if (stackBox == null || sourceBox == null || cartBox == null) return;
+
+    final sourceGlobal = sourceBox.localToGlobal(
+      Offset(sourceBox.size.width / 2, sourceBox.size.height / 2),
+    );
+    final cartGlobal = cartBox.localToGlobal(
+      Offset(cartBox.size.width / 2, cartBox.size.height / 2),
+    );
+
+    setState(() {
+      _flyStart = stackBox.globalToLocal(sourceGlobal);
+      _flyEnd = stackBox.globalToLocal(cartGlobal);
+      _showFlyDot = true;
+    });
+    await _flyController.forward(from: 0);
+  }
+
+  String? get _storePhoneDigits {
+    final phone = widget.restaurant.merchantPhone?.replaceAll(RegExp(r'\D'), '') ?? '';
+    return phone.isEmpty ? null : phone;
+  }
+
+  List<ListItem> _menuItemsForRestaurant(AppProvider provider) {
+    final storePhone = _storePhoneDigits;
+    final storeName = widget.restaurant.nameAr.trim();
+
+    return provider.items.where((item) {
+      if (item.category != 'restaurant' || !item.isAvailable) return false;
+      if (item.id == widget.restaurant.id) return false;
+
+      final itemPhone = item.merchantPhone?.replaceAll(RegExp(r'\D'), '') ?? '';
+      if (storePhone != null && storePhone.isNotEmpty) {
+        return itemPhone.isNotEmpty && itemPhone == storePhone;
+      }
+
+      final itemStoreName = (item.merchantStoreName ?? '').trim();
+      return itemStoreName.isNotEmpty && itemStoreName == storeName;
+    }).toList();
+  }
+
+  List<ListItem> _filterMenuItems(List<ListItem> items, String query) {
+    if (query.isEmpty) return items;
+    return items.where((item) {
+      final searchable = [
+        item.nameAr,
+        item.nameEn,
+        item.descriptionAr,
+        item.descriptionEn,
+      ].join(' ').toLowerCase();
+      return searchable.contains(query);
+    }).toList();
   }
 
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<AppProvider>();
-    final isAr = provider.lang == 'ar';
     final query = _searchController.text.trim().toLowerCase();
 
-    final menuItems = provider.items
-        .where((item) => item.category == 'restaurant' && item.isAvailable)
-        .where((item) {
-      if (query.isEmpty) return true;
-      return item.nameAr.toLowerCase().contains(query) ||
-          item.nameEn.toLowerCase().contains(query) ||
-          item.descriptionAr.toLowerCase().contains(query) ||
-          item.descriptionEn.toLowerCase().contains(query);
-    }).toList();
+    final menuItems = _filterMenuItems(_menuItemsForRestaurant(provider), query);
 
     final sortedItems = [...menuItems]..sort((a, b) {
         final favoriteCompare =
@@ -56,70 +133,125 @@ class _RestaurantMenuScreenState extends State<RestaurantMenuScreen> {
         backgroundColor: Colors.white.withValues(alpha: 0.96),
         border: const Border(bottom: BorderSide(color: Color(0x11000000))),
         middle: Text(
-          isAr ? widget.restaurant.nameAr : widget.restaurant.nameEn,
+          widget.restaurant.nameAr,
           style: const TextStyle(
             fontWeight: FontWeight.w800,
             fontFamily: 'Cairo',
           ),
         ),
-        previousPageTitle: isAr ? 'الرجوع' : 'Back',
+        previousPageTitle: 'الرجوع',
+        trailing: Padding(
+          padding: const EdgeInsetsDirectional.only(end: 4),
+          child: _CartNavButton(
+            key: _cartIconKey,
+            count: provider.cartCount,
+            pulseTick: _cartPulseTick,
+            onTap: () {
+              Navigator.of(context).push(
+                CupertinoPageRoute(builder: (_) => const CartScreen()),
+              );
+            },
+          ),
+        ),
       ),
       child: SafeArea(
-        child: Column(
+        child: Stack(
+          key: _stackKey,
           children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
-              child: _HeaderCard(
-                restaurant: widget.restaurant,
-                isAr: isAr,
-                menuCount: sortedItems.length,
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: CupertinoSearchTextField(
-                controller: _searchController,
-                placeholder: isAr ? 'ابحث في المنيو' : 'Search menu',
-                onChanged: (_) => setState(() {}),
-              ),
-            ),
-            const SizedBox(height: 12),
-            Expanded(
-              child: sortedItems.isEmpty
-                  ? _EmptyState(isAr: isAr, hasSearch: query.isNotEmpty)
-                  : ListView.separated(
-                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
-                      itemCount: sortedItems.length,
-                      separatorBuilder: (_, __) => const SizedBox(height: 12),
-                      itemBuilder: (context, index) {
-                        final item = sortedItems[index];
-                        return _MenuItemCard(
-                          item: item,
-                          isAr: isAr,
-                          onAdd: () {
-                            provider.addToCart(item);
-                            showCupertinoDialog(
-                              context: context,
-                              builder: (context) => CupertinoAlertDialog(
-                                title: Text(isAr ? 'تمت الإضافة' : 'Added'),
-                                content: Text(
-                                  isAr
-                                      ? 'تمت إضافة ${item.nameAr} إلى السلة.'
-                                      : '${item.nameEn} was added to cart.',
-                                ),
-                                actions: [
-                                  CupertinoDialogAction(
-                                    child: Text(isAr ? 'حسنًا' : 'OK'),
-                                    onPressed: () => Navigator.pop(context),
-                                  ),
-                                ],
-                              ),
+            Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+                  child: _HeaderCard(
+                    restaurant: widget.restaurant,
+                    menuCount: sortedItems.length,
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child:                   CupertinoSearchTextField(
+                    controller: _searchController,
+                    placeholder: 'ابحث داخل المطعم',
+                    onChanged: (_) => setState(() {}),
+                    onSubmitted: (_) => setState(() {}),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Expanded(
+                  child: sortedItems.isEmpty
+                      ? _EmptyState(hasSearch: query.isNotEmpty)
+                      : ListView.separated(
+                          padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
+                          itemCount: sortedItems.length,
+                          separatorBuilder: (_, __) => const SizedBox(height: 12),
+                          itemBuilder: (context, index) {
+                            final item = sortedItems[index];
+                            return _MenuItemCard(
+                              item: item,
+                              onAdd: (buttonContext) async {
+                                final added = provider.addToCart(item);
+                                if (!added) {
+                                  if (!mounted) return;
+                                  showCupertinoDialog(
+                                    context: context,
+                                    builder: (dialogContext) => CupertinoAlertDialog(
+                                      title: const Text('تنبيه'),
+                                      content: const Text(
+                                        'السلة تحتوي منتجات من متجر آخر. أكمل طلبك أو افرغ السلة أولاً.',
+                                      ),
+                                      actions: [
+                                        CupertinoDialogAction(
+                                          onPressed: () =>
+                                              Navigator.of(dialogContext).pop(),
+                                          child: const Text('حسنًا'),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                  return;
+                                }
+                                await _animateAddToCart(buttonContext);
+                              },
                             );
                           },
-                        );
-                      },
-                    ),
+                        ),
+                ),
+              ],
             ),
+            if (_showFlyDot)
+              IgnorePointer(
+                child: AnimatedBuilder(
+                  animation: _flyController,
+                  builder: (_, __) {
+                    final t = Curves.easeInOutCubic.transform(_flyController.value);
+                    final x = _flyStart.dx + ((_flyEnd.dx - _flyStart.dx) * t);
+                    final yBase = _flyStart.dy + ((_flyEnd.dy - _flyStart.dy) * t);
+                    final arc = -70 * (1 - (2 * t - 1).abs());
+                    final scale = 1 - (t * 0.4);
+                    return Positioned(
+                      left: x - 10,
+                      top: yBase + arc - 10,
+                      child: Transform.scale(
+                        scale: scale,
+                        child: Container(
+                          width: 20,
+                          height: 20,
+                          decoration: BoxDecoration(
+                            color: Colors.deepOrange,
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.deepOrange.withValues(alpha: 0.4),
+                                blurRadius: 10,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
           ],
         ),
       ),
@@ -129,12 +261,10 @@ class _RestaurantMenuScreenState extends State<RestaurantMenuScreen> {
 
 class _HeaderCard extends StatelessWidget {
   final ListItem restaurant;
-  final bool isAr;
   final int menuCount;
 
   const _HeaderCard({
     required this.restaurant,
-    required this.isAr,
     required this.menuCount,
   });
 
@@ -196,11 +326,9 @@ class _HeaderCard extends StatelessWidget {
                             color: Colors.white.withValues(alpha: 0.18),
                             borderRadius: BorderRadius.circular(999),
                           ),
-                          child: Text(
-                            isAr
-                                ? 'منيو حقيقي من قاعدة البيانات'
-                                : 'Live menu from Supabase',
-                            style: const TextStyle(
+                          child: const Text(
+                            'منيو حقيقي من قاعدة البيانات',
+                            style: TextStyle(
                               color: Colors.white,
                               fontSize: 11,
                               fontWeight: FontWeight.w700,
@@ -210,7 +338,7 @@ class _HeaderCard extends StatelessWidget {
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          isAr ? restaurant.nameAr : restaurant.nameEn,
+                          restaurant.nameAr,
                           style: const TextStyle(
                             color: Colors.white,
                             fontSize: 22,
@@ -231,7 +359,7 @@ class _HeaderCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  isAr ? restaurant.descriptionAr : restaurant.descriptionEn,
+                  restaurant.descriptionAr,
                   style: const TextStyle(
                     fontSize: 13,
                     height: 1.4,
@@ -247,20 +375,20 @@ class _HeaderCard extends StatelessWidget {
                     _InfoChip(
                       icon: CupertinoIcons.star_fill,
                       label: restaurant.rating == null
-                          ? (isAr ? 'تقييم' : 'Rating')
+                          ? 'تقييم'
                           : restaurant.rating!.toStringAsFixed(1),
                       color: Colors.amber,
                     ),
                     _InfoChip(
                       icon: CupertinoIcons.clock_fill,
                       label: restaurant.prepMinutes == null
-                          ? (isAr ? 'سريع' : 'Fast')
-                          : '${restaurant.prepMinutes} ${isAr ? 'د' : 'min'}',
+                          ? 'سريع'
+                          : '${restaurant.prepMinutes} د',
                       color: Colors.deepOrange,
                     ),
                     _InfoChip(
                       icon: CupertinoIcons.square_grid_2x2_fill,
-                      label: '$menuCount ${isAr ? 'صنف' : 'items'}',
+                      label: '$menuCount صنف',
                       color: Colors.green,
                     ),
                   ],
@@ -315,17 +443,17 @@ class _InfoChip extends StatelessWidget {
 
 class _MenuItemCard extends StatelessWidget {
   final ListItem item;
-  final bool isAr;
-  final VoidCallback onAdd;
+  final void Function(BuildContext buttonContext) onAdd;
 
   const _MenuItemCard({
     required this.item,
-    required this.isAr,
     required this.onAdd,
   });
 
   @override
   Widget build(BuildContext context) {
+    final provider = context.watch<AppProvider>();
+    final isFavorite = provider.isFavoriteId(item.id);
     final imageWidget = AppImage(
       imageData: item.imageBase64 != null && item.imageBase64!.isNotEmpty
           ? item.imageBase64
@@ -381,6 +509,27 @@ class _MenuItemCard extends StatelessWidget {
                         ),
                       ),
                     ),
+                  Positioned(
+                    top: 8,
+                    left: 8,
+                    child: GestureDetector(
+                      onTap: () => provider.toggleFavoriteItem(item),
+                      child: Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.92),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          isFavorite
+                              ? CupertinoIcons.heart_fill
+                              : CupertinoIcons.heart,
+                          size: 18,
+                          color: isFavorite ? Colors.red : Colors.grey,
+                        ),
+                      ),
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -392,7 +541,7 @@ class _MenuItemCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    isAr ? item.nameAr : item.nameEn,
+                    item.nameAr,
                     style: const TextStyle(
                       fontSize: 15,
                       fontWeight: FontWeight.w900,
@@ -403,7 +552,7 @@ class _MenuItemCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 6),
                   Text(
-                    isAr ? item.descriptionAr : item.descriptionEn,
+                    item.descriptionAr,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
@@ -426,25 +575,27 @@ class _MenuItemCard extends StatelessWidget {
                         ),
                       ),
                       const Spacer(),
-                      CupertinoButton(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 14,
-                          vertical: 7,
-                        ),
-                        minSize: 0,
-                        color:
-                            item.isAvailable ? Colors.deepOrange : Colors.grey,
-                        borderRadius: BorderRadius.circular(12),
-                        onPressed: item.isAvailable ? onAdd : null,
-                        child: Text(
-                          item.isAvailable
-                              ? (isAr ? 'أضف' : 'Add')
-                              : (isAr ? 'غير متاح' : 'Unavailable'),
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w800,
-                            fontFamily: 'Cairo',
+                      Builder(
+                        builder: (buttonContext) => CupertinoButton(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 7,
+                          ),
+                          minSize: 0,
+                          color:
+                              item.isAvailable ? Colors.deepOrange : Colors.grey,
+                          borderRadius: BorderRadius.circular(12),
+                          onPressed: item.isAvailable
+                              ? () => onAdd(buttonContext)
+                              : null,
+                          child: Text(
+                            item.isAvailable ? 'أضف للسلة' : 'غير متاح',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w800,
+                              fontFamily: 'Cairo',
+                            ),
                           ),
                         ),
                       ),
@@ -460,12 +611,73 @@ class _MenuItemCard extends StatelessWidget {
   }
 }
 
+class _CartNavButton extends StatelessWidget {
+  final int count;
+  final int pulseTick;
+  final VoidCallback onTap;
+
+  const _CartNavButton({
+    super.key,
+    required this.count,
+    required this.pulseTick,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final scale = count > 0 && pulseTick.isOdd ? 1.12 : 1.0;
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedScale(
+        scale: scale,
+        duration: const Duration(milliseconds: 220),
+        curve: Curves.easeOutBack,
+        child: SizedBox(
+          width: 34,
+          height: 34,
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              const Center(
+                child: Icon(
+                  CupertinoIcons.cart_fill,
+                  size: 24,
+                  color: Colors.deepOrange,
+                ),
+              ),
+              if (count > 0)
+                Positioned(
+                  top: -4,
+                  left: -6,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                    decoration: BoxDecoration(
+                      color: Colors.red,
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Text(
+                      '$count',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w800,
+                        fontFamily: 'Cairo',
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _EmptyState extends StatelessWidget {
-  final bool isAr;
   final bool hasSearch;
 
   const _EmptyState({
-    required this.isAr,
     required this.hasSearch,
   });
 
@@ -492,9 +704,7 @@ class _EmptyState extends StatelessWidget {
             ),
             const SizedBox(height: 18),
             Text(
-              hasSearch
-                  ? (isAr ? 'لا توجد نتائج مطابقة' : 'No matching results')
-                  : (isAr ? 'لا توجد وجبات مضافة بعد' : 'No menu items yet'),
+              hasSearch ? 'لا توجد نتائج مطابقة' : 'لا توجد وجبات مضافة بعد',
               textAlign: TextAlign.center,
               style: const TextStyle(
                 fontSize: 18,
@@ -505,12 +715,8 @@ class _EmptyState extends StatelessWidget {
             const SizedBox(height: 8),
             Text(
               hasSearch
-                  ? (isAr
-                      ? 'جرّب البحث بكلمة مختلفة'
-                      : 'Try a different search term')
-                  : (isAr
-                      ? 'سيظهر المنيو الحقيقي هنا عندما يضيف التاجر وجباته.'
-                      : 'The live menu will appear here when the merchant adds items.'),
+                  ? 'جرّب البحث بكلمة مختلفة'
+                  : 'سيظهر المنيو الحقيقي هنا عندما يضيف التاجر وجباته.',
               textAlign: TextAlign.center,
               style: const TextStyle(
                 color: Color(0xFF6B6B6B),

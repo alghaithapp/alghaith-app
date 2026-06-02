@@ -7,3 +7,4 @@ Uploading [====================] (541.0B/541B)
   Inspect     https://vercel.com/abdullas-projects-5c8d01e7/algaithapp/HbpBbonCYZcWfK8V7cJJouBFqaBZ
 ▲ Production  https://algaithapp-9mld5lwvw-abdullas-projects-5c8d01e7.vercel.app
 https://algaithapp-9mld5lwvw-abdullas-projects-5c8d01e7.vercel.appBuilding…
+^C

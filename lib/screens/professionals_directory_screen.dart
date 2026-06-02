@@ -1,11 +1,7 @@
-import 'dart:convert';
-
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 
 import '../models/app_models.dart';
-import '../providers/app_provider.dart';
 import '../services/supabase_service.dart';
 import '../utils/helpers.dart';
 import '../widgets/app_image.dart';
@@ -46,14 +42,14 @@ class _ProfessionalsDirectoryScreenState
     );
   }
 
-  String _profileName(Map<String, dynamic> profile, bool isAr) {
+  String _profileName(Map<String, dynamic> profile) {
     final storeName = profile['store_name']?.toString().trim();
     final fullName = profile['full_name']?.toString().trim();
     final professionalInfo = profile['professional_info'];
     final infoName = professionalInfo is Map
         ? (professionalInfo['name']?.toString().trim() ?? '')
         : '';
-    final fallback = isAr ? 'مهني' : 'Professional';
+    const fallback = 'مهني';
     return [storeName, infoName, fullName]
             .where((value) => value != null && value.trim().isNotEmpty)
             .map((value) => value!.trim())
@@ -61,7 +57,7 @@ class _ProfessionalsDirectoryScreenState
         fallback;
   }
 
-  String _profileDescription(Map<String, dynamic> profile, bool isAr) {
+  String _profileDescription(Map<String, dynamic> profile) {
     final description = profile['description']?.toString().trim();
     if (description != null && description.isNotEmpty) {
       return description;
@@ -71,9 +67,7 @@ class _ProfessionalsDirectoryScreenState
       final info = professionalInfo['description']?.toString().trim();
       if (info != null && info.isNotEmpty) return info;
     }
-    return isAr
-        ? 'متاح للتواصل مباشرة عبر واتساب'
-        : 'Available for direct WhatsApp contact';
+    return 'متاح للتواصل مباشرة عبر واتساب';
   }
 
   List<String> _extractWorkSamples(Map<String, dynamic> profile) {
@@ -107,34 +101,32 @@ class _ProfessionalsDirectoryScreenState
 
   @override
   Widget build(BuildContext context) {
-    final provider = context.watch<AppProvider>();
-    final isAr = provider.lang == 'ar';
     final query = _searchController.text.trim().toLowerCase();
 
     return CupertinoPageScaffold(
       backgroundColor: const Color(0xFFF2F2F7),
       navigationBar: CupertinoNavigationBar(
         middle: Text(
-          isAr ? widget.profession.titleAr : widget.profession.titleEn,
+          widget.profession.titleAr,
           style: const TextStyle(
             fontWeight: FontWeight.bold,
             fontFamily: 'Cairo',
           ),
         ),
-        previousPageTitle: isAr ? 'الرجوع' : 'Back',
+        previousPageTitle: 'الرجوع',
       ),
       child: SafeArea(
         child: Column(
           children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-              child: _ProfessionalDisclaimer(isAr: isAr),
+            const Padding(
+              padding: EdgeInsets.fromLTRB(16, 16, 16, 0),
+              child: _ProfessionalDisclaimer(),
             ),
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
               child: CupertinoSearchTextField(
                 controller: _searchController,
-                placeholder: isAr ? 'ابحث عن مهني' : 'Search professional',
+                placeholder: 'ابحث عن مهني',
                 onChanged: (_) => setState(() {}),
               ),
             ),
@@ -146,19 +138,15 @@ class _ProfessionalsDirectoryScreenState
                     return const Center(child: CupertinoActivityIndicator());
                   }
                   if (snapshot.hasError) {
-                    return _EmptyState(
-                      isAr: isAr,
-                      message: isAr
-                          ? 'تعذر تحميل بيانات المهنيين'
-                          : 'Failed to load professionals',
+                    return const _EmptyState(
+                      message: 'تعذر تحميل بيانات المهنيين',
                     );
                   }
 
                   final profiles = snapshot.data ?? const [];
                   final filtered = profiles.where((profile) {
-                    final name = _profileName(profile, isAr).toLowerCase();
-                    final desc =
-                        _profileDescription(profile, isAr).toLowerCase();
+                    final name = _profileName(profile).toLowerCase();
+                    final desc = _profileDescription(profile).toLowerCase();
                     final phone =
                         profile['phone']?.toString().toLowerCase() ?? '';
                     final whatsapp = _profileWhatsapp(profile).toLowerCase();
@@ -171,14 +159,9 @@ class _ProfessionalsDirectoryScreenState
 
                   if (filtered.isEmpty) {
                     return _EmptyState(
-                      isAr: isAr,
                       message: query.isEmpty
-                          ? (isAr
-                              ? 'لا يوجد مهنيون مسجلون في هذا التخصص بعد'
-                              : 'No professionals registered for this category yet')
-                          : (isAr
-                              ? 'لا توجد نتائج مطابقة'
-                              : 'No matching results'),
+                          ? 'لا يوجد مهنيون مسجلون في هذا التخصص بعد'
+                          : 'لا توجد نتائج مطابقة',
                     );
                   }
 
@@ -189,9 +172,8 @@ class _ProfessionalsDirectoryScreenState
                     itemBuilder: (context, index) {
                       final profile = filtered[index];
                       return _ProfessionalCard(
-                        isAr: isAr,
-                        name: _profileName(profile, isAr),
-                        description: _profileDescription(profile, isAr),
+                        name: _profileName(profile),
+                        description: _profileDescription(profile),
                         phone: profile['phone']?.toString() ?? '',
                         whatsapp: _profileWhatsapp(profile),
                         address: profile['address']?.toString() ?? '',
@@ -215,18 +197,10 @@ class _ProfessionalsDirectoryScreenState
 }
 
 class _ProfessionalDisclaimer extends StatelessWidget {
-  final bool isAr;
-
-  const _ProfessionalDisclaimer({
-    required this.isAr,
-  });
+  const _ProfessionalDisclaimer();
 
   @override
   Widget build(BuildContext context) {
-    final text = isAr
-        ? 'تنبيه: التطبيق وسيط فقط بينك وبين المهني. الاتفاق على السعر والتفاصيل وموعد التنفيذ يتم مباشرة عبر واتساب بين الطرفين. التطبيق لا يأخذ أي نسبة من العمل ولا يتحمل مسؤولية جودة الخدمة أو التنفيذ.'
-        : 'Notice: the app is only a middleman between you and the professional. Price, details, and timing are agreed directly via WhatsApp. The app takes no commission and is not responsible for service quality or execution.';
-
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(14),
@@ -235,15 +209,15 @@ class _ProfessionalDisclaimer extends StatelessWidget {
         borderRadius: BorderRadius.circular(18),
         border: Border.all(color: Colors.amber.withValues(alpha: 0.35)),
       ),
-      child: Row(
+      child: const Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(Icons.info_outline_rounded, color: Colors.amber),
-          const SizedBox(width: 10),
+          Icon(Icons.info_outline_rounded, color: Colors.amber),
+          SizedBox(width: 10),
           Expanded(
             child: Text(
-              text,
-              style: const TextStyle(
+              'تنبيه: التطبيق وسيط فقط بينك وبين المهني. الاتفاق على السعر والتفاصيل وموعد التنفيذ يتم مباشرة عبر واتساب بين الطرفين. التطبيق لا يأخذ أي نسبة من العمل ولا يتحمل مسؤولية جودة الخدمة أو التنفيذ.',
+              style: TextStyle(
                 fontFamily: 'Cairo',
                 height: 1.5,
               ),
@@ -256,7 +230,6 @@ class _ProfessionalDisclaimer extends StatelessWidget {
 }
 
 class _ProfessionalCard extends StatelessWidget {
-  final bool isAr;
   final String name;
   final String description;
   final String phone;
@@ -269,7 +242,6 @@ class _ProfessionalCard extends StatelessWidget {
   final List<String> workSamples;
 
   const _ProfessionalCard({
-    required this.isAr,
     required this.name,
     required this.description,
     required this.phone,
@@ -284,10 +256,6 @@ class _ProfessionalCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final avatar = profileImageBase64 != null && profileImageBase64!.isNotEmpty
-        ? MemoryImage(base64Decode(profileImageBase64!))
-        : null;
-
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -307,14 +275,14 @@ class _ProfessionalCard extends StatelessWidget {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-            CircleAvatar(
-              radius: 28,
-              backgroundColor: const Color(0xFFF3F3F5),
-              child: AppImage(
-                imageData: profileImageBase64,
-                borderRadius: BorderRadius.circular(28),
+              CircleAvatar(
+                radius: 28,
+                backgroundColor: const Color(0xFFF3F3F5),
+                child: AppImage(
+                  imageData: profileImageBase64,
+                  borderRadius: BorderRadius.circular(28),
+                ),
               ),
-            ),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
@@ -359,16 +327,14 @@ class _ProfessionalCard extends StatelessWidget {
           if (address.trim().isNotEmpty) ...[
             const SizedBox(height: 12),
             Text(
-              isAr ? 'العنوان: $address' : 'Address: $address',
+              'العنوان: $address',
               style: const TextStyle(fontFamily: 'Cairo'),
             ),
           ],
           if (openTime.trim().isNotEmpty || closeTime.trim().isNotEmpty) ...[
             const SizedBox(height: 8),
             Text(
-              isAr
-                  ? 'الدوام: ${openTime.isEmpty ? '-' : openTime} - ${closeTime.isEmpty ? '-' : closeTime}'
-                  : 'Hours: ${openTime.isEmpty ? '-' : openTime} - ${closeTime.isEmpty ? '-' : closeTime}',
+              'الدوام: ${openTime.isEmpty ? '-' : openTime} - ${closeTime.isEmpty ? '-' : closeTime}',
               style: const TextStyle(fontFamily: 'Cairo'),
             ),
           ],
@@ -402,14 +368,12 @@ class _ProfessionalCard extends StatelessWidget {
                       ? null
                       : () => AppHelpers.launchWhatsApp(
                             whatsapp,
-                            isAr
-                                ? 'مرحبًا، أريد الاستفسار عن الخدمة'
-                                : 'Hello, I would like to ask about the service',
+                            'مرحبًا، أريد الاستفسار عن الخدمة',
                           ),
                   icon: const Icon(Icons.chat_outlined),
-                  label: Text(
-                    isAr ? 'واتساب' : 'WhatsApp',
-                    style: const TextStyle(fontFamily: 'Cairo'),
+                  label: const Text(
+                    'واتساب',
+                    style: TextStyle(fontFamily: 'Cairo'),
                   ),
                 ),
               ),
@@ -418,9 +382,9 @@ class _ProfessionalCard extends StatelessWidget {
                 OutlinedButton.icon(
                   onPressed: () => AppHelpers.makePhoneCall(phone),
                   icon: const Icon(Icons.call_outlined),
-                  label: Text(
-                    isAr ? 'اتصال' : 'Call',
-                    style: const TextStyle(fontFamily: 'Cairo'),
+                  label: const Text(
+                    'اتصال',
+                    style: TextStyle(fontFamily: 'Cairo'),
                   ),
                 ),
             ],
@@ -432,11 +396,9 @@ class _ProfessionalCard extends StatelessWidget {
 }
 
 class _EmptyState extends StatelessWidget {
-  final bool isAr;
   final String message;
 
   const _EmptyState({
-    required this.isAr,
     required this.message,
   });
 

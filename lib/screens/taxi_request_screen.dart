@@ -1,7 +1,16 @@
+import 'dart:async';
+import 'dart:convert';
+import 'dart:math' as math;
+import 'dart:ui' as ui;
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart' as geo;
+import 'package:http/http.dart' as http;
+import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
 import 'package:provider/provider.dart';
 
+import '../core/config/app_config.dart';
 import '../models/app_models.dart';
 import '../providers/app_provider.dart';
 import '../utils/extensions.dart';
@@ -14,320 +23,1277 @@ class TaxiRequestScreen extends StatefulWidget {
 }
 
 class _TaxiRequestScreenState extends State<TaxiRequestScreen> {
-  final TextEditingController _pickupController =
-      TextEditingController(text: 'المنصور - بغداد');
-  final TextEditingController _dropoffController =
-      TextEditingController(text: 'شارع الجامعة - بغداد');
-  final TextEditingController _noteController =
-      TextEditingController(text: 'يرجى الوصول إلى البوابة الرئيسية');
+  static const double _defaultDistanceKm = 0.0;
+  static final Position _defaultMapCenter = Position(44.3661, 33.3152);
+  final TextEditingController _pickupController = TextEditingController();
+  final TextEditingController _dropoffController = TextEditingController();
+  final TextEditingController _noteController = TextEditingController();
 
-  String _selectedRideType = 'economy';
+  Timer? _distanceDebounce;
+  double _estimatedDistanceKm = _defaultDistanceKm;
+  bool _isCalculatingDistance = false;
+  Position _mapCenter = _defaultMapCenter;
+  int _mapRefreshSeed = 0;
+  Position? _pickupPosition;
+  Position? _dropoffPosition;
+  List<Position> _routePolyline = const [];
+
+  String _selectedVehicleId = 'economy_taxi';
   String _selectedPayment = 'cash';
+  bool _showDrivers = false;
+  bool _shareWithFamily = false;
+  bool _scheduleRide = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _pickupController.addListener(_scheduleDistanceUpdate);
+    _dropoffController.addListener(_scheduleDistanceUpdate);
+    _scheduleDistanceUpdate();
+  }
 
   @override
   void dispose() {
+    _distanceDebounce?.cancel();
+    _pickupController.removeListener(_scheduleDistanceUpdate);
+    _dropoffController.removeListener(_scheduleDistanceUpdate);
     _pickupController.dispose();
     _dropoffController.dispose();
     _noteController.dispose();
     super.dispose();
   }
 
+  void _scheduleDistanceUpdate() {
+    _distanceDebounce?.cancel();
+    _distanceDebounce = Timer(
+      const Duration(milliseconds: 600),
+      _updateDistanceFromAddresses,
+    );
+  }
+
+  Future<void> _updateDistanceFromAddresses() async {
+    final pickup = _pickupController.text.trim();
+    final dropoff = _dropoffController.text.trim();
+    if (pickup.isEmpty || dropoff.isEmpty) {
+      if (mounted) {
+        setState(() {
+          if (pickup.isEmpty) {
+            _pickupPosition = null;
+          }
+          if (dropoff.isEmpty) {
+            _dropoffPosition = null;
+          }
+          _routePolyline = const [];
+          _mapRefreshSeed++;
+        });
+      }
+      return;
+    }
+
+    if (mounted) {
+      setState(() => _isCalculatingDistance = true);
+    }
+
+    try {
+      final from = await _resolveCoordinates('$pickup، العراق');
+      final to = await _resolveCoordinates('$dropoff، العراق');
+      if (from != null && to != null && mounted) {
+        final pickupPos = Position(from.longitude, from.latitude);
+        final dropoffPos = Position(to.longitude, to.latitude);
+        final centerPos = Position(
+          (pickupPos.lng + dropoffPos.lng) / 2,
+          (pickupPos.lat + dropoffPos.lat) / 2,
+        );
+        final routePoints = await _fetchRoutePolyline(
+          from: pickupPos,
+          to: dropoffPos,
+        );
+        setState(() {
+          _pickupPosition = pickupPos;
+          _dropoffPosition = dropoffPos;
+          _routePolyline = routePoints;
+          _mapCenter = centerPos;
+          _mapRefreshSeed++;
+        });
+      }
+
+      final roadDistanceKm = await _fetchRoadDistanceKmFromBackend(
+        pickupAddress: pickup,
+        dropoffAddress: dropoff,
+      );
+      final fallbackDistanceKm = from == null || to == null
+          ? null
+          : _haversineDistanceKm(
+              from.latitude,
+              from.longitude,
+              to.latitude,
+              to.longitude,
+            );
+      final distanceKm = roadDistanceKm ?? fallbackDistanceKm;
+      if (distanceKm == null) return;
+      final normalizedDistance = distanceKm <= 0 ? 0.5 : distanceKm;
+
+      if (!mounted) return;
+      setState(() => _estimatedDistanceKm = normalizedDistance);
+    } catch (_) {
+      // نحتفظ بآخر قيمة صالحة بدل إيقاف التجربة على المستخدم.
+    } finally {
+      if (mounted) {
+        setState(() => _isCalculatingDistance = false);
+      }
+    }
+  }
+
+  Future<double?> _fetchRoadDistanceKmFromBackend({
+    required String pickupAddress,
+    required String dropoffAddress,
+  }) async {
+    final baseUrl = AppConfig.normalizedDatabaseUrl;
+    if (baseUrl.isEmpty) return null;
+
+    try {
+      final uri = Uri.parse('$baseUrl/maps/route-distance');
+      final response = await http
+          .post(
+            uri,
+            headers: const {'Content-Type': 'application/json'},
+            body: jsonEncode({
+              'pickupAddress': pickupAddress,
+              'dropoffAddress': dropoffAddress,
+            }),
+          )
+          .timeout(AppConfig.apiTimeout);
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        return null;
+      }
+      final payload = jsonDecode(response.body);
+      if (payload is! Map) return null;
+      final distanceKm = (payload['distanceKm'] as num?)?.toDouble();
+      return distanceKm;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<double?> _calculateStraightDistanceKm({
+    required String pickupAddress,
+    required String dropoffAddress,
+  }) async {
+    final from = await _resolveCoordinates('$pickupAddress، العراق');
+    final to = await _resolveCoordinates('$dropoffAddress، العراق');
+    if (from == null || to == null) return null;
+    return _haversineDistanceKm(
+      from.latitude,
+      from.longitude,
+      to.latitude,
+      to.longitude,
+    );
+  }
+
+  Future<_GeoPoint?> _resolveCoordinates(String query) async {
+    final uri = Uri.https(
+      'nominatim.openstreetmap.org',
+      '/search',
+      <String, String>{
+        'format': 'json',
+        'limit': '1',
+        'q': query,
+      },
+    );
+    final response = await http.get(
+      uri,
+      headers: const {'User-Agent': 'alghaith-app/1.0 taxi distance lookup'},
+    );
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      return null;
+    }
+    final data = jsonDecode(response.body);
+    if (data is! List || data.isEmpty) return null;
+    final first = data.first;
+    if (first is! Map) return null;
+    final lat = double.tryParse(first['lat']?.toString() ?? '');
+    final lon = double.tryParse(first['lon']?.toString() ?? '');
+    if (lat == null || lon == null) return null;
+    return _GeoPoint(lat, lon);
+  }
+
+  double _haversineDistanceKm(
+    double lat1,
+    double lon1,
+    double lat2,
+    double lon2,
+  ) {
+    const earthRadiusKm = 6371.0;
+    final dLat = _degreesToRadians(lat2 - lat1);
+    final dLon = _degreesToRadians(lon2 - lon1);
+    final a = math.sin(dLat / 2) * math.sin(dLat / 2) +
+        math.cos(_degreesToRadians(lat1)) *
+            math.cos(_degreesToRadians(lat2)) *
+            math.sin(dLon / 2) *
+            math.sin(dLon / 2);
+    final c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a));
+    return earthRadiusKm * c;
+  }
+
+  double _degreesToRadians(double value) => value * math.pi / 180;
+
+  Future<List<Position>> _fetchRoutePolyline({
+    required Position from,
+    required Position to,
+  }) async {
+    final token = AppConfig.mapboxPublicToken.trim();
+    if (token.isEmpty) return [from, to];
+    try {
+      final uri = Uri.parse(
+        'https://api.mapbox.com/directions/v5/mapbox/driving/'
+        '${from.lng},${from.lat};${to.lng},${to.lat}'
+        '?alternatives=false&overview=full&geometries=geojson&language=ar&access_token=$token',
+      );
+      final response = await http.get(uri).timeout(AppConfig.apiTimeout);
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        return [from, to];
+      }
+      final data = jsonDecode(response.body);
+      if (data is! Map || data['routes'] is! List) return [from, to];
+      final routes = data['routes'] as List;
+      if (routes.isEmpty || routes.first is! Map) return [from, to];
+      final geometry = (routes.first as Map)['geometry'];
+      if (geometry is! Map || geometry['coordinates'] is! List) {
+        return [from, to];
+      }
+      final coordinates = geometry['coordinates'] as List;
+      final points = coordinates
+          .whereType<List>()
+          .map((coord) {
+            if (coord.length < 2) return null;
+            final lng = (coord[0] as num?)?.toDouble();
+            final lat = (coord[1] as num?)?.toDouble();
+            if (lng == null || lat == null) return null;
+            return Position(lng, lat);
+          })
+          .whereType<Position>()
+          .toList();
+      if (points.length < 2) return [from, to];
+      return points;
+    } catch (_) {
+      return [from, to];
+    }
+  }
+
+  Future<List<String>> _fetchAddressSuggestions(String query) async {
+    final input = query.trim();
+    if (input.length < 2) return const [];
+    final token = AppConfig.mapboxPublicToken.trim();
+    if (token.isEmpty) return const [];
+    try {
+      final uri = Uri.parse(
+        'https://api.mapbox.com/geocoding/v5/mapbox.places/${Uri.encodeComponent(input)}.json'
+        '?language=ar&country=iq&limit=5&access_token=$token',
+      );
+      final response = await http.get(uri).timeout(AppConfig.apiTimeout);
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        return const [];
+      }
+      final data = jsonDecode(response.body);
+      if (data is! Map || data['features'] is! List) return const [];
+      final features = (data['features'] as List)
+          .whereType<Map>()
+          .map((item) => item['place_name']?.toString().trim() ?? '')
+          .where((item) => item.isNotEmpty)
+          .toList();
+      return features;
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  Future<String?> _resolveAddressFromCoordinates(double lat, double lng) async {
+    final token = AppConfig.mapboxPublicToken.trim();
+    if (token.isEmpty) return null;
+    try {
+      final uri = Uri.parse(
+        'https://api.mapbox.com/geocoding/v5/mapbox.places/$lng,$lat.json'
+        '?language=ar&country=iq&limit=1&access_token=$token',
+      );
+      final response = await http.get(uri).timeout(AppConfig.apiTimeout);
+      if (response.statusCode < 200 || response.statusCode >= 300) return null;
+      final data = jsonDecode(response.body);
+      if (data is! Map || data['features'] is! List) return null;
+      final features = data['features'] as List;
+      if (features.isEmpty || features.first is! Map) return null;
+      return (features.first['place_name']?.toString() ?? '').trim();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> _useCurrentLocation() async {
+    final serviceEnabled = await geo.Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('يرجى تفعيل خدمة الموقع في الهاتف.')),
+      );
+      return;
+    }
+
+    var permission = await geo.Geolocator.checkPermission();
+    if (permission == geo.LocationPermission.denied) {
+      permission = await geo.Geolocator.requestPermission();
+    }
+    if (permission == geo.LocationPermission.denied ||
+        permission == geo.LocationPermission.deniedForever) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('تم رفض إذن الموقع، لا يمكن تحديد موقعك.')),
+      );
+      return;
+    }
+
+    try {
+      final position = await geo.Geolocator.getCurrentPosition(
+        locationSettings: const geo.LocationSettings(
+          accuracy: geo.LocationAccuracy.high,
+        ),
+      );
+      final address = await _resolveAddressFromCoordinates(
+        position.latitude,
+        position.longitude,
+      );
+      final label = (address == null || address.isEmpty)
+          ? '${position.latitude.toStringAsFixed(5)}, ${position.longitude.toStringAsFixed(5)}'
+          : address;
+      if (!mounted) return;
+      setState(() {
+        _pickupController.text = label;
+        _pickupController.selection = TextSelection.fromPosition(
+          TextPosition(offset: _pickupController.text.length),
+        );
+        _pickupPosition = Position(position.longitude, position.latitude);
+        _mapCenter = Position(position.longitude, position.latitude);
+        _mapRefreshSeed++;
+      });
+      unawaited(_updateDistanceFromAddresses());
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('تعذر قراءة موقعك الحالي حالياً.')),
+      );
+    }
+  }
+
+  String _estimatedArrivalLabel(double distanceKm) {
+    if (distanceKm <= 0) return '--';
+    final minMinutes = math.max(3, (distanceKm * 2.2).round());
+    final maxMinutes = math.max(minMinutes + 2, (distanceKm * 3.4).round());
+    return '$minMinutes-$maxMinutes';
+  }
+
+  Future<void> _handleCustomerCancel(
+    BuildContext context,
+    AppProvider provider,
+    TaxiRequest request,
+  ) async {
+    final isPending = request.statusKey == 'pending' || request.statusKey == 'new';
+    final isAccepted = request.statusKey == 'accepted';
+    if (!isPending && !isAccepted) return;
+
+    final confirmed = await showCupertinoDialog<bool>(
+      context: context,
+      builder: (dialogContext) => CupertinoAlertDialog(
+        title: Text(isPending ? 'إلغاء الطلب' : 'طلب إلغاء الرحلة'),
+        content: Text(
+          isPending
+              ? 'سيتم إلغاء الطلب مباشرة لأنه لم يتم قبوله بعد.'
+              : 'سيتم إرسال طلب إلغاء إلى السائق، ويلزم موافقته على الإلغاء.',
+        ),
+        actions: [
+          CupertinoDialogAction(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('تراجع'),
+          ),
+          CupertinoDialogAction(
+            isDestructiveAction: true,
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('تأكيد'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+    final result = provider.cancelTaxiRequestByCustomer(request.id);
+    if (!context.mounted) return;
+
+    final message = result == 'cancelled'
+        ? 'تم إلغاء الرحلة بنجاح.'
+        : result == 'requested'
+            ? 'تم إرسال طلب الإلغاء إلى السائق بانتظار موافقته.'
+            : 'لا يمكن إلغاء الرحلة في حالتها الحالية.';
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  int _roundTo250(int value) {
+    if (value <= 0) return 250;
+    return (value / 250).ceil() * 250;
+  }
+
+  List<_VehicleOption> _vehicleOptions() {
+    return [
+      _VehicleOption(
+        id: 'economy_taxi',
+        name: 'تكسي اقتصادي',
+        eta: '4 د',
+        capacity: '4 مقاعد',
+        emoji: '🚕',
+        multiplier: 1.0,
+      ),
+      _VehicleOption(
+        id: 'super_taxi',
+        name: 'تكسي سوبر',
+        eta: '3 د',
+        capacity: '4 مقاعد',
+        emoji: '🚘',
+        multiplier: 1.30,
+      ),
+    ];
+  }
+
   @override
   Widget build(BuildContext context) {
     final appProvider = Provider.of<AppProvider>(context);
-    final isAr = appProvider.lang == 'ar';
-
-    final rideTypes = [
-      _RideType(
-        id: 'economy',
-        titleAr: 'اقتصادي',
-        titleEn: 'Economy',
-        subtitleAr: 'الأرخص والأسرع عادة',
-        subtitleEn: 'Best value for quick trips',
-        price: 4500,
-        icon: CupertinoIcons.car_fill,
-        color: Colors.green,
-      ),
-      _RideType(
-        id: 'super',
-        titleAr: 'سوبر',
-        titleEn: 'Super',
-        subtitleAr: 'خدمة أفضل وراحة أكثر',
-        subtitleEn: 'Better service and a smoother ride',
-        price: 6500,
-        icon: CupertinoIcons.car_detailed,
-        color: Colors.blue,
-      ),
-    ];
-
-    final selectedRide =
-        rideTypes.firstWhere((ride) => ride.id == _selectedRideType);
-    final estimatedFare = selectedRide.price + 1500;
+    final baseFare = AppConfig.calculateTaxiFare(_estimatedDistanceKm);
+    final vehicles = _vehicleOptions();
+    final selectedVehicle = vehicles.firstWhere(
+      (vehicle) => vehicle.id == _selectedVehicleId,
+      orElse: () => vehicles.first,
+    );
+    final estimatedFare = _roundTo250((baseFare * selectedVehicle.multiplier).round());
     final latestTaxiRequest =
         appProvider.taxiRequests.isNotEmpty ? appProvider.taxiRequests.first : null;
 
-    return CupertinoPageScaffold(
-      backgroundColor: const Color(0xFFF5F7FB),
-      navigationBar: CupertinoNavigationBar(
-        backgroundColor: Colors.white.withValues(alpha: 0.92),
-        border: const Border(bottom: BorderSide(color: Color(0x11000000))),
-        middle: Text(
-          isAr ? 'طلب تكسي' : 'Taxi Request',
-          style:
-              const TextStyle(fontWeight: FontWeight.w700, fontFamily: 'Cairo'),
-        ),
-      ),
-      child: SafeArea(
-        child: CustomScrollView(
-          slivers: [
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-                child: _MapPreviewCard(isAr: isAr),
-              ),
-            ),
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-                child: _QuickStatsRow(
-                  isAr: isAr,
-                  estimatedTime: '6-10',
-                  estimatedDistance: '4.2',
-                  estimatedFare: estimatedFare,
+    return Directionality(
+      textDirection: TextDirection.rtl,
+      child: CupertinoPageScaffold(
+        backgroundColor: const Color(0xFF030B1A),
+        child: SafeArea(
+          child: Stack(
+            children: [
+              Positioned.fill(
+                child: _TaxiMapBackdrop(
+                  pickupAddress: _pickupController.text.trim(),
+                  dropoffAddress: _dropoffController.text.trim(),
+                  estimatedDistanceKm: _estimatedDistanceKm,
+                  mapCenter: _mapCenter,
+                  mapRefreshSeed: _mapRefreshSeed,
+                  pickupPosition: _pickupPosition,
+                  dropoffPosition: _dropoffPosition,
+                  routePolyline: _routePolyline,
                 ),
               ),
-            ),
-            if (latestTaxiRequest != null)
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
-                  child: _LiveStatusBanner(
-                    isAr: isAr,
-                    request: latestTaxiRequest,
-                  ),
+              Positioned(
+                top: 8,
+                left: 14,
+                right: 14,
+                child: Row(
+                  textDirection: TextDirection.ltr,
+                  children: [
+                    _MapTopCircleButton(
+                      icon: CupertinoIcons.bars,
+                      onTap: () {
+                        if (Navigator.of(context).canPop()) {
+                          Navigator.of(context).pop();
+                        }
+                      },
+                    ),
+                  ],
                 ),
               ),
-            if (latestTaxiRequest != null)
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 18, 16, 0),
-                  child: _SectionTitle(
-                    title: isAr ? 'حالة الرحلة' : 'Trip status',
-                    subtitle: isAr
-                        ? 'تابع هنا آخر طلب تكسي أرسلته'
-                        : 'Track the latest taxi request here',
-                  ),
+              Positioned(
+                top: 116,
+                right: 14,
+                child: _MapTopCircleButton(
+                  icon: CupertinoIcons.bell_fill,
+                  onTap: () {},
                 ),
               ),
-            if (latestTaxiRequest != null)
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-                  child: _TaxiStatusCard(
-                    isAr: isAr,
-                    request: latestTaxiRequest,
-                  ),
+              Positioned(
+                top: 64,
+                left: 14,
+                right: 14,
+                child: Row(
+                  textDirection: TextDirection.ltr,
+                  children: [
+                    Expanded(
+                      child: _GlassLocationCard(
+                        title: 'نقطة الانطلاق',
+                        value: _pickupController.text.trim().isEmpty
+                            ? 'اضغط لإدخال الموقع'
+                            : _pickupController.text.trim(),
+                        glowColor: const Color(0xFF00C8FF),
+                        icon: CupertinoIcons.circle_fill,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: _GlassLocationCard(
+                        title: 'الوجهة',
+                        value: _dropoffController.text.trim().isEmpty
+                            ? 'أدخل الوجهة'
+                            : _dropoffController.text.trim(),
+                        glowColor: const Color(0xFFE60012),
+                        icon: CupertinoIcons.location_solid,
+                      ),
+                    ),
+                  ],
                 ),
               ),
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 18, 16, 0),
-                child: _SectionTitle(
-                  title: isAr ? 'موقع الرحلة' : 'Trip locations',
-                  subtitle: isAr
-                      ? 'حدد نقطة الانطلاق والوصول'
-                      : 'Set pickup and destination points',
+              Positioned(
+                right: 14,
+                top: 190,
+                child: Column(
+                  children: [
+                    _MapQuickActionButton(
+                      icon: CupertinoIcons.location_fill,
+                      label: 'موقعي',
+                      onTap: _useCurrentLocation,
+                    ),
+                    const SizedBox(height: 10),
+                    _MapQuickActionButton(
+                      icon: CupertinoIcons.exclamationmark_triangle_fill,
+                      label: 'SOS',
+                      onTap: () {},
+                    ),
+                  ],
                 ),
               ),
-            ),
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-                child: _LocationCard(
-                  isAr: isAr,
-                  pickupController: _pickupController,
-                  dropoffController: _dropoffController,
-                ),
-              ),
-            ),
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 18, 16, 0),
-                child: _SectionTitle(
-                  title: isAr ? 'نوع التكسي' : 'Ride type',
-                  subtitle: isAr
-                      ? 'اختر الفئة المناسبة لرحلتك'
-                      : 'Choose the ride that fits your trip',
-                ),
-              ),
-            ),
-            SliverToBoxAdapter(
-              child: SizedBox(
-                height: 156,
-                child: ListView.separated(
-                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-                  scrollDirection: Axis.horizontal,
-                  itemCount: rideTypes.length,
-                  separatorBuilder: (_, __) => const SizedBox(width: 12),
-                  itemBuilder: (context, index) {
-                    final ride = rideTypes[index];
-                    final selected = ride.id == _selectedRideType;
-                    return GestureDetector(
-                      onTap: () => setState(() => _selectedRideType = ride.id),
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 220),
-                        width: 150,
-                        padding: const EdgeInsets.all(14),
-                        decoration: BoxDecoration(
-                          color: selected
-                              ? ride.color.withValues(alpha: 0.12)
-                              : Colors.white,
-                          borderRadius: BorderRadius.circular(24),
-                          border: Border.all(
-                            color: selected ? ride.color : Colors.grey.shade200,
-                            width: selected ? 1.5 : 1,
+              DraggableScrollableSheet(
+                initialChildSize: 0.50,
+                minChildSize: 0.44,
+                maxChildSize: 0.82,
+                snap: true,
+                snapSizes: const [0.50, 0.66, 0.82],
+                builder: (context, controller) {
+                  return Container(
+                    decoration: const BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
+                    ),
+                    child: ListView(
+                      controller: controller,
+                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+                      children: [
+                        Center(
+                          child: Container(
+                            width: 48,
+                            height: 5,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFD2D6E2),
+                              borderRadius: BorderRadius.circular(999),
+                            ),
                           ),
                         ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Container(
-                              width: 42,
-                              height: 42,
-                              decoration: BoxDecoration(
-                                color: ride.color.withValues(alpha: 0.12),
-                                borderRadius: BorderRadius.circular(14),
-                              ),
-                              child:
-                                  Icon(ride.icon, color: ride.color, size: 24),
-                            ),
-                            const Spacer(),
-                            Text(
-                              isAr ? ride.titleAr : ride.titleEn,
-                              style: const TextStyle(
-                                fontSize: 15,
-                                fontWeight: FontWeight.w800,
-                                fontFamily: 'Cairo',
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              isAr ? ride.subtitleAr : ride.subtitleEn,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                color: Colors.grey,
-                                fontSize: 11,
-                                height: 1.35,
-                                fontFamily: 'Cairo',
-                              ),
-                            ),
-                            const SizedBox(height: 10),
-                            Text(
-                              '${ride.price.toPrice()} د.ع',
-                              style: TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w900,
-                                color: selected ? ride.color : Colors.orange,
-                              ),
-                            ),
-                          ],
+                        const SizedBox(height: 12),
+                        _PremiumSearchFields(
+                          pickupController: _pickupController,
+                          dropoffController: _dropoffController,
+                          onQuerySuggestions: _fetchAddressSuggestions,
+                          onPickupSuggestionSelected: (value) async {
+                            final point = await _resolveCoordinates('$value، العراق');
+                            if (point == null || !mounted) {
+                              _scheduleDistanceUpdate();
+                              return;
+                            }
+                            setState(() {
+                              _pickupPosition = Position(point.longitude, point.latitude);
+                              _mapCenter = Position(point.longitude, point.latitude);
+                              _mapRefreshSeed++;
+                            });
+                            _scheduleDistanceUpdate();
+                          },
+                          onDropoffSuggestionSelected: (value) async {
+                            final point = await _resolveCoordinates('$value، العراق');
+                            if (point == null || !mounted) {
+                              _scheduleDistanceUpdate();
+                              return;
+                            }
+                            setState(() {
+                              _dropoffPosition = Position(point.longitude, point.latitude);
+                              _mapRefreshSeed++;
+                            });
+                            _scheduleDistanceUpdate();
+                          },
                         ),
-                      ),
-                    );
-                  },
-                ),
-              ),
-            ),
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 18, 16, 0),
-                child: _SectionTitle(
-                  title: isAr ? 'الدفع والملاحظات' : 'Payment and notes',
-                  subtitle: isAr
-                      ? 'حدد طريقة الدفع وأضف ملاحظة للسائق'
-                      : 'Choose payment and leave a note for the driver',
-                ),
-              ),
-            ),
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-                child: _PaymentCard(
-                  isAr: isAr,
-                  selectedPayment: _selectedPayment,
-                  noteController: _noteController,
-                  onPaymentSelected: (value) {
-                    setState(() => _selectedPayment = value);
-                  },
-                ),
-              ),
-            ),
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 18, 16, 24),
-                child: _RequestSummaryCard(
-                  isAr: isAr,
-                  rideName: isAr ? selectedRide.titleAr : selectedRide.titleEn,
-                  fare: estimatedFare,
-                  payment: _selectedPayment,
-                  onRequest: () {
-                    appProvider.addTaxiRequest(
-                      TaxiRequest(
-                        id: DateTime.now().millisecondsSinceEpoch.toString(),
-                        requestNumber:
-                            'TX-${DateTime.now().millisecondsSinceEpoch.toString().substring(6)}',
-                        requestedAtAr:
-                            'اليوم، ${TimeOfDay.now().format(context)}',
-                        requestedAtEn:
-                            'Today, ${TimeOfDay.now().format(context)}',
-                        customerNameAr: appProvider.customerName,
-                        customerNameEn: appProvider.customerName,
-                        customerPhone: appProvider.customerPhone,
-                        pickupAddressAr: _pickupController.text.trim(),
-                        pickupAddressEn: _pickupController.text.trim(),
-                        dropoffAddressAr: _dropoffController.text.trim(),
-                        dropoffAddressEn: _dropoffController.text.trim(),
-                        rideTypeId: selectedRide.id,
-                        rideTypeAr: selectedRide.titleAr,
-                        rideTypeEn: selectedRide.titleEn,
-                        fare: estimatedFare,
-                        statusKey: 'pending',
-                        statusAr: 'بانتظار السائق',
-                        statusEn: 'Waiting for driver',
-                        noteAr: _noteController.text.trim(),
-                        noteEn: _noteController.text.trim(),
-                        paymentMethodAr: _selectedPayment == 'cash'
-                            ? 'نقدًا'
-                            : _selectedPayment == 'wallet'
-                                ? 'محفظة'
-                                : 'بطاقة',
-                        paymentMethodEn: _selectedPayment == 'cash'
-                            ? 'Cash'
-                            : _selectedPayment == 'wallet'
-                                ? 'Wallet'
-                                : 'Card',
-                      ),
-                    );
-                    showCupertinoDialog(
-                      context: context,
-                      builder: (context) => CupertinoAlertDialog(
-                        title: Text(isAr ? 'تم إرسال الطلب' : 'Request sent'),
-                        content: Text(
-                          isAr
-                              ? 'واجهة تكسي تجريبية جاهزة. عند الربط الحقيقي ستظهر هنا حالة السائق ومسار الرحلة.'
-                              : 'Taxi features are coming soon. Once connected to the backend, driver status and trip tracking will appear here.',
+                        const SizedBox(height: 14),
+                        _QuickActionsGrid(
+                          actions: const ['المنزل', 'العمل', 'المفضلة', 'الرحلات السابقة', 'اختر على الخريطة'],
                         ),
-                        actions: [
-                          CupertinoDialogAction(
-                            child: Text(isAr ? 'حسنًا' : 'OK'),
-                            onPressed: () => Navigator.pop(context),
+                        const SizedBox(height: 14),
+                        const Text(
+                          'اختر نوع المركبة',
+                          style: TextStyle(
+                            fontFamily: 'Cairo',
+                            fontWeight: FontWeight.w900,
+                            fontSize: 15,
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        SizedBox(
+                          height: 146,
+                          child: ListView.separated(
+                            scrollDirection: Axis.horizontal,
+                            itemCount: vehicles.length,
+                            separatorBuilder: (_, __) => const SizedBox(width: 10),
+                            itemBuilder: (context, index) {
+                              final vehicle = vehicles[index];
+                              final isSelected = vehicle.id == _selectedVehicleId;
+                              final vehicleFare = _roundTo250((baseFare * vehicle.multiplier).round());
+                              return _VehicleCard(
+                                option: vehicle,
+                                fare: vehicleFare,
+                                selected: isSelected,
+                                onTap: () => setState(() => _selectedVehicleId = vehicle.id),
+                              );
+                            },
+                          ),
+                        ),
+                        const SizedBox(height: 14),
+                        _TripInfoPanel(
+                          isCalculatingDistance: _isCalculatingDistance,
+                          distanceKm: _estimatedDistanceKm,
+                          etaLabel: _estimatedArrivalLabel(_estimatedDistanceKm),
+                          fareIqd: estimatedFare,
+                        ),
+                        const SizedBox(height: 14),
+                        _ExtraOptionsPanel(
+                          selectedPayment: _selectedPayment,
+                          showDrivers: _showDrivers,
+                          shareWithFamily: _shareWithFamily,
+                          scheduleRide: _scheduleRide,
+                          onPaymentSelected: (value) => setState(() => _selectedPayment = value),
+                          onShowDriversChanged: (value) => setState(() => _showDrivers = value),
+                          onShareWithFamilyChanged: (value) =>
+                              setState(() => _shareWithFamily = value),
+                          onScheduleRideChanged: (value) =>
+                              setState(() => _scheduleRide = value),
+                          noteController: _noteController,
+                        ),
+                        if (latestTaxiRequest != null) ...[
+                          const SizedBox(height: 14),
+                          _LiveStatusBanner(request: latestTaxiRequest),
+                          const SizedBox(height: 10),
+                          _TaxiStatusCard(request: latestTaxiRequest),
+                          const SizedBox(height: 10),
+                          _CustomerTaxiActionsCard(
+                            request: latestTaxiRequest,
+                            onCancelPressed: () => _handleCustomerCancel(
+                              context,
+                              appProvider,
+                              latestTaxiRequest,
+                            ),
                           ),
                         ],
-                      ),
-                    );
-                  },
+                        const SizedBox(height: 16),
+                        _PremiumRequestButton(
+                          onPressed: () => _submitTaxiRequest(
+                            context: context,
+                            appProvider: appProvider,
+                            selectedVehicle: selectedVehicle,
+                            estimatedFare: estimatedFare,
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _submitTaxiRequest({
+    required BuildContext context,
+    required AppProvider appProvider,
+    required _VehicleOption selectedVehicle,
+    required int estimatedFare,
+  }) {
+    final pickup = _pickupController.text.trim();
+    final dropoff = _dropoffController.text.trim();
+    if (pickup.isEmpty || dropoff.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('يرجى إدخال نقطة الانطلاق والوجهة أولاً.'),
+        ),
+      );
+      return;
+    }
+
+    appProvider.addTaxiRequest(
+      TaxiRequest(
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        requestNumber:
+            'TX-${DateTime.now().millisecondsSinceEpoch.toString().substring(6)}',
+        requestedAtAr: 'اليوم، ${TimeOfDay.now().format(context)}',
+        requestedAtEn: 'Today, ${TimeOfDay.now().format(context)}',
+        customerNameAr: appProvider.customerName,
+        customerNameEn: appProvider.customerName,
+        customerPhone: appProvider.customerPhone,
+        pickupAddressAr: pickup,
+        pickupAddressEn: pickup,
+        dropoffAddressAr: dropoff,
+        dropoffAddressEn: dropoff,
+        rideTypeId: selectedVehicle.id,
+        rideTypeAr: selectedVehicle.name,
+        rideTypeEn: selectedVehicle.name,
+        fare: estimatedFare,
+        statusKey: 'pending',
+        statusAr: 'بانتظار السائق',
+        statusEn: 'Waiting for driver',
+        noteAr: _noteController.text.trim(),
+        noteEn: _noteController.text.trim(),
+        paymentMethodAr: _selectedPayment == 'cash'
+            ? 'نقدًا'
+            : _selectedPayment == 'wallet'
+                ? 'محفظة'
+                : 'بطاقة',
+        paymentMethodEn: _selectedPayment == 'cash'
+            ? 'Cash'
+            : _selectedPayment == 'wallet'
+                ? 'Wallet'
+                : 'Card',
+      ),
+    );
+
+    showCupertinoDialog(
+      context: context,
+      builder: (context) => CupertinoAlertDialog(
+        title: const Text('تم إرسال الطلب'),
+        content: const Text('تم استلام طلبك وجارٍ البحث عن أقرب سائق.'),
+        actions: [
+          CupertinoDialogAction(
+            child: const Text('حسنًا'),
+            onPressed: () => Navigator.pop(context),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _GeoPoint {
+  final double latitude;
+  final double longitude;
+
+  const _GeoPoint(this.latitude, this.longitude);
+}
+
+class _TaxiMapBackdrop extends StatefulWidget {
+  final String pickupAddress;
+  final String dropoffAddress;
+  final double estimatedDistanceKm;
+  final Position mapCenter;
+  final int mapRefreshSeed;
+  final Position? pickupPosition;
+  final Position? dropoffPosition;
+  final List<Position> routePolyline;
+
+  const _TaxiMapBackdrop({
+    required this.pickupAddress,
+    required this.dropoffAddress,
+    required this.estimatedDistanceKm,
+    required this.mapCenter,
+    required this.mapRefreshSeed,
+    required this.pickupPosition,
+    required this.dropoffPosition,
+    required this.routePolyline,
+  });
+
+  @override
+  State<_TaxiMapBackdrop> createState() => _TaxiMapBackdropState();
+}
+
+class _TaxiMapBackdropState extends State<_TaxiMapBackdrop> {
+  MapboxMap? _mapboxMap;
+  CircleAnnotationManager? _circleManager;
+  PolylineAnnotationManager? _polylineManager;
+  bool get _hasMapboxToken => AppConfig.mapboxPublicToken.trim().isNotEmpty;
+
+  Future<void> _onMapCreated(MapboxMap mapboxMap) async {
+    _mapboxMap = mapboxMap;
+    try {
+      _circleManager = await mapboxMap.annotations.createCircleAnnotationManager();
+      _polylineManager =
+          await mapboxMap.annotations.createPolylineAnnotationManager();
+      await _syncRouteAnnotations();
+    } catch (_) {}
+  }
+
+  Future<void> _onStyleLoaded(StyleLoadedEventData _) async {
+    // محاولة تعريب طبقة basemap في Mapbox Standard.
+    try {
+      await _mapboxMap?.style
+          .setStyleImportConfigProperty('basemap', 'language', 'ar');
+    } catch (_) {
+      // بعض الأنماط لا تدعم هذا الإعداد؛ نكمل بدون كسر الشاشة.
+    }
+    await _syncRouteAnnotations();
+    await _setBestCamera();
+  }
+
+  @override
+  void didUpdateWidget(covariant _TaxiMapBackdrop oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final changed = oldWidget.pickupPosition != widget.pickupPosition ||
+        oldWidget.dropoffPosition != widget.dropoffPosition ||
+        oldWidget.routePolyline != widget.routePolyline ||
+        oldWidget.mapCenter != widget.mapCenter ||
+        oldWidget.mapRefreshSeed != widget.mapRefreshSeed;
+    if (changed) {
+      unawaited(_syncRouteAnnotations());
+      unawaited(_setBestCamera());
+    }
+  }
+
+  Future<void> _setBestCamera() async {
+    final map = _mapboxMap;
+    if (map == null) return;
+    final pickup = widget.pickupPosition;
+    final dropoff = widget.dropoffPosition;
+    if (pickup == null || dropoff == null) {
+      await map.setCamera(
+        CameraOptions(
+          center: Point(coordinates: widget.mapCenter),
+          zoom: 13.2,
+          pitch: 55,
+          bearing: 18,
+        ),
+      );
+      return;
+    }
+    final latDiff = (pickup.lat - dropoff.lat).abs();
+    final lngDiff = (pickup.lng - dropoff.lng).abs();
+    final maxDiff = math.max(latDiff, lngDiff);
+    final zoom = maxDiff < 0.01
+        ? 14.4
+        : maxDiff < 0.03
+            ? 13.7
+            : maxDiff < 0.07
+                ? 12.7
+                : maxDiff < 0.15
+                    ? 11.9
+                    : 10.8;
+    final center = Position(
+      (pickup.lng + dropoff.lng) / 2,
+      (pickup.lat + dropoff.lat) / 2,
+    );
+    await map.setCamera(
+      CameraOptions(
+        center: Point(coordinates: center),
+        zoom: zoom,
+        pitch: 52,
+        bearing: 14,
+      ),
+    );
+  }
+
+  Future<void> _syncRouteAnnotations() async {
+    final circles = _circleManager;
+    final polyline = _polylineManager;
+    if (circles == null || polyline == null) return;
+    try {
+      await circles.deleteAll();
+      await polyline.deleteAll();
+
+      final route = widget.routePolyline;
+      if (route.length >= 2) {
+        await polyline.create(
+          PolylineAnnotationOptions(
+            geometry: LineString(coordinates: route),
+            lineColor: const Color(0x6600E5FF).value,
+            lineWidth: 10,
+            lineOpacity: 0.55,
+          ),
+        );
+        await polyline.create(
+          PolylineAnnotationOptions(
+            geometry: LineString(coordinates: route),
+            lineColor: const Color(0xFF00E5FF).value,
+            lineWidth: 5.5,
+            lineOpacity: 0.95,
+          ),
+        );
+      }
+
+      final pickup = widget.pickupPosition;
+      if (pickup != null) {
+        await circles.create(
+          CircleAnnotationOptions(
+            geometry: Point(coordinates: pickup),
+            circleColor: const Color(0x5527C2FF).value,
+            circleRadius: 15,
+            circleStrokeColor: const Color(0x3327C2FF).value,
+            circleStrokeWidth: 1.8,
+          ),
+        );
+        await circles.create(
+          CircleAnnotationOptions(
+            geometry: Point(coordinates: pickup),
+            circleColor: const Color(0xFF16B7FF).value,
+            circleRadius: 7.5,
+            circleStrokeColor: Colors.white.value,
+            circleStrokeWidth: 2,
+          ),
+        );
+      }
+
+      final dropoff = widget.dropoffPosition;
+      if (dropoff != null) {
+        await circles.create(
+          CircleAnnotationOptions(
+            geometry: Point(coordinates: dropoff),
+            circleColor: const Color(0x55E60012).value,
+            circleRadius: 15,
+            circleStrokeColor: const Color(0x33E60012).value,
+            circleStrokeWidth: 1.8,
+          ),
+        );
+        await circles.create(
+          CircleAnnotationOptions(
+            geometry: Point(coordinates: dropoff),
+            circleColor: const Color(0xFFE60012).value,
+            circleRadius: 7.5,
+            circleStrokeColor: Colors.white.value,
+            circleStrokeWidth: 2,
+          ),
+        );
+      }
+    } catch (_) {}
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final pickupAddress = widget.pickupAddress;
+    final dropoffAddress = widget.dropoffAddress;
+    final estimatedDistanceKm = widget.estimatedDistanceKm;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [Colors.blueGrey.shade900, Colors.blueGrey.shade700],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+      ),
+      child: Stack(
+        children: [
+          Positioned.fill(
+            child: _hasMapboxToken
+                ? MapWidget(
+                    key: ValueKey('taxi-live-map-${widget.mapRefreshSeed}'),
+                    styleUri: 'mapbox://styles/mapbox/navigation-night-v1',
+                    cameraOptions: CameraOptions(
+                      center: Point(coordinates: widget.mapCenter),
+                      zoom: 13.2,
+                      pitch: 55,
+                      bearing: 16,
+                    ),
+                    onMapCreated: _onMapCreated,
+                    onStyleLoadedListener: _onStyleLoaded,
+                  )
+                : CustomPaint(painter: _MapPatternPainter()),
+          ),
+          const Positioned.fill(
+            child: IgnorePointer(
+              child: _MovingVehiclesOverlay(),
+            ),
+          ),
+          Positioned.fill(
+            child: IgnorePointer(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Colors.black.withValues(alpha: 0.18),
+                      Colors.transparent,
+                      Colors.black.withValues(alpha: 0.15),
+                    ],
+                  ),
                 ),
+              ),
+            ),
+          ),
+          Positioned(
+            left: 16,
+            top: 200,
+            child: _FloatingTag(
+              title: pickupAddress.isEmpty ? 'حدد الانطلاق' : 'الانطلاق جاهز',
+              color: const Color(0xFF16B7FF),
+            ),
+          ),
+          Positioned(
+            right: 16,
+            top: 246,
+            child: _FloatingTag(
+              title: dropoffAddress.isEmpty
+                  ? 'حدد الوجهة'
+                  : '${estimatedDistanceKm.toStringAsFixed(1)} كم',
+              color: const Color(0xFFE60012),
+            ),
+          ),
+          if (!_hasMapboxToken)
+            Positioned(
+              left: 16,
+              right: 16,
+              bottom: 18,
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.5),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Text(
+                  'أضف MAPBOX_PUBLIC_TOKEN لتفعيل الخريطة الحية',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 12,
+                    fontFamily: 'Cairo',
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _OverlayLocationField extends StatefulWidget {
+  final TextEditingController controller;
+  final String hint;
+  final IconData icon;
+  final Color color;
+  final Future<List<String>> Function(String query) onQuerySuggestions;
+  final Future<void> Function(String value)? onSuggestionSelected;
+
+  const _OverlayLocationField({
+    required this.controller,
+    required this.hint,
+    required this.icon,
+    required this.color,
+    required this.onQuerySuggestions,
+    this.onSuggestionSelected,
+  });
+
+  @override
+  State<_OverlayLocationField> createState() => _OverlayLocationFieldState();
+}
+
+class _OverlayLocationFieldState extends State<_OverlayLocationField> {
+  Timer? _debounce;
+  List<String> _suggestions = const [];
+  bool _loading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.controller.addListener(_handleTextChanged);
+  }
+
+  @override
+  void dispose() {
+    _debounce?.cancel();
+    widget.controller.removeListener(_handleTextChanged);
+    super.dispose();
+  }
+
+  void _handleTextChanged() {
+    _debounce?.cancel();
+    final value = widget.controller.text.trim();
+    if (value.length < 2) {
+      if (_suggestions.isNotEmpty) {
+        setState(() => _suggestions = const []);
+      }
+      return;
+    }
+    _debounce = Timer(const Duration(milliseconds: 320), () async {
+      setState(() => _loading = true);
+      final results = await widget.onQuerySuggestions(value);
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _suggestions = results;
+      });
+    });
+  }
+
+  void _pickSuggestion(String value) {
+    widget.controller.text = value;
+    widget.controller.selection =
+        TextSelection.fromPosition(TextPosition(offset: value.length));
+    setState(() => _suggestions = const []);
+    if (widget.onSuggestionSelected != null) {
+      unawaited(widget.onSuggestionSelected!(value));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        TextField(
+          controller: widget.controller,
+          style: const TextStyle(fontFamily: 'Cairo'),
+          decoration: InputDecoration(
+            hintText: widget.hint,
+            hintStyle: const TextStyle(fontFamily: 'Cairo', fontSize: 13),
+            filled: true,
+            fillColor: const Color(0xFFF4F6FB),
+            prefixIcon: Icon(widget.icon, color: widget.color, size: 18),
+            suffixIcon: _loading
+                ? const Padding(
+                    padding: EdgeInsets.all(12),
+                    child: SizedBox(
+                      width: 14,
+                      height: 14,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  )
+                : null,
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: BorderSide.none,
+            ),
+          ),
+        ),
+        if (_suggestions.isNotEmpty) ...[
+          const SizedBox(height: 6),
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFFE9EAF0)),
+            ),
+            child: ListView.separated(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: _suggestions.take(4).length,
+              separatorBuilder: (_, __) =>
+                  const Divider(height: 1, color: Color(0xFFEFEFF4)),
+              itemBuilder: (context, index) {
+                final suggestion = _suggestions[index];
+                return ListTile(
+                  dense: true,
+                  visualDensity: VisualDensity.compact,
+                  leading: const Icon(CupertinoIcons.location_solid, size: 16),
+                  title: Text(
+                    suggestion,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontFamily: 'Cairo', fontSize: 12),
+                  ),
+                  onTap: () => _pickSuggestion(suggestion),
+                );
+              },
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _MapTopCircleButton extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback onTap;
+
+  const _MapTopCircleButton({
+    required this.icon,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return CupertinoButton(
+      padding: EdgeInsets.zero,
+      minSize: 0,
+      onPressed: onTap,
+      child: Container(
+        width: 44,
+        height: 44,
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.24),
+          shape: BoxShape.circle,
+          border: Border.all(color: Colors.white.withValues(alpha: 0.42)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.24),
+              blurRadius: 14,
+              offset: const Offset(0, 5),
+            ),
+          ],
+        ),
+        child: Icon(icon, color: Colors.white, size: 21),
+      ),
+    );
+  }
+}
+
+class _MapQuickActionButton extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  const _MapQuickActionButton({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return CupertinoButton(
+      onPressed: onTap,
+      minSize: 0,
+      padding: EdgeInsets.zero,
+      child: Container(
+        width: 54,
+        height: 54,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(18),
+          gradient: const LinearGradient(
+            colors: [Color(0xCC12223B), Color(0xCC060A18)],
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+          ),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.26)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.28),
+              blurRadius: 16,
+              offset: const Offset(0, 8),
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, color: Colors.white, size: 20),
+            const SizedBox(height: 2),
+            Text(
+              label,
+              style: const TextStyle(
+                fontFamily: 'Cairo',
+                fontSize: 9,
+                color: Colors.white,
+                fontWeight: FontWeight.w700,
               ),
             ),
           ],
@@ -337,10 +1303,611 @@ class _TaxiRequestScreenState extends State<TaxiRequestScreen> {
   }
 }
 
-class _MapPreviewCard extends StatelessWidget {
-  final bool isAr;
+class _GlassLocationCard extends StatelessWidget {
+  final String title;
+  final String value;
+  final Color glowColor;
+  final IconData icon;
 
-  const _MapPreviewCard({required this.isAr});
+  const _GlassLocationCard({
+    required this.title,
+    required this.value,
+    required this.glowColor,
+    required this.icon,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.18),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.35)),
+        boxShadow: [
+          BoxShadow(
+            color: glowColor.withValues(alpha: 0.18),
+            blurRadius: 22,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 28,
+            height: 28,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: glowColor.withValues(alpha: 0.2),
+            ),
+            child: Icon(icon, color: Colors.white, size: 14),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontFamily: 'Cairo',
+                    color: Colors.white70,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 10,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  value,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontFamily: 'Cairo',
+                    color: Colors.white,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 11,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PremiumSearchFields extends StatelessWidget {
+  final TextEditingController pickupController;
+  final TextEditingController dropoffController;
+  final Future<List<String>> Function(String query) onQuerySuggestions;
+  final Future<void> Function(String value)? onPickupSuggestionSelected;
+  final Future<void> Function(String value)? onDropoffSuggestionSelected;
+
+  const _PremiumSearchFields({
+    required this.pickupController,
+    required this.dropoffController,
+    required this.onQuerySuggestions,
+    required this.onPickupSuggestionSelected,
+    required this.onDropoffSuggestionSelected,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF5F7FC),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Column(
+        children: [
+          _OverlayLocationField(
+            controller: pickupController,
+            hint: 'من أين ستنطلق؟',
+            icon: CupertinoIcons.circle_fill,
+            color: const Color(0xFF16B7FF),
+            onQuerySuggestions: onQuerySuggestions,
+            onSuggestionSelected: onPickupSuggestionSelected,
+          ),
+          const SizedBox(height: 10),
+          _OverlayLocationField(
+            controller: dropoffController,
+            hint: 'إلى أين وجهتك؟',
+            icon: CupertinoIcons.location_solid,
+            color: const Color(0xFFE60012),
+            onQuerySuggestions: onQuerySuggestions,
+            onSuggestionSelected: onDropoffSuggestionSelected,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _QuickActionsGrid extends StatelessWidget {
+  final List<String> actions;
+
+  const _QuickActionsGrid({
+    required this.actions,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFF),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: actions
+            .map(
+              (action) => Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: const Color(0xFFE7EAF3)),
+                ),
+                child: Text(
+                  action,
+                  style: const TextStyle(
+                    fontFamily: 'Cairo',
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            )
+            .toList(),
+      ),
+    );
+  }
+}
+
+class _VehicleCard extends StatelessWidget {
+  final _VehicleOption option;
+  final int fare;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _VehicleCard({
+    required this.option,
+    required this.fare,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return CupertinoButton(
+      onPressed: onTap,
+      padding: EdgeInsets.zero,
+      minSize: 0,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        width: 174,
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: selected ? const Color(0xFFE60012) : const Color(0xFFE8ECF5),
+            width: selected ? 1.7 : 1.0,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: selected
+                  ? const Color(0x33E60012)
+                  : Colors.black.withValues(alpha: 0.05),
+              blurRadius: selected ? 20 : 10,
+              offset: const Offset(0, 6),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF7F9FF),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(option.emoji, style: const TextStyle(fontSize: 23)),
+                ),
+                const Spacer(),
+                if (selected)
+                  const Icon(
+                    CupertinoIcons.check_mark_circled_solid,
+                    color: Color(0xFFE60012),
+                    size: 19,
+                  ),
+              ],
+            ),
+            const Spacer(),
+            Text(
+              option.name,
+              style: const TextStyle(
+                fontFamily: 'Cairo',
+                fontSize: 13,
+                fontWeight: FontWeight.w900,
+                color: Colors.black87,
+              ),
+            ),
+            const SizedBox(height: 3),
+            Text(
+              '${option.eta} | ${option.capacity}',
+              style: const TextStyle(
+                fontFamily: 'Cairo',
+                fontSize: 11,
+                color: Colors.grey,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              '${fare.toPrice()} د.ع',
+              style: const TextStyle(
+                fontFamily: 'Cairo',
+                fontSize: 13,
+                color: Color(0xFFE60012),
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _TripInfoPanel extends StatelessWidget {
+  final bool isCalculatingDistance;
+  final double distanceKm;
+  final String etaLabel;
+  final int fareIqd;
+
+  const _TripInfoPanel({
+    required this.isCalculatingDistance,
+    required this.distanceKm,
+    required this.etaLabel,
+    required this.fareIqd,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF7F9FF),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: _TripInfoCell(
+              title: 'المسافة',
+              value: isCalculatingDistance ? 'جاري...' : '${distanceKm.toStringAsFixed(1)} كم',
+              icon: CupertinoIcons.map_fill,
+            ),
+          ),
+          Expanded(
+            child: _TripInfoCell(
+              title: 'وقت الوصول',
+              value: etaLabel == '--' ? '--' : '$etaLabel دقيقة',
+              icon: CupertinoIcons.clock_fill,
+            ),
+          ),
+          Expanded(
+            child: _TripInfoCell(
+              title: 'الأجرة',
+              value: '${fareIqd.toPrice()} د.ع',
+              icon: CupertinoIcons.money_dollar_circle_fill,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TripInfoCell extends StatelessWidget {
+  final String title;
+  final String value;
+  final IconData icon;
+
+  const _TripInfoCell({
+    required this.title,
+    required this.value,
+    required this.icon,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Icon(icon, size: 18, color: const Color(0xFF344760)),
+        const SizedBox(height: 6),
+        Text(
+          value,
+          textAlign: TextAlign.center,
+          style: const TextStyle(
+            fontFamily: 'Cairo',
+            fontWeight: FontWeight.w900,
+            fontSize: 12,
+          ),
+        ),
+        const SizedBox(height: 3),
+        Text(
+          title,
+          style: const TextStyle(
+            fontFamily: 'Cairo',
+            color: Colors.grey,
+            fontSize: 10,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ExtraOptionsPanel extends StatelessWidget {
+  final String selectedPayment;
+  final bool showDrivers;
+  final bool shareWithFamily;
+  final bool scheduleRide;
+  final ValueChanged<String> onPaymentSelected;
+  final ValueChanged<bool> onShowDriversChanged;
+  final ValueChanged<bool> onShareWithFamilyChanged;
+  final ValueChanged<bool> onScheduleRideChanged;
+  final TextEditingController noteController;
+
+  const _ExtraOptionsPanel({
+    required this.selectedPayment,
+    required this.showDrivers,
+    required this.shareWithFamily,
+    required this.scheduleRide,
+    required this.onPaymentSelected,
+    required this.onShowDriversChanged,
+    required this.onShareWithFamilyChanged,
+    required this.onScheduleRideChanged,
+    required this.noteController,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF7F9FF),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _SmallOptionChip(
+                label: 'الدفع كاش',
+                selected: selectedPayment == 'cash',
+                onTap: () => onPaymentSelected('cash'),
+              ),
+              _SmallOptionChip(
+                label: 'عرض السائقين',
+                selected: showDrivers,
+                onTap: () => onShowDriversChanged(!showDrivers),
+              ),
+              _SmallOptionChip(
+                label: 'مشاركة الرحلة مع العائلة',
+                selected: shareWithFamily,
+                onTap: () => onShareWithFamilyChanged(!shareWithFamily),
+              ),
+              _SmallOptionChip(
+                label: 'جدولة رحلة',
+                selected: scheduleRide,
+                onTap: () => onScheduleRideChanged(!scheduleRide),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          CupertinoTextField(
+            controller: noteController,
+            maxLines: 2,
+            textDirection: TextDirection.rtl,
+            placeholder: 'ملاحظة للسائق (اختياري)',
+            placeholderStyle: const TextStyle(fontFamily: 'Cairo', fontSize: 12),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: const Color(0xFFE6EAF3)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SmallOptionChip extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _SmallOptionChip({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return CupertinoButton(
+      onPressed: onTap,
+      padding: EdgeInsets.zero,
+      minSize: 0,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 8),
+        decoration: BoxDecoration(
+          color: selected ? const Color(0x1AE60012) : Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: selected ? const Color(0xFFE60012) : const Color(0xFFE4E9F2),
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontFamily: 'Cairo',
+            fontSize: 11,
+            fontWeight: FontWeight.w800,
+            color: selected ? const Color(0xFFE60012) : const Color(0xFF33435A),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PremiumRequestButton extends StatelessWidget {
+  final VoidCallback onPressed;
+
+  const _PremiumRequestButton({
+    required this.onPressed,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFFFF2D37), Color(0xFFE60012)],
+          begin: Alignment.centerLeft,
+          end: Alignment.centerRight,
+        ),
+        borderRadius: BorderRadius.circular(999),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x66E60012),
+            blurRadius: 22,
+            offset: Offset(0, 12),
+          ),
+        ],
+      ),
+      child: CupertinoButton(
+        onPressed: onPressed,
+        borderRadius: BorderRadius.circular(999),
+        padding: const EdgeInsets.symmetric(vertical: 16),
+        child: const Text(
+          'اطلب الآن',
+          style: TextStyle(
+            color: Colors.white,
+            fontFamily: 'Cairo',
+            fontWeight: FontWeight.w900,
+            fontSize: 16,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _MovingVehiclesOverlay extends StatefulWidget {
+  const _MovingVehiclesOverlay();
+
+  @override
+  State<_MovingVehiclesOverlay> createState() => _MovingVehiclesOverlayState();
+}
+
+class _MovingVehiclesOverlayState extends State<_MovingVehiclesOverlay>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 5),
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) {
+        final t = _controller.value;
+        return Stack(
+          children: [
+            Positioned(
+              left: 60 + (18 * t),
+              top: 145 + (8 * t),
+              child: const _TinyVehicleDot(),
+            ),
+            Positioned(
+              right: 70 + (14 * (1 - t)),
+              top: 210 + (10 * t),
+              child: const _TinyVehicleDot(),
+            ),
+            Positioned(
+              left: 120 + (12 * (1 - t)),
+              top: 260 + (6 * t),
+              child: const _TinyVehicleDot(),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _TinyVehicleDot extends StatelessWidget {
+  const _TinyVehicleDot();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 8,
+      height: 8,
+      decoration: const BoxDecoration(
+        color: Color(0xFFFFF59D),
+        shape: BoxShape.circle,
+        boxShadow: [
+          BoxShadow(color: Color(0x88FFF59D), blurRadius: 10, spreadRadius: 1),
+        ],
+      ),
+    );
+  }
+}
+
+class _MapPreviewCard extends StatelessWidget {
+  final String pickupAddress;
+  final String dropoffAddress;
+  final double estimatedDistanceKm;
+
+  const _MapPreviewCard({
+    required this.pickupAddress,
+    required this.dropoffAddress,
+    required this.estimatedDistanceKm,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -374,7 +1941,7 @@ class _MapPreviewCard extends StatelessWidget {
               left: 18,
               top: 18,
               child: _FloatingTag(
-                title: isAr ? 'السائقون قريبون' : 'Drivers nearby',
+                title: pickupAddress.isEmpty ? 'أدخل نقطة الانطلاق' : 'الانطلاق جاهز',
                 color: Colors.green,
               ),
             ),
@@ -382,7 +1949,9 @@ class _MapPreviewCard extends StatelessWidget {
               right: 18,
               bottom: 18,
               child: _FloatingTag(
-                title: isAr ? 'متوسط الانتظار 4 د' : 'Avg wait 4 min',
+                title: dropoffAddress.isEmpty
+                    ? 'أدخل الوجهة'
+                    : 'المسافة ${estimatedDistanceKm.toStringAsFixed(1)} كم',
                 color: Colors.orange,
               ),
             ),
@@ -421,16 +1990,16 @@ class _MapPreviewCard extends StatelessWidget {
 }
 
 class _QuickStatsRow extends StatelessWidget {
-  final bool isAr;
   final String estimatedTime;
   final String estimatedDistance;
   final int estimatedFare;
+  final bool isCalculatingDistance;
 
   const _QuickStatsRow({
-    required this.isAr,
     required this.estimatedTime,
     required this.estimatedDistance,
     required this.estimatedFare,
+    this.isCalculatingDistance = false,
   });
 
   @override
@@ -445,23 +2014,25 @@ class _QuickStatsRow extends StatelessWidget {
         children: [
           Expanded(
             child: _StatBox(
-              title: isAr ? 'وقت الوصول المتوقع' : 'Estimated arrival',
-              value: '$estimatedTime ${isAr ? 'دقيقة' : 'min'}',
+              title: 'وقت الوصول المتوقع',
+              value: estimatedTime == '--' ? '--' : '$estimatedTime دقيقة',
               icon: CupertinoIcons.clock_fill,
               color: Colors.blue,
             ),
           ),
           Expanded(
             child: _StatBox(
-              title: isAr ? 'المسافة' : 'Distance',
-              value: '$estimatedDistance ${isAr ? 'كم' : 'km'}',
+              title: 'المسافة',
+              value: isCalculatingDistance
+                  ? 'جاري التحديث...'
+                  : '$estimatedDistance كم',
               icon: CupertinoIcons.map_fill,
               color: Colors.green,
             ),
           ),
           Expanded(
             child: _StatBox(
-              title: isAr ? 'التكلفة' : 'Fare',
+              title: 'التكلفة',
               value: '${estimatedFare.toPrice()} د.ع',
               icon: CupertinoIcons.money_dollar_circle_fill,
               color: Colors.orange,
@@ -474,12 +2045,10 @@ class _QuickStatsRow extends StatelessWidget {
 }
 
 class _LocationCard extends StatelessWidget {
-  final bool isAr;
   final TextEditingController pickupController;
   final TextEditingController dropoffController;
 
   const _LocationCard({
-    required this.isAr,
     required this.pickupController,
     required this.dropoffController,
   });
@@ -495,14 +2064,14 @@ class _LocationCard extends StatelessWidget {
       child: Column(
         children: [
           _LocationField(
-            label: isAr ? 'نقطة الانطلاق' : 'Pickup location',
+            label: 'نقطة الانطلاق',
             icon: CupertinoIcons.circle_fill,
             iconColor: Colors.green,
             controller: pickupController,
           ),
           const SizedBox(height: 14),
           _LocationField(
-            label: isAr ? 'الوجهة' : 'Destination',
+            label: 'الوجهة',
             icon: CupertinoIcons.location_solid,
             iconColor: Colors.redAccent,
             controller: dropoffController,
@@ -514,13 +2083,11 @@ class _LocationCard extends StatelessWidget {
 }
 
 class _PaymentCard extends StatelessWidget {
-  final bool isAr;
   final String selectedPayment;
   final TextEditingController noteController;
   final ValueChanged<String> onPaymentSelected;
 
   const _PaymentCard({
-    required this.isAr,
     required this.selectedPayment,
     required this.noteController,
     required this.onPaymentSelected,
@@ -537,8 +2104,8 @@ class _PaymentCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            isAr ? 'طريقة الدفع' : 'Payment method',
+          const Text(
+            'طريقة الدفع',
             style: const TextStyle(
               fontSize: 14,
               fontWeight: FontWeight.w800,
@@ -550,28 +2117,28 @@ class _PaymentCard extends StatelessWidget {
             children: [
               Expanded(
                 child: _ChoiceChip(
-                  label: isAr ? 'نقدًا' : 'Cash',
+                  label: 'نقدًا',
                   selected: selectedPayment == 'cash',
                   onTap: () => onPaymentSelected('cash'),
                 ),
               ),
               const SizedBox(width: 10),
               Expanded(
-                child: _SoonChip(
-                  label: isAr ? 'محفظة' : 'Wallet',
+                child: const _SoonChip(
+                  label: 'محفظة',
                 ),
               ),
               const SizedBox(width: 10),
               Expanded(
-                child: _SoonChip(
-                  label: isAr ? 'بطاقة' : 'Card',
+                child: const _SoonChip(
+                  label: 'بطاقة',
                 ),
               ),
             ],
           ),
           const SizedBox(height: 8),
-          Text(
-            isAr ? 'ملاحظة للسائق' : 'Note for driver',
+          const Text(
+            'ملاحظة للسائق',
             style: const TextStyle(
               fontSize: 14,
               fontWeight: FontWeight.w800,
@@ -595,14 +2162,12 @@ class _PaymentCard extends StatelessWidget {
 }
 
 class _RequestSummaryCard extends StatelessWidget {
-  final bool isAr;
   final String rideName;
   final int fare;
   final String payment;
   final VoidCallback onRequest;
 
   const _RequestSummaryCard({
-    required this.isAr,
     required this.rideName,
     required this.fare,
     required this.payment,
@@ -631,8 +2196,8 @@ class _RequestSummaryCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            isAr ? 'ملخص الرحلة' : 'Trip summary',
+          const Text(
+            'ملخص الرحلة',
             style: const TextStyle(
               color: Colors.white,
               fontSize: 17,
@@ -642,15 +2207,15 @@ class _RequestSummaryCard extends StatelessWidget {
           ),
           const SizedBox(height: 10),
           _SummaryRow(
-            label: isAr ? 'الفئة' : 'Type',
+            label: 'الفئة',
             value: rideName,
           ),
           _SummaryRow(
-            label: isAr ? 'الدفع' : 'Payment',
-            value: _paymentLabel(payment, isAr),
+            label: 'الدفع',
+            value: _paymentLabel(payment),
           ),
           _SummaryRow(
-            label: isAr ? 'السعر المتوقع' : 'Estimated fare',
+            label: 'السعر المتوقع',
             value: '${fare.toPrice()} د.ع',
             emphasize: true,
           ),
@@ -662,8 +2227,8 @@ class _RequestSummaryCard extends StatelessWidget {
               color: Colors.white,
               borderRadius: BorderRadius.circular(18),
               onPressed: onRequest,
-              child: Text(
-                isAr ? 'اطلب التكسي الآن' : 'Request taxi now',
+              child: const Text(
+                'اطلب التكسي الآن',
                 style: const TextStyle(
                   color: Colors.deepOrange,
                   fontWeight: FontWeight.w900,
@@ -677,24 +2242,85 @@ class _RequestSummaryCard extends StatelessWidget {
     );
   }
 
-  String _paymentLabel(String payment, bool isAr) {
+  String _paymentLabel(String payment) {
     switch (payment) {
       case 'wallet':
-        return isAr ? 'محفظة' : 'Wallet';
+        return 'محفظة';
       case 'card':
-        return isAr ? 'بطاقة' : 'Card';
+        return 'بطاقة';
       default:
-        return isAr ? 'نقدًا' : 'Cash';
+        return 'نقدًا';
     }
   }
 }
 
+class _CustomerTaxiActionsCard extends StatelessWidget {
+  final TaxiRequest request;
+  final VoidCallback onCancelPressed;
+
+  const _CustomerTaxiActionsCard({
+    required this.request,
+    required this.onCancelPressed,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final canCancelDirectly =
+        request.statusKey == 'pending' || request.statusKey == 'new';
+    final canRequestCancel = request.statusKey == 'accepted';
+    final canCancel = canCancelDirectly || canRequestCancel;
+
+    if (!canCancel) {
+      return const SizedBox.shrink();
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            canCancelDirectly
+                ? 'يمكنك إلغاء الرحلة الآن لأن الطلب لم يُقبل بعد.'
+                : 'يمكنك طلب الإلغاء، وسيصل الطلب للسائق للموافقة.',
+            style: const TextStyle(
+              fontFamily: 'Cairo',
+              fontSize: 12,
+              color: Colors.grey,
+              height: 1.4,
+            ),
+          ),
+          const SizedBox(height: 10),
+          SizedBox(
+            width: double.infinity,
+            child: CupertinoButton(
+              color: Colors.red.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(14),
+              onPressed: onCancelPressed,
+              child: Text(
+                canCancelDirectly ? 'إلغاء الرحلة' : 'طلب إلغاء الرحلة',
+                style: const TextStyle(
+                  color: Colors.redAccent,
+                  fontWeight: FontWeight.w800,
+                  fontFamily: 'Cairo',
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _TaxiStatusCard extends StatelessWidget {
-  final bool isAr;
   final TaxiRequest request;
 
   const _TaxiStatusCard({
-    required this.isAr,
     required this.request,
   });
 
@@ -702,6 +2328,8 @@ class _TaxiStatusCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final isRejected = request.statusKey == 'rejected';
     final isCompleted = request.statusKey == 'completed';
+    final isCancelRequested = request.statusKey == 'cancel_requested';
+    final isCancelled = request.statusKey == 'cancelled';
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -739,9 +2367,7 @@ class _TaxiStatusCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      isAr
-                          ? 'الطلب رقم ${request.requestNumber}'
-                          : 'Request ${request.requestNumber}',
+                      'الطلب رقم ${request.requestNumber}',
                       style: const TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.w900,
@@ -750,7 +2376,7 @@ class _TaxiStatusCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      isAr ? request.requestedAtAr : request.requestedAtEn,
+                      request.requestedAtAr,
                       style: const TextStyle(
                         color: Colors.grey,
                         fontSize: 12,
@@ -761,9 +2387,11 @@ class _TaxiStatusCard extends StatelessWidget {
                 ),
               ),
               _StatusBadge(
-                text: isAr ? request.statusAr : request.statusEn,
+                text: request.statusAr,
                 color: isRejected
                     ? Colors.red
+                    : isCancelled
+                        ? Colors.green
                     : isCompleted
                         ? Colors.green
                         : Colors.blue,
@@ -777,79 +2405,84 @@ class _TaxiStatusCard extends StatelessWidget {
               color: const Color(0xFFF7F8FC),
               borderRadius: BorderRadius.circular(18),
             ),
-            child: Column(
-              children: [
-                _TaxiTimelineDot(
-                  title: isAr ? 'تم قبول الطلب' : 'Request accepted',
-                  subtitle: isAr
-                      ? 'تظهر هذه المرحلة بعد موافقة السائق'
-                      : 'Shown after the driver accepts the request',
-                  color: Colors.blue,
-                  icon: CupertinoIcons.checkmark_alt_circle_fill,
-                  active: _isTaxiStepReached(request.statusKey, 'accepted'),
-                  current: request.statusKey == 'accepted',
-                  completed:
-                      _isTaxiStepCompleted(request.statusKey, 'accepted'),
-                ),
-                _TaxiTimelineLine(
-                  active: _isTaxiStepReached(request.statusKey, 'on_way'),
-                ),
-                _TaxiTimelineDot(
-                  title: isAr ? 'السائق في الطريق' : 'Driver on the way',
-                  subtitle: isAr
-                      ? 'السيارة متجهة الآن إليك'
-                      : 'The driver is heading to your location',
-                  color: Colors.orange,
-                  icon: CupertinoIcons.car_fill,
-                  active: _isTaxiStepReached(request.statusKey, 'on_way'),
-                  current: request.statusKey == 'on_way',
-                  completed: _isTaxiStepCompleted(request.statusKey, 'on_way'),
-                ),
-                _TaxiTimelineLine(
-                  active: _isTaxiStepReached(request.statusKey, 'arrived'),
-                ),
-                _TaxiTimelineDot(
-                  title: isAr ? 'وصل للموقع' : 'Arrived at pickup',
-                  subtitle: isAr
-                      ? 'وصل السائق إلى نقطة الانطلاق'
-                      : 'The driver arrived at the pickup point',
-                  color: Colors.purple,
-                  icon: CupertinoIcons.location_solid,
-                  active: _isTaxiStepReached(request.statusKey, 'arrived'),
-                  current: request.statusKey == 'arrived',
-                  completed: _isTaxiStepCompleted(request.statusKey, 'arrived'),
-                ),
-                _TaxiTimelineLine(
-                  active: _isTaxiStepReached(request.statusKey, 'picked_up'),
-                ),
-                _TaxiTimelineDot(
-                  title: isAr ? 'استلام الزبون' : 'Customer picked up',
-                  subtitle: isAr
-                      ? 'تم استلامك من قبل السائق'
-                      : 'You have been picked up by the driver',
-                  color: Colors.teal,
-                  icon: CupertinoIcons.person_crop_circle_badge_checkmark,
-                  active: _isTaxiStepReached(request.statusKey, 'picked_up'),
-                  current: request.statusKey == 'picked_up',
-                  completed:
-                      _isTaxiStepCompleted(request.statusKey, 'picked_up'),
-                ),
-                _TaxiTimelineLine(
-                  active: _isTaxiStepReached(request.statusKey, 'completed'),
-                ),
-                _TaxiTimelineDot(
-                  title: isAr ? 'تم الوصول' : 'Trip completed',
-                  subtitle: isAr
-                      ? 'انتهت الرحلة بنجاح'
-                      : 'The trip ended successfully',
-                  color: Colors.green,
-                  icon: CupertinoIcons.check_mark_circled_solid,
-                  active: _isTaxiStepReached(request.statusKey, 'completed'),
-                  current: isCompleted,
-                  completed: isCompleted,
-                ),
-              ],
-            ),
+            child: isCancelRequested || isCancelled
+                ? Text(
+                    isCancelRequested
+                        ? 'تم إرسال طلب إلغاء الرحلة للسائق، بانتظار موافقته أو رفضه.'
+                        : 'تم إلغاء الرحلة بنجاح.',
+                    style: TextStyle(
+                      color: isCancelled ? Colors.green : Colors.orange,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w800,
+                      height: 1.4,
+                      fontFamily: 'Cairo',
+                    ),
+                  )
+                : Column(
+                    children: [
+                      _TaxiTimelineDot(
+                        title: 'تم قبول الطلب',
+                        subtitle: 'تظهر هذه المرحلة بعد موافقة السائق',
+                        color: Colors.blue,
+                        icon: CupertinoIcons.checkmark_alt_circle_fill,
+                        active: _isTaxiStepReached(request.statusKey, 'accepted'),
+                        current: request.statusKey == 'accepted',
+                        completed:
+                            _isTaxiStepCompleted(request.statusKey, 'accepted'),
+                      ),
+                      _TaxiTimelineLine(
+                        active: _isTaxiStepReached(request.statusKey, 'on_way'),
+                      ),
+                      _TaxiTimelineDot(
+                        title: 'السائق في الطريق',
+                        subtitle: 'السيارة متجهة الآن إليك',
+                        color: Colors.orange,
+                        icon: CupertinoIcons.car_fill,
+                        active: _isTaxiStepReached(request.statusKey, 'on_way'),
+                        current: request.statusKey == 'on_way',
+                        completed:
+                            _isTaxiStepCompleted(request.statusKey, 'on_way'),
+                      ),
+                      _TaxiTimelineLine(
+                        active: _isTaxiStepReached(request.statusKey, 'arrived'),
+                      ),
+                      _TaxiTimelineDot(
+                        title: 'وصل للموقع',
+                        subtitle: 'وصل السائق إلى نقطة الانطلاق',
+                        color: Colors.purple,
+                        icon: CupertinoIcons.location_solid,
+                        active: _isTaxiStepReached(request.statusKey, 'arrived'),
+                        current: request.statusKey == 'arrived',
+                        completed:
+                            _isTaxiStepCompleted(request.statusKey, 'arrived'),
+                      ),
+                      _TaxiTimelineLine(
+                        active: _isTaxiStepReached(request.statusKey, 'picked_up'),
+                      ),
+                      _TaxiTimelineDot(
+                        title: 'استلام الزبون',
+                        subtitle: 'تم استلامك من قبل السائق',
+                        color: Colors.teal,
+                        icon: CupertinoIcons.person_crop_circle_badge_checkmark,
+                        active: _isTaxiStepReached(request.statusKey, 'picked_up'),
+                        current: request.statusKey == 'picked_up',
+                        completed:
+                            _isTaxiStepCompleted(request.statusKey, 'picked_up'),
+                      ),
+                      _TaxiTimelineLine(
+                        active: _isTaxiStepReached(request.statusKey, 'completed'),
+                      ),
+                      _TaxiTimelineDot(
+                        title: 'تم الوصول',
+                        subtitle: 'انتهت الرحلة بنجاح',
+                        color: Colors.green,
+                        icon: CupertinoIcons.check_mark_circled_solid,
+                        active: _isTaxiStepReached(request.statusKey, 'completed'),
+                        current: isCompleted,
+                        completed: isCompleted,
+                      ),
+                    ],
+                  ),
           ),
           if (isRejected) ...[
             const SizedBox(height: 14),
@@ -860,10 +2493,8 @@ class _TaxiStatusCard extends StatelessWidget {
                 color: Colors.red.withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(18),
               ),
-              child: Text(
-                isAr
-                    ? 'تم رفض الطلب. يمكنك إنشاء طلب جديد من نفس الصفحة.'
-                    : 'The request was rejected. You can place a new request from the same page.',
+              child: const Text(
+                'تم رفض الطلب. يمكنك إنشاء طلب جديد من نفس الصفحة.',
                 style: const TextStyle(
                   color: Colors.redAccent,
                   fontSize: 12,
@@ -894,17 +2525,15 @@ class _TaxiStatusCard extends StatelessWidget {
 }
 
 class _LiveStatusBanner extends StatelessWidget {
-  final bool isAr;
   final TaxiRequest request;
 
   const _LiveStatusBanner({
-    required this.isAr,
     required this.request,
   });
 
   @override
   Widget build(BuildContext context) {
-    final details = _liveNoticeFor(request.statusKey, isAr);
+    final details = _liveNoticeFor(request.statusKey);
     return AnimatedContainer(
       duration: const Duration(milliseconds: 250),
       padding: const EdgeInsets.all(14),
@@ -962,7 +2591,7 @@ class _LiveStatusBanner extends StatelessWidget {
             ),
           ),
           _StatusBadge(
-            text: isAr ? request.statusAr : request.statusEn,
+            text: request.statusAr,
             color: Colors.white,
           ),
         ],
@@ -970,68 +2599,68 @@ class _LiveStatusBanner extends StatelessWidget {
     );
   }
 
-  _LiveNotice _liveNoticeFor(String statusKey, bool isAr) {
+  _LiveNotice _liveNoticeFor(String statusKey) {
     switch (statusKey) {
       case 'accepted':
         return _LiveNotice(
-          title: isAr ? 'تم قبول طلبك' : 'Your request was accepted',
-          subtitle: isAr
-              ? 'السائق بدأ مراجعة التفاصيل استعدادًا للانطلاق'
-              : 'The driver is reviewing details before starting',
+          title: 'تم قبول طلبك',
+          subtitle: 'السائق بدأ مراجعة التفاصيل استعدادًا للانطلاق',
           colors: [Colors.blue.shade700, Colors.blue.shade500],
           icon: CupertinoIcons.checkmark_alt_circle_fill,
         );
       case 'on_way':
         return _LiveNotice(
-          title: isAr ? 'السائق في الطريق' : 'Driver is on the way',
-          subtitle: isAr
-              ? 'تابع الوصول المتوقع إلى موقعك'
-              : 'Track the expected arrival to your location',
+          title: 'السائق في الطريق',
+          subtitle: 'تابع الوصول المتوقع إلى موقعك',
           colors: [Colors.orange.shade700, Colors.deepOrange.shade400],
           icon: CupertinoIcons.car_fill,
         );
       case 'arrived':
         return _LiveNotice(
-          title: isAr ? 'وصل للموقع' : 'Arrived at pickup',
-          subtitle: isAr
-              ? 'السائق بانتظارك في نقطة الانطلاق'
-              : 'The driver is waiting at the pickup point',
+          title: 'وصل للموقع',
+          subtitle: 'السائق بانتظارك في نقطة الانطلاق',
           colors: [Colors.purple.shade700, Colors.purple.shade400],
           icon: CupertinoIcons.location_solid,
         );
       case 'picked_up':
         return _LiveNotice(
-          title: isAr ? 'استلام الزبون' : 'Customer picked up',
-          subtitle: isAr
-              ? 'بدأت الرحلة فعليًا مع السائق'
-              : 'The trip has officially started',
+          title: 'استلام الزبون',
+          subtitle: 'بدأت الرحلة فعليًا مع السائق',
           colors: [Colors.teal.shade700, Colors.teal.shade400],
           icon: CupertinoIcons.person_crop_circle_badge_checkmark,
         );
+      case 'cancel_requested':
+        return _LiveNotice(
+          title: 'طلب إلغاء بانتظار السائق',
+          subtitle: 'تم إرسال طلب الإلغاء، يرجى انتظار قرار السائق',
+          colors: [Colors.orange.shade700, Colors.orange.shade400],
+          icon: CupertinoIcons.hourglass,
+        );
+      case 'cancelled':
+        return _LiveNotice(
+          title: 'تم إلغاء الرحلة',
+          subtitle: 'تمت عملية الإلغاء بنجاح',
+          colors: [Colors.green.shade700, Colors.green.shade400],
+          icon: CupertinoIcons.check_mark_circled_solid,
+        );
       case 'completed':
         return _LiveNotice(
-          title: isAr ? 'تم الوصول' : 'Trip completed',
-          subtitle: isAr
-              ? 'اكتملت الرحلة بنجاح'
-              : 'Your trip was completed successfully',
+          title: 'تم الوصول',
+          subtitle: 'اكتملت الرحلة بنجاح',
           colors: [Colors.green.shade700, Colors.green.shade400],
           icon: CupertinoIcons.check_mark_circled_solid,
         );
       case 'rejected':
         return _LiveNotice(
-          title: isAr ? 'تم رفض الطلب' : 'Request rejected',
-          subtitle: isAr
-              ? 'يمكنك إرسال طلب جديد مباشرة'
-              : 'You can create a new request right away',
+          title: 'تم رفض الطلب',
+          subtitle: 'يمكنك إرسال طلب جديد مباشرة',
           colors: [Colors.red.shade700, Colors.red.shade400],
           icon: CupertinoIcons.xmark_circle_fill,
         );
       default:
         return _LiveNotice(
-          title: isAr ? 'بانتظار السائق' : 'Waiting for driver',
-          subtitle: isAr
-              ? 'أول سائق متاح سيظهر له طلبك'
-              : 'The first available driver will see your request',
+          title: 'بانتظار السائق',
+          subtitle: 'أول سائق متاح سيظهر له طلبك',
           colors: [Colors.blueGrey.shade700, Colors.blueGrey.shade500],
           icon: CupertinoIcons.time,
         );
@@ -1524,7 +3153,7 @@ class _SummaryRow extends StatelessWidget {
 
 class _MapPatternPainter extends CustomPainter {
   @override
-  void paint(Canvas canvas, Size size) {
+  void paint(Canvas canvas, ui.Size size) {
     final paint = Paint()
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1
@@ -1542,13 +3171,30 @@ class _MapPatternPainter extends CustomPainter {
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
+class _VehicleOption {
+  final String id;
+  final String name;
+  final String eta;
+  final String capacity;
+  final String emoji;
+  final double multiplier;
+
+  const _VehicleOption({
+    required this.id,
+    required this.name,
+    required this.eta,
+    required this.capacity,
+    required this.emoji,
+    required this.multiplier,
+  });
+}
+
 class _RideType {
   final String id;
   final String titleAr;
   final String titleEn;
   final String subtitleAr;
   final String subtitleEn;
-  final int price;
   final IconData icon;
   final Color color;
 
@@ -1558,7 +3204,6 @@ class _RideType {
     required this.titleEn,
     required this.subtitleAr,
     required this.subtitleEn,
-    required this.price,
     required this.icon,
     required this.color,
   });

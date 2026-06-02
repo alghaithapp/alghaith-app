@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -12,10 +14,9 @@ class MerchantOrdersScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<AppProvider>();
-    final isAr = provider.lang == 'ar';
 
     return DefaultTabController(
-      length: 5,
+      length: 4,
       child: Column(
         children: [
           const SizedBox(height: 10),
@@ -33,32 +34,29 @@ class MerchantOrdersScreen extends StatelessWidget {
                     children: [
                       Expanded(
                         child: _MiniStat(
-                          label: isAr ? 'جديد' : 'New',
+                          label: 'جديد',
                           value: '${provider.merchantPendingOrdersCount}',
                           color: Colors.blue,
                         ),
                       ),
                       Expanded(
                         child: _MiniStat(
-                          label: isAr ? 'قيد التجهيز' : 'Preparing',
-                          value:
-                              '${provider.merchantIncomingOrders.where((o) => o.statusKey == 'preparing').length}',
+                          label: 'موافقة/إلغاء',
+                          value: '${provider.merchantIncomingOrders.where((o) => o.statusKey == 'accepted' || o.statusKey == 'cancel_requested').length}',
                           color: Colors.deepOrange,
                         ),
                       ),
                       Expanded(
                         child: _MiniStat(
-                          label: isAr ? 'جاهز' : 'Ready',
-                          value:
-                              '${provider.merchantIncomingOrders.where((o) => o.statusKey == 'delivering').length}',
+                          label: 'مكتمل',
+                          value: '${provider.merchantIncomingOrders.where((o) => o.statusKey == 'completed').length}',
                           color: Colors.green,
                         ),
                       ),
                       Expanded(
                         child: _MiniStat(
-                          label: isAr ? 'ملغي' : 'Cancelled',
-                          value:
-                              '${provider.merchantIncomingOrders.where((o) => o.statusKey == 'cancelled').length}',
+                          label: 'ملغي',
+                          value: '${provider.merchantIncomingOrders.where((o) => o.statusKey == 'cancelled').length}',
                           color: Colors.red,
                         ),
                       ),
@@ -72,8 +70,7 @@ class MerchantOrdersScreen extends StatelessWidget {
                     indicatorColor: Colors.deepOrange,
                     tabs: [
                       Tab(text: 'جديد'),
-                      Tab(text: 'قيد التجهيز'),
-                      Tab(text: 'جاهز للتوصيل'),
+                      Tab(text: 'موافقة/إلغاء'),
                       Tab(text: 'مكتمل'),
                       Tab(text: 'ملغي'),
                     ],
@@ -86,36 +83,10 @@ class MerchantOrdersScreen extends StatelessWidget {
           Expanded(
             child: TabBarView(
               children: [
-                _OrdersList(
-                  orders: provider.merchantIncomingOrders
-                      .where((o) => o.statusKey == 'pending')
-                      .toList(),
-                  isAr: isAr,
-                ),
-                _OrdersList(
-                  orders: provider.merchantIncomingOrders
-                      .where((o) => o.statusKey == 'preparing')
-                      .toList(),
-                  isAr: isAr,
-                ),
-                _OrdersList(
-                  orders: provider.merchantIncomingOrders
-                      .where((o) => o.statusKey == 'delivering')
-                      .toList(),
-                  isAr: isAr,
-                ),
-                _OrdersList(
-                  orders: provider.merchantIncomingOrders
-                      .where((o) => o.statusKey == 'completed')
-                      .toList(),
-                  isAr: isAr,
-                ),
-                _OrdersList(
-                  orders: provider.merchantIncomingOrders
-                      .where((o) => o.statusKey == 'cancelled')
-                      .toList(),
-                  isAr: isAr,
-                ),
+                _OrdersList(orders: provider.merchantIncomingOrders.where((o) => o.statusKey == 'pending').toList()),
+                _OrdersList(orders: provider.merchantIncomingOrders.where((o) => o.statusKey == 'accepted' || o.statusKey == 'cancel_requested').toList()),
+                _OrdersList(orders: provider.merchantIncomingOrders.where((o) => o.statusKey == 'completed').toList()),
+                _OrdersList(orders: provider.merchantIncomingOrders.where((o) => o.statusKey == 'cancelled').toList()),
               ],
             ),
           ),
@@ -127,21 +98,17 @@ class MerchantOrdersScreen extends StatelessWidget {
 
 class _OrdersList extends StatelessWidget {
   final List<ActiveOrder> orders;
-  final bool isAr;
 
-  const _OrdersList({
-    required this.orders,
-    required this.isAr,
-  });
+  const _OrdersList({required this.orders});
 
   @override
   Widget build(BuildContext context) {
     final provider = context.read<AppProvider>();
     if (orders.isEmpty) {
-      return Center(
+      return const Center(
         child: Text(
-          isAr ? 'لا توجد طلبات هنا' : 'No orders here',
-          style: const TextStyle(fontFamily: 'Cairo', color: Colors.grey),
+          'لا توجد طلبات هنا',
+          style: TextStyle(fontFamily: 'Cairo', color: Colors.grey),
         ),
       );
     }
@@ -154,61 +121,103 @@ class _OrdersList extends StatelessWidget {
         final order = orders[index];
         return _OrderCard(
           order: order,
-          isAr: isAr,
-          onDetails: () {
+          onDetails: () async {
+            await provider.markMerchantOrderAsRead(order.id);
+            if (!context.mounted) return;
             Navigator.of(context).push(
-              MaterialPageRoute(
-                  builder: (_) => OrderDetailsScreen(order: order)),
+              MaterialPageRoute(builder: (_) => OrderDetailsScreen(order: order)),
             );
           },
-          onAccept: () => provider.updateOrderStatus(
-              order.id, 'preparing', 'قيد التجهيز', 'Preparing'),
-          onReject: () => provider.updateOrderStatus(
-              order.id, 'cancelled', 'ملغي', 'Cancelled'),
-          onNext: () {
-            if (order.statusKey != 'preparing') return;
+          onAccept: () => provider.updateOrderStatus(order.id, 'accepted', 'تمت الموافقة', 'Approved'),
+          onReject: () async {
+            final reason = await _showRejectReasonDialog(context);
+            if (reason == null || reason.trim().isEmpty) return;
             provider.updateOrderStatus(
               order.id,
-              'delivering',
-              'جاهز للتوصيل',
-              'Ready for delivery',
+              'cancelled',
+              'تم رفض الطلب',
+              'Rejected',
+              noteAr: 'سبب الرفض: ${reason.trim()}',
+              noteEn: 'Rejected reason: ${reason.trim()}',
+            );
+          },
+          onNext: () {
+            if (order.statusKey != 'accepted') return;
+            provider.updateOrderStatus(order.id, 'completed', 'مكتمل', 'Completed');
+          },
+          onApproveCancelRequest: () {
+            provider.resolveCustomerCancellationRequestByMerchant(
+              order.id,
+              approve: true,
+            );
+          },
+          onRejectCancelRequest: () {
+            provider.resolveCustomerCancellationRequestByMerchant(
+              order.id,
+              approve: false,
             );
           },
         );
       },
     );
   }
+
+  Future<String?> _showRejectReasonDialog(BuildContext context) async {
+    final controller = TextEditingController();
+    final reason = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('سبب رفض الطلب'),
+        content: TextField(
+          controller: controller,
+          maxLines: 3,
+          decoration: const InputDecoration(
+            hintText: 'اكتب سبب الرفض للزبون',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('إلغاء'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, controller.text.trim()),
+            child: const Text('تأكيد الرفض'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    return reason;
+  }
 }
 
 class _OrderCard extends StatelessWidget {
   final ActiveOrder order;
-  final bool isAr;
   final VoidCallback onDetails;
   final VoidCallback onAccept;
   final VoidCallback onReject;
   final VoidCallback onNext;
+  final VoidCallback onApproveCancelRequest;
+  final VoidCallback onRejectCancelRequest;
 
   const _OrderCard({
     required this.order,
-    required this.isAr,
     required this.onDetails,
     required this.onAccept,
     required this.onReject,
     required this.onNext,
+    required this.onApproveCancelRequest,
+    required this.onRejectCancelRequest,
   });
 
-  Color get statusColor {
+  Color get _statusColor {
     switch (order.statusKey) {
-      case 'preparing':
-        return Colors.deepOrange;
-      case 'delivering':
-        return Colors.green;
-      case 'completed':
-        return Colors.green;
-      case 'cancelled':
-        return Colors.red;
-      default:
-        return Colors.blue;
+      case 'accepted':   return Colors.deepOrange;
+      case 'completed':  return Colors.green;
+      case 'cancelled':  return Colors.red;
+      default:           return Colors.blue;
     }
   }
 
@@ -232,7 +241,7 @@ class _OrderCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      order.orderNumber,
+                      context.read<AppProvider>().displayOrderNumber(order),
                       style: const TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.w900,
@@ -241,7 +250,7 @@ class _OrderCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      isAr ? order.customerNameAr : order.customerNameEn,
+                      order.customerNameAr,
                       style: const TextStyle(
                         color: Colors.black87,
                         fontSize: 12,
@@ -250,27 +259,39 @@ class _OrderCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      isAr ? order.dateAr : order.dateEn,
+                      order.dateAr,
                       style: const TextStyle(
                         color: Colors.grey,
                         fontSize: 11,
                         fontFamily: 'Cairo',
                       ),
                     ),
+                    const SizedBox(height: 2),
+                    Text(
+                      context.read<AppProvider>().orderElapsedLabelAr(order),
+                      style: const TextStyle(
+                        color: Colors.blueGrey,
+                        fontSize: 11,
+                        fontFamily: 'Cairo',
+                      ),
+                    ),
+                    if (order.statusKey == 'pending') ...[
+                      const SizedBox(height: 2),
+                      _PendingApprovalCountdown(order: order),
+                    ],
                   ],
                 ),
               ),
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                 decoration: BoxDecoration(
-                  color: statusColor.withValues(alpha: 0.10),
+                  color: _statusColor.withValues(alpha: 0.10),
                   borderRadius: BorderRadius.circular(999),
                 ),
                 child: Text(
-                  isAr ? order.statusAr : order.statusEn,
+                  order.statusAr,
                   style: TextStyle(
-                    color: statusColor,
+                    color: _statusColor,
                     fontSize: 11,
                     fontWeight: FontWeight.w800,
                     fontFamily: 'Cairo',
@@ -281,14 +302,10 @@ class _OrderCard extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           Text(
-            isAr ? order.itemsNameAr : order.itemsNameEn,
+            order.itemsNameAr,
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              fontSize: 13,
-              height: 1.4,
-              fontFamily: 'Cairo',
-            ),
+            style: const TextStyle(fontSize: 13, height: 1.4, fontFamily: 'Cairo'),
           ),
           const SizedBox(height: 12),
           Row(
@@ -304,12 +321,8 @@ class _OrderCard extends StatelessWidget {
                 ),
               ),
               Text(
-                isAr ? order.paymentMethodAr : order.paymentMethodEn,
-                style: const TextStyle(
-                  color: Colors.grey,
-                  fontSize: 11,
-                  fontFamily: 'Cairo',
-                ),
+                order.paymentMethodAr,
+                style: const TextStyle(color: Colors.grey, fontSize: 11, fontFamily: 'Cairo'),
               ),
             ],
           ),
@@ -318,39 +331,31 @@ class _OrderCard extends StatelessWidget {
             spacing: 8,
             runSpacing: 8,
             children: [
-              _SmallButton(
-                label: isAr ? 'تفاصيل' : 'Details',
-                color: Colors.black87,
-                onTap: onDetails,
-              ),
-              if (order.statusKey == 'pending')
+              _SmallButton(label: 'تفاصيل', color: Colors.black87, onTap: onDetails),
+              if (order.statusKey == 'pending') ...[
+                _SmallButton(label: 'قبول', color: Colors.blue, onTap: onAccept),
+                _SmallButton(label: 'رفض', color: Colors.red, onTap: onReject),
+              ],
+              if (order.statusKey == 'accepted')
+                _SmallButton(label: 'إكمال الطلب', color: Colors.green, onTap: onNext),
+              if (order.statusKey == 'cancel_requested') ...[
                 _SmallButton(
-                  label: isAr ? 'قبول' : 'Accept',
-                  color: Colors.blue,
-                  onTap: onAccept,
-                ),
-              if (order.statusKey == 'pending')
-                _SmallButton(
-                  label: isAr ? 'رفض' : 'Reject',
+                  label: 'موافقة على الإلغاء',
                   color: Colors.red,
-                  onTap: onReject,
+                  onTap: onApproveCancelRequest,
                 ),
-              if (order.statusKey == 'preparing')
                 _SmallButton(
-                  label: isAr ? 'جاهز للتوصيل' : 'Ready for courier',
-                  color: Colors.green,
-                  onTap: onNext,
+                  label: 'رفض طلب الإلغاء',
+                  color: Colors.blue,
+                  onTap: onRejectCancelRequest,
                 ),
+              ],
               if (order.statusKey != 'completed' &&
                   order.statusKey != 'cancelled' &&
-                  order.statusKey != 'delivering' &&
-                  order.statusKey != 'preparing' &&
+                  order.statusKey != 'accepted' &&
+                  order.statusKey != 'cancel_requested' &&
                   order.statusKey != 'pending')
-                _SmallButton(
-                  label: isAr ? 'تغيير الحالة' : 'Next Status',
-                  color: Colors.green,
-                  onTap: onNext,
-                ),
+                _SmallButton(label: 'تغيير الحالة', color: Colors.green, onTap: onNext),
             ],
           ),
         ],
@@ -364,11 +369,7 @@ class _SmallButton extends StatelessWidget {
   final Color color;
   final VoidCallback onTap;
 
-  const _SmallButton({
-    required this.label,
-    required this.color,
-    required this.onTap,
-  });
+  const _SmallButton({required this.label, required this.color, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -380,10 +381,51 @@ class _SmallButton extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       ),
       onPressed: onTap,
-      child: Text(
-        label,
-        style: const TextStyle(
-            fontFamily: 'Cairo', fontWeight: FontWeight.w800, fontSize: 12),
+      child: Text(label, style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w800, fontSize: 12)),
+    );
+  }
+}
+
+class _PendingApprovalCountdown extends StatefulWidget {
+  final ActiveOrder order;
+
+  const _PendingApprovalCountdown({required this.order});
+
+  @override
+  State<_PendingApprovalCountdown> createState() =>
+      _PendingApprovalCountdownState();
+}
+
+class _PendingApprovalCountdownState extends State<_PendingApprovalCountdown> {
+  Timer? _ticker;
+
+  @override
+  void initState() {
+    super.initState();
+    _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted) return;
+      setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _ticker?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final label =
+        context.read<AppProvider>().pendingApprovalRemainingLabelAr(widget.order);
+    if (label == null) return const SizedBox.shrink();
+    return Text(
+      label,
+      style: const TextStyle(
+        color: Colors.red,
+        fontSize: 11,
+        fontFamily: 'Cairo',
+        fontWeight: FontWeight.w700,
       ),
     );
   }
@@ -394,11 +436,7 @@ class _MiniStat extends StatelessWidget {
   final String value;
   final Color color;
 
-  const _MiniStat({
-    required this.label,
-    required this.value,
-    required this.color,
-  });
+  const _MiniStat({required this.label, required this.value, required this.color});
 
   @override
   Widget build(BuildContext context) {
@@ -407,24 +445,10 @@ class _MiniStat extends StatelessWidget {
         CircleAvatar(
           radius: 22,
           backgroundColor: color.withValues(alpha: 0.10),
-          child: Text(
-            value,
-            style: TextStyle(
-              color: color,
-              fontWeight: FontWeight.w900,
-              fontFamily: 'Cairo',
-            ),
-          ),
+          child: Text(value, style: TextStyle(color: color, fontWeight: FontWeight.w900, fontFamily: 'Cairo')),
         ),
         const SizedBox(height: 8),
-        Text(
-          label,
-          style: const TextStyle(
-            fontSize: 11,
-            color: Colors.grey,
-            fontFamily: 'Cairo',
-          ),
-        ),
+        Text(label, style: const TextStyle(fontSize: 11, color: Colors.grey, fontFamily: 'Cairo')),
       ],
     );
   }

@@ -10,7 +10,6 @@ class MerchantReviewsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<AppProvider>();
-    final isAr = provider.lang == 'ar';
     final reviews = provider.merchantReviews;
 
     return Scaffold(
@@ -37,7 +36,7 @@ class MerchantReviewsScreen extends StatelessWidget {
                       size: 48, color: Colors.deepOrange),
                   const SizedBox(height: 12),
                   Text(
-                    isAr ? 'لا توجد تقييمات بعد' : 'No reviews yet',
+                    'لا توجد تقييمات بعد',
                     style: const TextStyle(
                       fontFamily: 'Cairo',
                       fontWeight: FontWeight.w900,
@@ -51,7 +50,6 @@ class MerchantReviewsScreen extends StatelessWidget {
             ...reviews.map(
               (review) => _ReviewCard(
                 review: review,
-                isAr: isAr,
                 onReply: () => _showReplyDialog(context, review),
               ),
             ),
@@ -65,32 +63,31 @@ class MerchantReviewsScreen extends StatelessWidget {
     MerchantReview review,
   ) async {
     final provider = context.read<AppProvider>();
-    final isAr = provider.lang == 'ar';
     final controller = TextEditingController(text: review.reply ?? '');
 
     final submitted = await showDialog<String>(
       context: context,
       builder: (dialogContext) {
         return AlertDialog(
-          title: Text(
-            isAr ? 'الرد على التقييم' : 'Reply to review',
-            style: const TextStyle(fontFamily: 'Cairo'),
+          title: const Text(
+            'الرد على التقييم',
+            style: TextStyle(fontFamily: 'Cairo'),
           ),
           content: TextField(
             controller: controller,
             maxLines: 4,
             decoration: InputDecoration(
-              hintText: isAr ? 'اكتب ردك هنا' : 'Write your reply here',
+              hintText: 'اكتب ردك هنا',
             ),
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(dialogContext),
-              child: Text(isAr ? 'إلغاء' : 'Cancel'),
+              child: const Text('إلغاء'),
             ),
             FilledButton(
               onPressed: () => Navigator.pop(dialogContext, controller.text),
-              child: Text(isAr ? 'حفظ' : 'Save'),
+              child: const Text('حفظ'),
             ),
           ],
         );
@@ -104,7 +101,7 @@ class MerchantReviewsScreen extends StatelessWidget {
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(isAr ? 'تم حفظ الرد' : 'Reply saved'),
+          content: const Text('تم حفظ الرد'),
         ),
       );
     }
@@ -113,12 +110,10 @@ class MerchantReviewsScreen extends StatelessWidget {
 
 class _ReviewCard extends StatelessWidget {
   final MerchantReview review;
-  final bool isAr;
   final VoidCallback onReply;
 
   const _ReviewCard({
     required this.review,
-    required this.isAr,
     required this.onReply,
   });
 
@@ -194,7 +189,7 @@ class _ReviewCard extends StatelessWidget {
                 borderRadius: BorderRadius.circular(16),
               ),
               child: Text(
-                isAr ? 'ردك: ${review.reply}' : 'Your reply: ${review.reply}',
+                'ردك: ${review.reply}',
                 style: const TextStyle(fontFamily: 'Cairo'),
               ),
             ),
@@ -206,7 +201,7 @@ class _ReviewCard extends StatelessWidget {
               onPressed: onReply,
               icon: const Icon(Icons.reply_rounded),
               label: Text(
-                isAr ? 'الرد على التقييم' : 'Reply to review',
+                'الرد على التقييم',
                 style: const TextStyle(
                   fontFamily: 'Cairo',
                   fontWeight: FontWeight.w800,

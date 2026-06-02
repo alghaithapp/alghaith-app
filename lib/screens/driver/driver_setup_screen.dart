@@ -23,9 +23,7 @@ class _DriverSetupScreenState extends State<DriverSetupScreen> {
   final TextEditingController _areaController =
       TextEditingController(text: 'بغداد - المنصور');
   final TextEditingController _notesController =
-      TextEditingController(text: 'جاهز لاستلام الطلبات القريبة');
-
-  String _driverType = 'taxi';
+      TextEditingController(text: 'جاهز لاستلام طلبات التكسي القريبة');
 
   @override
   void dispose() {
@@ -41,21 +39,14 @@ class _DriverSetupScreenState extends State<DriverSetupScreen> {
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<AppProvider>();
-    final isAr = provider.lang == 'ar';
-    final title = isAr ? 'تسجيل حساب السائق' : 'Driver Account Setup';
-    final subtitle = _driverType == 'taxi'
-        ? (isAr ? 'سائق تكسي فقط' : 'Taxi service only')
-        : _driverType == 'delivery'
-            ? (isAr ? 'مندوب توصيل فقط' : 'Delivery service only')
-            : (isAr ? 'الخدمتان معًا' : 'Both services');
 
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7FB),
       appBar: AppBar(
-        title: Text(
-          title,
+        title: const Text(
+          'تسجيل سائق تكسي',
           style:
-              const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w900),
+              TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w900),
         ),
       ),
       body: ListView(
@@ -84,27 +75,23 @@ class _DriverSetupScreenState extends State<DriverSetupScreen> {
                       color: Colors.white, size: 30),
                 ),
                 const SizedBox(width: 12),
-                Expanded(
+                const Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        isAr
-                            ? 'أنت على وشك إنشاء حساب سائق للخدمات'
-                            : 'You are setting up a service driver account',
-                        style: const TextStyle(
+                        'حساب سائق تكسي — نقل الزبائن',
+                        style: TextStyle(
                           color: Colors.white,
                           fontSize: 17,
                           fontWeight: FontWeight.w900,
                           fontFamily: 'Cairo',
                         ),
                       ),
-                      const SizedBox(height: 4),
+                      SizedBox(height: 4),
                       Text(
-                        isAr
-                            ? 'اختر الخدمات التي تريد استقبالها ثم أدخل بياناتك الأساسية.'
-                            : 'Choose the services you want to receive and enter your details.',
-                        style: const TextStyle(
+                        'هذا الحساب لطلبات التكسي فقط. لتوصيل طلبات المطاعم والتسوق استخدم حساب مندوب التوصيل.',
+                        style: TextStyle(
                           color: Colors.white70,
                           fontSize: 12,
                           height: 1.4,
@@ -118,44 +105,29 @@ class _DriverSetupScreenState extends State<DriverSetupScreen> {
             ),
           ),
           const SizedBox(height: 16),
-          _TypeSelector(
-            isAr: isAr,
-            selectedType: _driverType,
-            onChanged: (value) => setState(() => _driverType = value),
-          ),
-          const SizedBox(height: 10),
-          Text(
-            subtitle,
-            style: const TextStyle(
-              color: Colors.grey,
-              fontSize: 12,
-              fontFamily: 'Cairo',
-            ),
-          ),
-          const SizedBox(height: 16),
           _Field(
-            label: isAr ? 'الاسم الكامل' : 'Full name',
+            label: 'الاسم الكامل',
             controller: _nameController,
           ),
           _Field(
-            label: isAr ? 'رقم الهاتف' : 'Phone number',
+            label: 'رقم الهاتف',
             controller: _phoneController,
             keyboardType: TextInputType.phone,
           ),
           _Field(
-            label: isAr ? 'نوع السيارة' : 'Vehicle type',
+            label: 'نوع السيارة',
             controller: _vehicleController,
           ),
           _Field(
-            label: isAr ? 'رقم اللوحة' : 'Plate number',
+            label: 'رقم اللوحة',
             controller: _plateController,
           ),
           _Field(
-            label: isAr ? 'المنطقة' : 'Working area',
+            label: 'المنطقة',
             controller: _areaController,
           ),
           _Field(
-            label: isAr ? 'ملاحظات' : 'Notes',
+            label: 'ملاحظات',
             controller: _notesController,
             maxLines: 3,
           ),
@@ -167,14 +139,10 @@ class _DriverSetupScreenState extends State<DriverSetupScreen> {
               borderRadius: BorderRadius.circular(18),
               padding: const EdgeInsets.symmetric(vertical: 15),
               onPressed: () async {
-                provider.setDriverType(_driverType);
+                provider.setDriverType('taxi');
                 await provider.setDriverProfile({
-                  'type': _driverType,
-                  'services': {
-                    'taxi': _driverType == 'taxi' || _driverType == 'both',
-                    'delivery':
-                        _driverType == 'delivery' || _driverType == 'both',
-                  },
+                  'type': 'taxi',
+                  'services': {'taxi': true, 'delivery': false},
                   'name': _nameController.text.trim(),
                   'phone': _phoneController.text.trim(),
                   'vehicle': _vehicleController.text.trim(),
@@ -184,9 +152,9 @@ class _DriverSetupScreenState extends State<DriverSetupScreen> {
                 });
                 provider.setUserRole('driver');
               },
-              child: Text(
-                isAr ? 'حفظ وتفعيل الحساب' : 'Save and activate',
-                style: const TextStyle(
+              child: const Text(
+                'حفظ وتفعيل حساب التكسي',
+                style: TextStyle(
                   fontFamily: 'Cairo',
                   fontWeight: FontWeight.w900,
                 ),
@@ -194,132 +162,6 @@ class _DriverSetupScreenState extends State<DriverSetupScreen> {
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _TypeSelector extends StatelessWidget {
-  final bool isAr;
-  final String selectedType;
-  final ValueChanged<String> onChanged;
-
-  const _TypeSelector({
-    required this.isAr,
-    required this.selectedType,
-    required this.onChanged,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Row(
-          children: [
-            Expanded(
-              child: _TypeCard(
-                isSelected: selectedType == 'taxi',
-                title: isAr ? 'سائق تكسي فقط' : 'Taxi only',
-                subtitle: isAr ? 'استقبال طلبات التكسي' : 'Taxi requests only',
-                icon: Icons.local_taxi_rounded,
-                color: Colors.orange,
-                onTap: () => onChanged('taxi'),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: _TypeCard(
-                isSelected: selectedType == 'delivery',
-                title: isAr ? 'مندوب توصيل فقط' : 'Delivery only',
-                subtitle: isAr ? 'استقبال طلبات المطاعم' : 'Restaurant orders only',
-                icon: Icons.delivery_dining_rounded,
-                color: Colors.blue,
-                onTap: () => onChanged('delivery'),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        _TypeCard(
-          isSelected: selectedType == 'both',
-          title: isAr ? 'الخدمتان معًا' : 'Both services',
-          subtitle: isAr
-              ? 'التكسي وطلبات التوصيل معًا'
-              : 'Taxi and delivery requests together',
-          icon: Icons.sync_alt_rounded,
-          color: Colors.green,
-          onTap: () => onChanged('both'),
-        ),
-      ],
-    );
-  }
-}
-
-class _TypeCard extends StatelessWidget {
-  final bool isSelected;
-  final String title;
-  final String subtitle;
-  final IconData icon;
-  final Color color;
-  final VoidCallback onTap;
-
-  const _TypeCard({
-    required this.isSelected,
-    required this.title,
-    required this.subtitle,
-    required this.icon,
-    required this.color,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 220),
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: isSelected ? color.withValues(alpha: 0.12) : Colors.white,
-          borderRadius: BorderRadius.circular(22),
-          border: Border.all(
-            color: isSelected ? color : Colors.grey.shade200,
-            width: isSelected ? 1.5 : 1,
-          ),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              width: 42,
-              height: 42,
-              decoration: BoxDecoration(
-                color: color.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: Icon(icon, color: color),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              title,
-              style: const TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.w900,
-                fontFamily: 'Cairo',
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              subtitle,
-              style: const TextStyle(
-                fontSize: 11,
-                color: Colors.grey,
-                height: 1.35,
-                fontFamily: 'Cairo',
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }

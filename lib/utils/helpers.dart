@@ -34,6 +34,22 @@ class AppHelpers {
     await launchUrl(launchUri);
   }
 
+  static Future<void> openExternalMapNavigation({
+    required double latitude,
+    required double longitude,
+  }) async {
+    final googleUri = Uri.parse(
+      'https://www.google.com/maps/dir/?api=1&destination=$latitude,$longitude&travelmode=driving',
+    );
+    final geoUri = Uri.parse('geo:$latitude,$longitude?q=$latitude,$longitude');
+
+    if (await canLaunchUrl(geoUri)) {
+      await launchUrl(geoUri, mode: LaunchMode.externalApplication);
+      return;
+    }
+    await launchUrl(googleUri, mode: LaunchMode.externalApplication);
+  }
+
   static Future<void> launchEmail({
     required String email,
     String subject = '',

@@ -9,12 +9,11 @@ class AddressesScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final appProvider = Provider.of<AppProvider>(context);
-    final isAr = appProvider.lang == 'ar';
 
     return CupertinoPageScaffold(
       backgroundColor: const Color(0xFFF2F2F7),
       navigationBar: CupertinoNavigationBar(
-        middle: Text(isAr ? "عناويني" : "My Addresses", style: const TextStyle(fontWeight: FontWeight.bold, fontFamily: 'Cairo')),
+        middle: Text("عناويني", style: const TextStyle(fontWeight: FontWeight.bold, fontFamily: 'Cairo')),
         trailing: CupertinoButton(
           padding: EdgeInsets.zero,
           child: const Icon(CupertinoIcons.add_circled_solid, color: Colors.orange),
@@ -23,7 +22,7 @@ class AddressesScreen extends StatelessWidget {
       ),
       child: SafeArea(
         child: appProvider.addresses.isEmpty
-            ? Center(child: Text(isAr ? "لا توجد عناوين مضافة" : "No addresses added", style: const TextStyle(fontFamily: 'Cairo')))
+            ? Center(child: Text("لا توجد عناوين مضافة", style: const TextStyle(fontFamily: 'Cairo')))
             : ListView.builder(
                 padding: const EdgeInsets.all(16),
                 itemCount: appProvider.addresses.length,

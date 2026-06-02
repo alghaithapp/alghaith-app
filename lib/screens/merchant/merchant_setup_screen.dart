@@ -7,10 +7,12 @@ import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
 import '../../providers/app_provider.dart';
+import '../../services/image_storage_service.dart';
 import '../../utils/dummy_data.dart';
 import '../../utils/helpers.dart';
 import '../../utils/merchant_service_labels.dart';
 import '../../widgets/app_image.dart';
+import '../../widgets/location_picker_screen.dart';
 
 class MerchantSetupScreen extends StatefulWidget {
   const MerchantSetupScreen({super.key});
@@ -35,6 +37,8 @@ class _MerchantSetupScreenState extends State<MerchantSetupScreen> {
   String? _profileImageBase64;
   final List<String> _workSampleImagesBase64 = [];
   String? _selectedProfessionalCategoryId;
+  double? _storeLatitude;
+  double? _storeLongitude;
 
   String get _primaryServiceId => _selectedServiceIds.first;
 
@@ -55,6 +59,9 @@ class _MerchantSetupScreenState extends State<MerchantSetupScreen> {
       _selectedServiceIds.contains('professionals');
 
   bool get _isRestaurantSetup => _primaryServiceId == 'restaurant';
+  bool get _requiresStoreLocation =>
+      _selectedServiceIds.contains('restaurant') ||
+      _selectedServiceIds.contains('product');
 
   @override
   void initState() {
@@ -89,6 +96,8 @@ class _MerchantSetupScreenState extends State<MerchantSetupScreen> {
       _profileImageBase64 ??= provider.merchantProfileImageBase64;
       _selectedProfessionalCategoryId ??=
           provider.merchantProfessionalCategoryId;
+      _storeLatitude ??= provider.merchantLatitude;
+      _storeLongitude ??= provider.merchantLongitude;
       if (_workSampleImagesBase64.isEmpty) {
         _workSampleImagesBase64.addAll(provider.merchantWorkSampleImagesBase64);
       }
@@ -114,20 +123,12 @@ class _MerchantSetupScreenState extends State<MerchantSetupScreen> {
   }
 
   String? _extractBase64(String value) {
-    final trimmed = value.trim();
-    if (trimmed.isEmpty) return null;
-    if (trimmed.startsWith('iVBOR') ||
-        trimmed.startsWith('/9j/') ||
-        trimmed.length > 80) {
-      return trimmed;
-    }
-    return null;
+    return ImageStorageService.normalizeImageRef(value);
   }
 
   @override
   Widget build(BuildContext context) {
     final appProvider = Provider.of<AppProvider>(context);
-    final isAr = appProvider.lang == 'ar';
     final labels = merchantServiceLabels(_primaryServiceId);
     final hideFee = _primaryServiceId == 'professionals' ||
         _primaryServiceId == 'restaurant';
@@ -168,7 +169,7 @@ class _MerchantSetupScreenState extends State<MerchantSetupScreen> {
           ),
         ),
         middle: Text(
-          isAr ? labels.accountTitleAr : labels.accountTitleEn,
+          labels.accountTitleAr,
           style:
               const TextStyle(fontWeight: FontWeight.w700, fontFamily: 'Cairo'),
         ),
@@ -217,9 +218,7 @@ class _MerchantSetupScreenState extends State<MerchantSetupScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              isAr
-                                  ? labels.dashboardGreetingAr
-                                  : labels.dashboardGreetingEn,
+                              labels.dashboardGreetingAr,
                               style: const TextStyle(
                                 color: Colors.white,
                                 fontSize: 18,
@@ -229,9 +228,7 @@ class _MerchantSetupScreenState extends State<MerchantSetupScreen> {
                             ),
                             const SizedBox(height: 6),
                             Text(
-                              isAr
-                                  ? labels.dashboardIntroAr
-                                  : labels.dashboardIntroEn,
+                              labels.dashboardIntroAr,
                               style: const TextStyle(
                                 color: Colors.white70,
                                 height: 1.35,
@@ -253,41 +250,31 @@ class _MerchantSetupScreenState extends State<MerchantSetupScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _sectionTitle(isAr
-                        ? 'معلومات ${labels.storeLabelAr}'
-                        : 'Business Info'),
+                    _sectionTitle('معلومات ${labels.storeLabelAr}'),
                     const SizedBox(height: 12),
                     _buildField(
-                        isAr
-                            ? (_isProfessionalSetup
-                                ? 'اسم صاحب المهنة'
-                                : 'اسم ${labels.storeLabelAr}')
-                            : (_isProfessionalSetup
-                                ? 'Professional name'
-                                : labels.storeNameLabelEn),
+                        _isProfessionalSetup
+                            ? 'اسم صاحب المهنة'
+                            : 'اسم ${labels.storeLabelAr}',
                         _nameController),
                     const SizedBox(height: 14),
                     _buildField(
-                        isAr
-                            ? (_isProfessionalSetup
-                                ? 'وصف المهنة'
-                                : 'وصف ${labels.storeLabelAr}')
-                            : (_isProfessionalSetup
-                                ? 'Professional description'
-                                : labels.descriptionLabelEn),
+                        _isProfessionalSetup
+                            ? 'وصف المهنة'
+                            : 'وصف ${labels.storeLabelAr}',
                         _descController,
                         maxLines: 3),
                     const SizedBox(height: 14),
                     _buildField(
-                        isAr ? 'رقم الهاتف' : 'Phone number', _phoneController),
+                        'رقم الهاتف', _phoneController),
                     const SizedBox(height: 14),
                     if (_isProfessionalSetup) ...[
                       _buildField(
-                        isAr ? 'رقم الواتساب' : 'WhatsApp number',
+                        'رقم الواتساب',
                         _whatsappController,
                       ),
                       const SizedBox(height: 14),
-                      _sectionTitle(isAr ? 'تخصص المهنة' : 'Profession'),
+                      _sectionTitle('تخصص المهنة'),
                       const SizedBox(height: 10),
                       DropdownButtonFormField<String>(
                         value: DummyData.professionalsSubCategories.any(
@@ -301,7 +288,7 @@ class _MerchantSetupScreenState extends State<MerchantSetupScreen> {
                           return DropdownMenuItem<String>(
                             value: profession.id,
                             child: Text(
-                              isAr ? profession.titleAr : profession.titleEn,
+                              profession.titleAr,
                               style: const TextStyle(fontFamily: 'Cairo'),
                             ),
                           );
@@ -321,9 +308,7 @@ class _MerchantSetupScreenState extends State<MerchantSetupScreen> {
                         validator: (value) {
                           if (_isProfessionalSetup &&
                               (value == null || value.isEmpty)) {
-                            return isAr
-                                ? 'اختر تخصص المهنة'
-                                : 'Choose a profession';
+                            return 'اختر تخصص المهنة';
                           }
                           return null;
                         },
@@ -331,39 +316,35 @@ class _MerchantSetupScreenState extends State<MerchantSetupScreen> {
                       const SizedBox(height: 14),
                     ],
                     _buildField(
-                        isAr ? 'العنوان' : 'Address', _addressController),
+                        'العنوان', _addressController),
+                    const SizedBox(height: 12),
+                    _buildLocationCard(),
                     const SizedBox(height: 20),
                     _sectionTitle(
                       _isRestaurantSetup
-                          ? (isAr
-                              ? 'صورة المطعم وشعاره'
-                              : 'Restaurant identity')
+                          ? 'صورة المطعم وشعاره'
                           : (_isProfessionalSetup
-                              ? (isAr
-                                  ? 'الصورة الشخصية والأعمال'
-                                  : 'Profile & work samples')
-                              : (isAr
-                                  ? 'الصور والهوية'
-                                  : 'Images and identity')),
+                              ? 'الصورة الشخصية والأعمال'
+                              : 'الصور والهوية'),
                     ),
                     const SizedBox(height: 12),
                     if (_isRestaurantSetup) ...[
                       _ImagePickCard(
-                        title: isAr ? 'صورة المطعم' : 'Restaurant cover',
+                        title: 'صورة المطعم',
                         imageBase64: _coverImageBase64,
                         icon: Icons.storefront_rounded,
                         onTap: _pickCoverImage,
                       ),
                       const SizedBox(height: 12),
                       _ImagePickCard(
-                        title: isAr ? 'شعار المطعم' : 'Restaurant logo',
+                        title: 'شعار المطعم',
                         imageBase64: _logoImageBase64,
                         icon: Icons.badge_rounded,
                         onTap: _pickLogoImage,
                       ),
                     ] else ...[
                       _ImagePickCard(
-                        title: isAr ? 'الصورة الشخصية' : 'Profile photo',
+                        title: 'الصورة الشخصية',
                         imageBase64: _profileImageBase64,
                         icon: Icons.person_rounded,
                         onTap: _pickProfileImage,
@@ -371,19 +352,17 @@ class _MerchantSetupScreenState extends State<MerchantSetupScreen> {
                       const SizedBox(height: 12),
                       _SampleImagesRow(
                         title:
-                            isAr ? 'صور نماذج الأعمال' : 'Work sample images',
+                            'صور نماذج الأعمال',
                         imagesBase64: _workSampleImagesBase64,
                         onAddTap: _pickWorkSamples,
                       ),
                     ],
                     const SizedBox(height: 20),
                     _sectionTitle(
-                        isAr ? 'الخدمات المشمولة' : 'Enabled services'),
+                        'الخدمات المشمولة'),
                     const SizedBox(height: 6),
                     Text(
-                      isAr
-                          ? 'يمكنك اختيار أكثر من خدمة من نفس الحساب، ثم التبديل بينها لاحقًا من داخل حسابك.'
-                          : 'You can enable more than one service on the same account and switch between them later.',
+                      'يمكنك اختيار أكثر من خدمة من نفس الحساب، ثم التبديل بينها لاحقًا من داخل حسابك.',
                       style: const TextStyle(
                         color: Colors.grey,
                         fontSize: 12,
@@ -400,10 +379,11 @@ class _MerchantSetupScreenState extends State<MerchantSetupScreen> {
                         return GestureDetector(
                           onTap: () => setState(() {
                             if (selected) {
+                              // إلغاء التحديد — لكن يجب الإبقاء على خدمة واحدة على الأقل
                               if (_selectedServiceIds.length == 1) return;
                               _selectedServiceIds.remove(cat.id);
-                              _selectedServiceIds.insert(0, cat.id);
                             } else {
+                              // إضافة وجعلها الخدمة الأساسية
                               _selectedServiceIds.remove(cat.id);
                               _selectedServiceIds.insert(0, cat.id);
                             }
@@ -424,7 +404,7 @@ class _MerchantSetupScreenState extends State<MerchantSetupScreen> {
                               ),
                             ),
                             child: Text(
-                              isAr ? cat.titleAr : cat.titleEn,
+                              cat.titleAr,
                               style: TextStyle(
                                 color: selected ? Colors.white : Colors.black87,
                                 fontWeight: FontWeight.w700,
@@ -437,9 +417,7 @@ class _MerchantSetupScreenState extends State<MerchantSetupScreen> {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      isAr
-                          ? 'اضغط على أي خدمة لتجعلها الخدمة الأساسية أثناء تعبئة البيانات.'
-                          : 'Tap any service to make it the primary service while filling details.',
+                      'اضغط على أي خدمة لتجعلها الخدمة الأساسية أثناء تعبئة البيانات.',
                       style: const TextStyle(
                         color: Colors.grey,
                         fontSize: 12,
@@ -448,29 +426,26 @@ class _MerchantSetupScreenState extends State<MerchantSetupScreen> {
                       ),
                     ),
                     const SizedBox(height: 20),
-                    _sectionTitle(isAr
-                        ? (hideFee
+                    _sectionTitle(
+                        hideFee
                             ? 'أوقات وإعدادات ${labels.storeLabelAr}'
-                            : 'أوقات ورسوم ${labels.storeLabelAr}')
-                        : 'Operation settings'),
+                            : 'أوقات ورسوم ${labels.storeLabelAr}'),
                     const SizedBox(height: 12),
                     Row(
                       children: [
                         Expanded(
                             child: _buildField(
-                                isAr ? 'يفتح' : 'Open', _openTimeController)),
+                                'يفتح', _openTimeController)),
                         const SizedBox(width: 12),
                         Expanded(
                             child: _buildField(
-                                isAr ? 'يغلق' : 'Close', _closeTimeController)),
+                                'يغلق', _closeTimeController)),
                       ],
                     ),
                     const SizedBox(height: 14),
                     if (!hideFee) ...[
                       _buildField(
-                        isAr
-                            ? 'رسوم ${labels.storeLabelAr}'
-                            : labels.deliveryFeeLabelEn,
+                        'رسوم ${labels.storeLabelAr}',
                         _deliveryFeeController,
                         keyboardType: TextInputType.number,
                       ),
@@ -482,9 +457,7 @@ class _MerchantSetupScreenState extends State<MerchantSetupScreen> {
                           borderRadius: BorderRadius.circular(16),
                         ),
                         child: Text(
-                          isAr
-                              ? 'لا توجد رسوم مباشرة على الزبون. التواصل والتفاهم يتم بين الطرفين فقط.'
-                              : 'No direct fee is charged to the customer. Contact and agreement are between both sides only.',
+                          'لا توجد رسوم مباشرة على الزبون. التواصل والتفاهم يتم بين الطرفين فقط.',
                           style: const TextStyle(
                             fontFamily: 'Cairo',
                             height: 1.4,
@@ -505,7 +478,7 @@ class _MerchantSetupScreenState extends State<MerchantSetupScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            isAr ? 'ملاحظات' : 'Notes',
+                            'ملاحظات',
                             style: const TextStyle(
                               fontWeight: FontWeight.w800,
                               fontSize: 16,
@@ -514,9 +487,7 @@ class _MerchantSetupScreenState extends State<MerchantSetupScreen> {
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            isAr
-                                ? 'بعد الحفظ سيتم تفعيل الحساب وفتح لوحة التحكم ببياناتك أنت فقط.'
-                                : 'After saving, the account will be activated with your own details only.',
+                            'بعد الحفظ سيتم تفعيل الحساب وفتح لوحة التحكم ببياناتك أنت فقط.',
                             style: const TextStyle(
                               color: Colors.grey,
                               height: 1.45,
@@ -537,11 +508,7 @@ class _MerchantSetupScreenState extends State<MerchantSetupScreen> {
                         onPressed: () async {
                           final name = _nameController.text.trim();
                           if (name.isEmpty) {
-                            _showMessage(
-                              isAr
-                                  ? 'يرجى إدخال الاسم أولاً'
-                                  : 'Please enter the name first',
-                            );
+                            _showMessage('يرجى إدخال الاسم أولاً');
                             return;
                           }
 
@@ -550,11 +517,7 @@ class _MerchantSetupScreenState extends State<MerchantSetupScreen> {
                                 _coverImageBase64!.isEmpty ||
                                 _logoImageBase64 == null ||
                                 _logoImageBase64!.isEmpty) {
-                              _showMessage(
-                                isAr
-                                    ? 'يرجى إضافة صورة المطعم وشعاره'
-                                    : 'Please add the restaurant cover and logo',
-                              );
+                              _showMessage('يرجى إضافة صورة المطعم وشعاره');
                               return;
                             }
                           }
@@ -574,16 +537,19 @@ class _MerchantSetupScreenState extends State<MerchantSetupScreen> {
                                 closeTime.isEmpty ||
                                 professionId == null ||
                                 professionId.isEmpty) {
-                              _showMessage(
-                                isAr
-                                    ? 'يرجى إكمال بيانات صاحب المهنة'
-                                    : 'Please complete the professional details',
-                              );
+                              _showMessage('يرجى إكمال بيانات صاحب المهنة');
                               return;
                             }
                           }
+                          if (_requiresStoreLocation &&
+                              (_storeLatitude == null ||
+                                  _storeLongitude == null)) {
+                            _showMessage('حدد موقع ${labels.storeLabelAr} على الخريطة أولاً');
+                            return;
+                          }
 
-                          await appProvider.setMerchantStore({
+                          try {
+                            await appProvider.setMerchantStore({
                             'name': name,
                             'description': _descController.text.trim(),
                             'category': _primaryServiceId,
@@ -599,6 +565,8 @@ class _MerchantSetupScreenState extends State<MerchantSetupScreen> {
                             'phone': _phoneController.text.trim(),
                             'whatsapp': _whatsappController.text.trim(),
                             'address': _addressController.text.trim(),
+                            'latitude': _storeLatitude,
+                            'longitude': _storeLongitude,
                             'openTime': _openTimeController.text.trim(),
                             'closeTime': _closeTimeController.text.trim(),
                             'deliveryFee': hideFee
@@ -615,6 +583,8 @@ class _MerchantSetupScreenState extends State<MerchantSetupScreen> {
                                 ? {
                                     'name': _nameController.text.trim(),
                                     'address': _addressController.text.trim(),
+                                    'latitude': _storeLatitude,
+                                    'longitude': _storeLongitude,
                                     'phone': _phoneController.text.trim(),
                                     'whatsapp': _whatsappController.text.trim(),
                                     'openTime': _openTimeController.text.trim(),
@@ -643,12 +613,13 @@ class _MerchantSetupScreenState extends State<MerchantSetupScreen> {
                             'professionalCategoryId':
                                 _selectedProfessionalCategoryId,
                           });
-                          await appProvider.setUserRole('merchant');
+                          await appProvider.activateMerchantRole();
+                          } catch (error) {
+                            _showMessage('تعذر حفظ بيانات التاجر: $error');
+                          }
                         },
                         child: Text(
-                          isAr
-                              ? 'حفظ وتفعيل ${labels.storeLabelAr}'
-                              : 'Save and activate',
+                          'حفظ وتفعيل ${labels.storeLabelAr}',
                           style: const TextStyle(
                             fontWeight: FontWeight.w800,
                             fontFamily: 'Cairo',
@@ -717,6 +688,76 @@ class _MerchantSetupScreenState extends State<MerchantSetupScreen> {
           ..addAll(images);
       });
     }
+  }
+
+  Future<void> _pickStoreLocation() async {
+    final picked = await Navigator.of(context).push<PickedLocation>(
+      CupertinoPageRoute(
+        builder: (_) => LocationPickerScreen(
+          title: 'تحديد موقع المتجر',
+          initialLatitude: _storeLatitude,
+          initialLongitude: _storeLongitude,
+        ),
+      ),
+    );
+    if (picked == null || !mounted) return;
+    setState(() {
+      _storeLatitude = picked.latitude;
+      _storeLongitude = picked.longitude;
+      _addressController.text = picked.address;
+    });
+  }
+
+  Widget _buildLocationCard() {
+    final hasLocation = _storeLatitude != null && _storeLongitude != null;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.grey.shade300),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'لوكيشن المطعم على الخريطة',
+            style: TextStyle(
+              fontFamily: 'Cairo',
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            hasLocation
+                ? 'تم تحديد الموقع: ${_storeLatitude!.toStringAsFixed(5)}, ${_storeLongitude!.toStringAsFixed(5)}'
+                : 'يرجى تحديد موقع المتجر بدقة ليتم حساب كلفة التوصيل بخط طريق حقيقي.',
+            style: const TextStyle(
+              fontFamily: 'Cairo',
+              color: Colors.black87,
+              fontSize: 12,
+              height: 1.4,
+            ),
+          ),
+          const SizedBox(height: 10),
+          CupertinoButton(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            color: Colors.deepOrange,
+            borderRadius: BorderRadius.circular(12),
+            onPressed: _pickStoreLocation,
+            child: Text(
+              hasLocation ? 'تعديل موقع المتجر' : 'تحديد موقع المتجر',
+              style: const TextStyle(
+                fontFamily: 'Cairo',
+                color: Colors.white,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _sectionTitle(String title) {

@@ -31,7 +31,6 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
   final _nameController = TextEditingController();
   final _priceController = TextEditingController();
   final _descController = TextEditingController();
-  final _prepController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
 
   String? _imageBase64;
@@ -47,7 +46,6 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
     _nameController.text = item?.nameAr ?? '';
     _priceController.text = item?.price.toString() ?? '';
     _descController.text = item?.descriptionAr ?? '';
-    _prepController.text = item?.prepMinutes?.toString() ?? '';
     _imageBase64 = item?.imageBase64;
     _imageLabel = item == null ? null : 'selected';
     _isAvailable = item?.isAvailable ?? true;
@@ -60,15 +58,15 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
     _nameController.dispose();
     _priceController.dispose();
     _descController.dispose();
-    _prepController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     final appProvider = Provider.of<AppProvider>(context);
-    final isAr = appProvider.lang == 'ar';
-    final availableServiceIds = appProvider.merchantServiceIds;
+    final availableServiceIds = appProvider.merchantServiceIds.isNotEmpty
+        ? appProvider.merchantServiceIds
+        : const ['restaurant'];
     final serviceId = availableServiceIds.contains(_selectedServiceId ??
             widget.serviceId ??
             appProvider.merchantActiveServiceId)
@@ -84,8 +82,8 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
         : const <ServiceCategory>[];
     final isEdit = widget.item != null;
     final title = isEdit
-        ? (isAr ? labels.editItemAr : labels.editItemEn)
-        : (isAr ? labels.addItemAr : labels.addItemEn);
+        ? labels.editItemAr
+        : labels.addItemAr;
 
     final previewImage = _buildPreviewImage(serviceId);
 
@@ -117,9 +115,7 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                   children: [
                     if (showServicePicker) ...[
                       Text(
-                        isAr
-                            ? 'اختر الخدمة المستهدفة'
-                            : 'Choose target service',
+                        'اختر الخدمة المستهدفة',
                         style: const TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w800,
@@ -137,7 +133,7 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                           return DropdownMenuItem<String>(
                             value: id,
                             child: Text(
-                              isAr ? category.titleAr : category.titleEn,
+                              category.titleAr,
                               style: const TextStyle(fontFamily: 'Cairo'),
                             ),
                           );
@@ -159,7 +155,7 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                     ],
                     if (showSubCategoryPicker) ...[
                       Text(
-                        isAr ? 'اختر قسم التسوق' : 'Choose shopping category',
+                        'اختر قسم التسوق',
                         style: const TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w800,
@@ -176,7 +172,7 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                           return DropdownMenuItem<String>(
                             value: subCategory.id,
                             child: Text(
-                              isAr ? subCategory.titleAr : subCategory.titleEn,
+                              subCategory.titleAr,
                               style: const TextStyle(fontFamily: 'Cairo'),
                             ),
                           );
@@ -187,9 +183,7 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                         validator: (value) {
                           if (showSubCategoryPicker &&
                               (value == null || value.isEmpty)) {
-                            return isAr
-                                ? 'اختر قسمًا فرعيًا للمنتج'
-                                : 'Please choose a shopping sub-category';
+                            return 'اختر قسمًا فرعيًا للمنتج';
                           }
                           return null;
                         },
@@ -205,9 +199,7 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                       const SizedBox(height: 16),
                     ],
                     Text(
-                      isAr
-                          ? 'أضف صورة لـ ${labels.itemSingularAr} لتظهر بشكل احترافي'
-                          : 'Add an image for the ${labels.itemSingularEn} to look professional',
+                      'أضف صورة لـ ${labels.itemSingularAr} لتظهر بشكل احترافي',
                       style: const TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w800,
@@ -258,7 +250,7 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                                       borderRadius: BorderRadius.circular(999),
                                     ),
                                     child: Text(
-                                      isAr ? 'رفع صورة' : 'Upload Image',
+                                      'رفع صورة',
                                       style: const TextStyle(
                                         color: Colors.white,
                                         fontWeight: FontWeight.w700,
@@ -276,9 +268,7 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                     if (_imageLabel != null) ...[
                       const SizedBox(height: 10),
                       Text(
-                        isAr
-                            ? 'تم اختيار الصورة بنجاح'
-                            : 'Image selected successfully',
+                        'تم اختيار الصورة بنجاح',
                         style: const TextStyle(
                           color: Colors.green,
                           fontSize: 12,
@@ -288,66 +278,40 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                     ],
                     const SizedBox(height: 16),
                     _buildField(
-                      label: isAr
-                          ? 'اسم ${labels.itemSingularAr}'
-                          : '${labels.itemSingularEn} name',
+                      label: 'اسم ${labels.itemSingularAr}',
                       controller: _nameController,
                       validator: (value) {
                         if (value == null || value.trim().isEmpty) {
-                          return isAr
-                              ? 'هذا الحقل مطلوب'
-                              : 'This field is required';
+                          return 'هذا الحقل مطلوب';
                         }
                         return null;
                       },
                     ),
                     const SizedBox(height: 14),
                     _buildField(
-                      label: isAr ? 'السعر' : 'Price',
+                      label: 'السعر',
                       controller: _priceController,
                       keyboardType: TextInputType.number,
                       validator: (value) {
                         final parsed = int.tryParse(value?.trim() ?? '');
                         if (parsed == null || parsed <= 0) {
-                          return isAr
-                              ? 'أدخل سعراً صحيحاً'
-                              : 'Enter a valid price';
+                          return 'أدخل سعراً صحيحاً';
                         }
                         return null;
                       },
                     ),
                     const SizedBox(height: 14),
                     _buildField(
-                      label: isAr
-                          ? 'وصف ${labels.itemSingularAr}'
-                          : '${labels.itemSingularEn} description',
+                      label: 'وصف ${labels.itemSingularAr}',
                       controller: _descController,
                       maxLines: 4,
                       validator: (value) {
                         if (value == null || value.trim().isEmpty) {
-                          return isAr ? 'أدخل الوصف' : 'Enter a description';
+                          return 'أدخل الوصف';
                         }
                         return null;
                       },
                     ),
-                    const SizedBox(height: 14),
-                    if (serviceId == 'restaurant')
-                      _buildField(
-                        label: isAr ? 'مدة التحضير (دقائق)' : 'Prep time (min)',
-                        controller: _prepController,
-                        keyboardType: TextInputType.number,
-                        validator: (value) {
-                          if (value != null && value.trim().isNotEmpty) {
-                            final parsed = int.tryParse(value.trim());
-                            if (parsed == null || parsed < 0) {
-                              return isAr
-                                  ? 'أدخل رقماً صحيحاً'
-                                  : 'Enter a valid number';
-                            }
-                          }
-                          return null;
-                        },
-                      ),
                     const SizedBox(height: 4),
                     SwitchListTile(
                       contentPadding: EdgeInsets.zero,
@@ -355,14 +319,14 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                       onChanged: (value) =>
                           setState(() => _isAvailable = value),
                       title: Text(
-                        isAr ? 'حالة التوفر' : 'Availability',
+                        'حالة التوفر',
                         style: const TextStyle(
                             fontFamily: 'Cairo', fontWeight: FontWeight.w700),
                       ),
                       subtitle: Text(
                         _isAvailable
-                            ? (isAr ? 'متوفر' : 'Available')
-                            : (isAr ? 'غير متوفر' : 'Unavailable'),
+                            ? 'متوفر'
+                            : 'غير متوفر',
                         style: const TextStyle(fontFamily: 'Cairo'),
                       ),
                     ),
@@ -373,11 +337,11 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                         color: Colors.orange,
                         borderRadius: BorderRadius.circular(16),
                         onPressed: () =>
-                            _saveItem(context, appProvider, isAr, serviceId),
+                            _saveItem(context, appProvider, serviceId),
                         child: Text(
                           isEdit
-                              ? (isAr ? 'حفظ التعديل' : 'Save Changes')
-                              : (isAr ? labels.addItemAr : labels.addItemEn),
+                              ? 'حفظ التعديل'
+                              : labels.addItemAr,
                           style: const TextStyle(
                             fontWeight: FontWeight.bold,
                             fontFamily: 'Cairo',
@@ -463,13 +427,20 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
     );
   }
 
-  void _saveItem(
+  Future<void> _saveItem(
     BuildContext context,
     AppProvider provider,
-    bool isAr,
     String serviceId,
-  ) {
+  ) async {
     if (!(_formKey.currentState?.validate() ?? false)) {
+      return;
+    }
+    if (!provider.canPublishForService(serviceId)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('حدد موقع المتجر على الخريطة قبل نشر المنتج.'),
+        ),
+      );
       return;
     }
 
@@ -503,9 +474,7 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                           ? 'assets/images/re_house.png'
                           : 'assets/images/cat_shopping.png'),
       imageBase64: _imageBase64,
-      prepMinutes: serviceId == 'restaurant'
-          ? int.tryParse(_prepController.text.trim())
-          : null,
+      prepMinutes: widget.item?.prepMinutes,
       isAvailable: _isAvailable,
       avgPriceLabelAr: 'السعر',
       avgPriceLabelEn: 'Price',
@@ -513,12 +482,31 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
       actionLabelEn: labels.actionLabelEn,
     );
 
-    if (isEdit) {
-      provider.updateProduct(item);
-    } else {
-      provider.addProduct(item);
+    try {
+      if (isEdit) {
+        provider.updateProduct(item);
+      } else {
+        await provider.addProduct(item);
+      }
+      if (!context.mounted) return;
+      Navigator.pop(context);
+    } catch (error) {
+      if (!context.mounted) return;
+      final raw = error.toString();
+      final message = raw.contains('Missing authorization token') ||
+              raw.contains('Invalid authorization token') ||
+              raw.contains('401')
+          ? 'انتهت جلسة الدخول. سجل الخروج ثم ادخل مرة أخرى.'
+          : raw.contains('يرجى تحديد موقع المتجر على الخريطة')
+              ? 'حدد موقع المتجر على الخريطة أولاً، ثم أعد نشر المنتج.'
+          : raw.contains('Network error')
+              ? 'فشل الاتصال بالإنترنت أو بالخادم. حاول مرة أخرى.'
+              : 'تعذر حفظ المنتج في السحابة. تحقق من الاتصال وحاول مرة أخرى.';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(message),
+        ),
+      );
     }
-
-    Navigator.pop(context);
   }
 }

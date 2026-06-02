@@ -1,11 +1,13 @@
+import 'dart:async';
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/app_provider.dart';
 import '../models/app_models.dart';
 import '../utils/extensions.dart';
-import '../utils/translations.dart';
 import '../widgets/app_image.dart';
+import '../widgets/order_tracking_sheet.dart';
 
 class OrdersScreen extends StatefulWidget {
   const OrdersScreen({super.key});
@@ -28,17 +30,21 @@ class _OrdersScreenState extends State<OrdersScreen> {
   @override
   Widget build(BuildContext context) {
     final appProvider = Provider.of<AppProvider>(context);
-    final lang = appProvider.lang;
-    final isAr = lang == 'ar';
     final orders = appProvider.orders;
+    final currentOrders = orders
+        .where((order) =>
+            order.statusKey != 'completed' &&
+            order.statusKey != 'rejected' &&
+            order.statusKey != 'cancelled')
+        .toList();
     final latestTaxiRequest =
         appProvider.taxiRequests.isNotEmpty ? appProvider.taxiRequests.first : null;
 
     return CupertinoPageScaffold(
       backgroundColor: const Color(0xFFF2F2F7),
-      navigationBar: CupertinoNavigationBar(
-        middle: Text(AppTranslations.t('orders', lang),
-            style: const TextStyle(fontWeight: FontWeight.bold)),
+      navigationBar: const CupertinoNavigationBar(
+        middle: Text('طلباتي',
+            style: TextStyle(fontWeight: FontWeight.bold)),
         border: null,
       ),
       child: SafeArea(
@@ -53,17 +59,17 @@ class _OrdersScreenState extends State<OrdersScreen> {
                   groupValue: _selectedSegment,
                   onValueChanged: (value) =>
                       setState(() => _selectedSegment = value!),
-                  children: {
+                  children: const {
                     0: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      child: Text(isAr ? "الطلبات الحالية" : "Active",
-                          style: const TextStyle(
+                      padding: EdgeInsets.symmetric(vertical: 8),
+                      child: Text("الطلبات الحالية",
+                          style: TextStyle(
                               fontSize: 13, fontWeight: FontWeight.bold)),
                     ),
                     1: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      child: Text(isAr ? "الطلبات السابقة" : "Previous",
-                          style: const TextStyle(
+                      padding: EdgeInsets.symmetric(vertical: 8),
+                      child: Text("الطلبات السابقة",
+                          style: TextStyle(
                               fontSize: 13, fontWeight: FontWeight.bold)),
                     ),
                   },
@@ -75,22 +81,24 @@ class _OrdersScreenState extends State<OrdersScreen> {
                 padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
                 child: _TaxiRequestStatusBanner(
                   request: latestTaxiRequest,
-                  isAr: isAr,
                 ),
               ),
             Expanded(
               child: _selectedSegment == 0
-                  ? orders.isEmpty
-                      ? _buildEmptyState(isAr)
+                  ? currentOrders.isEmpty
+                      ? _buildEmptyState()
                       : ListView.builder(
                           padding: const EdgeInsets.all(16),
-                          itemCount: orders.length,
+                          itemCount: currentOrders.length,
                           itemBuilder: (context, index) {
-                            final order = orders[index];
-                            return _buildOrderCard(order, isAr, lang);
+                            final order = currentOrders[index];
+                            return _buildOrderCard(
+                              order,
+                              displayIndex: index + 1,
+                            );
                           },
                         )
-                  : _buildPreviousOrders(isAr),
+                  : _buildPreviousOrders(),
             ),
           ],
         ),
@@ -98,7 +106,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
     );
   }
 
-  Widget _buildEmptyState(bool isAr) {
+  Widget _buildEmptyState() {
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -106,14 +114,18 @@ class _OrdersScreenState extends State<OrdersScreen> {
           const Icon(CupertinoIcons.doc_text,
               size: 80, color: CupertinoColors.systemGrey4),
           const SizedBox(height: 16),
-          Text(isAr ? "لا توجد طلبات حالية" : "No active orders",
-              style: const TextStyle(color: CupertinoColors.systemGrey)),
+          const Text("لا توجد طلبات حالية",
+              style: TextStyle(color: CupertinoColors.systemGrey)),
         ],
       ),
     );
   }
 
-  Widget _buildOrderCard(ActiveOrder order, bool isAr, String lang) {
+  Widget _buildOrderCard(
+    ActiveOrder order, {
+    required int displayIndex,
+  }) {
+    final appProvider = context.read<AppProvider>();
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       padding: const EdgeInsets.all(16),
@@ -133,14 +145,25 @@ class _OrdersScreenState extends State<OrdersScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                      isAr
-                          ? "طلب #${order.orderNumber}"
-                          : "Order #${order.orderNumber}",
+                      "طلب $displayIndex",
                       style: const TextStyle(
                           fontWeight: FontWeight.bold, fontSize: 15)),
-                  Text(isAr ? order.dateAr : order.dateEn,
+                  Text(order.dateAr,
                       style: const TextStyle(
                           color: CupertinoColors.systemGrey, fontSize: 11)),
+                  const SizedBox(height: 2),
+                  Text(
+                    appProvider.orderElapsedLabelAr(order),
+                    style: const TextStyle(
+                      color: CupertinoColors.systemGrey2,
+                      fontSize: 11,
+                      fontFamily: 'Cairo',
+                    ),
+                  ),
+                  if (order.statusKey == 'pending') ...[
+                    const SizedBox(height: 2),
+                    _PendingApprovalCountdown(order: order),
+                  ],
                 ],
               ),
               Container(
@@ -149,7 +172,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
                 decoration: BoxDecoration(
                     color: Colors.orange.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(20)),
-                child: Text(isAr ? order.statusAr : order.statusEn,
+                child: Text(order.statusAr,
                     style: TextStyle(
                         color: Colors.orange[800],
                         fontSize: 10,
@@ -169,9 +192,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Text(
-                  isAr
-                      ? (order.deliveryStatusAr ?? '')
-                      : (order.deliveryStatusEn ?? ''),
+                  order.deliveryStatusAr ?? '',
                   style: TextStyle(
                     color: Colors.blue[800],
                     fontSize: 10,
@@ -184,20 +205,64 @@ class _OrdersScreenState extends State<OrdersScreen> {
           if ((order.assignedCourierName ?? '').isNotEmpty) ...[
             const SizedBox(height: 6),
             Text(
-              isAr
-                  ? 'المندوب: ${order.assignedCourierName}'
-                  : 'Courier: ${order.assignedCourierName}',
+              'المندوب: ${order.assignedCourierName}',
               style: const TextStyle(
                 fontSize: 11,
                 color: CupertinoColors.systemGrey,
               ),
             ),
           ],
+          if (order.statusKey == 'cancelled' && order.noteAr.trim().isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: Colors.red.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  order.noteAr,
+                  style: const TextStyle(
+                    color: Colors.red,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    fontFamily: 'Cairo',
+                  ),
+                ),
+              ),
+            ),
+          ],
+          if (order.statusKey == 'pending' &&
+              order.merchantReadAt != null &&
+              order.merchantReadAt!.trim().isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: Colors.blue.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Text(
+                  'تمت قراءة الطلب من التاجر',
+                  style: TextStyle(
+                    color: Colors.blue,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    fontFamily: 'Cairo',
+                  ),
+                ),
+              ),
+            ),
+          ],
           if (order.codConfirmed) ...[
             const SizedBox(height: 6),
-            Text(
-              isAr ? '✓ تم الدفع نقداً' : '✓ Cash payment confirmed',
-              style: const TextStyle(
+            const Text(
+              '✓ تم الدفع نقداً',
+              style: TextStyle(
                 fontSize: 11,
                 color: Colors.green,
                 fontWeight: FontWeight.bold,
@@ -222,11 +287,11 @@ class _OrdersScreenState extends State<OrdersScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(isAr ? order.itemsNameAr : order.itemsNameEn,
+                    Text(order.itemsNameAr,
                         style: const TextStyle(
                             fontSize: 13, fontWeight: FontWeight.w500),
                         maxLines: 1),
-                    Text("${order.itemsCount} ${isAr ? 'عناصر' : 'items'}",
+                    Text("${order.itemsCount} عناصر",
                         style: const TextStyle(
                             color: CupertinoColors.systemGrey, fontSize: 11)),
                   ],
@@ -236,22 +301,69 @@ class _OrdersScreenState extends State<OrdersScreen> {
           ),
           const SizedBox(height: 16),
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text("${order.price.toLocaleString()} د.ع",
-                  style: const TextStyle(
-                      fontWeight: FontWeight.w900, fontSize: 16)),
-              CupertinoButton(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                color: Colors.orange,
-                borderRadius: BorderRadius.circular(10),
-                minimumSize: const Size(0, 35),
-                onPressed: () => _showTrackingSheet(context, order, isAr),
-                child: Text(isAr ? "تتبع الطلب" : "Track",
+              Expanded(
+                child: Text("${order.price.toLocaleString()} د.ع",
                     style: const TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white)),
+                        fontWeight: FontWeight.w900, fontSize: 16)),
+              ),
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                alignment: WrapAlignment.end,
+                children: [
+                  if (_canRequestCancel(order))
+                    CupertinoButton(
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      color: Colors.red,
+                      borderRadius: BorderRadius.circular(10),
+                      minimumSize: const Size(0, 35),
+                      onPressed: () => _confirmCancelRequest(order),
+                      child: Text(
+                        _isPendingApproval(order) ? 'إلغاء فوري' : 'طلب إلغاء',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                          fontFamily: 'Cairo',
+                        ),
+                      ),
+                    ),
+                  if (order.statusKey == 'cancel_requested')
+                    Container(
+                      margin: const EdgeInsetsDirectional.only(start: 6),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 8,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.orange.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Text(
+                        'بانتظار موافقة التاجر',
+                        style: TextStyle(
+                          color: Colors.orange,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 11,
+                          fontFamily: 'Cairo',
+                        ),
+                      ),
+                    ),
+                  const SizedBox(width: 8),
+                  CupertinoButton(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    color: Colors.orange,
+                    borderRadius: BorderRadius.circular(10),
+                    minimumSize: const Size(0, 35),
+                    onPressed: () => _showTrackingSheet(context, order),
+                    child: const Text("تتبع الطلب",
+                        style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white)),
+                  ),
+                ],
               ),
             ],
           ),
@@ -260,71 +372,68 @@ class _OrdersScreenState extends State<OrdersScreen> {
     );
   }
 
-  void _showTrackingSheet(BuildContext context, ActiveOrder order, bool isAr) {
-    showCupertinoModalPopup(
-      context: context,
-      builder: (context) => CupertinoActionSheet(
-        title: Text(isAr
-            ? "تتبع الطلب #${order.orderNumber}"
-            : "Tracking Order #${order.orderNumber}"),
-        message: Column(
-          children: [
-            const SizedBox(height: 20),
-            _buildTimelineStep(isAr ? "تم استلام الطلب" : "Order Received",
-                isAr ? "تم التأكيد والدفع كاش" : "Confirmed & COD", true, true),
-            _buildTimelineStep(isAr ? "قيد التحضير" : "Preparing",
-                isAr ? "الطلب في المستودع" : "In Warehouse", true, true),
-            _buildTimelineStep(isAr ? "قيد التوصيل" : "Out for Delivery",
-                isAr ? "المندوب في الطريق" : "Courier on the way", true, false),
-            _buildTimelineStep(isAr ? "تم التسليم" : "Delivered",
-                isAr ? "استلم وادفع كاش" : "Received & Paid", false, false),
-          ],
-        ),
-        cancelButton: CupertinoActionSheetAction(
-          onPressed: () => Navigator.pop(context),
-          child: Text(isAr ? "إغلاق" : "Close"),
-        ),
-      ),
-    );
+  bool _canRequestCancel(ActiveOrder order) {
+    return order.statusKey != 'completed' &&
+        order.statusKey != 'cancelled' &&
+        order.statusKey != 'rejected' &&
+        order.statusKey != 'cancel_requested';
   }
 
-  Widget _buildTimelineStep(
-      String title, String subtitle, bool isDone, bool isLast) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 5),
-      child: Row(
-        children: [
-          Icon(
-              isDone
-                  ? CupertinoIcons.checkmark_circle_fill
-                  : CupertinoIcons.circle,
-              color: isDone ? Colors.orange : CupertinoColors.systemGrey4,
-              size: 20),
-          const SizedBox(width: 15),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(title,
-                  style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      color: isDone
-                          ? CupertinoColors.black
-                          : CupertinoColors.systemGrey)),
-              Text(subtitle,
-                  style: const TextStyle(
-                      fontSize: 11, color: CupertinoColors.systemGrey)),
-            ],
-          )
+  bool _isPendingApproval(ActiveOrder order) => order.statusKey == 'pending';
+
+  Future<void> _confirmCancelRequest(ActiveOrder order) async {
+    final isPendingApproval = _isPendingApproval(order);
+    final confirmed = await showCupertinoDialog<bool>(
+      context: context,
+      builder: (dialogContext) => CupertinoAlertDialog(
+        title: Text(isPendingApproval ? 'إلغاء الطلب' : 'طلب إلغاء الطلب'),
+        content: Text(
+          isPendingApproval
+              ? 'الطلب ما زال بانتظار موافقة التاجر، وسيتم إلغاؤه فورًا بدون انتظار موافقة.'
+              : 'سيتم إرسال طلب الإلغاء إلى التاجر للموافقة عليه.',
+        ),
+        actions: [
+          CupertinoDialogAction(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('تراجع'),
+          ),
+          CupertinoDialogAction(
+            isDestructiveAction: true,
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: Text(isPendingApproval ? 'تأكيد الإلغاء' : 'إرسال الطلب'),
+          ),
         ],
       ),
     );
+    if (confirmed != true || !mounted) return;
+    final ok =
+        context.read<AppProvider>().requestCustomerOrderCancellation(order.id);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          ok
+              ? (isPendingApproval
+                  ? 'تم إلغاء الطلب مباشرة.'
+                  : 'تم إرسال طلب الإلغاء إلى التاجر.')
+              : 'لا يمكن إرسال طلب إلغاء لهذه الحالة.',
+        ),
+      ),
+    );
   }
 
-  Widget _buildPreviousOrders(bool isAr) {
+  void _showTrackingSheet(BuildContext context, ActiveOrder order) {
+    showCupertinoModalPopup(
+      context: context,
+      builder: (context) => OrderTrackingSheet(order: order),
+    );
+  }
+
+  Widget _buildPreviousOrders() {
     final appProvider = Provider.of<AppProvider>(context);
-    // تصفية الطلبات لعرض المنتهية فقط (مكتملة أو مرفوضة) في السجل
     final pastOrders = appProvider.orders.where((o) => 
-      o.statusKey == 'completed' || o.statusKey == 'rejected'
+      o.statusKey == 'completed' ||
+      o.statusKey == 'rejected' ||
+      o.statusKey == 'cancelled'
     ).toList();
 
     if (pastOrders.isEmpty) {
@@ -334,8 +443,8 @@ class _OrdersScreenState extends State<OrdersScreen> {
           children: [
             const Icon(CupertinoIcons.archivebox, size: 60, color: CupertinoColors.systemGrey4),
             const SizedBox(height: 12),
-            Text(isAr ? "لا يوجد سجل طلبات بعد" : "No order history yet",
-                style: const TextStyle(color: CupertinoColors.systemGrey, fontFamily: 'Cairo')),
+            const Text("لا يوجد سجل طلبات بعد",
+                style: TextStyle(color: CupertinoColors.systemGrey, fontFamily: 'Cairo')),
           ],
         ),
       );
@@ -347,42 +456,85 @@ class _OrdersScreenState extends State<OrdersScreen> {
       itemBuilder: (context, index) {
         final order = pastOrders[index];
         return _buildHistoryItem(
-          order.orderNumber,
-          isAr ? order.dateAr : order.dateEn,
+          appProvider.displayOrderNumber(order),
+          order.dateAr,
           order.price.toPrice(),
-          isAr,
-          order.statusKey == 'rejected',
+          order.statusKey == 'rejected' || order.statusKey == 'cancelled',
+          onReorder: () {
+            final ok = appProvider.reorderFromPreviousOrder(order);
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  ok
+                      ? 'تمت إضافة نفس الطلب إلى السلة.'
+                      : 'تعذر إعادة الطلب الآن (تحقق من المتجر أو وجود طلب نشط).',
+                ),
+              ),
+            );
+            if (ok) {
+              setState(() => _selectedSegment = 0);
+            }
+          },
         );
       },
     );
   }
 
-  Widget _buildHistoryItem(String id, String date, String price, bool isAr, bool isRejected) {
+  Widget _buildHistoryItem(
+    String id,
+    String date,
+    String price,
+    bool isRejected, {
+    required VoidCallback onReorder,
+  }) {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
           color: CupertinoColors.white,
           borderRadius: BorderRadius.circular(15)),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      child: Column(
         children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(id,
-                  style: const TextStyle(
-                      fontWeight: FontWeight.bold, fontSize: 14)),
-              Text(date,
-                  style: const TextStyle(
-                      color: CupertinoColors.systemGrey, fontSize: 11)),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(id,
+                      style: const TextStyle(
+                          fontWeight: FontWeight.bold, fontSize: 14)),
+                  Text(date,
+                      style: const TextStyle(
+                          color: CupertinoColors.systemGrey, fontSize: 11)),
+                ],
+              ),
+              Text("$price د.ع",
+                  style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                      color: isRejected ? Colors.red : CupertinoColors.systemGreen)),
             ],
           ),
-          Text("$price د.ع",
-              style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 14,
-                  color: isRejected ? Colors.red : CupertinoColors.systemGreen)),
+          const SizedBox(height: 10),
+          SizedBox(
+            width: double.infinity,
+            child: CupertinoButton(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              color: Colors.deepOrange,
+              borderRadius: BorderRadius.circular(10),
+              onPressed: onReorder,
+              child: const Text(
+                'إعادة نفس الطلب',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w700,
+                  fontFamily: 'Cairo',
+                  fontSize: 12,
+                ),
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -391,16 +543,14 @@ class _OrdersScreenState extends State<OrdersScreen> {
 
 class _TaxiRequestStatusBanner extends StatelessWidget {
   final TaxiRequest request;
-  final bool isAr;
 
   const _TaxiRequestStatusBanner({
     required this.request,
-    required this.isAr,
   });
 
   @override
   Widget build(BuildContext context) {
-    final details = _taxiNotice(request.statusKey, isAr);
+    final details = _taxiNotice(request.statusKey);
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -463,7 +613,7 @@ class _TaxiRequestStatusBanner extends StatelessWidget {
               borderRadius: BorderRadius.circular(999),
             ),
             child: Text(
-              isAr ? request.statusAr : request.statusEn,
+              request.statusAr,
               style: const TextStyle(
                 color: Colors.white,
                 fontSize: 11,
@@ -477,72 +627,102 @@ class _TaxiRequestStatusBanner extends StatelessWidget {
     );
   }
 
-  _TaxiNotice _taxiNotice(String statusKey, bool isAr) {
+  _TaxiNotice _taxiNotice(String statusKey) {
     switch (statusKey) {
       case 'accepted':
         return _TaxiNotice(
-          title: isAr ? 'تم قبول الطلب' : 'Request accepted',
-          subtitle: isAr
-              ? 'السائق بدأ تجهيز نفسه للانطلاق'
-              : 'The driver is preparing to leave',
+          title: 'تم قبول الطلب',
+          subtitle: 'السائق بدأ تجهيز نفسه للانطلاق',
           colors: [Colors.blue.shade700, Colors.blue.shade500],
           icon: CupertinoIcons.checkmark_alt_circle_fill,
         );
       case 'on_way':
         return _TaxiNotice(
-          title: isAr ? 'السائق في الطريق' : 'Driver on the way',
-          subtitle: isAr
-              ? 'الرحلة تتقدم نحو موقعك'
-              : 'Your trip is moving toward your location',
+          title: 'السائق في الطريق',
+          subtitle: 'الرحلة تتقدم نحو موقعك',
           colors: [Colors.orange.shade700, Colors.deepOrange.shade400],
           icon: CupertinoIcons.car_fill,
         );
       case 'arrived':
         return _TaxiNotice(
-          title: isAr ? 'وصل للموقع' : 'Arrived at pickup',
-          subtitle: isAr
-              ? 'السائق ينتظر عند نقطة الانطلاق'
-              : 'The driver is waiting at pickup',
+          title: 'وصل للموقع',
+          subtitle: 'السائق ينتظر عند نقطة الانطلاق',
           colors: [Colors.purple.shade700, Colors.purple.shade400],
           icon: CupertinoIcons.location_solid,
         );
       case 'picked_up':
         return _TaxiNotice(
-          title: isAr ? 'استلام الزبون' : 'Customer picked up',
-          subtitle: isAr
-              ? 'تم بدء الرحلة مع السائق'
-              : 'The trip has started',
+          title: 'استلام الزبون',
+          subtitle: 'تم بدء الرحلة مع السائق',
           colors: [Colors.teal.shade700, Colors.teal.shade400],
           icon: CupertinoIcons.person_crop_circle_badge_checkmark,
         );
       case 'completed':
         return _TaxiNotice(
-          title: isAr ? 'تم الوصول' : 'Trip completed',
-          subtitle: isAr
-              ? 'انتهت الرحلة بنجاح'
-              : 'The trip completed successfully',
+          title: 'تم الوصول',
+          subtitle: 'انتهت الرحلة بنجاح',
           colors: [Colors.green.shade700, Colors.green.shade400],
           icon: CupertinoIcons.check_mark_circled_solid,
         );
       case 'rejected':
         return _TaxiNotice(
-          title: isAr ? 'تم رفض الطلب' : 'Request rejected',
-          subtitle: isAr
-              ? 'يمكنك إرسال طلب جديد الآن'
-              : 'You can send a new request now',
+          title: 'تم رفض الطلب',
+          subtitle: 'يمكنك إرسال طلب جديد الآن',
           colors: [Colors.red.shade700, Colors.red.shade400],
           icon: CupertinoIcons.xmark_circle_fill,
         );
       default:
         return _TaxiNotice(
-          title: isAr ? 'بانتظار السائق' : 'Waiting for driver',
-          subtitle: isAr
-              ? 'سيظهر طلبك عند أول سائق متاح'
-              : 'Your request will appear for the next available driver',
+          title: 'بانتظار السائق',
+          subtitle: 'سيظهر طلبك عند أول سائق متاح',
           colors: [Colors.blueGrey.shade700, Colors.blueGrey.shade500],
           icon: CupertinoIcons.time,
         );
     }
+  }
+}
+
+class _PendingApprovalCountdown extends StatefulWidget {
+  final ActiveOrder order;
+
+  const _PendingApprovalCountdown({required this.order});
+
+  @override
+  State<_PendingApprovalCountdown> createState() => _PendingApprovalCountdownState();
+}
+
+class _PendingApprovalCountdownState extends State<_PendingApprovalCountdown> {
+  Timer? _ticker;
+
+  @override
+  void initState() {
+    super.initState();
+    _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted) return;
+      setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _ticker?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final label =
+        context.read<AppProvider>().pendingApprovalRemainingLabelAr(widget.order);
+    if (label == null) return const SizedBox.shrink();
+    return Text(
+      label,
+      style: const TextStyle(
+        color: Colors.red,
+        fontSize: 11,
+        fontFamily: 'Cairo',
+        fontWeight: FontWeight.w700,
+      ),
+    );
   }
 }
 

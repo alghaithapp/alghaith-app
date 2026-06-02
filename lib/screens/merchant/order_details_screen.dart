@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -13,119 +15,76 @@ class OrderDetailsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<AppProvider>();
-    final isAr = provider.lang == 'ar';
     final labels = provider.merchantLabels;
+    unawaited(provider.markMerchantOrderAsRead(order.id));
 
     return Scaffold(
       backgroundColor: const Color(0xFFF4F4F6),
       appBar: AppBar(
         backgroundColor: Colors.white,
         surfaceTintColor: Colors.white,
-        title: Text(
-          isAr ? 'تفاصيل الطلب' : 'Order Details',
-          style:
-              const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w900),
+        title: const Text(
+          'تفاصيل الطلب',
+          style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w900),
         ),
       ),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
           _InfoCard(
-            title: order.orderNumber,
+            title: provider.displayOrderNumber(order),
             children: [
-              _InfoRow(
-                  label: isAr ? 'العميل' : 'Customer',
-                  value: isAr ? order.customerNameAr : order.customerNameEn),
-              _InfoRow(
-                  label: isAr ? 'الهاتف' : 'Phone', value: order.customerPhone),
-              _InfoRow(
-                  label: isAr ? 'العنوان' : 'Address',
-                  value: isAr ? order.addressAr : order.addressEn),
-              _InfoRow(
-                  label: isAr ? 'طريقة الدفع' : 'Payment',
-                  value: isAr ? order.paymentMethodAr : order.paymentMethodEn),
-              if ((isAr ? order.noteAr : order.noteEn).isNotEmpty)
-                _InfoRow(
-                    label: isAr ? 'ملاحظات' : 'Note',
-                    value: isAr ? order.noteAr : order.noteEn),
+              _InfoRow(label: 'العميل',      value: order.customerNameAr),
+              _InfoRow(label: 'الهاتف',      value: order.customerPhone),
+              _InfoRow(label: 'العنوان',      value: order.addressAr),
+              _InfoRow(label: 'طريقة الدفع', value: order.paymentMethodAr),
+              if (order.noteAr.isNotEmpty)
+                _InfoRow(label: 'ملاحظات', value: order.noteAr),
             ],
           ),
           const SizedBox(height: 12),
           _InfoCard(
-            title: isAr
-                ? '${labels.itemPluralAr} المطلوبة'
-                : 'Ordered ${labels.itemPluralEn}',
+            title: '${labels.itemPluralAr} المطلوبة',
             children: order.lineItems.isEmpty
-                ? [
-                    Text(
-                      isAr
-                          ? 'لا توجد عناصر مفصلة.'
-                          : 'No detailed items available.',
-                      style: const TextStyle(
-                          color: Colors.grey, fontFamily: 'Cairo'),
-                    )
-                  ]
-                : order.lineItems.map((item) {
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 10),
-                      child: Row(
-                        children: [
-                          Container(
-                            width: 44,
-                            height: 44,
-                            decoration: BoxDecoration(
-                              color: Colors.deepOrange.withValues(alpha: 0.10),
-                              borderRadius: BorderRadius.circular(14),
-                            ),
-                            child: const Icon(Icons.fastfood_rounded,
-                                color: Colors.deepOrange, size: 22),
+                ? [const Text('لا توجد عناصر مفصلة.', style: TextStyle(color: Colors.grey, fontFamily: 'Cairo'))]
+                : order.lineItems.map((item) => Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 44,
+                          height: 44,
+                          decoration: BoxDecoration(
+                            color: Colors.deepOrange.withValues(alpha: 0.10),
+                            borderRadius: BorderRadius.circular(14),
                           ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  isAr ? item.nameAr : item.nameEn,
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w800,
-                                    fontFamily: 'Cairo',
-                                  ),
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  '${item.quantity} × ${item.price.toPrice()} د.ع',
-                                  style: const TextStyle(
-                                    color: Colors.grey,
-                                    fontSize: 12,
-                                    fontFamily: 'Cairo',
-                                  ),
-                                ),
-                              ],
-                            ),
+                          child: const Icon(Icons.fastfood_rounded, color: Colors.deepOrange, size: 22),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(item.nameAr,
+                                  style: const TextStyle(fontWeight: FontWeight.w800, fontFamily: 'Cairo')),
+                              const SizedBox(height: 4),
+                              Text('${item.quantity} × ${item.price.toPrice()} د.ع',
+                                  style: const TextStyle(color: Colors.grey, fontSize: 12, fontFamily: 'Cairo')),
+                            ],
                           ),
-                        ],
-                      ),
-                    );
-                  }).toList(),
+                        ),
+                      ],
+                    ),
+                  )).toList(),
           ),
           const SizedBox(height: 12),
           _InfoCard(
-            title: isAr ? 'الإجمالي' : 'Total',
+            title: 'الإجمالي',
             children: [
-              _InfoRow(
-                  label: isAr ? 'المبلغ' : 'Amount',
-                  value: '${order.price.toPrice()} د.ع'),
-              _InfoRow(
-                  label: isAr ? 'الحالة' : 'Status',
-                  value: isAr ? order.statusAr : order.statusEn),
+              _InfoRow(label: 'المبلغ', value: '${order.price.toPrice()} د.ع'),
+              _InfoRow(label: 'الحالة', value: order.statusAr),
               if (order.deliveryStatusKey != null)
-                _InfoRow(
-                  label: isAr ? 'التوصيل' : 'Delivery',
-                  value: isAr
-                      ? (order.deliveryStatusAr ?? '-')
-                      : (order.deliveryStatusEn ?? '-'),
-                ),
+                _InfoRow(label: 'التوصيل', value: order.deliveryStatusAr ?? '-'),
             ],
           ),
           const SizedBox(height: 16),
@@ -133,34 +92,87 @@ class OrderDetailsScreen extends StatelessWidget {
             spacing: 10,
             runSpacing: 10,
             children: [
-              _ActionButton(
-                label: isAr ? 'قبول الطلب' : 'Accept',
-                color: Colors.blue,
-                onTap: () => provider.updateOrderStatus(
-                    order.id, 'accepted', 'تم القبول', 'Accepted'),
-              ),
-              _ActionButton(
-                label: isAr ? 'تجهيز الطلب' : 'Prepare',
-                color: Colors.deepOrange,
-                onTap: () => provider.updateOrderStatus(
-                    order.id, 'preparing', 'قيد التجهيز', 'Preparing'),
-              ),
-              _ActionButton(
-                label: isAr ? 'جاهز للتوصيل' : 'Ready',
-                color: Colors.green,
-                onTap: () => provider.updateOrderStatus(
-                    order.id, 'delivering', 'جاهز للتوصيل', 'Ready'),
-              ),
-              _ActionButton(
-                label: isAr ? 'إلغاء الطلب' : 'Cancel',
-                color: Colors.red,
-                onTap: () => provider.updateOrderStatus(
-                    order.id, 'cancelled', 'ملغي', 'Cancelled'),
-              ),
+              if (order.statusKey == 'pending')
+                _ActionButton(
+                  label: 'قبول الطلب',
+                  color: Colors.blue,
+                  onTap: () => provider.updateOrderStatus(
+                    order.id,
+                    'accepted',
+                    'تمت الموافقة',
+                    'Approved',
+                  ),
+                ),
+              if (order.statusKey == 'pending')
+                _ActionButton(
+                  label: 'رفض الطلب',
+                  color: Colors.red,
+                  onTap: () => _rejectWithReason(context, provider, order.id),
+                ),
+              if (order.statusKey == 'cancel_requested')
+                _ActionButton(
+                  label: 'موافقة على الإلغاء',
+                  color: Colors.red,
+                  onTap: () => provider.resolveCustomerCancellationRequestByMerchant(
+                    order.id,
+                    approve: true,
+                  ),
+                ),
+              if (order.statusKey == 'cancel_requested')
+                _ActionButton(
+                  label: 'رفض طلب الإلغاء',
+                  color: Colors.blue,
+                  onTap: () => provider.resolveCustomerCancellationRequestByMerchant(
+                    order.id,
+                    approve: false,
+                  ),
+                ),
             ],
           ),
         ],
       ),
+    );
+  }
+
+  Future<void> _rejectWithReason(
+    BuildContext context,
+    AppProvider provider,
+    String orderId,
+  ) async {
+    final controller = TextEditingController();
+    final reason = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('سبب رفض الطلب'),
+        content: TextField(
+          controller: controller,
+          maxLines: 3,
+          decoration: const InputDecoration(
+            hintText: 'اكتب سبب الرفض ليظهر للزبون',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('إلغاء'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, controller.text.trim()),
+            child: const Text('تأكيد الرفض'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (reason == null || reason.trim().isEmpty) return;
+    provider.updateOrderStatus(
+      orderId,
+      'cancelled',
+      'تم رفض الطلب',
+      'Rejected',
+      noteAr: 'سبب الرفض: ${reason.trim()}',
+      noteEn: 'Rejected reason: ${reason.trim()}',
     );
   }
 }
@@ -169,30 +181,17 @@ class _InfoCard extends StatelessWidget {
   final String title;
   final List<Widget> children;
 
-  const _InfoCard({
-    required this.title,
-    required this.children,
-  });
+  const _InfoCard({required this.title, required this.children});
 
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
-      ),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(24)),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            title,
-            style: const TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w900,
-              fontFamily: 'Cairo',
-            ),
-          ),
+          Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900, fontFamily: 'Cairo')),
           const SizedBox(height: 14),
           ...children,
         ],
@@ -205,10 +204,7 @@ class _InfoRow extends StatelessWidget {
   final String label;
   final String value;
 
-  const _InfoRow({
-    required this.label,
-    required this.value,
-  });
+  const _InfoRow({required this.label, required this.value});
 
   @override
   Widget build(BuildContext context) {
@@ -219,23 +215,10 @@ class _InfoRow extends StatelessWidget {
         children: [
           SizedBox(
             width: 96,
-            child: Text(
-              label,
-              style: const TextStyle(
-                color: Colors.grey,
-                fontSize: 12,
-                fontFamily: 'Cairo',
-              ),
-            ),
+            child: Text(label, style: const TextStyle(color: Colors.grey, fontSize: 12, fontFamily: 'Cairo')),
           ),
           Expanded(
-            child: Text(
-              value,
-              style: const TextStyle(
-                fontWeight: FontWeight.w700,
-                fontFamily: 'Cairo',
-              ),
-            ),
+            child: Text(value, style: const TextStyle(fontWeight: FontWeight.w700, fontFamily: 'Cairo')),
           ),
         ],
       ),
@@ -248,11 +231,7 @@ class _ActionButton extends StatelessWidget {
   final Color color;
   final VoidCallback onTap;
 
-  const _ActionButton({
-    required this.label,
-    required this.color,
-    required this.onTap,
-  });
+  const _ActionButton({required this.label, required this.color, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -262,17 +241,12 @@ class _ActionButton extends StatelessWidget {
         style: ElevatedButton.styleFrom(
           backgroundColor: color,
           foregroundColor: Colors.white,
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           padding: const EdgeInsets.symmetric(vertical: 14),
         ),
         onPressed: onTap,
-        child: Text(
-          label,
-          textAlign: TextAlign.center,
-          style:
-              const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w800),
-        ),
+        child: Text(label, textAlign: TextAlign.center,
+            style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w800)),
       ),
     );
   }

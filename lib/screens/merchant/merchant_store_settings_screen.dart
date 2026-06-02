@@ -1,8 +1,7 @@
 import 'dart:convert';
+import 'dart:io';
 
-import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
-import 'dart:io'; // إضافة مكتبة الملفات
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
@@ -11,6 +10,7 @@ import '../../providers/app_provider.dart';
 import '../../utils/dummy_data.dart';
 import '../../utils/helpers.dart';
 import '../../widgets/app_image.dart';
+import '../../widgets/location_picker_screen.dart';
 
 class MerchantStoreSettingsScreen extends StatefulWidget {
   const MerchantStoreSettingsScreen({super.key});
@@ -37,6 +37,8 @@ class _MerchantStoreSettingsScreenState
   String? _profileImageBase64;
   final List<String> _workSampleImagesBase64 = [];
   String? _selectedProfessionalCategoryId;
+  double? _storeLatitude;
+  double? _storeLongitude;
 
   @override
   void initState() {
@@ -70,6 +72,8 @@ class _MerchantStoreSettingsScreenState
     _logoImageBase64 ??= _extractBase64(provider.merchantLogoImage);
     _profileImageBase64 ??= provider.merchantProfileImageBase64;
     _selectedProfessionalCategoryId ??= provider.merchantProfessionalCategoryId;
+    _storeLatitude ??= provider.merchantLatitude;
+    _storeLongitude ??= provider.merchantLongitude;
     if (_workSampleImagesBase64.isEmpty) {
       _workSampleImagesBase64.addAll(provider.merchantWorkSampleImagesBase64);
     }
@@ -103,18 +107,22 @@ class _MerchantStoreSettingsScreenState
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<AppProvider>();
-    final isAr = provider.lang == 'ar';
     final labels = provider.merchantActiveLabels;
     final serviceIds = provider.merchantServiceIds;
+    final availableToAdd = DummyData.categories
+        .where((category) => !serviceIds.contains(category.id))
+        .toList();
     final hideFee = provider.merchantActiveServiceId == 'professionals' ||
         provider.merchantActiveServiceId == 'restaurant';
     final isProfessional = provider.merchantActiveServiceId == 'professionals';
+    final requiresStoreLocation =
+        serviceIds.contains('restaurant') || serviceIds.contains('product');
 
     return Scaffold(
       backgroundColor: const Color(0xFFF4F4F6),
       appBar: AppBar(
         title: Text(
-          isAr ? labels.storeSettingsTitleAr : labels.storeSettingsTitleEn,
+          labels.storeSettingsTitleAr,
           style:
               const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w900),
         ),
@@ -122,142 +130,166 @@ class _MerchantStoreSettingsScreenState
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          if (provider.merchantHasMultipleServices) ...[
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    isAr ? 'الخدمة النشطة' : 'Active service',
-                    style: const TextStyle(
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'إدارة الخدمات',
+                  style: const TextStyle(
+                    fontFamily: 'Cairo',
+                    fontWeight: FontWeight.w900,
+                    fontSize: 15,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'يمكنك إضافة خدمة جديدة لاحقًا من هنا، ثم التبديل بين خدماتك في أي وقت.',
+                  style: const TextStyle(
+                    color: Colors.grey,
+                    fontSize: 12,
+                    height: 1.5,
+                    fontFamily: 'Cairo',
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: serviceIds.map((serviceId) {
+                    final service = DummyData.categories.firstWhere(
+                      (category) => category.id == serviceId,
+                      orElse: () => DummyData.categories.first,
+                    );
+                    final selected = serviceId == provider.merchantActiveServiceId;
+                    return ChoiceChip(
+                      label: Text(
+                        service.titleAr,
+                        style: const TextStyle(fontFamily: 'Cairo'),
+                      ),
+                      selected: selected,
+                      onSelected: (_) => provider.setMerchantActiveService(serviceId),
+                      selectedColor: Colors.deepOrange,
+                      backgroundColor: Colors.white,
+                      labelStyle: TextStyle(
+                        color: selected ? Colors.white : Colors.black87,
+                        fontFamily: 'Cairo',
+                        fontWeight: FontWeight.w700,
+                      ),
+                    );
+                  }).toList(),
+                ),
+                if (availableToAdd.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  const Text(
+                    'إضافة خدمة جديدة:',
+                    style: TextStyle(
                       fontFamily: 'Cairo',
-                      fontWeight: FontWeight.w900,
-                      fontSize: 15,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 13,
                     ),
                   ),
                   const SizedBox(height: 8),
-                  Text(
-                    isAr
-                        ? 'يمكنك التنقل بين أكثر من خدمة داخل نفس الحساب لتعديل بيانات كل خدمة على حدة.'
-                        : 'Switch between your enabled services to edit each one separately.',
-                    style: const TextStyle(
-                      color: Colors.grey,
-                      fontSize: 12,
-                      height: 1.5,
-                      fontFamily: 'Cairo',
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  SizedBox(
-                    height: 44,
-                    child: ListView.separated(
-                      scrollDirection: Axis.horizontal,
-                      itemBuilder: (context, index) {
-                        final serviceId = serviceIds[index];
-                        final service = DummyData.categories.firstWhere(
-                          (category) => category.id == serviceId,
-                          orElse: () => DummyData.categories.first,
-                        );
-                        final selected = serviceId == provider.merchantActiveServiceId;
-                        return ChoiceChip(
-                          label: Text(
-                            isAr ? service.titleAr : service.titleEn,
-                            style: const TextStyle(fontFamily: 'Cairo'),
-                          ),
-                          selected: selected,
-                          onSelected: (_) => provider.setMerchantActiveService(serviceId),
-                          selectedColor: Colors.deepOrange,
-                          backgroundColor: Colors.white,
-                          labelStyle: TextStyle(
-                            color: selected ? Colors.white : Colors.black87,
-                            fontFamily: 'Cairo',
-                            fontWeight: FontWeight.w700,
-                          ),
-                        );
-                      },
-                      separatorBuilder: (_, __) => const SizedBox(width: 8),
-                      itemCount: serviceIds.length,
-                    ),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: availableToAdd.map((category) {
+                      return ActionChip(
+                        avatar: const Icon(
+                          Icons.add_circle_outline_rounded,
+                          size: 18,
+                          color: Colors.deepOrange,
+                        ),
+                        label: Text(
+                          category.titleAr,
+                          style: const TextStyle(fontFamily: 'Cairo'),
+                        ),
+                        onPressed: () async {
+                          await provider.addMerchantService(category.id);
+                          if (!context.mounted) return;
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                'تمت إضافة خدمة ${category.titleAr} إلى حسابك.',
+                              ),
+                            ),
+                          );
+                        },
+                      );
+                    }).toList(),
                   ),
                 ],
-              ),
+              ],
             ),
-            const SizedBox(height: 12),
-          ],
+          ),
+          const SizedBox(height: 12),
           _ImagePreview(
-            title: isAr ? labels.coverLabelAr : labels.coverLabelEn,
+            title: labels.coverLabelAr,
             image: _coverImageBase64 ?? provider.merchantCoverImage,
           ),
           const SizedBox(height: 12),
           _ImagePreview(
-            title: isAr ? labels.logoLabelAr : labels.logoLabelEn,
+            title: labels.logoLabelAr,
             image: _logoImageBase64 ?? provider.merchantLogoImage,
           ),
           const SizedBox(height: 12),
           _ImagePickerCard(
-            title: isAr ? labels.coverLabelAr : labels.coverLabelEn,
-            subtitle: isAr
-                ? 'اختر صورة الغلاف الرئيسية للمطعم أو المتجر'
-                : 'Choose the main cover image',
+            title: labels.coverLabelAr,
+            subtitle: 'اختر صورة الغلاف الرئيسية للمطعم أو المتجر',
             imageBase64: _coverImageBase64,
             onTap: _pickCoverImage,
           ),
           const SizedBox(height: 12),
           _ImagePickerCard(
-            title: isAr ? labels.logoLabelAr : labels.logoLabelEn,
-            subtitle: isAr
-                ? 'اختر الشعار الظاهر في الواجهة'
-                : 'Choose the logo shown across the app',
+            title: labels.logoLabelAr,
+            subtitle: 'اختر الشعار الظاهر في الواجهة',
             imageBase64: _logoImageBase64,
             onTap: _pickLogoImage,
           ),
           const SizedBox(height: 16),
-          _SectionTitle(title: isAr ? 'معلومات أساسية' : 'Basic info'),
+          const _SectionTitle(title: 'معلومات أساسية'),
           const SizedBox(height: 10),
           _Field(
-              label: isAr ? labels.storeNameLabelAr : labels.storeNameLabelEn,
+              label: labels.storeNameLabelAr,
               controller: _nameController),
           _Field(
               label:
-                  isAr ? labels.descriptionLabelAr : labels.descriptionLabelEn,
+                  labels.descriptionLabelAr,
               controller: _descController,
               maxLines: 3),
           _Field(
-              label: isAr ? 'رقم الهاتف' : 'Phone',
+              label: 'رقم الهاتف',
               controller: _phoneController),
           _Field(
-              label: isAr ? 'واتساب' : 'WhatsApp',
+              label: 'واتساب',
               controller: _whatsappController),
           _Field(
-              label: isAr ? 'العنوان' : 'Address',
+              label: 'العنوان',
               controller: _addressController),
+          _buildStoreLocationCard(),
           const SizedBox(height: 6),
           _SectionTitle(
             title: isProfessional
-                ? (isAr ? 'صور وصاحب المهنة' : 'Professional profile')
-                : (isAr ? 'الصور والهوية' : 'Images and identity'),
+                ? 'صور وصاحب المهنة'
+                : 'الصور والهوية',
           ),
           const SizedBox(height: 10),
           if (isProfessional) ...[
             _ImagePickerCard(
-              title: isAr ? 'الصورة الشخصية' : 'Profile photo',
-              subtitle: isAr
-                  ? 'تظهر هذه الصورة في حساب التاجر وملف صاحب المهنة'
-                  : 'Shown in the merchant profile and professional account',
+              title: 'الصورة الشخصية',
+              subtitle: 'تظهر هذه الصورة في حساب التاجر وملف صاحب المهنة',
               imageBase64: _profileImageBase64,
               onTap: _pickProfileImage,
             ),
             const SizedBox(height: 12),
             _SampleImagesRow(
-              title: isAr ? 'صور نماذج الأعمال' : 'Work sample images',
-              subtitle: isAr
-                  ? 'اختياري، ويمكنك إضافة أكثر من صورة'
-                  : 'Optional, you can add multiple images',
+              title: 'صور نماذج الأعمال',
+              subtitle: 'اختياري، ويمكنك إضافة أكثر من صورة',
               imagesBase64: _workSampleImagesBase64,
               onAddTap: _pickWorkSamples,
               onRemoveTap: (index) {
@@ -268,7 +300,7 @@ class _MerchantStoreSettingsScreenState
           if (isProfessional) ...[
             const SizedBox(height: 12),
             _SectionTitle(
-              title: isAr ? 'تخصص المهنة' : 'Profession',
+              title: 'تخصص المهنة',
             ),
             const SizedBox(height: 10),
             DropdownButtonFormField<String>(
@@ -280,7 +312,7 @@ class _MerchantStoreSettingsScreenState
                 return DropdownMenuItem<String>(
                   value: profession.id,
                   child: Text(
-                    isAr ? profession.titleAr : profession.titleEn,
+                    profession.titleAr,
                     style: const TextStyle(fontFamily: 'Cairo'),
                   ),
                 );
@@ -303,30 +335,26 @@ class _MerchantStoreSettingsScreenState
             children: [
               Expanded(
                 child: _Field(
-                  label: isAr ? 'يفتح' : 'Open',
+                  label: 'يفتح',
                   controller: _openController,
                 ),
               ),
               const SizedBox(width: 12),
               Expanded(
                 child: _Field(
-                  label: isAr ? 'يغلق' : 'Close',
+                  label: 'يغلق',
                   controller: _closeController,
                 ),
               ),
             ],
           ),
           _Field(
-              label: isAr
-                  ? labels.deliveryAreasLabelAr
-                  : labels.deliveryAreasLabelEn,
+              label: labels.deliveryAreasLabelAr,
               controller: _deliveryAreasController,
               maxLines: 2),
           if (!hideFee)
             _Field(
-                label: isAr
-                    ? labels.deliveryFeeLabelAr
-                    : labels.deliveryFeeLabelEn,
+                label: labels.deliveryFeeLabelAr,
                 controller: _deliveryFeeController,
                 keyboardType: TextInputType.number)
           else
@@ -338,9 +366,7 @@ class _MerchantStoreSettingsScreenState
                 borderRadius: BorderRadius.circular(16),
               ),
               child: Text(
-                isAr
-                    ? 'لا توجد رسوم مباشرة في هذا القسم.'
-                    : 'No direct fee is used in this section.',
+                'لا توجد رسوم مباشرة في هذا القسم.',
                 style: const TextStyle(fontFamily: 'Cairo', height: 1.4),
               ),
             ),
@@ -348,14 +374,12 @@ class _MerchantStoreSettingsScreenState
             value: _isOpen,
             onChanged: (value) => setState(() => _isOpen = value),
             title: Text(
-              isAr
-                  ? 'حالة ${labels.storeLabelAr}'
-                  : '${labels.storeLabelEn} status',
+              'حالة ${labels.storeLabelAr}',
               style: const TextStyle(
                   fontFamily: 'Cairo', fontWeight: FontWeight.w800),
             ),
             subtitle: Text(
-              _isOpen ? (isAr ? 'مفتوح' : 'Open') : (isAr ? 'مغلق' : 'Closed'),
+              _isOpen ? 'مفتوح' : 'مغلق',
               style: const TextStyle(fontFamily: 'Cairo'),
             ),
           ),
@@ -369,12 +393,23 @@ class _MerchantStoreSettingsScreenState
               padding: const EdgeInsets.symmetric(vertical: 14),
             ),
             onPressed: () {
+              if (requiresStoreLocation &&
+                  (_storeLatitude == null || _storeLongitude == null)) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('حدد موقع المتجر على الخريطة أولاً'),
+                  ),
+                );
+                return;
+              }
               provider.updateMerchantStore({
                 'name': _nameController.text.trim(),
                 'description': _descController.text.trim(),
                 'phone': _phoneController.text.trim(),
                 'whatsapp': _whatsappController.text.trim(),
                 'address': _addressController.text.trim(),
+                'latitude': _storeLatitude,
+                'longitude': _storeLongitude,
                 'openTime': _openController.text.trim(),
                 'closeTime': _closeController.text.trim(),
                 'deliveryAreas': _deliveryAreasController.text.trim(),
@@ -398,6 +433,8 @@ class _MerchantStoreSettingsScreenState
                     ? {
                         'name': _nameController.text.trim(),
                         'address': _addressController.text.trim(),
+                        'latitude': _storeLatitude,
+                        'longitude': _storeLongitude,
                         'phone': _phoneController.text.trim(),
                         'whatsapp': _whatsappController.text.trim(),
                         'openTime': _openController.text.trim(),
@@ -432,16 +469,88 @@ class _MerchantStoreSettingsScreenState
               if (!context.mounted) return;
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
-                  content: Text(isAr
-                      ? 'تم حفظ التغييرات بنجاح'
-                      : 'Changes saved successfully'),
+                  content: Text('تم حفظ التغييرات بنجاح'),
                 ),
               );
             },
             child: Text(
-              isAr ? 'حفظ التغييرات' : 'Save Changes',
+              'حفظ التغييرات',
               style: const TextStyle(
                   fontFamily: 'Cairo', fontWeight: FontWeight.w900),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _pickStoreLocation() async {
+    final picked = await Navigator.of(context).push<PickedLocation>(
+      CupertinoPageRoute(
+        builder: (_) => LocationPickerScreen(
+          title: 'تحديد موقع المتجر',
+          initialLatitude: _storeLatitude,
+          initialLongitude: _storeLongitude,
+        ),
+      ),
+    );
+    if (picked == null || !mounted) return;
+    setState(() {
+      _storeLatitude = picked.latitude;
+      _storeLongitude = picked.longitude;
+      _addressController.text = picked.address;
+    });
+  }
+
+  Widget _buildStoreLocationCard() {
+    final hasLocation = _storeLatitude != null && _storeLongitude != null;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.grey.shade300),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'موقع المتجر على الخريطة',
+            style: TextStyle(
+              fontFamily: 'Cairo',
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            hasLocation
+                ? '${_storeLatitude!.toStringAsFixed(5)}, ${_storeLongitude!.toStringAsFixed(5)}'
+                : 'حدد الموقع بدقة ليتم احتساب رسوم التوصيل من المطعم إلى الزبون بمسار حقيقي.',
+            style: const TextStyle(
+              fontFamily: 'Cairo',
+              color: Colors.black87,
+              fontSize: 12,
+              height: 1.4,
+            ),
+          ),
+          const SizedBox(height: 10),
+          ElevatedButton.icon(
+            onPressed: _pickStoreLocation,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.deepOrange,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+            icon: const Icon(Icons.location_on_rounded),
+            label: Text(
+              hasLocation ? 'تعديل الموقع' : 'تحديد الموقع',
+              style: const TextStyle(
+                fontFamily: 'Cairo',
+                fontWeight: FontWeight.w800,
+              ),
             ),
           ),
         ],

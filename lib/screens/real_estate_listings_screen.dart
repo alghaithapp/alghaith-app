@@ -1,5 +1,3 @@
-import 'dart:convert';
-
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
@@ -44,16 +42,15 @@ class _RealEstateListingsScreenState extends State<RealEstateListingsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isAr = Directionality.of(context) == TextDirection.rtl;
     final query = _searchController.text.trim().toLowerCase();
     final filters = DummyData.realEstateSubCategories;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF5F6FA),
       appBar: AppBar(
-        title: Text(
-          isAr ? 'العقارات' : 'Real Estate',
-          style: const TextStyle(
+        title: const Text(
+          'العقارات',
+          style: TextStyle(
             fontFamily: 'Cairo',
             fontWeight: FontWeight.w900,
           ),
@@ -64,7 +61,7 @@ class _RealEstateListingsScreenState extends State<RealEstateListingsScreen> {
         children: [
           CupertinoSearchTextField(
             controller: _searchController,
-            placeholder: isAr ? 'ابحث عن عقار' : 'Search property',
+            placeholder: 'ابحث عن عقار',
             onChanged: (_) => setState(() {}),
           ),
           const SizedBox(height: 12),
@@ -79,7 +76,7 @@ class _RealEstateListingsScreenState extends State<RealEstateListingsScreen> {
                 final selected = _selectedSubCategoryId == filter.id;
                 return ChoiceChip(
                   label: Text(
-                    isAr ? filter.titleAr : filter.titleEn,
+                    filter.titleAr,
                     style: const TextStyle(fontFamily: 'Cairo'),
                   ),
                   selected: selected,
@@ -113,11 +110,8 @@ class _RealEstateListingsScreenState extends State<RealEstateListingsScreen> {
                 );
               }
               if (snapshot.hasError) {
-                return _EmptyState(
-                  isAr: isAr,
-                  message: isAr
-                      ? 'تعذر تحميل العقارات'
-                      : 'Failed to load listings',
+                return const _EmptyState(
+                  message: 'تعذر تحميل العقارات',
                 );
               }
 
@@ -127,32 +121,21 @@ class _RealEstateListingsScreenState extends State<RealEstateListingsScreen> {
                     Map<String, dynamic>.from(entry['product'] as Map);
                 final nameAr =
                     product['name_ar']?.toString().toLowerCase() ?? '';
-                final nameEn =
-                    product['name_en']?.toString().toLowerCase() ?? '';
                 final address =
                     product['address']?.toString().toLowerCase() ?? '';
                 final descriptionAr =
                     product['description_ar']?.toString().toLowerCase() ?? '';
-                final descriptionEn =
-                    product['description_en']?.toString().toLowerCase() ?? '';
                 if (query.isEmpty) return true;
                 return nameAr.contains(query) ||
-                    nameEn.contains(query) ||
                     address.contains(query) ||
-                    descriptionAr.contains(query) ||
-                    descriptionEn.contains(query);
+                    descriptionAr.contains(query);
               }).toList();
 
               if (filtered.isEmpty) {
                 return _EmptyState(
-                  isAr: isAr,
                   message: query.isEmpty
-                      ? (isAr
-                          ? 'لا توجد عقارات منشورة بعد'
-                          : 'No properties published yet')
-                      : (isAr
-                          ? 'لا توجد نتائج مطابقة'
-                          : 'No matching properties'),
+                      ? 'لا توجد عقارات منشورة بعد'
+                      : 'لا توجد نتائج مطابقة',
                 );
               }
 
@@ -164,7 +147,6 @@ class _RealEstateListingsScreenState extends State<RealEstateListingsScreen> {
                       ? Map<String, dynamic>.from(entry['merchant'] as Map)
                       : <String, dynamic>{};
                   return _PropertyCard(
-                    isAr: isAr,
                     product: product,
                     merchant: merchant,
                   );
@@ -179,12 +161,10 @@ class _RealEstateListingsScreenState extends State<RealEstateListingsScreen> {
 }
 
 class _PropertyCard extends StatelessWidget {
-  final bool isAr;
   final Map<String, dynamic> product;
   final Map<String, dynamic> merchant;
 
   const _PropertyCard({
-    required this.isAr,
     required this.product,
     required this.merchant,
   });
@@ -232,9 +212,7 @@ class _PropertyCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  isAr
-                      ? (product['name_ar']?.toString() ?? '')
-                      : (product['name_en']?.toString() ?? ''),
+                  product['name_ar']?.toString() ?? '',
                   style: const TextStyle(
                     fontFamily: 'Cairo',
                     fontWeight: FontWeight.w900,
@@ -243,9 +221,7 @@ class _PropertyCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  isAr
-                      ? (product['description_ar']?.toString() ?? '')
-                      : (product['description_en']?.toString() ?? ''),
+                  product['description_ar']?.toString() ?? '',
                   style: const TextStyle(
                     fontFamily: 'Cairo',
                     color: Colors.grey,
@@ -259,26 +235,22 @@ class _PropertyCard extends StatelessWidget {
                   children: [
                     _InfoChip(
                       icon: Icons.location_on_outlined,
-                      label: product['address']?.toString() ??
-                          (isAr ? 'غير محدد' : 'Unknown'),
+                      label: product['address']?.toString() ?? 'غير محدد',
                     ),
                     if (product['area_square_meter'] != null)
                       _InfoChip(
                         icon: Icons.square_foot_outlined,
-                        label:
-                            '${product['area_square_meter']} ${isAr ? 'م²' : 'm²'}',
+                        label: '${product['area_square_meter']} م²',
                       ),
                     if (product['bedrooms'] != null)
                       _InfoChip(
                         icon: Icons.bed_outlined,
-                        label:
-                            '${product['bedrooms']} ${isAr ? 'غرف' : 'beds'}',
+                        label: '${product['bedrooms']} غرف',
                       ),
                     if (product['bathrooms'] != null)
                       _InfoChip(
                         icon: Icons.bathtub_outlined,
-                        label:
-                            '${product['bathrooms']} ${isAr ? 'حمامات' : 'baths'}',
+                        label: '${product['bathrooms']} حمامات',
                       ),
                   ],
                 ),
@@ -289,9 +261,9 @@ class _PropertyCard extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            isAr ? 'السعر' : 'Price',
-                            style: const TextStyle(
+                          const Text(
+                            'السعر',
+                            style: TextStyle(
                               fontFamily: 'Cairo',
                               color: Colors.grey,
                               fontSize: 12,
@@ -315,14 +287,12 @@ class _PropertyCard extends StatelessWidget {
                           ? null
                           : () => AppHelpers.launchWhatsApp(
                                 phone,
-                                isAr
-                                    ? 'مرحبًا، أريد الاستفسار عن العقار ${product['name_ar'] ?? ''}'
-                                    : 'Hello, I want to ask about ${product['name_en'] ?? ''}',
+                                'مرحبًا، أريد الاستفسار عن العقار ${product['name_ar'] ?? ''}',
                               ),
                       icon: const Icon(Icons.chat_outlined),
-                      label: Text(
-                        isAr ? 'تواصل' : 'Contact',
-                        style: const TextStyle(fontFamily: 'Cairo'),
+                      label: const Text(
+                        'تواصل',
+                        style: TextStyle(fontFamily: 'Cairo'),
                       ),
                     ),
                   ],
@@ -330,7 +300,7 @@ class _PropertyCard extends StatelessWidget {
                 if (merchantName != null && merchantName.isNotEmpty) ...[
                   const SizedBox(height: 12),
                   Text(
-                    isAr ? 'الناشر: $merchantName' : 'Listed by: $merchantName',
+                    'الناشر: $merchantName',
                     style: const TextStyle(
                       fontFamily: 'Cairo',
                       color: Colors.black87,
@@ -379,11 +349,9 @@ class _InfoChip extends StatelessWidget {
 }
 
 class _EmptyState extends StatelessWidget {
-  final bool isAr;
   final String message;
 
   const _EmptyState({
-    required this.isAr,
     required this.message,
   });
 

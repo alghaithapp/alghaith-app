@@ -6,7 +6,6 @@ import 'package:provider/provider.dart';
 
 import '../providers/app_provider.dart';
 import '../utils/extensions.dart';
-import '../utils/translations.dart';
 import '../utils/helpers.dart';
 import '../utils/merchant_service_labels.dart';
 import '../widgets/app_image.dart';
@@ -30,21 +29,70 @@ class AccountScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final appProvider = Provider.of<AppProvider>(context);
-    final lang = appProvider.lang;
-    final isAr = lang == 'ar';
 
     if (appProvider.isMerchant) {
-      return _MerchantAccountView(isAr: isAr);
+      return const _MerchantAccountView();
     }
 
-    return _CustomerAccountView(lang: lang, isAr: isAr);
+    return const _CustomerAccountView();
   }
 }
 
-class _MerchantAccountView extends StatelessWidget {
-  final bool isAr;
+Future<void> _switchAccountRoleWithLoading(
+  BuildContext context,
+  AppProvider provider,
+  String role, {
+  required String loadingMessage,
+  required String errorMessage,
+}) async {
+  BuildContext? dialogContext;
+  showDialog<void>(
+    context: context,
+    useRootNavigator: true,
+    barrierDismissible: false,
+    builder: (ctx) {
+      dialogContext = ctx;
+      return AlertDialog(
+        content: Row(
+          children: [
+            const SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(strokeWidth: 2.2),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                loadingMessage,
+                style: const TextStyle(fontFamily: 'Cairo'),
+              ),
+            ),
+          ],
+        ),
+      );
+    },
+  ).then((_) {
+    dialogContext = null;
+  });
 
-  const _MerchantAccountView({required this.isAr});
+  var switched = false;
+  try {
+    switched = await provider.setUserRole(role);
+  } finally {
+    final ctx = dialogContext;
+    if (ctx != null) {
+      Navigator.of(ctx, rootNavigator: true).pop();
+    }
+  }
+
+  if (!context.mounted || switched) return;
+  ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(content: Text(errorMessage)),
+  );
+}
+
+class _MerchantAccountView extends StatelessWidget {
+  const _MerchantAccountView();
 
   @override
   Widget build(BuildContext context) {
@@ -59,7 +107,7 @@ class _MerchantAccountView extends StatelessWidget {
     final showWorkSamples = appProvider.merchantActiveServiceId != 'restaurant';
     final displayStoreName = storeName.trim().isNotEmpty
         ? storeName
-        : (isAr ? 'حساب التاجر' : 'Merchant account');
+        : 'حساب التاجر';
     String showOrDash(String value) =>
         value.trim().isNotEmpty ? value.trim() : '-';
 
@@ -73,7 +121,7 @@ class _MerchantAccountView extends StatelessWidget {
           child: AppLogo(size: 28),
         ),
         middle: Text(
-          isAr ? labels.accountTitleAr : labels.accountTitleEn,
+          labels.accountTitleAr,
           style:
               const TextStyle(fontWeight: FontWeight.w700, fontFamily: 'Cairo'),
         ),
@@ -148,10 +196,8 @@ class _MerchantAccountView extends StatelessWidget {
             ),
             const SizedBox(height: 14),
             _RoleSwitchCard(
-              title: isAr ? 'بيانات الحساب الكامل' : 'Full account data',
-              subtitle: isAr
-                  ? 'عرض كل بيانات الحساب من مكان واحد'
-                  : 'View all account data in one place',
+              title: 'بيانات الحساب الكامل',
+              subtitle: 'عرض كل بيانات الحساب من مكان واحد',
               icon: Icons.badge_rounded,
               color: Colors.purple,
               onTap: () => Navigator.of(context).push(
@@ -162,13 +208,17 @@ class _MerchantAccountView extends StatelessWidget {
             ),
             const SizedBox(height: 14),
             _RoleSwitchCard(
-              title: isAr ? 'الانتقال إلى حساب الزبون' : 'Switch to customer',
-              subtitle: isAr
-                  ? 'احتفظ بنفس الدخول واستخدم واجهة الزبون'
-                  : 'Keep the same sign-in and use the customer view',
+              title: 'الانتقال إلى حساب الزبون',
+              subtitle: 'احتفظ بنفس الدخول واستخدم واجهة الزبون',
               icon: CupertinoIcons.person_fill,
               color: Colors.orange,
-              onTap: () => appProvider.setUserRole('customer'),
+              onTap: () => _switchAccountRoleWithLoading(
+                context,
+                appProvider,
+                'customer',
+                loadingMessage: 'يرجى الانتظار... جارٍ التحويل إلى حساب الزبون',
+                errorMessage: 'تعذر الانتقال إلى حساب الزبون حالياً.',
+              ),
             ),
             const SizedBox(height: 14),
             Container(
@@ -183,7 +233,7 @@ class _MerchantAccountView extends StatelessWidget {
                     children: [
                       Expanded(
                         child: _MetricTile(
-                          label: isAr ? 'المبيعات' : 'Sales',
+                          label: 'المبيعات',
                           value: '${appProvider.totalSales.toPrice()} د.ع',
                           color: Colors.green,
                         ),
@@ -191,7 +241,7 @@ class _MerchantAccountView extends StatelessWidget {
                       const SizedBox(width: 10),
                       Expanded(
                         child: _MetricTile(
-                          label: isAr ? 'الطلبات' : 'Orders',
+                          label: 'الطلبات',
                           value: '${appProvider.merchantOrdersCount}',
                           color: Colors.orange,
                         ),
@@ -203,8 +253,7 @@ class _MerchantAccountView extends StatelessWidget {
                     children: [
                       Expanded(
                         child: _MetricTile(
-                          label:
-                              isAr ? labels.itemPluralAr : labels.itemPluralEn,
+                          label: labels.itemPluralAr,
                           value: '${appProvider.merchantProductCount}',
                           color: Colors.blue,
                         ),
@@ -212,10 +261,8 @@ class _MerchantAccountView extends StatelessWidget {
                       const SizedBox(width: 10),
                       Expanded(
                         child: _MetricTile(
-                          label: isAr ? 'الحالة' : 'Status',
-                          value: isOpen
-                              ? (isAr ? 'مفتوح' : 'Open')
-                              : (isAr ? 'مغلق' : 'Closed'),
+                          label: 'الحالة',
+                          value: isOpen ? 'مفتوح' : 'مغلق',
                           color: isOpen ? Colors.green : Colors.red,
                         ),
                       ),
@@ -235,7 +282,7 @@ class _MerchantAccountView extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    isAr ? 'إدارة الخدمات' : 'Service management',
+                    'إدارة الخدمات',
                     style: const TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w800,
@@ -244,9 +291,7 @@ class _MerchantAccountView extends StatelessWidget {
                   ),
                   const SizedBox(height: 6),
                   Text(
-                    isAr
-                        ? 'يمكنك تفعيل أكثر من خدمة لنفس الحساب، ثم النشر في كل خدمة بحسب نوعها.'
-                        : 'Enable multiple services on one account and publish in each service separately.',
+                    'يمكنك تفعيل أكثر من خدمة لنفس الحساب، ثم النشر في كل خدمة بحسب نوعها.',
                     style: const TextStyle(
                       color: Colors.grey,
                       fontSize: 12,
@@ -256,7 +301,6 @@ class _MerchantAccountView extends StatelessWidget {
                   ),
                   const SizedBox(height: 12),
                   _ServiceStatusPills(
-                    isAr: isAr,
                     serviceIds: appProvider.merchantServiceIds,
                     activeServiceId: appProvider.merchantActiveServiceId,
                     onActivate: (serviceId) async {
@@ -268,15 +312,12 @@ class _MerchantAccountView extends StatelessWidget {
                     final serviceLabels = merchantServiceLabels(serviceId);
                     final isActive =
                         serviceId == appProvider.merchantActiveServiceId;
-                    final actionLabel = _servicePublishLabel(serviceId, isAr);
-                    final subtitle = _servicePublishSubtitle(serviceId, isAr);
+                    final actionLabel = _servicePublishLabel(serviceId);
+                    final subtitle = _servicePublishSubtitle(serviceId);
                     return Padding(
                       padding: const EdgeInsets.only(bottom: 12),
                       child: _ServiceManagementCard(
-                        isAr: isAr,
-                        title: isAr
-                            ? serviceLabels.storeLabelAr
-                            : serviceLabels.storeLabelEn,
+                        title: serviceLabels.storeLabelAr,
                         subtitle: subtitle,
                         active: isActive,
                         actionLabel: actionLabel,
@@ -308,9 +349,7 @@ class _MerchantAccountView extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    isAr
-                        ? 'إدارة ${labels.storeLabelAr}'
-                        : 'Account management',
+                    'إدارة ${labels.storeLabelAr}',
                     style: const TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w800,
@@ -319,43 +358,33 @@ class _MerchantAccountView extends StatelessWidget {
                   const SizedBox(height: 12),
                   _MerchantActionTile(
                     icon: CupertinoIcons.graph_square_fill,
-                    title: isAr ? 'لوحة التاجر' : 'Dashboard',
-                    subtitle: isAr
-                        ? 'مؤشرات الأداء والملخصات الخاصة بـ ${labels.storeLabelAr}'
-                        : 'Performance summary and key metrics',
+                    title: 'لوحة التاجر',
+                    subtitle:
+                        'مؤشرات الأداء والملخصات الخاصة بـ ${labels.storeLabelAr}',
                     color: Colors.orange,
                     onTap: () => Navigator.of(context).push(CupertinoPageRoute(
                         builder: (_) => const MerchantDashboardScreen())),
                   ),
                   _MerchantActionTile(
                     icon: CupertinoIcons.square_grid_2x2_fill,
-                    title:
-                        isAr ? labels.productsTitleAr : labels.productsTitleEn,
-                    subtitle: isAr
-                        ? 'إضافة وتعديل وحذف ${labels.itemPluralAr}'
-                        : 'Add, edit, and delete items',
+                    title: labels.productsTitleAr,
+                    subtitle: 'إضافة وتعديل وحذف ${labels.itemPluralAr}',
                     color: Colors.blue,
                     onTap: () => Navigator.of(context).push(CupertinoPageRoute(
                         builder: (_) => const MerchantProductsScreen())),
                   ),
                   _MerchantActionTile(
                     icon: CupertinoIcons.list_bullet_below_rectangle,
-                    title: isAr ? 'الطلبات' : 'Orders',
-                    subtitle: isAr
-                        ? 'التحكم بحالات الطلبات'
-                        : 'Manage order status updates',
+                    title: 'الطلبات',
+                    subtitle: 'التحكم بحالات الطلبات',
                     color: Colors.green,
                     onTap: () => Navigator.of(context).push(CupertinoPageRoute(
                         builder: (_) => const MerchantOrdersScreen())),
                   ),
                   _MerchantActionTile(
                     icon: CupertinoIcons.pencil_circle,
-                    title: isAr
-                        ? 'تعديل بيانات ${labels.storeLabelAr}'
-                        : labels.storeSettingsTitleEn,
-                    subtitle: isAr
-                        ? 'الاسم والوصف والهاتف والعنوان والصور'
-                        : 'Name, phone, WhatsApp, work hours and images',
+                    title: 'تعديل بيانات ${labels.storeLabelAr}',
+                    subtitle: 'الاسم والوصف والهاتف والعنوان والصور',
                     color: Colors.purple,
                     onTap: () => Navigator.of(context).push(
                       CupertinoPageRoute(
@@ -365,12 +394,8 @@ class _MerchantAccountView extends StatelessWidget {
                   ),
                   _MerchantActionTile(
                     icon: CupertinoIcons.power,
-                    title: isAr
-                        ? 'فتح / إغلاق ${labels.storeLabelAr}'
-                        : 'Open / Close store',
-                    subtitle: isAr
-                        ? 'تبديل جاهزية الاستقبال'
-                        : 'Toggle the store availability',
+                    title: 'فتح / إغلاق ${labels.storeLabelAr}',
+                    subtitle: 'تبديل جاهزية الاستقبال',
                     color: isOpen ? Colors.red : Colors.green,
                     onTap: appProvider.toggleMerchantOpenStatus,
                   ),
@@ -388,7 +413,7 @@ class _MerchantAccountView extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    isAr ? 'تفاصيل ${labels.storeLabelAr}' : 'Business details',
+                    'تفاصيل ${labels.storeLabelAr}',
                     style: const TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w800,
@@ -396,36 +421,36 @@ class _MerchantAccountView extends StatelessWidget {
                   ),
                   const SizedBox(height: 12),
                   _InfoRow(
-                      label: isAr ? 'رقم الهاتف' : 'Phone',
+                      label: 'رقم الهاتف',
                       value: showOrDash(appProvider.merchantPhone)),
                   _InfoRow(
-                      label: isAr ? 'واتساب' : 'WhatsApp',
+                      label: 'واتساب',
                       value: showOrDash(appProvider.merchantWhatsApp)),
                   _InfoRow(
-                      label: isAr ? 'العنوان' : 'Address',
+                      label: 'العنوان',
                       value: showOrDash(appProvider.merchantAddress)),
                   _InfoRow(
-                      label: isAr ? 'ساعات العمل' : 'Working hours',
+                      label: 'ساعات العمل',
                       value:
                           '${showOrDash(appProvider.merchantOpenTime)} - ${showOrDash(appProvider.merchantCloseTime)}'),
                   if (!hideFee)
                     _InfoRow(
-                        label: isAr ? 'رسوم التوصيل' : 'Delivery fee',
+                        label: 'رسوم التوصيل',
                         value:
                             '${appProvider.merchantDeliveryFee.toPrice()} د.ع')
                   else
                     _InfoRow(
-                        label: isAr ? 'نوع الخدمة' : 'Service type',
-                        value: isAr ? 'بدون رسوم مباشرة' : 'No direct fee'),
+                        label: 'نوع الخدمة',
+                        value: 'بدون رسوم مباشرة'),
                   if (profileImageBase64 != null &&
                       profileImageBase64.isNotEmpty) ...[
                     const SizedBox(height: 8),
                     _InlinePreview(
-                      title: isAr ? 'الصورة الشخصية' : 'Profile photo',
+                      title: 'الصورة الشخصية',
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(18),
-                        child: Image.memory(
-                          base64Decode(profileImageBase64),
+                        child: AppImage(
+                          imageData: profileImageBase64,
                           height: 160,
                           width: double.infinity,
                           fit: BoxFit.cover,
@@ -436,7 +461,7 @@ class _MerchantAccountView extends StatelessWidget {
                   if (showWorkSamples && workSamples.isNotEmpty) ...[
                     const SizedBox(height: 8),
                     _InlinePreview(
-                      title: isAr ? 'نماذج الأعمال' : 'Work samples',
+                      title: 'نماذج الأعمال',
                       child: SizedBox(
                         height: 110,
                         child: ListView.separated(
@@ -447,8 +472,8 @@ class _MerchantAccountView extends StatelessWidget {
                           itemBuilder: (context, index) {
                             return ClipRRect(
                               borderRadius: BorderRadius.circular(16),
-                              child: Image.memory(
-                                base64Decode(workSamples[index]),
+                              child: AppImage(
+                                imageData: workSamples[index],
                                 width: 110,
                                 height: 110,
                                 fit: BoxFit.cover,
@@ -464,7 +489,6 @@ class _MerchantAccountView extends StatelessWidget {
             ),
             const SizedBox(height: 16),
             _LogoutButton(
-              isAr: isAr,
               onTap: () => appProvider.resetAll(),
             ),
           ],
@@ -546,13 +570,7 @@ class _RoleSwitchCard extends StatelessWidget {
 }
 
 class _CustomerAccountView extends StatelessWidget {
-  final String lang;
-  final bool isAr;
-
-  const _CustomerAccountView({
-    required this.lang,
-    required this.isAr,
-  });
+  const _CustomerAccountView();
 
   @override
   Widget build(BuildContext context) {
@@ -565,8 +583,8 @@ class _CustomerAccountView extends StatelessWidget {
           padding: EdgeInsets.only(top: 2),
           child: AppLogo(size: 28),
         ),
-        middle: Text(AppTranslations.t('account', lang),
-            style: const TextStyle(
+        middle: const Text('حسابي',
+            style: TextStyle(
                 fontWeight: FontWeight.bold, fontFamily: 'Cairo')),
         trailing: GestureDetector(
           onTap: () => Navigator.of(context, rootNavigator: true).push(
@@ -618,10 +636,9 @@ class _CustomerAccountView extends StatelessWidget {
                       onPressed: () => _showEditProfileDialog(
                         context,
                         appProvider,
-                        isAr,
                       ),
-                      child: Text(
-                        isAr ? 'تعديل' : 'Edit',
+                      child: const Text(
+                        'تعديل',
                         style: const TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.bold,
@@ -635,20 +652,22 @@ class _CustomerAccountView extends StatelessWidget {
               ),
               const SizedBox(height: 25),
               _RoleSwitchCard(
-                title: isAr ? 'الانتقال إلى حساب التاجر' : 'Switch to merchant',
-                subtitle: isAr
-                    ? 'استخدم نفس الحساب وادخل إلى واجهة التاجر'
-                    : 'Use the same sign-in and open the merchant view',
+                title: 'الانتقال إلى حساب التاجر',
+                subtitle: 'استخدم نفس الحساب وادخل إلى واجهة التاجر',
                 icon: Icons.storefront_rounded,
                 color: Colors.deepOrange,
-                onTap: () => appProvider.setUserRole('merchant'),
+                onTap: () => _switchAccountRoleWithLoading(
+                  context,
+                  appProvider,
+                  'merchant',
+                  loadingMessage: 'يرجى الانتظار... جارٍ التحويل إلى حساب التاجر',
+                  errorMessage: 'تعذر الانتقال إلى حساب التاجر حالياً.',
+                ),
               ),
               const SizedBox(height: 25),
               _RoleSwitchCard(
-                title: isAr ? 'بيانات الحساب الكامل' : 'Full account data',
-                subtitle: isAr
-                    ? 'عرض كل بيانات الحساب من مكان واحد'
-                    : 'View all account data in one place',
+                title: 'بيانات الحساب الكامل',
+                subtitle: 'عرض كل بيانات الحساب من مكان واحد',
                 icon: Icons.badge_rounded,
                 color: Colors.purple,
                 onTap: () => Navigator.of(context).push(
@@ -668,7 +687,7 @@ class _CustomerAccountView extends StatelessWidget {
                     _buildSettingItem(
                       context,
                       CupertinoIcons.location_fill,
-                      isAr ? "عناويني" : "My Addresses",
+                      'عناويني',
                       color: Colors.orange,
                       onTap: () => Navigator.of(context, rootNavigator: true)
                           .push(CupertinoPageRoute(
@@ -677,7 +696,7 @@ class _CustomerAccountView extends StatelessWidget {
                     _buildSettingItem(
                       context,
                       CupertinoIcons.creditcard_fill,
-                      isAr ? "طرق الدفع" : "Payment Methods",
+                      'طرق الدفع',
                       color: Colors.amber,
                       onTap: () => Navigator.of(context, rootNavigator: true)
                           .push(CupertinoPageRoute(
@@ -687,7 +706,7 @@ class _CustomerAccountView extends StatelessWidget {
                     _buildSettingItem(
                       context,
                       CupertinoIcons.doc_text_fill,
-                      isAr ? "سجل الطلبات" : "Order History",
+                      'سجل الطلبات',
                       color: Colors.blue,
                       onTap: () => Navigator.of(context, rootNavigator: true)
                           .push(CupertinoPageRoute(
@@ -696,7 +715,7 @@ class _CustomerAccountView extends StatelessWidget {
                     _buildSettingItem(
                       context,
                       CupertinoIcons.settings,
-                      isAr ? "الإعدادات" : "Settings",
+                      'الإعدادات',
                       color: Colors.grey,
                       onTap: () => Navigator.of(context, rootNavigator: true)
                           .push(CupertinoPageRoute(
@@ -705,13 +724,11 @@ class _CustomerAccountView extends StatelessWidget {
                     _buildSettingItem(
                       context,
                       Icons.headset_mic,
-                      isAr ? "اتصل بنا (واتساب)" : "Contact Us",
+                      'اتصل بنا (واتساب)',
                       color: Colors.green,
                       onTap: () => AppHelpers.launchWhatsApp(
                           AppHelpers.supportWhatsAppNumber,
-                          isAr
-                              ? "مرحبا، أحتاج مساعدة في تطبيق الغيث"
-                              : "Hello, I need help with the Al-Ghaith app."),
+                          'مرحبا، أحتاج مساعدة في تطبيق الغيث'),
                     ),
                   ],
                 ),
@@ -729,7 +746,7 @@ class _CustomerAccountView extends StatelessWidget {
                       const Icon(CupertinoIcons.power,
                           color: CupertinoColors.systemRed),
                       const SizedBox(width: 15),
-                      Text(AppTranslations.t('logout', lang),
+                      Text('تسجيل الخروج',
                           style: const TextStyle(
                               color: CupertinoColors.systemRed,
                               fontWeight: FontWeight.bold,
@@ -784,7 +801,6 @@ class _CustomerAccountView extends StatelessWidget {
   Future<void> _showEditProfileDialog(
     BuildContext context,
     AppProvider provider,
-    bool isAr,
   ) async {
     final nameController = TextEditingController(text: provider.customerName);
     final phoneController = TextEditingController(text: provider.customerPhone);
@@ -820,8 +836,8 @@ class _CustomerAccountView extends StatelessWidget {
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(24),
               ),
-              title: Text(
-                isAr ? 'تعديل الملف الشخصي' : 'Edit Profile',
+              title: const Text(
+                'تعديل الملف الشخصي',
                 style: const TextStyle(
                   fontFamily: 'Cairo',
                   fontWeight: FontWeight.w800,
@@ -858,9 +874,7 @@ class _CustomerAccountView extends StatelessWidget {
                               ScaffoldMessenger.of(context).showSnackBar(
                                 SnackBar(
                                   content: Text(
-                                    isAr
-                                        ? 'تعذر رفع الصورة. تحقق من الاتصال وحاول مجدداً.'
-                                        : 'Could not upload the image. Check your connection and try again.',
+                                    'تعذر رفع الصورة. تحقق من الاتصال وحاول مجدداً.',
                                     style: const TextStyle(fontFamily: 'Cairo'),
                                   ),
                                 ),
@@ -884,12 +898,12 @@ class _CustomerAccountView extends StatelessWidget {
                     ),
                     const SizedBox(height: 16),
                     _profileField(
-                      label: isAr ? 'الاسم' : 'Name',
+                      label: 'الاسم',
                       controller: nameController,
                     ),
                     const SizedBox(height: 12),
                     _profileField(
-                      label: isAr ? 'رقم الهاتف' : 'Phone number',
+                      label: 'رقم الهاتف',
                       controller: phoneController,
                       keyboardType: TextInputType.phone,
                     ),
@@ -899,7 +913,7 @@ class _CustomerAccountView extends StatelessWidget {
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(dialogContext),
-                  child: Text(isAr ? 'إلغاء' : 'Cancel'),
+                  child: const Text('إلغاء'),
                 ),
                 ElevatedButton(
                   style: ElevatedButton.styleFrom(
@@ -920,16 +934,14 @@ class _CustomerAccountView extends StatelessWidget {
                       ScaffoldMessenger.of(dialogContext).showSnackBar(
                         SnackBar(
                           content: Text(
-                            isAr
-                                ? 'تعذر حفظ الصورة: $error'
-                                : 'Could not save profile: $error',
+                            'تعذر حفظ الصورة: $error',
                             style: const TextStyle(fontFamily: 'Cairo'),
                           ),
                         ),
                       );
                     }
                   },
-                  child: Text(isAr ? 'حفظ' : 'Save'),
+                  child: const Text('حفظ'),
                 ),
               ],
             );
@@ -1160,11 +1172,9 @@ class _InlinePreview extends StatelessWidget {
 }
 
 class _LogoutButton extends StatelessWidget {
-  final bool isAr;
   final VoidCallback onTap;
 
   const _LogoutButton({
-    required this.isAr,
     required this.onTap,
   });
 
@@ -1181,7 +1191,7 @@ class _LogoutButton extends StatelessWidget {
           children: [
             const Icon(CupertinoIcons.power, color: CupertinoColors.systemRed),
             const SizedBox(width: 15),
-            Text(isAr ? 'تسجيل الخروج' : 'Logout',
+            Text('تسجيل الخروج',
                 style: const TextStyle(
                     color: CupertinoColors.systemRed,
                     fontWeight: FontWeight.bold,
@@ -1193,49 +1203,37 @@ class _LogoutButton extends StatelessWidget {
   }
 }
 
-String _servicePublishLabel(String serviceId, bool isAr) {
+String _servicePublishLabel(String serviceId) {
   switch (serviceId) {
     case 'restaurant':
-      return isAr ? 'نشر منيو' : 'Publish menu';
+      return 'نشر منيو';
     case 'product':
-      return isAr ? 'نشر منتجات' : 'Publish products';
+      return 'نشر منتجات';
     case 'real_estate':
-      return isAr ? 'نشر عقار' : 'Publish property';
+      return 'نشر عقار';
     case 'professionals':
-      return isAr ? 'تحديث الملف' : 'Update profile';
+      return 'تحديث الملف';
     case 'cars':
-      return isAr ? 'نشر سيارة' : 'Publish car';
+      return 'نشر سيارة';
     default:
-      return isAr ? 'نشر الآن' : 'Publish now';
+      return 'نشر الآن';
   }
 }
 
-String _servicePublishSubtitle(String serviceId, bool isAr) {
+String _servicePublishSubtitle(String serviceId) {
   switch (serviceId) {
     case 'restaurant':
-      return isAr
-          ? 'أضف وجباتك ومنيو مطعمك من هنا.'
-          : 'Add your meals and restaurant menu from here.';
+      return 'أضف وجباتك ومنيو مطعمك من هنا.';
     case 'product':
-      return isAr
-          ? 'أضف المنتجات واختر القسم الفرعي المناسب.'
-          : 'Add products and choose the right sub-category.';
+      return 'أضف المنتجات واختر القسم الفرعي المناسب.';
     case 'real_estate':
-      return isAr
-          ? 'أنشئ إعلان بيع أو إيجار للعقار.'
-          : 'Create a sale or rent property listing.';
+      return 'أنشئ إعلان بيع أو إيجار للعقار.';
     case 'professionals':
-      return isAr
-          ? 'حدّث ملفك المهني وصور أعمالك ووسائل التواصل.'
-          : 'Update your professional profile and contact details.';
+      return 'حدّث ملفك المهني وصور أعمالك ووسائل التواصل.';
     case 'cars':
-      return isAr
-          ? 'أنشئ إعلانًا أو خدمة خاصة بالسيارات.'
-          : 'Create a car listing or related service.';
+      return 'أنشئ إعلانًا أو خدمة خاصة بالسيارات.';
     default:
-      return isAr
-          ? 'نشر المحتوى الخاص بهذه الخدمة.'
-          : 'Publish content for this service.';
+      return 'نشر المحتوى الخاص بهذه الخدمة.';
   }
 }
 
@@ -1261,13 +1259,11 @@ void _openServicePublisher(
 }
 
 class _ServiceStatusPills extends StatelessWidget {
-  final bool isAr;
   final List<String> serviceIds;
   final String activeServiceId;
   final Future<void> Function(String serviceId) onActivate;
 
   const _ServiceStatusPills({
-    required this.isAr,
     required this.serviceIds,
     required this.activeServiceId,
     required this.onActivate,
@@ -1287,7 +1283,7 @@ class _ServiceStatusPills extends StatelessWidget {
           final selected = serviceId == activeServiceId;
           return ChoiceChip(
             label: Text(
-              isAr ? labels.storeLabelAr : labels.storeLabelEn,
+              labels.storeLabelAr,
               style: const TextStyle(fontFamily: 'Cairo'),
             ),
             selected: selected,
@@ -1307,7 +1303,6 @@ class _ServiceStatusPills extends StatelessWidget {
 }
 
 class _ServiceManagementCard extends StatelessWidget {
-  final bool isAr;
   final String title;
   final String subtitle;
   final bool active;
@@ -1316,7 +1311,6 @@ class _ServiceManagementCard extends StatelessWidget {
   final VoidCallback onPublish;
 
   const _ServiceManagementCard({
-    required this.isAr,
     required this.title,
     required this.subtitle,
     required this.active,
@@ -1373,9 +1367,7 @@ class _ServiceManagementCard extends StatelessWidget {
                           borderRadius: BorderRadius.circular(999),
                         ),
                         child: Text(
-                          active
-                              ? (isAr ? 'الحالية' : 'Current')
-                              : (isAr ? 'مفعلة' : 'Enabled'),
+                          active ? 'الحالية' : 'مفعلة',
                           style: TextStyle(
                             fontFamily: 'Cairo',
                             fontWeight: FontWeight.w700,

@@ -1,15 +1,20 @@
+import 'dart:async';
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:animate_do/animate_do.dart';
+import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
+import 'core/config/app_config.dart';
+import 'core/ui/app_system_ui.dart';
 import 'providers/app_provider.dart';
-import 'utils/translations.dart';
 import 'screens/home_screen.dart';
 import 'screens/cart_screen.dart';
 import 'screens/orders_screen.dart';
 import 'screens/account_screen.dart';
 import 'screens/favorites_screen.dart';
+import 'screens/delivery/delivery_setup_screen.dart';
 import 'screens/delivery/delivery_shell.dart';
 import 'screens/driver/driver_setup_screen.dart';
 import 'screens/driver/driver_shell.dart';
@@ -18,56 +23,38 @@ import 'screens/role_selection_screen.dart';
 import 'screens/customer_setup_screen.dart';
 import 'screens/merchant/merchant_setup_screen.dart';
 import 'screens/merchant/merchant_shell.dart';
+import 'screens/admin/admin_dashboard_screen.dart';
 import 'services/supabase_service.dart';
 import 'widgets/app_logo.dart';
+import 'widgets/customer_order_notifications.dart';
 import 'widgets/exit_confirm_scope.dart';
+import 'widgets/safe_bottom_bar.dart';
 import 'widgets/startup_splash_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   try {
+    AppConfig.validate(throwOnError: false);
+    if (AppConfig.mapboxPublicToken.trim().isNotEmpty) {
+      MapboxOptions.setAccessToken(AppConfig.mapboxPublicToken.trim());
+      MapboxMapsOptions.setLanguage('ar');
+    }
     await SupabaseService.initialize();
+    await configureAppSystemUi();
   } catch (e) {
-    debugPrint('Supabase Init Error: $e');
+    debugPrint('Bootstrap error: $e');
   }
   runApp(
     MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => AppProvider()),
       ],
-      child: const StartupGate(),
+      child: const AlGhaithApp(),
     ),
   );
 }
 
-class StartupGate extends StatefulWidget {
-  const StartupGate({super.key});
-
-  @override
-  State<StartupGate> createState() => _StartupGateState();
-}
-
-class _StartupGateState extends State<StartupGate> {
-  bool _showSplash = true;
-
-  @override
-  void initState() {
-    super.initState();
-    Future<void>.delayed(const Duration(seconds: 2)).then((_) {
-      if (mounted) {
-        setState(() => _showSplash = false);
-      }
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (_showSplash) {
-      return const StartupSplashScreen();
-    }
-    return const AlGhaithApp();
-  }
-}
+// StartupGate removed — splash is handled inside AlGhaithApp after MaterialApp loads.
 
 class SplashScreen extends StatelessWidget {
   const SplashScreen({super.key});
@@ -169,29 +156,8 @@ class AlGhaithApp extends StatelessWidget {
 
     // واجهة اختيار الشاشة المناسبة بناءً على حالة الحساب
     Widget getHome() {
-      if (!appProvider.isReady) {
+      if (!appProvider.isReady || appProvider.isLoggingIn || appProvider.isRestoring) {
         return const StartupSplashScreen();
-      }
-
-      if (appProvider.isLoggingIn) {
-        return const Scaffold(
-          body: Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                AppLogo(size: 100),
-                SizedBox(height: 30),
-                CircularProgressIndicator(color: Colors.orange),
-                SizedBox(height: 20),
-                Text(
-                  'جاري استعادة بياناتك من السحابة...',
-                  style: TextStyle(
-                      fontFamily: 'Cairo', fontWeight: FontWeight.bold),
-                ),
-              ],
-            ),
-          ),
-        );
       }
 
       if (!appProvider.hasPhoneSession) {
@@ -203,7 +169,7 @@ class AlGhaithApp extends StatelessWidget {
       }
 
       if (appProvider.userRole == 'merchant') {
-        return appProvider.merchantStore == null
+        return !appProvider.hasCompletedMerchantProfile
             ? const ExitConfirmScope(child: MerchantSetupScreen())
             : const ExitConfirmScope(child: MerchantShell());
       } else if (appProvider.userRole == 'driver') {
@@ -211,7 +177,11 @@ class AlGhaithApp extends StatelessWidget {
             ? const ExitConfirmScope(child: DriverShell())
             : const ExitConfirmScope(child: DriverSetupScreen());
       } else if (appProvider.userRole == 'delivery') {
-        return const ExitConfirmScope(child: DeliveryShell());
+        return appProvider.hasCourierProfile
+            ? const ExitConfirmScope(child: DeliveryShell())
+            : const ExitConfirmScope(child: DeliverySetupScreen());
+      } else if (appProvider.userRole == 'admin') {
+        return const ExitConfirmScope(child: AdminDashboardScreen());
       }
 
       if (appProvider.isCustomer && !appProvider.hasCompletedCustomerProfile) {
@@ -244,11 +214,13 @@ class AlGhaithApp extends StatelessWidget {
         ),
       ),
       builder: (context, child) {
-        return Directionality(
-          textDirection: TextDirection.rtl,
-          child: Material(
-            type: MaterialType.transparency,
-            child: child!,
+        return AppSystemUiScope(
+          child: Directionality(
+            textDirection: TextDirection.rtl,
+            child: Material(
+              type: MaterialType.transparency,
+              child: child!,
+            ),
           ),
         );
       },
@@ -266,6 +238,10 @@ class MainShell extends StatefulWidget {
 
 class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
   int _currentIndex = 0;
+  Timer? _orderRefreshTimer;
+  Map<String, CustomerOrderSnapshot> _lastOrderSnapshots = {};
+  OverlayEntry? _notificationEntry;
+  final List<CustomerBannerData> _pendingBanners = [];
 
   final List<Widget> _screens = [
     const HomeScreen(),
@@ -279,70 +255,157 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final provider = context.read<AppProvider>();
+      _lastOrderSnapshots = {
+        for (final order in provider.orders)
+          order.id: CustomerOrderSnapshot(
+            statusKey: order.statusKey,
+            deliveryStatusKey: order.deliveryStatusKey,
+          ),
+      };
+      provider.refreshCustomerOrders();
+      _orderRefreshTimer = Timer.periodic(const Duration(seconds: 20), (_) {
+        _pollCustomerOrders();
+      });
+    });
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _orderRefreshTimer?.cancel();
+    _notificationEntry?.remove();
     super.dispose();
+  }
+
+  Future<void> _pollCustomerOrders() async {
+    if (!mounted) return;
+    final provider = context.read<AppProvider>();
+    await provider.refreshCustomerOrders();
+    if (!mounted) return;
+
+    for (final order in provider.orders) {
+      final previous = _lastOrderSnapshots[order.id];
+      final banner = detectCustomerOrderBanner(
+        order: order,
+        previous: previous,
+      );
+      if (banner != null) {
+        _pendingBanners.add(banner);
+      }
+    }
+
+    _lastOrderSnapshots = {
+      for (final order in provider.orders)
+        order.id: CustomerOrderSnapshot(
+          statusKey: order.statusKey,
+          deliveryStatusKey: order.deliveryStatusKey,
+        ),
+    };
+
+    _showNextCustomerBanner();
+  }
+
+  void _showNextCustomerBanner() {
+    if (_notificationEntry != null) return;
+    if (_pendingBanners.isEmpty) return;
+    final data = _pendingBanners.removeAt(0);
+    _showCustomerBanner(data);
+  }
+
+  void _showCustomerBanner(CustomerBannerData data) {
+    _notificationEntry?.remove();
+    _notificationEntry = null;
+
+    final overlay = Overlay.of(context);
+    late OverlayEntry entry;
+    entry = OverlayEntry(
+      builder: (_) => CustomerOrderNotificationBanner(
+        data: data,
+        onTap: () {
+          entry.remove();
+          _notificationEntry = null;
+          setState(() => _currentIndex = 3);
+          _showNextCustomerBanner();
+        },
+        onDismiss: () {
+          entry.remove();
+          _notificationEntry = null;
+          _showNextCustomerBanner();
+        },
+      ),
+    );
+    _notificationEntry = entry;
+    overlay.insert(entry);
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed && mounted) {
       setState(() => _currentIndex = 0);
+      _pollCustomerOrders();
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final appProvider = Provider.of<AppProvider>(context);
-    final lang = appProvider.lang;
     final cartCount = appProvider.cart.length;
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
       backgroundColor:
           isDark ? const Color(0xFF111111) : const Color(0xFFF2F2F7),
-      body: SafeArea(bottom: false, child: _screens[_currentIndex]),
-      bottomNavigationBar: Container(
-        height: 90,
-        decoration: BoxDecoration(
-          color: isDark
-              ? const Color(0xFF1A1A1A)
-              : Colors.white.withValues(alpha: 0.95),
-          boxShadow: [
-            BoxShadow(
-                color: Colors.black.withValues(alpha: isDark ? 0.35 : 0.05),
-                blurRadius: 20,
-                offset: const Offset(0, -5))
-          ],
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceAround,
-          children: [
-            _buildNavItem(
-                0, CupertinoIcons.house_fill, AppTranslations.t('home', lang)),
-            _buildNavItem(1, CupertinoIcons.heart_fill,
-                AppTranslations.t('favorites', lang)),
-
-            // زر السلة المميز (Unique Cart Button)
-            _buildSpecialCartItemCompact(2, CupertinoIcons.shopping_cart,
-                AppTranslations.t('cart', lang), cartCount),
-
-            _buildNavItem(3, CupertinoIcons.doc_text_fill,
-                AppTranslations.t('orders', lang)),
-            _buildNavItem(4, CupertinoIcons.person_fill,
-                AppTranslations.t('account', lang)),
-          ],
+      body: SafeArea(
+        bottom: false,
+        child: _screens[_currentIndex],
+      ),
+      bottomNavigationBar: SafeBottomBar(
+        color: isDark
+            ? const Color(0xFF1A1A1A)
+            : Colors.white.withValues(alpha: 0.95),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: isDark ? 0.35 : 0.05),
+            blurRadius: 20,
+            offset: const Offset(0, -5),
+          ),
+        ],
+        child: SizedBox(
+          height: 64,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              _buildNavItem(0, CupertinoIcons.house_fill, 'الرئيسية'),
+              _buildNavItem(1, CupertinoIcons.heart_fill, 'المفضلة'),
+              _buildSpecialCartItemCompact(
+                  2, CupertinoIcons.shopping_cart, 'السلة', cartCount),
+              _buildNavItem(3, CupertinoIcons.doc_text_fill, 'طلباتي',
+                  badgeCount: appProvider.customerActiveOrdersCount),
+              _buildNavItem(4, CupertinoIcons.person_fill, 'حسابي'),
+            ],
+          ),
         ),
       ),
     );
   }
 
-  Widget _buildNavItem(int index, IconData icon, String label) {
+  Widget _buildNavItem(int index, IconData icon, String label,
+      {int badgeCount = 0}) {
     final appProvider = Provider.of<AppProvider>(context, listen: false);
     bool isActive = _currentIndex == index;
+    final iconWidget = badgeCount > 0
+        ? Badge(
+            label: Text('$badgeCount'),
+            child: Icon(icon,
+                color: isActive ? Colors.orange[800] : CupertinoColors.systemGrey,
+                size: isActive ? 26 : 24),
+          )
+        : Icon(icon,
+            color: isActive ? Colors.orange[800] : CupertinoColors.systemGrey,
+            size: isActive ? 26 : 24);
     return GestureDetector(
       onTap: () {
         if (index == 0) {
@@ -356,9 +419,8 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
         children: [
           isActive
               ? FadeInUp(
-                  duration: const Duration(milliseconds: 300),
-                  child: Icon(icon, color: Colors.orange[800], size: 26))
-              : Icon(icon, color: CupertinoColors.systemGrey, size: 24),
+                  duration: const Duration(milliseconds: 300), child: iconWidget)
+              : iconWidget,
           const SizedBox(height: 4),
           Text(
             label,

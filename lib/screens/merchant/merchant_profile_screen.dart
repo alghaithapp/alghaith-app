@@ -14,7 +14,6 @@ class MerchantProfileScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<AppProvider>();
-    final isAr = provider.lang == 'ar';
     final labels = provider.merchantActiveLabels;
     final workSamples = provider.merchantWorkSampleImagesBase64;
     final showWorkSamples =
@@ -23,7 +22,7 @@ class MerchantProfileScreen extends StatelessWidget {
     final services = provider.merchantServiceIds;
     final storeName = provider.merchantStoreName.trim().isNotEmpty
         ? provider.merchantStoreName
-        : (isAr ? 'ملف التاجر' : 'Merchant profile');
+        : 'ملف التاجر';
 
     String showOrDash(String value) =>
         value.trim().isNotEmpty ? value.trim() : '-';
@@ -32,7 +31,7 @@ class MerchantProfileScreen extends StatelessWidget {
       backgroundColor: const Color(0xFFF5F6FA),
       appBar: AppBar(
         title: Text(
-          isAr ? 'ملف ${labels.storeLabelAr}' : '${labels.storeLabelEn} profile',
+          'ملف ${labels.storeLabelAr}',
           style:
               const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w900),
         ),
@@ -98,10 +97,10 @@ class MerchantProfileScreen extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           _SectionCard(
-            title: isAr ? 'بيانات التواصل' : 'Contact details',
+            title: 'بيانات التواصل',
             children: [
               _InfoRow(
-                label: isAr ? 'الهاتف' : 'Phone',
+                label: 'الهاتف',
                 value: showOrDash(provider.merchantPhone),
               ),
               _InfoRow(
@@ -109,11 +108,11 @@ class MerchantProfileScreen extends StatelessWidget {
                 value: showOrDash(provider.merchantWhatsApp),
               ),
               _InfoRow(
-                label: isAr ? 'العنوان' : 'Address',
+                label: 'العنوان',
                 value: showOrDash(provider.merchantAddress),
               ),
               _InfoRow(
-                label: isAr ? 'أوقات العمل' : 'Working hours',
+                label: 'أوقات العمل',
                 value:
                     '${showOrDash(provider.merchantOpenTime)} - ${showOrDash(provider.merchantCloseTime)}',
               ),
@@ -121,11 +120,11 @@ class MerchantProfileScreen extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           _SectionCard(
-            title: isAr ? 'الخدمات' : 'Services',
+            title: 'الخدمات',
             children: [
               if (services.isEmpty)
                 Text(
-                  isAr ? 'لا توجد خدمات مفعلة بعد.' : 'No services enabled yet.',
+                  'لا توجد خدمات مفعلة بعد.',
                   style: const TextStyle(
                     color: Colors.grey,
                     fontFamily: 'Cairo',
@@ -147,7 +146,7 @@ class MerchantProfileScreen extends StatelessWidget {
                         borderRadius: BorderRadius.circular(999),
                       ),
                       child: Text(
-                        isAr ? serviceLabels.storeLabelAr : serviceLabels.storeLabelEn,
+                        serviceLabels.storeLabelAr,
                         style: const TextStyle(
                           fontFamily: 'Cairo',
                           fontWeight: FontWeight.w700,
@@ -161,15 +160,13 @@ class MerchantProfileScreen extends StatelessWidget {
           if (showWorkSamples) ...[
             const SizedBox(height: 12),
             _SectionCard(
-              title: isAr ? 'نماذج الأعمال' : 'Work samples',
+              title: 'نماذج الأعمال',
               trailing: TextButton(
                 onPressed: () => AppHelpers.launchWhatsApp(
                   provider.merchantWhatsApp,
-                  isAr
-                      ? 'مرحباً، هذا ملف أعمالي للتواصل'
-                      : 'Hello, here is my work profile for contact.',
+                  'مرحباً، هذا ملف أعمالي للتواصل',
                 ),
-                child: Text(isAr ? 'مشاركة' : 'Share'),
+                child: const Text('مشاركة'),
               ),
               children: [
                 GridView.builder(
@@ -198,12 +195,10 @@ class MerchantProfileScreen extends StatelessWidget {
           ],
           const SizedBox(height: 12),
           _SectionCard(
-            title: isAr ? 'ملاحظات' : 'Notes',
+            title: 'ملاحظات',
             children: [
               Text(
-                isAr
-                    ? 'يمكنك تعديل هذا الملف من شاشة تعديل بيانات التاجر، وستنعكس التغييرات هنا مباشرة.'
-                    : 'You can edit this profile from the merchant settings screen and see the changes here instantly.',
+                'يمكنك تعديل هذا الملف من شاشة تعديل بيانات التاجر، وستنعكس التغييرات هنا مباشرة.',
                 style: const TextStyle(
                   fontFamily: 'Cairo',
                   height: 1.5,

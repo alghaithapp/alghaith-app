@@ -11,6 +11,7 @@ const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 
 const {
+  getAppUser,
   getUserState,
   saveUserState,
   saveAppUser,
@@ -52,11 +53,24 @@ async function resolveTargetPhones(supabase, cliPhones) {
 
 async function grantAdminToPhone(phone) {
   const existingState = (await getUserState(phone)) || {};
+  const appUser = (await getAppUser(phone)) || {};
+  const primaryRole =
+    appUser.role === 'customer' || appUser.role === 'merchant'
+      ? appUser.role
+      : existingState.userRole === 'customer' ||
+          existingState.userRole === 'merchant'
+        ? existingState.userRole
+        : null;
+
   await saveUserState(phone, {
     ...existingState,
-    userRole: 'admin',
+    adminAccess: true,
+    userRole: primaryRole ?? existingState.userRole,
   });
-  await saveAppUser(phone, { role: 'admin' });
+
+  if (primaryRole) {
+    await saveAppUser(phone, { role: primaryRole });
+  }
 }
 
 function upsertAdminPhonesInEnv(phones) {

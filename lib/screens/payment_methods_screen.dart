@@ -1,23 +1,17 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-
-import '../providers/app_provider.dart';
 
 class PaymentMethodsScreen extends StatelessWidget {
   const PaymentMethodsScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
-    final isAr = Provider.of<AppProvider>(context).lang == 'ar';
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     final methods = [
       _PaymentMethod(
         titleAr: 'الدفع عند الاستلام',
-        titleEn: 'Cash on Delivery',
         subtitleAr: 'الطريقة المتاحة حاليًا',
-        subtitleEn: 'Available right now',
         icon: CupertinoIcons.money_dollar_circle_fill,
         color: Colors.green,
         active: true,
@@ -29,7 +23,7 @@ class PaymentMethodsScreen extends StatelessWidget {
           isDark ? const Color(0xFF111111) : const Color(0xFFF2F2F7),
       navigationBar: CupertinoNavigationBar(
         middle: Text(
-          isAr ? 'طرق الدفع' : 'Payment Methods',
+          'طرق الدفع',
           style:
               const TextStyle(fontWeight: FontWeight.bold, fontFamily: 'Cairo'),
         ),
@@ -45,9 +39,7 @@ class PaymentMethodsScreen extends StatelessWidget {
                 borderRadius: BorderRadius.circular(18),
               ),
               child: Text(
-                isAr
-                    ? 'حاليًا طريقة الدفع الوحيدة المتاحة هي الدفع عند الاستلام. سيتم تفعيل Super Key و Zain Cash لاحقًا.'
-                    : 'Currently, the only available payment method is Cash on Delivery. Super Key and Zain Cash will be enabled later.',
+                'حاليًا طريقة الدفع الوحيدة المتاحة هي الدفع عند الاستلام. سيتم تفعيل Super Key و Zain Cash لاحقًا.',
                 style: const TextStyle(height: 1.5, fontFamily: 'Cairo'),
               ),
             ),
@@ -55,7 +47,7 @@ class PaymentMethodsScreen extends StatelessWidget {
             ...methods.map(
               (method) => Padding(
                 padding: const EdgeInsets.only(bottom: 12),
-                child: _PaymentCard(method: method, isAr: isAr),
+                child: _PaymentCard(method: method),
               ),
             ),
             const SizedBox(height: 6),
@@ -66,9 +58,7 @@ class PaymentMethodsScreen extends StatelessWidget {
                 borderRadius: BorderRadius.circular(18),
               ),
               child: Text(
-                isAr
-                    ? 'لا توجد طرق دفع أخرى مفعلة الآن. جميع الطلبات تُسدد نقدًا عند الاستلام.'
-                    : 'No other payment methods are enabled now. All orders are paid cash on delivery.',
+                'لا توجد طرق دفع أخرى مفعلة الآن. جميع الطلبات تُسدد نقدًا عند الاستلام.',
                 style: const TextStyle(height: 1.5, fontFamily: 'Cairo'),
               ),
             ),
@@ -81,18 +71,13 @@ class PaymentMethodsScreen extends StatelessWidget {
 
 class _PaymentCard extends StatelessWidget {
   final _PaymentMethod method;
-  final bool isAr;
 
   const _PaymentCard({
     required this.method,
-    required this.isAr,
   });
 
   @override
   Widget build(BuildContext context) {
-    final title = isAr ? method.titleAr : method.titleEn;
-    final subtitle = isAr ? method.subtitleAr : method.subtitleEn;
-
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -123,7 +108,7 @@ class _PaymentCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  title,
+                  method.titleAr,
                   style: TextStyle(
                     fontSize: 15,
                     fontWeight: FontWeight.w800,
@@ -133,7 +118,7 @@ class _PaymentCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  subtitle,
+                  method.subtitleAr,
                   style: TextStyle(
                     color: method.active ? method.color : Colors.grey,
                     fontSize: 12,
@@ -152,9 +137,7 @@ class _PaymentCard extends StatelessWidget {
               borderRadius: BorderRadius.circular(999),
             ),
             child: Text(
-              method.active
-                  ? (isAr ? 'متاح' : 'Active')
-                  : (isAr ? 'قريباً' : 'Soon'),
+              method.active ? 'متاح' : 'قريباً',
               style: TextStyle(
                 fontSize: 11,
                 fontWeight: FontWeight.w800,
@@ -171,18 +154,14 @@ class _PaymentCard extends StatelessWidget {
 
 class _PaymentMethod {
   final String titleAr;
-  final String titleEn;
   final String subtitleAr;
-  final String subtitleEn;
   final IconData icon;
   final Color color;
   final bool active;
 
   _PaymentMethod({
     required this.titleAr,
-    required this.titleEn,
     required this.subtitleAr,
-    required this.subtitleEn,
     required this.icon,
     required this.color,
     required this.active,
