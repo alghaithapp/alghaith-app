@@ -276,6 +276,8 @@ class CartItem {
   int count;
   final String image;
   final String category;
+  final String? descriptionAr;
+  final String? descriptionEn;
   final String? merchantPhone;
   final String? merchantStoreName;
   final String? merchantAddress;
@@ -295,6 +297,8 @@ class CartItem {
     required this.count,
     required this.image,
     required this.category,
+    this.descriptionAr,
+    this.descriptionEn,
     this.merchantPhone,
     this.merchantStoreName,
     this.merchantAddress,

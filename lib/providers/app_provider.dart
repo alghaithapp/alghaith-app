@@ -2196,6 +2196,8 @@ class AppProvider extends ChangeNotifier {
         count: 1,
         image: item.imageBase64 ?? item.image,
         category: item.category,
+        descriptionAr: item.descriptionAr,
+        descriptionEn: item.descriptionEn,
         merchantPhone: item.merchantPhone,
         merchantStoreName: item.merchantStoreName,
         merchantAddress: item.address,
