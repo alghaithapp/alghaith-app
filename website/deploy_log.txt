@@ -1,0 +1,8 @@
+Vercel CLI 54.6.1 (Node.js 24.16.0)
+Retrieving project…
+Deploying abdullas-projects-5c8d01e7/algaithapp
+Uploading [--------------------] (0.0B/106B)
+Uploading [====================] (106.0B/106B)
+  Inspect     https://vercel.com/abdullas-projects-5c8d01e7/algaithapp/567B5f7GgbxhP6do38hJTkgjJ8ks
+▲ Production  https://algaithapp-u455fv61z-abdullas-projects-5c8d01e7.vercel.app
+https://algaithapp-u455fv61z-abdullas-projects-5c8d01e7.vercel.appBuilding…

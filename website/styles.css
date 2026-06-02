@@ -930,3 +930,120 @@ img {
     padding: 22px 20px;
   }
 }
+
+.policy-page {
+  width: min(960px, 100%);
+  margin: 48px auto 0;
+  display: grid;
+  gap: 20px;
+}
+
+.policy-hero,
+.policy-card {
+  position: relative;
+  border: 1px solid var(--border);
+  background: rgba(17, 17, 24, 0.82);
+  box-shadow: var(--shadow-card);
+  backdrop-filter: blur(18px);
+}
+
+.policy-hero {
+  padding: 36px;
+  border-radius: var(--radius-xl);
+  overflow: hidden;
+}
+
+.policy-hero::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at top right, rgba(255, 107, 53, 0.2), transparent 35%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.02), transparent);
+  pointer-events: none;
+}
+
+.policy-hero h1 {
+  position: relative;
+  z-index: 1;
+  font-size: clamp(34px, 5vw, 54px);
+  line-height: 1.1;
+  margin: 10px 0 16px;
+}
+
+.policy-hero p {
+  position: relative;
+  z-index: 1;
+  max-width: 760px;
+  color: var(--text-soft);
+  font-size: 18px;
+  line-height: 1.9;
+}
+
+.policy-meta {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 22px;
+}
+
+.policy-meta span {
+  padding: 10px 14px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: var(--text-soft);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.policy-card {
+  padding: 28px;
+  border-radius: var(--radius-lg);
+}
+
+.policy-card h2 {
+  font-size: 24px;
+  margin-bottom: 14px;
+}
+
+.policy-card p,
+.policy-card li {
+  color: var(--text-soft);
+  font-size: 17px;
+  line-height: 1.95;
+}
+
+.policy-card a {
+  color: #ffd08c;
+}
+
+.policy-list {
+  list-style: disc;
+  padding-right: 22px;
+}
+
+.policy-highlight {
+  border-color: rgba(255, 107, 53, 0.35);
+  box-shadow: 0 12px 40px rgba(255, 107, 53, 0.12);
+}
+
+@media (max-width: 720px) {
+  .policy-page {
+    margin-top: 28px;
+    gap: 16px;
+  }
+
+  .policy-hero,
+  .policy-card {
+    padding: 22px;
+  }
+
+  .policy-card p,
+  .policy-card li,
+  .policy-hero p {
+    font-size: 15px;
+  }
+}
