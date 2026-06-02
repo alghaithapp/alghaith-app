@@ -273,7 +273,7 @@ class AppProvider extends ChangeNotifier {
     // Fallback for legacy orders whose id starts with a Unix-ms timestamp
     final idPrefix = order.id.split('-').first;
     final ts = int.tryParse(idPrefix);
-    if (ts == null || ts < 1_000_000_000_000) return null;
+    if (ts == null || ts < 1000000000000) return null;
     return DateTime.fromMillisecondsSinceEpoch(ts).toLocal();
   }
 
@@ -2039,6 +2039,14 @@ class AppProvider extends ChangeNotifier {
       List<ActiveOrder>.unmodifiable(_merchantIncomingOrders);
   List<CartItem> get cart => _cart;
   List<ActiveOrder> get orders => _orders;
+  int get customerActiveOrdersCount => _orders
+      .where(
+        (order) =>
+            order.statusKey != 'completed' &&
+            order.statusKey != 'rejected' &&
+            order.statusKey != 'cancelled',
+      )
+      .length;
   List<TaxiRequest> get taxiRequests => _taxiRequests;
   List<String> get addresses => List<String>.unmodifiable(_addresses);
   List<Map<String, String>> get notifications =>
@@ -2708,92 +2716,92 @@ class AppProvider extends ChangeNotifier {
   Future<int> checkout({int deliveryFeeIqd = 0}) async {
     if (_cart.isEmpty) return 0;
 
+    final customerPhone = _trimmedOrNull(_authPhone);
+    if (customerPhone == null) {
+      throw StateError(
+        'انتهت جلسة تسجيل الدخول. يرجى تسجيل الدخول مرة أخرى قبل إتمام الطلب.',
+      );
+    }
+
     final grouped = <String, List<CartItem>>{};
     for (final item in _cart) {
       final key = _trimmedOrNull(item.merchantPhone) ?? 'unknown';
       grouped.putIfAbsent(key, () => []).add(item);
     }
 
-    // رقم الزبون الفعلي: نفضّل _authPhone لأنه الرقم المسجّل والموثّق
     final effectiveCustomerPhone =
-        _trimmedOrNull(_authPhone) ?? _trimmedOrNull(_customerPhone) ?? '';
+        customerPhone.isNotEmpty ? customerPhone : _trimmedOrNull(_customerPhone) ?? '';
 
     var createdCount = 0;
-    final savedOrders = <ActiveOrder>[];
+    final stagedOrders = <({ActiveOrder order, List<CartItem> items})>[];
 
     for (final entry in grouped.entries) {
       final items = entry.value;
       if (items.isEmpty) continue;
 
-      final isRestaurantOrder =
-          items.any((item) => item.category == 'restaurant');
       final subtotal =
           items.fold(0, (sum, item) => sum + (item.price * item.count));
-      final merchantPhone =
-          entry.key == 'unknown' ? null : entry.key;
+      final merchantPhone = entry.key == 'unknown' ? null : entry.key;
       if (merchantPhone == null) {
         throw StateError(
-            'تعذر تحديد التاجر. يرجى إعادة إضافة المنتجات والمحاولة مجدداً.');
+          'تعذر تحديد التاجر. يرجى إعادة إضافة المنتجات والمحاولة مجددًا.',
+        );
       }
       if (_hasActiveOrderForMerchant(merchantPhone)) {
         throw StateError(
-            'لديك طلب نشط بالفعل من نفس المتجر. أكمل الطلب الحالي أولاً.');
+          'لديك طلب نشط بالفعل من نفس المتجر. أكمل الطلب الحالي أولًا.',
+        );
       }
       if (!_isMerchantAcceptingForCartItem(items.first)) {
         final service = items.first.category;
         if (service == 'restaurant') {
           throw StateError(
-              'المطعم مغلق الآن ولا يستقبل الطلبات خارج أوقات العمل.');
+            'المطعم مغلق الآن ولا يستقبل الطلبات خارج أوقات العمل.',
+          );
         }
         if (service == 'product') {
           throw StateError(
-              'المتجر مغلق الآن ولا يستقبل طلبات التسوق خارج أوقات العمل.');
+            'المتجر مغلق الآن ولا يستقبل طلبات التسوق خارج أوقات العمل.',
+          );
         }
         throw StateError(
-            'الخدمة مغلقة الآن ولا تستقبل الطلبات خارج أوقات العمل.');
+          'الخدمة مغلقة الآن ولا تستقبل الطلبات خارج أوقات العمل.',
+        );
       }
+
       final merchantStoreName = items.first.merchantStoreName;
       final now = DateTime.now();
       final createdAtIso = now.toIso8601String();
       final idSeed = now.millisecondsSinceEpoch;
-      final shortOrder =
-          (idSeed % 1000000).toString().padLeft(6, '0');
+      final shortOrder = (idSeed % 1000000).toString().padLeft(6, '0');
       final orderId = _generateUuid();
 
-      String finalAddressAr = _addresses.isNotEmpty
+      final finalAddressAr = _addresses.isNotEmpty
           ? _addresses.first
-          : (_customerAddress.isNotEmpty
-              ? _customerAddress
-              : 'لم يتم تحديد الموقع');
-      String finalAddressEn = _addresses.isNotEmpty
+          : (_customerAddress.isNotEmpty ? _customerAddress : 'لم يتم تحديد الموقع');
+      final finalAddressEn = _addresses.isNotEmpty
           ? _addresses.first
-          : (_customerAddress.isNotEmpty
-              ? _customerAddress
-              : 'Location not set');
+          : (_customerAddress.isNotEmpty ? _customerAddress : 'Location not set');
 
       final orderDeliveryFee = createdCount == 0 ? deliveryFeeIqd : 0;
-      final totalPrice =
-          subtotal + (orderDeliveryFee > 0 ? orderDeliveryFee : 0);
+      final totalPrice = subtotal + (orderDeliveryFee > 0 ? orderDeliveryFee : 0);
       final newOrder = ActiveOrder(
         id: orderId,
         orderNumber: '#$shortOrder',
         dateAr: 'الآن',
         dateEn: 'Just now',
-        customerNameAr: _customerName.trim().isNotEmpty
-            ? _customerName
-            : 'زبون الغيث',
+        customerNameAr:
+            _customerName.trim().isNotEmpty ? _customerName : 'زبون الغيث',
         customerNameEn: _customerName.trim().isNotEmpty
             ? _customerName
             : 'Al-Ghaith Customer',
         customerPhone: effectiveCustomerPhone,
         addressAr: finalAddressAr,
         addressEn: finalAddressEn,
-        noteAr: orderDeliveryFee > 0
-            ? 'رسوم التوصيل: $orderDeliveryFee د.ع'
-            : '',
-        noteEn: orderDeliveryFee > 0
-            ? 'Delivery fee: $orderDeliveryFee IQD'
-            : '',
+        noteAr:
+            orderDeliveryFee > 0 ? 'رسوم التوصيل: $orderDeliveryFee د.ع' : '',
+        noteEn:
+            orderDeliveryFee > 0 ? 'Delivery fee: $orderDeliveryFee IQD' : '',
         paymentMethodAr: 'نقداً عند الاستلام',
         paymentMethodEn: 'Cash on Delivery',
         statusKey: 'pending',
@@ -2804,13 +2812,15 @@ class AppProvider extends ChangeNotifier {
         itemsNameAr: items.map((e) => e.nameAr).join(' ، '),
         itemsNameEn: items.map((e) => e.nameEn).join(', '),
         lineItems: items
-            .map((item) => OrderLineItem(
-                  nameAr: item.nameAr,
-                  nameEn: item.nameEn,
-                  quantity: item.count,
-                  price: item.price,
-                  image: item.image,
-                ))
+            .map(
+              (item) => OrderLineItem(
+                nameAr: item.nameAr,
+                nameEn: item.nameEn,
+                quantity: item.count,
+                price: item.price,
+                image: item.image,
+              ),
+            )
             .toList(),
         isRestaurantOrder: items.any((item) => item.category == 'restaurant'),
         requiresDelivery: true,
@@ -2826,33 +2836,56 @@ class AppProvider extends ChangeNotifier {
         isPriceLocked: false,
       );
 
-      // أضف الطلب محلياً فوراً
-      _orders.insert(0, newOrder);
-      savedOrders.add(newOrder);
+      stagedOrders.add((order: newOrder, items: List<CartItem>.from(items)));
       createdCount++;
     }
 
-    _cart.clear();
-    notifyListeners();
+    final successfulOrders = <ActiveOrder>[];
+    final successfulItemKeys = <String>{};
+    final failedStores = <String>[];
 
-    // احفظ كل الطلبات في السيرفر وانتظر النتيجة
-    if (savedOrders.isNotEmpty && _trimmedOrNull(_authPhone) != null) {
-      final saveErrors = <String>[];
-      for (final order in savedOrders) {
-        try {
-          await SupabaseService.saveCustomerOrder(_authPhone!, order);
-        } catch (error) {
-          debugPrint('CHECKOUT_SAVE_ERROR: $error');
-          saveErrors.add(order.id);
-        }
-      }
-      if (saveErrors.isNotEmpty) {
-        // الطلبات موجودة محلياً وسيُعاد محاولة رفعها تلقائياً
-        debugPrint('CHECKOUT: ${saveErrors.length} order(s) saved locally only, will retry on next refresh.');
+    for (final staged in stagedOrders) {
+      try {
+        await SupabaseService.saveCustomerOrder(customerPhone, staged.order);
+        successfulOrders.add(staged.order);
+        successfulItemKeys.addAll(
+          staged.items.map(
+            (item) => '${item.id}:${item.optionAr ?? ''}:${item.optionEn ?? ''}',
+          ),
+        );
+      } catch (error) {
+        debugPrint('CHECKOUT_SAVE_ERROR (${staged.order.id}): $error');
+        failedStores.add(
+          _trimmedOrNull(staged.order.merchantStoreName) ?? 'المتجر المحدد',
+        );
       }
     }
 
-    return createdCount;
+    if (successfulOrders.isNotEmpty) {
+      final existingIds = {for (final order in _orders) order.id};
+      for (final order in successfulOrders.reversed) {
+        if (!existingIds.contains(order.id)) {
+          _orders.insert(0, order);
+        }
+      }
+      _cart.removeWhere(
+        (item) => successfulItemKeys.contains(
+          '${item.id}:${item.optionAr ?? ''}:${item.optionEn ?? ''}',
+        ),
+      );
+      notifyListeners();
+    }
+
+    if (failedStores.isNotEmpty) {
+      final storesLabel = failedStores.toSet().join('، ');
+      throw StateError(
+        successfulOrders.isEmpty
+            ? 'تعذر حفظ الطلب في الخادم. لم يتم إرسال الطلب إلى $storesLabel، وما زالت المنتجات في السلة.'
+            : 'تم إرسال بعض الطلبات فقط. تعذر حفظ الطلب إلى $storesLabel، وأبقينا المنتجات غير المرسلة في السلة لإعادة المحاولة.',
+      );
+    }
+
+    return successfulOrders.length;
   }
 
   void loadInitialData(List<ListItem> initialItems) {
@@ -3335,3 +3368,4 @@ class AppProvider extends ChangeNotifier {
     }
   }
 }
+

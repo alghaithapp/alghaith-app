@@ -172,6 +172,17 @@ function canonicalPhone(phone) {
   return trimmed.startsWith('+') ? trimmed : `+${digits}`;
 }
 
+function phonesOverlap(left, right) {
+  const leftVariants = new Set(getPhoneVariants(left));
+  if (leftVariants.size === 0) return false;
+  for (const variant of getPhoneVariants(right)) {
+    if (leftVariants.has(variant)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 async function selectSingleByPhone(table, phone) {
   const variants = getPhoneVariants(phone);
   if (variants.length === 0) return null;
@@ -686,41 +697,54 @@ async function saveCustomerFavorite(phone, data = {}) {
 }
 
 async function getCustomerOrders(phone) {
+  const variants = getPhoneVariants(phone);
+  if (variants.length === 0) return [];
   return selectMany(
     'customer_orders',
-    [{ method: 'eq', column: 'phone', value: phone }],
+    [{ method: 'in', column: 'phone', value: variants }],
     { column: 'created_at', ascending: false }
   );
 }
 
 async function saveCustomerOrder(phone, data = {}) {
-  await ensureAppUser(phone, data);
+  const customerPhone = await resolvePhoneKey(phone);
+  await ensureAppUser(customerPhone, data);
   const order = normalizeObject(data.order ?? data.order_payload);
   const orderId = String(order.id ?? data.id ?? '').trim();
   if (!orderId) {
     throw new Error('Order id is required.');
   }
 
-  const merchantPhone =
+  const rawMerchantPhone =
     String(
       data.merchant_phone ??
         data.merchantPhone ??
         order.merchantPhone ??
         ''
-    ).trim() || null;
+    ).trim();
+  const merchantPhone = rawMerchantPhone
+    ? await resolvePhoneKey(rawMerchantPhone)
+    : null;
 
-  const courierPhone =
+  const rawCourierPhone =
     String(
       data.courier_phone ??
         data.courierPhone ??
         order.courierPhone ??
         order.assignedCourierPhone ??
         ''
-    ).trim() || null;
+    ).trim();
+  const courierPhone = rawCourierPhone
+    ? await resolvePhoneKey(rawCourierPhone)
+    : null;
+
+  order.customerPhone = customerPhone;
+  order.merchantPhone = merchantPhone;
+  order.courierPhone = courierPhone;
 
   const payload = {
     id: orderId,
-    phone,
+    phone: customerPhone,
     order_number: String(order.orderNumber ?? data.order_number ?? '').trim() || null,
     status_key: String(order.statusKey ?? data.status_key ?? '').trim() || null,
     delivery_status_key:
@@ -804,7 +828,7 @@ async function getCourierAssignedOrders(courierPhone) {
   );
   return rows.filter((row) => {
     const meta = readOrderMeta(row);
-    return variants.includes(meta.courierPhone);
+    return phonesOverlap(courierPhone, meta.courierPhone);
   });
 }
 
@@ -858,8 +882,7 @@ async function updateCourierDeliveryStatus(courierPhone, orderId, updates = {}) 
   }
 
   const meta = readOrderMeta(row);
-  const courierVariants = getPhoneVariants(normalizedCourier);
-  if (!courierVariants.includes(meta.courierPhone)) {
+  if (!phonesOverlap(normalizedCourier, meta.courierPhone)) {
     throw new Error('You are not assigned to this order.');
   }
 
@@ -1073,7 +1096,7 @@ async function getMerchantIncomingOrders(merchantPhone) {
     const linkedMerchant = String(
       row.merchant_phone ?? payload.merchantPhone ?? ''
     ).trim();
-    return variants.includes(linkedMerchant);
+    return phonesOverlap(merchantPhone, linkedMerchant);
   });
 }
 
@@ -1093,8 +1116,7 @@ async function updateIncomingOrderStatus(merchantPhone, orderId, updates = {}) {
   const linkedMerchant = String(
     row.merchant_phone ?? payload.merchantPhone ?? ''
   ).trim();
-  const merchantVariants = getPhoneVariants(normalizedMerchant);
-  if (!merchantVariants.includes(linkedMerchant)) {
+  if (!phonesOverlap(normalizedMerchant, linkedMerchant)) {
     throw new Error('You are not allowed to update this order.');
   }
 
