@@ -22,6 +22,7 @@ import 'merchant/merchant_products_screen.dart';
 import 'merchant/merchant_store_settings_screen.dart';
 import 'real_estate_form_screen.dart';
 import 'account_full_screen.dart';
+import 'phone_login_screen.dart';
 
 class AccountScreen extends StatelessWidget {
   const AccountScreen({super.key});
@@ -39,6 +40,60 @@ class AccountScreen extends StatelessWidget {
     }
 
     return const _CustomerAccountView();
+  }
+}
+
+class _GuestAccountView extends StatelessWidget {
+  const _GuestAccountView();
+
+  @override
+  Widget build(BuildContext context) {
+    return CupertinoPageScaffold(
+      backgroundColor: const Color(0xFFF2F2F7),
+      navigationBar: const CupertinoNavigationBar(
+        middle: Text('حسابي', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
+      ),
+      child: SafeArea(
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24.0),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(CupertinoIcons.person_circle, size: 100, color: Colors.grey),
+                const SizedBox(height: 20),
+                const Text(
+                  'سجل دخولك الآن',
+                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, fontFamily: 'Cairo'),
+                ),
+                const SizedBox(height: 10),
+                const Text(
+                  'يرجى تسجيل الدخول للوصول إلى طلباتك، عناويني، وإدارة حسابك بشكل كامل.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: Colors.grey, fontFamily: 'Cairo'),
+                ),
+                const SizedBox(height: 30),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.orange,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    ),
+                    onPressed: () {
+                      final provider = context.read<AppProvider>();
+                      provider.resetAll();
+                    },
+                    child: const Text('تسجيل الدخول', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontFamily: 'Cairo')),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
 
@@ -790,45 +845,6 @@ class _CustomerAccountView extends StatelessWidget {
     );
   }
 
-  Future<void> _showDeleteAccountDialog(BuildContext context, AppProvider provider) async {
-    final confirmed = await showCupertinoDialog<bool>(
-      context: context,
-      builder: (context) => CupertinoAlertDialog(
-        title: const Text('حذف الحساب', style: TextStyle(fontFamily: 'Cairo')),
-        content: const Text(
-          'هل أنت متأكد من رغبتك في حذف حسابك نهائياً؟ سيؤدي هذا إلى مسح كافة بياناتك وطلباتك ولا يمكن التراجع عن هذه الخطوة.',
-          style: TextStyle(fontFamily: 'Cairo'),
-        ),
-        actions: [
-          CupertinoDialogAction(
-            child: const Text('إلغاء'),
-            onPressed: () => Navigator.pop(context, false),
-          ),
-          CupertinoDialogAction(
-            isDestructiveAction: true,
-            child: const Text('حذف الحساب'),
-            onPressed: () => Navigator.pop(context, true),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed == true) {
-      // هنا نقوم بتسجيل الخروج ومسح البيانات
-      // في الحقيقة، أبل تطلب أن يكون هناك إجراء في السيرفر أيضاً
-      // سنقوم حالياً بمسح الجلسة وتوجيه المستخدم للخارج
-      await provider.resetAll();
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('تم تقديم طلب حذف الحساب بنجاح.', style: TextStyle(fontFamily: 'Cairo')),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
-  }
-
   Widget _buildSettingItem(BuildContext context, IconData icon, String title,
       {required Color color, required VoidCallback onTap}) {
     return GestureDetector(
@@ -1049,6 +1065,42 @@ class _CustomerAccountView extends StatelessWidget {
         ),
       ],
     );
+  }
+
+  Future<void> _showDeleteAccountDialog(BuildContext context, AppProvider provider) async {
+    final confirmed = await showCupertinoDialog<bool>(
+      context: context,
+      builder: (context) => CupertinoAlertDialog(
+        title: const Text('حذف الحساب', style: TextStyle(fontFamily: 'Cairo')),
+        content: const Text(
+          'هل أنت متأكد من رغبتك في حذف حسابك نهائياً؟ سيؤدي هذا إلى مسح كافة بياناتك وطلباتك ولا يمكن التراجع عن هذه الخطوة.',
+          style: TextStyle(fontFamily: 'Cairo'),
+        ),
+        actions: [
+          CupertinoDialogAction(
+            child: const Text('إلغاء'),
+            onPressed: () => Navigator.pop(context, false),
+          ),
+          CupertinoDialogAction(
+            isDestructiveAction: true,
+            child: const Text('حذف الحساب'),
+            onPressed: () => Navigator.pop(context, true),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      provider.resetAll();
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('تم تقديم طلب حذف الحساب بنجاح.', style: TextStyle(fontFamily: 'Cairo')),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 }
 

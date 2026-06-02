@@ -37,6 +37,7 @@ class _MerchantStoreSettingsScreenState
   String? _profileImageBase64;
   final List<String> _workSampleImagesBase64 = [];
   String? _selectedProfessionalCategoryId;
+  String? _selectedRestaurantCategory;
   double? _storeLatitude;
   double? _storeLongitude;
 
@@ -72,6 +73,8 @@ class _MerchantStoreSettingsScreenState
     _logoImageBase64 ??= _extractBase64(provider.merchantLogoImage);
     _profileImageBase64 ??= provider.merchantProfileImageBase64;
     _selectedProfessionalCategoryId ??= provider.merchantProfessionalCategoryId;
+    _selectedRestaurantCategory ??=
+        provider.merchantStore?['restaurantCategory']?.toString();
     _storeLatitude ??= provider.merchantLatitude;
     _storeLongitude ??= provider.merchantLongitude;
     if (_workSampleImagesBase64.isEmpty) {
@@ -251,6 +254,37 @@ class _MerchantStoreSettingsScreenState
             imageBase64: _logoImageBase64,
             onTap: _pickLogoImage,
           ),
+          if (provider.merchantActiveServiceId == 'restaurant') ...[
+            const SizedBox(height: 16),
+            const _SectionTitle(title: 'تخصص المطعم'),
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: _CategoryChoiceButton(
+                      label: 'مشويات',
+                      selected: _selectedRestaurantCategory == 'مشويات',
+                      onTap: () => setState(() => _selectedRestaurantCategory = 'مشويات'),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: _CategoryChoiceButton(
+                      label: 'وجبات سريعة',
+                      selected: _selectedRestaurantCategory == 'وجبات سريعة',
+                      onTap: () => setState(() => _selectedRestaurantCategory = 'وجبات سريعة'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
           const SizedBox(height: 16),
           const _SectionTitle(title: 'معلومات أساسية'),
           const SizedBox(height: 10),
@@ -420,6 +454,7 @@ class _MerchantStoreSettingsScreenState
                 'isOpen': _isOpen,
                 'coverImageBase64': _coverImageBase64,
                 'logoImageBase64': _logoImageBase64,
+                'restaurantCategory': _selectedRestaurantCategory,
                 'profileImageBase64': provider.merchantActiveServiceId ==
                         'restaurant'
                     ? _logoImageBase64
@@ -611,6 +646,46 @@ class _MerchantStoreSettingsScreenState
         _workSampleImagesBase64.addAll(urls);
       });
     }
+  }
+}
+
+class _CategoryChoiceButton extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _CategoryChoiceButton({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        decoration: BoxDecoration(
+          color: selected ? Colors.deepOrange : const Color(0xFFF7F8FC),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: selected ? Colors.deepOrange : Colors.grey.shade200,
+          ),
+        ),
+        alignment: Alignment.center,
+        child: Text(
+          label,
+          style: TextStyle(
+            color: selected ? Colors.white : Colors.black87,
+            fontWeight: FontWeight.bold,
+            fontFamily: 'Cairo',
+            fontSize: 13,
+          ),
+        ),
+      ),
+    );
   }
 }
 

@@ -11,7 +11,6 @@ import '../widgets/app_image.dart';
 import 'professionals_directory_screen.dart';
 import 'real_estate_form_screen.dart';
 import 'real_estate_listings_screen.dart';
-import 'restaurant_menu_screen.dart';
 import 'shopping_stores_screen.dart';
 import 'sub_category_items_screen.dart';
 import 'taxi_request_screen.dart';
@@ -147,16 +146,7 @@ class CategoryItemsScreen extends StatelessWidget {
                 itemCount: filteredItems.length,
                 itemBuilder: (context, index) {
                   final item = filteredItems[index];
-                  return GestureDetector(
-                    onTap: category.id == 'restaurant'
-                        ? () => Navigator.of(context).push(
-                              CupertinoPageRoute(
-                                builder: (context) =>
-                                    RestaurantMenuScreen(restaurant: item),
-                              ),
-                            )
-                        : null,
-                    child: Container(
+                  return Container(
                       margin: const EdgeInsets.only(bottom: 16),
                       decoration: BoxDecoration(
                         color: Colors.white,
@@ -274,48 +264,34 @@ class CategoryItemsScreen extends StatelessWidget {
                                       ),
                                       color: Colors.orange,
                                       borderRadius: BorderRadius.circular(12),
-                                      onPressed: category.id == 'restaurant'
-                                          ? () => Navigator.of(context).push(
-                                                CupertinoPageRoute(
-                                                  builder: (context) =>
-                                                      RestaurantMenuScreen(
-                                                    restaurant: item,
-                                                  ),
-                                                ),
+                                      onPressed: category.id == 'real_estate' ||
+                                              category.id == 'cars' ||
+                                              category.id == 'professionals'
+                                          ? () => AppHelpers.launchWhatsApp(
+                                                AppHelpers.supportWhatsAppNumber,
+                                                "مرحبًا، أستفسر عن: ${item.nameAr}",
                                               )
-                                          : (category.id == 'real_estate' ||
-                                                  category.id == 'cars' ||
-                                                  category.id ==
-                                                      'professionals'
-                                              ? () => AppHelpers.launchWhatsApp(
-                                                    AppHelpers
-                                                        .supportWhatsAppNumber,
-                                                    "مرحبًا، أستفسر عن: ${item.nameAr}",
-                                                  )
-                                              : () {
-                                                  appProvider.addToCart(item);
-                                                  showCupertinoDialog(
-                                                    context: context,
-                                                    builder: (context) =>
-                                                        CupertinoAlertDialog(
-                                                      title: const Text('تمت الإضافة'),
-                                                      content: const Text(
-                                                          'تمت إضافة المنتج إلى السلة بنجاح'),
-                                                      actions: [
-                                                        CupertinoDialogAction(
-                                                          child: const Text('حسنًا'),
-                                                          onPressed: () =>
-                                                              Navigator.pop(
-                                                                  context),
-                                                        ),
-                                                      ],
+                                          : () {
+                                              appProvider.addToCart(item);
+                                              showCupertinoDialog(
+                                                context: context,
+                                                builder: (context) =>
+                                                    CupertinoAlertDialog(
+                                                  title: const Text('تمت الإضافة'),
+                                                  content: const Text(
+                                                      'تمت إضافة المنتج إلى السلة بنجاح'),
+                                                  actions: [
+                                                    CupertinoDialogAction(
+                                                      child: const Text('حسنًا'),
+                                                      onPressed: () =>
+                                                          Navigator.pop(context),
                                                     ),
-                                                  );
-                                                }),
+                                                  ],
+                                                ),
+                                              );
+                                            },
                                       child: Text(
-                                        category.id == 'restaurant'
-                                            ? 'عرض المنيو'
-                                            : item.actionLabelAr,
+                                        item.actionLabelAr,
                                         style: const TextStyle(
                                           fontSize: 14,
                                           fontWeight: FontWeight.bold,
@@ -331,7 +307,6 @@ class CategoryItemsScreen extends StatelessWidget {
                           ),
                         ],
                       ),
-                    ),
                   );
                 },
               ),

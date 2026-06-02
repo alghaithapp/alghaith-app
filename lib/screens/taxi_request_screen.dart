@@ -18,6 +18,8 @@ import '../utils/extensions.dart';
 class TaxiRequestScreen extends StatefulWidget {
   const TaxiRequestScreen({super.key});
 
+  static const bool isComingSoon = true;
+
   @override
   State<TaxiRequestScreen> createState() => _TaxiRequestScreenState();
 }
@@ -47,6 +49,7 @@ class _TaxiRequestScreenState extends State<TaxiRequestScreen> {
   @override
   void initState() {
     super.initState();
+    if (TaxiRequestScreen.isComingSoon) return;
     _pickupController.addListener(_scheduleDistanceUpdate);
     _dropoffController.addListener(_scheduleDistanceUpdate);
     _scheduleDistanceUpdate();
@@ -472,25 +475,26 @@ class _TaxiRequestScreenState extends State<TaxiRequestScreen> {
     final latestTaxiRequest =
         appProvider.taxiRequests.isNotEmpty ? appProvider.taxiRequests.first : null;
 
-    return Directionality(
-      textDirection: TextDirection.rtl,
-      child: CupertinoPageScaffold(
-        backgroundColor: const Color(0xFF030B1A),
-        child: SafeArea(
-          child: Stack(
-            children: [
-              Positioned.fill(
-                child: _TaxiMapBackdrop(
-                  pickupAddress: _pickupController.text.trim(),
-                  dropoffAddress: _dropoffController.text.trim(),
-                  estimatedDistanceKm: _estimatedDistanceKm,
-                  mapCenter: _mapCenter,
-                  mapRefreshSeed: _mapRefreshSeed,
-                  pickupPosition: _pickupPosition,
-                  dropoffPosition: _dropoffPosition,
-                  routePolyline: _routePolyline,
+    return _wrapComingSoon(
+      Directionality(
+        textDirection: TextDirection.rtl,
+        child: CupertinoPageScaffold(
+          backgroundColor: const Color(0xFF030B1A),
+          child: SafeArea(
+            child: Stack(
+              children: [
+                Positioned.fill(
+                  child: _TaxiMapBackdrop(
+                    pickupAddress: _pickupController.text.trim(),
+                    dropoffAddress: _dropoffController.text.trim(),
+                    estimatedDistanceKm: _estimatedDistanceKm,
+                    mapCenter: _mapCenter,
+                    mapRefreshSeed: _mapRefreshSeed,
+                    pickupPosition: _pickupPosition,
+                    dropoffPosition: _dropoffPosition,
+                    routePolyline: _routePolyline,
+                  ),
                 ),
-              ),
               Positioned(
                 top: 8,
                 left: 14,
@@ -711,6 +715,18 @@ class _TaxiRequestScreenState extends State<TaxiRequestScreen> {
           ),
         ),
       ),
+    ),
+    );
+  }
+
+  Widget _wrapComingSoon(Widget child) {
+    if (!TaxiRequestScreen.isComingSoon) return child;
+
+    return Stack(
+      children: [
+        IgnorePointer(child: child),
+        const Positioned.fill(child: _TaxiComingSoonOverlay()),
+      ],
     );
   }
 
@@ -788,6 +804,107 @@ class _GeoPoint {
   final double longitude;
 
   const _GeoPoint(this.latitude, this.longitude);
+}
+
+class _TaxiComingSoonOverlay extends StatelessWidget {
+  const _TaxiComingSoonOverlay();
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: Stack(
+        children: [
+          Positioned.fill(
+            child: AbsorbPointer(
+              child: Container(
+                color: Colors.black.withValues(alpha: 0.45),
+              ),
+            ),
+          ),
+          SafeArea(
+            child: Align(
+              alignment: Alignment.topRight,
+              child: Padding(
+                padding: const EdgeInsets.all(14),
+                child: _MapTopCircleButton(
+                  icon: CupertinoIcons.back,
+                  onTap: () {
+                    if (Navigator.of(context).canPop()) {
+                      Navigator.of(context).pop();
+                    }
+                  },
+                ),
+              ),
+            ),
+          ),
+          Center(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 32),
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 28,
+                  vertical: 36,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(28),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.18),
+                      blurRadius: 24,
+                      offset: const Offset(0, 12),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 72,
+                      height: 72,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFF9800).withValues(alpha: 0.12),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.local_taxi_rounded,
+                        size: 38,
+                        color: Color(0xFFFF9800),
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    const Text(
+                      'قريباً',
+                      style: TextStyle(
+                        fontFamily: 'Cairo',
+                        fontSize: 32,
+                        fontWeight: FontWeight.w900,
+                        color: Color(0xFF1A1A1A),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      'خدمة طلب التكسي قيد التطوير\nستتوفر قريباً في تطبيق الغيث',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontFamily: 'Cairo',
+                        fontSize: 15,
+                        height: 1.6,
+                        color: Colors.grey.shade700,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _TaxiMapBackdrop extends StatefulWidget {

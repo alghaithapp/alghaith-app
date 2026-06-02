@@ -7,8 +7,9 @@ import '../providers/app_provider.dart';
 import '../services/supabase_service.dart';
 import '../utils/extensions.dart';
 import '../utils/helpers.dart';
-import '../../widgets/app_image.dart';
+import '../widgets/app_image.dart';
 import 'cart_screen.dart';
+import 'restaurant_menu_screen.dart';
 
 enum MerchantStoreKind { shopping, restaurant }
 
@@ -29,6 +30,13 @@ class ShoppingStoresScreen extends StatefulWidget {
 class _ShoppingStoresScreenState extends State<ShoppingStoresScreen> {
   final TextEditingController _searchController = TextEditingController();
   late Future<List<Map<String, dynamic>>> _futureStores;
+  String _selectedFilter = 'الكل';
+
+  final List<String> _filters = [
+    'الكل',
+    'مشويات',
+    'وجبات سريعة',
+  ];
 
   Future<List<Map<String, dynamic>>> _loadStores() {
     if (widget.storeKind == MerchantStoreKind.restaurant) {
@@ -37,7 +45,7 @@ class _ShoppingStoresScreenState extends State<ShoppingStoresScreen> {
       );
     }
     return SupabaseService.loadShoppingStores(
-      subCategoryId: widget.subCategory!.id,
+      subCategoryId: widget.subCategory?.id,
     );
   }
 
@@ -45,61 +53,6 @@ class _ShoppingStoresScreenState extends State<ShoppingStoresScreen> {
     setState(() {
       _futureStores = _loadStores();
     });
-  }
-
-  List<Map<String, dynamic>> _buildRestaurantFallbackStores(AppProvider provider) {
-    final targetSubCategory = widget.subCategory?.id;
-    final restaurantItems = provider.items.where((item) {
-      if (item.category != 'restaurant' || !item.isAvailable) return false;
-      if (targetSubCategory == null || targetSubCategory.isEmpty) return true;
-      return item.subCategory == targetSubCategory;
-    }).toList();
-
-    if (restaurantItems.isEmpty) return const [];
-
-    final profile = Map<String, dynamic>.from(provider.merchantStore ?? const {});
-    final storeName = (profile['name']?.toString().trim() ?? '').isNotEmpty
-        ? profile['name']?.toString().trim()
-        : 'مطعمك';
-    final description = profile['description']?.toString().trim() ?? '';
-    final phone = profile['phone']?.toString().trim() ?? provider.customerPhone;
-    final whatsapp = profile['whatsapp']?.toString().trim() ?? phone;
-    final address = profile['address']?.toString().trim() ?? '';
-    final openTime = profile['openTime']?.toString().trim() ?? '';
-    final closeTime = profile['closeTime']?.toString().trim() ?? '';
-    final profileImage = profile['profileImageBase64']?.toString().trim() ?? '';
-    final workSamples = provider.merchantWorkSampleImagesBase64;
-
-    return [
-      {
-        'profile': {
-          'store_name': storeName,
-          'description': description,
-          'phone': phone,
-          'whatsapp': whatsapp,
-          'address': address,
-          'open_time': openTime,
-          'close_time': closeTime,
-          'latitude': provider.merchantLatitude,
-          'longitude': provider.merchantLongitude,
-          'profile_image_base64': profileImage,
-          'work_sample_images_base64': workSamples,
-        },
-        'products': restaurantItems
-            .map((item) => {
-                  'id': item.id,
-                  'name_ar': item.nameAr,
-                  'description_ar': item.descriptionAr,
-                  'price': item.price,
-                  'category': item.category,
-                  'sub_category': item.subCategory,
-                  'image': item.image,
-                  'image_base64': item.imageBase64,
-                  'is_available': item.isAvailable,
-                })
-            .toList(),
-      },
-    ];
   }
 
   @override
@@ -116,282 +69,442 @@ class _ShoppingStoresScreenState extends State<ShoppingStoresScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final appProvider = context.watch<AppProvider>();
     final query = _searchController.text.trim().toLowerCase();
+    final primaryRed = const Color(0xFFE60012);
 
-    final isRestaurant = widget.storeKind == MerchantStoreKind.restaurant;
-    final title = widget.subCategory != null
-        ? widget.subCategory!.titleAr
-        : (isRestaurant ? 'المطاعم' : 'التسوق');
+    return Scaffold(
+      backgroundColor: Colors.white,
+      body: Stack(
+        children: [
+          SafeArea(
+            bottom: false,
+            child: CustomScrollView(
+              physics: const BouncingScrollPhysics(),
+              slivers: [
+                // 1. Header Section
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                    child: Column(
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            _IconButton(
+                              icon: CupertinoIcons.refresh_thick, 
+                              onTap: _reloadStores,
+                              color: primaryRed,
+                            ),
+                            Column(
+                              children: [
+                                const Text(
+                                  'المطاعم',
+                                  style: TextStyle(
+                                    fontFamily: 'Cairo',
+                                    fontSize: 24,
+                                    fontWeight: FontWeight.w900,
+                                    color: Color(0xFF1A1A1A),
+                                  ),
+                                ),
+                                Text(
+                                  'اختر مطعمك المفضل واطلب بسهولة',
+                                  style: TextStyle(
+                                    fontFamily: 'Cairo',
+                                    fontSize: 13,
+                                    color: Colors.grey.shade600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            _IconButton(
+                              icon: CupertinoIcons.house_fill, 
+                              onTap: () {
+                                Navigator.of(context).popUntil((route) => route.isFirst);
+                              },
+                              color: Colors.black87,
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 20),
+                        _SearchBar(
+                          controller: _searchController,
+                          onChanged: (_) => setState(() {}),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
 
-    return CupertinoPageScaffold(
-      backgroundColor: const Color(0xFFF2F2F7),
-      navigationBar: CupertinoNavigationBar(
-        middle: Text(
-          title,
-          style: const TextStyle(
-            fontWeight: FontWeight.bold,
-            fontFamily: 'Cairo',
-          ),
-        ),
-        previousPageTitle: 'الرجوع',
-        trailing: CupertinoButton(
-          padding: EdgeInsets.zero,
-          onPressed: _reloadStores,
-          child: const Icon(CupertinoIcons.refresh, size: 22),
-        ),
-      ),
-      child: SafeArea(
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
-              child: CupertinoSearchTextField(
-                controller: _searchController,
-                placeholder: isRestaurant
-                    ? 'ابحث عن مطعم'
-                    : 'ابحث عن سوق أو محل',
-                onChanged: (_) => setState(() {}),
-              ),
-            ),
-            Expanded(
-              child: FutureBuilder<List<Map<String, dynamic>>>(
-                future: _futureStores,
-                builder: (context, snapshot) {
-                  final provider = context.read<AppProvider>();
-                  if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const Center(child: CupertinoActivityIndicator());
-                  }
-
-                  if (snapshot.hasError) {
-                    return _EmptyState(
-                      message: isRestaurant
-                          ? 'تعذر تحميل المطاعم'
-                          : 'تعذر تحميل الأسواق',
-                      onRetry: _reloadStores,
-                    );
-                  }
-
-                  final remoteStores = snapshot.data ?? const [];
-                  final stores = remoteStores.isEmpty && isRestaurant
-                      ? _buildRestaurantFallbackStores(provider)
-                      : remoteStores;
-                  final filtered = stores.where((store) {
-                    final profile = Map<String, dynamic>.from(
-                      store['profile'] as Map,
-                    );
-                    final storeName =
-                        profile['store_name']?.toString().toLowerCase() ?? '';
-                    final description =
-                        profile['description']?.toString().toLowerCase() ?? '';
-                    if (query.isEmpty) return true;
-                    return storeName.contains(query) ||
-                        description.contains(query);
-                  }).toList();
-
-                  if (filtered.isEmpty) {
-                    return _EmptyState(
-                      onRetry: _reloadStores,
-                      message: query.isEmpty
-                          ? (isRestaurant
-                              ? 'لا توجد مطاعم في هذا القسم بعد'
-                              : 'لا توجد أسواق أو محلات في هذا القسم بعد')
-                          : 'لا توجد نتائج مطابقة',
-                    );
-                  }
-
-                  return RefreshIndicator(
-                    onRefresh: () async {
-                      _reloadStores();
-                      await _futureStores;
-                    },
-                    child: ListView.separated(
-                      physics: const AlwaysScrollableScrollPhysics(),
-                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
-                      itemCount: filtered.length,
-                      separatorBuilder: (_, __) => const SizedBox(height: 12),
+                // 2. Category Filters
+                SliverToBoxAdapter(
+                  child: Container(
+                    height: 55,
+                    margin: const EdgeInsets.symmetric(vertical: 10),
+                    child: ListView.builder(
+                      scrollDirection: Axis.horizontal,
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      itemCount: _filters.length,
                       itemBuilder: (context, index) {
-                        return _StoreCard(
-                          data: filtered[index],
-                          subCategory: widget.subCategory,
-                          storeKind: widget.storeKind,
+                        final filter = _filters[index];
+                        final isSelected = _selectedFilter == filter;
+                        return GestureDetector(
+                          onTap: () => setState(() => _selectedFilter = filter),
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 300),
+                            margin: const EdgeInsets.symmetric(horizontal: 5, vertical: 5),
+                            padding: const EdgeInsets.symmetric(horizontal: 20),
+                            decoration: BoxDecoration(
+                              color: isSelected ? primaryRed : const Color(0xFFF5F5F5),
+                              borderRadius: BorderRadius.circular(25),
+                              boxShadow: isSelected
+                                  ? [BoxShadow(color: primaryRed.withValues(alpha: 0.3), blurRadius: 8, offset: const Offset(0, 4))]
+                                  : null,
+                            ),
+                            alignment: Alignment.center,
+                            child: Text(
+                              filter,
+                              style: TextStyle(
+                                fontFamily: 'Cairo',
+                                fontWeight: FontWeight.bold,
+                                fontSize: 13,
+                                color: isSelected ? Colors.white : const Color(0xFF4A4A4A),
+                              ),
+                            ),
+                          ),
                         );
                       },
                     ),
-                  );
-                },
-              ),
+                  ),
+                ),
+
+                // 3. Restaurants List
+                FutureBuilder<List<Map<String, dynamic>>>(
+                  future: _futureStores,
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return const SliverFillRemaining(child: Center(child: CupertinoActivityIndicator()));
+                    }
+
+                    if (snapshot.hasError) {
+                      return SliverFillRemaining(child: _ErrorState(onRetry: _reloadStores));
+                    }
+
+                    var stores = snapshot.data ?? [];
+                    
+                    // Sorting: Open restaurants first
+                    stores.sort((a, b) {
+                      final aOpen = (a['profile'] as Map)['is_open'] as bool? ?? true;
+                      final bOpen = (b['profile'] as Map)['is_open'] as bool? ?? true;
+                      if (aOpen && !bOpen) return -1;
+                      if (!aOpen && bOpen) return 1;
+                      return 0;
+                    });
+
+                    // Search and Category Filter
+                    final filtered = stores.where((s) {
+                      final p = s['profile'] as Map;
+                      final name = p['store_name']?.toString().toLowerCase() ?? '';
+                      final desc = p['description']?.toString().toLowerCase() ?? '';
+                      final resCat = p['restaurantCategory']?.toString() ?? '';
+                      
+                      final matchesQuery = name.contains(query) || desc.contains(query);
+                      final matchesFilter = _selectedFilter == 'الكل' || resCat == _selectedFilter;
+
+                      return matchesQuery && matchesFilter;
+                    }).toList();
+
+                    if (filtered.isEmpty) {
+                      return const SliverFillRemaining(child: _NoResultsState());
+                    }
+
+                    return SliverPadding(
+                      padding: const EdgeInsets.fromLTRB(20, 10, 20, 120),
+                      sliver: SliverList(
+                        delegate: SliverChildBuilderDelegate(
+                          (context, index) => _PremiumRestaurantCard(
+                            data: filtered[index],
+                            onTap: () {
+                              final profile = Map<String, dynamic>.from(
+                                filtered[index]['profile'] as Map,
+                              );
+                              final products =
+                                  (filtered[index]['products'] as List)
+                                      .cast<Map<String, dynamic>>();
+                              Navigator.of(context).push(
+                                CupertinoPageRoute(
+                                  builder: (_) =>
+                                      widget.storeKind ==
+                                              MerchantStoreKind.restaurant
+                                          ? RestaurantMenuScreen(
+                                              storeProfile: profile,
+                                              storeProducts: products,
+                                            )
+                                          : ShoppingStoreMenuScreen(
+                                              profile: profile,
+                                              products: products,
+                                              subCategory: widget.subCategory,
+                                              storeKind: widget.storeKind,
+                                            ),
+                                ),
+                              );
+                            },
+                          ),
+                          childCount: filtered.length,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ],
             ),
-          ],
-        ),
+          ),
+
+          // 4. Guest Mode Banner
+          if (appProvider.isGuestMode)
+            Positioned(
+              bottom: 0,
+              left: 0,
+              right: 0,
+              child: _GuestModeBanner(onLogin: () => appProvider.resetAll()),
+            ),
+        ],
       ),
     );
   }
 }
 
-class _StoreCard extends StatelessWidget {
+class _PremiumRestaurantCard extends StatelessWidget {
   final Map<String, dynamic> data;
-  final ServiceCategory? subCategory;
-  final MerchantStoreKind storeKind;
+  final VoidCallback onTap;
 
-  const _StoreCard({
-    required this.data,
-    required this.subCategory,
-    required this.storeKind,
-  });
+  const _PremiumRestaurantCard({required this.data, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
     final profile = Map<String, dynamic>.from(data['profile'] as Map);
-    final products = (data['products'] as List)
-        .whereType<Map>()
-        .map((item) => Map<String, dynamic>.from(item))
-        .toList();
-    final profileImageBase64 = profile['profile_image_base64']?.toString();
-    final workSamples = profile['work_sample_images_base64'];
-    final samples = workSamples is List
-        ? workSamples.map((item) => item.toString()).toList()
-        : const <String>[];
-    final address = profile['address']?.toString().trim() ?? '';
+    final products = (data['products'] as List).cast<Map<String, dynamic>>();
+    final isOpen = profile['is_open'] as bool? ?? true;
+    final rating = profile['rating']?.toDouble() ?? 4.8;
+    final primaryRed = const Color(0xFFE60012);
+
     return Container(
+      margin: const EdgeInsets.only(bottom: 20),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: const Color(0x0F000000)),
+        borderRadius: BorderRadius.circular(28),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 15,
+            offset: const Offset(0, 8),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFFFFF4E7), Color(0xFFFFFBF5)],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              borderRadius: const BorderRadius.vertical(
-                top: Radius.circular(24),
-              ),
-            ),
-            child: Row(
-              children: [
-                Container(
-                  width: 64,
-                  height: 64,
-                  decoration: BoxDecoration(
-                    color: Colors.deepOrange.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(18),
-                  ),
-                  child: AppImage(
-                    imageData: profileImageBase64,
-                    borderRadius: BorderRadius.circular(18),
-                  ),
+          // Cover & Status
+          Stack(
+            children: [
+              ClipRRect(
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+                child: AppImage(
+                  imageData: profile['cover_image_url'] ?? profile['coverImageBase64'] ?? 'assets/images/cat_restaurant.png',
+                  height: 160,
+                  width: double.infinity,
+                  fit: BoxFit.cover,
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+              ),
+              Positioned(
+                top: 12,
+                right: 12,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.95),
+                    borderRadius: BorderRadius.circular(15),
+                    boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 5)],
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text(
-                        profile['store_name']?.toString() ?? 'متجر',
-                        style: const TextStyle(
-                          fontFamily: 'Cairo',
-                          fontWeight: FontWeight.w900,
-                          fontSize: 16,
+                      Container(
+                        width: 7,
+                        height: 7,
+                        decoration: BoxDecoration(
+                          color: isOpen ? Colors.green : Colors.grey,
+                          shape: BoxShape.circle,
                         ),
                       ),
-                      const SizedBox(height: 4),
+                      const SizedBox(width: 5),
                       Text(
-                        profile['description']?.toString() ??
-                            'منيو حقيقي من نفس المتجر',
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
+                        isOpen ? 'مفتوح الآن' : 'مغلق',
+                        style: TextStyle(
                           fontFamily: 'Cairo',
-                          color: Colors.grey,
-                          fontSize: 12,
-                          height: 1.35,
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                          color: isOpen ? Colors.green : Colors.grey.shade700,
                         ),
                       ),
                     ],
                   ),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
+
+          // Logo, Name & Rating
           Padding(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                Transform.translate(
+                  offset: const Offset(0, -25),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Container(
+                        width: 65,
+                        height: 65,
+                        padding: const EdgeInsets.all(2),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          shape: BoxShape.circle,
+                          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.08), blurRadius: 10)],
+                        ),
+                        child: ClipOval(
+                          child: AppImage(
+                            imageData: profile['profile_image_base64'] ?? profile['logoImageBase64'],
+                          ),
+                        ),
+                      ),
+                      const Spacer(),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFFF8E1),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(CupertinoIcons.star_fill, color: Colors.amber, size: 12),
+                            const SizedBox(width: 4),
+                            Text(
+                              rating.toString(),
+                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                
+                Transform.translate(
+                  offset: const Offset(0, -10),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        profile['store_name']?.toString() ?? 'اسم المطعم',
+                        style: const TextStyle(fontFamily: 'Cairo', fontSize: 18, fontWeight: FontWeight.w900),
+                      ),
+                      Text(
+                        profile['description']?.toString() ?? 'ألذ المأكولات العصرية',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(fontFamily: 'Cairo', fontSize: 12, color: Colors.grey.shade600),
+                      ),
+                    ],
+                  ),
+                ),
+                
+                const SizedBox(height: 5),
+                
+                // Info Chips
                 Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
+                  spacing: 6,
+                  runSpacing: 6,
                   children: [
-                    _InfoChip(
-                      icon: CupertinoIcons.location_solid,
-                      label: address.isNotEmpty ? address : 'بدون عنوان',
-                    ),
-                    _InfoChip(
-                      icon: CupertinoIcons.time,
-                      label:
-                          '${profile['open_time']?.toString() ?? ''} - ${profile['close_time']?.toString() ?? ''}',
-                    ),
-                    _InfoChip(
-                      icon: CupertinoIcons.cube_box_fill,
-                      label: '${products.length} منتج',
-                    ),
+                    _PremiumInfoChip(icon: CupertinoIcons.location_solid, label: profile['address']?.toString() ?? 'بغداد'),
+                    _PremiumInfoChip(icon: CupertinoIcons.time, label: '${profile['open_time']} - ${profile['close_time']}'),
+                    _PremiumInfoChip(icon: CupertinoIcons.square_grid_2x2_fill, label: '${products.length} صنف'),
                   ],
                 ),
-                if (samples.isNotEmpty) ...[
-                  const SizedBox(height: 12),
+
+                const SizedBox(height: 12),
+
+                // Food Preview Gallery
+                if (products.isNotEmpty)
                   SizedBox(
-                    height: 74,
-                    child: ListView.separated(
+                    height: 55,
+                    child: ListView.builder(
                       scrollDirection: Axis.horizontal,
-                      itemCount: samples.take(4).length,
-                      separatorBuilder: (_, __) => const SizedBox(width: 8),
-                      itemBuilder: (context, index) {
-                        final image = samples[index];
-                        return AppImage(
-                          imageData: image,
-                          width: 74,
-                          height: 74,
-                          borderRadius: BorderRadius.circular(14),
+                      itemCount: products.length > 5 ? 5 : products.length,
+                      itemBuilder: (context, idx) {
+                        final isLast = idx == 4 && products.length > 5;
+                        return Container(
+                          width: 55,
+                          margin: const EdgeInsets.only(left: 8),
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: Colors.grey.shade100),
+                          ),
+                          child: Stack(
+                            fit: StackFit.expand,
+                            children: [
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(11),
+                                child: AppImage(
+                                  imageData: products[idx]['image_base64'] ?? products[idx]['image'],
+                                  fit: BoxFit.cover,
+                                ),
+                              ),
+                              if (isLast)
+                                Container(
+                                  decoration: BoxDecoration(
+                                    color: Colors.black.withValues(alpha: 0.5),
+                                    borderRadius: BorderRadius.circular(11),
+                                  ),
+                                  alignment: Alignment.center,
+                                  child: Text(
+                                    '+${products.length - 4}',
+                                    style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                                  ),
+                                ),
+                            ],
+                          ),
                         );
                       },
                     ),
                   ),
-                ],
-                const SizedBox(height: 14),
-                SizedBox(
+
+                const SizedBox(height: 15),
+
+                // Main Action Button
+                Container(
                   width: double.infinity,
+                  height: 50,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(colors: [primaryRed, const Color(0xFFFF3D00)]),
+                    borderRadius: BorderRadius.circular(15),
+                    boxShadow: [
+                      BoxShadow(color: primaryRed.withValues(alpha: 0.25), blurRadius: 10, offset: const Offset(0, 4)),
+                    ],
+                  ),
                   child: ElevatedButton.icon(
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.deepOrange,
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                      padding: const EdgeInsets.symmetric(vertical: 13),
+                      backgroundColor: Colors.transparent,
+                      shadowColor: Colors.transparent,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
                     ),
-                    onPressed: () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => ShoppingStoreMenuScreen(
-                            profile: profile,
-                            products: products,
-                            subCategory: subCategory,
-                            storeKind: storeKind,
-                          ),
-                        ),
-                      );
-                    },
-                    icon: const Icon(Icons.menu_book_rounded),
-                    label: Text(
-                      storeKind == MerchantStoreKind.restaurant
-                          ? 'عرض المنيو'
-                          : 'فتح المنيو',
+                    onPressed: onTap,
+                    icon: const Icon(Icons.restaurant_menu_rounded, color: Colors.white, size: 20),
+                    label: const Text(
+                      'عرض المنيو',
+                      style: TextStyle(fontFamily: 'Cairo', fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white),
                     ),
                   ),
                 ),
@@ -404,6 +517,196 @@ class _StoreCard extends StatelessWidget {
   }
 }
 
+class _PremiumInfoChip extends StatelessWidget {
+  final IconData icon;
+  final String label;
+
+  const _PremiumInfoChip({required this.icon, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF5F5F5),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: Colors.grey.shade700),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: const TextStyle(fontFamily: 'Cairo', fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF4A4A4A)),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SearchBar extends StatelessWidget {
+  final TextEditingController controller;
+  final ValueChanged<String> onChanged;
+
+  const _SearchBar({required this.controller, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 55,
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8F8F8),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: Row(
+        children: [
+          const Icon(CupertinoIcons.search, color: Colors.grey),
+          const SizedBox(width: 12),
+          Expanded(
+            child: TextField(
+              controller: controller,
+              onChanged: onChanged,
+              decoration: const InputDecoration(
+                hintText: 'ابحث عن مطعم أو وجبة...',
+                hintStyle: TextStyle(fontFamily: 'Cairo', color: Colors.grey, fontSize: 14),
+                border: InputBorder.none,
+              ),
+            ),
+          ),
+          Container(
+            height: 35,
+            width: 1,
+            color: Colors.grey.shade300,
+            margin: const EdgeInsets.symmetric(horizontal: 10),
+          ),
+          const Icon(CupertinoIcons.slider_horizontal_3, color: Color(0xFFE60012)),
+        ],
+      ),
+    );
+  }
+}
+
+class _IconButton extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback onTap;
+  final Color color;
+
+  const _IconButton({
+    required this.icon,
+    required this.onTap,
+    this.color = Colors.black87,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          shape: BoxShape.circle,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.05),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+          border: Border.all(color: Colors.grey.shade100),
+        ),
+        child: Icon(icon, size: 20, color: color),
+      ),
+    );
+  }
+}
+
+class _GuestModeBanner extends StatelessWidget {
+  final VoidCallback onLogin;
+
+  const _GuestModeBanner({required this.onLogin});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(30)),
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 20, offset: const Offset(0, -5))],
+      ),
+      child: SafeArea(
+        top: false,
+        child: Row(
+          children: [
+            const Icon(CupertinoIcons.lock_shield_fill, color: Color(0xFFE60012), size: 32),
+            const SizedBox(width: 15),
+            const Expanded(
+              child: Text(
+                'يمكنك التصفح الآن، ولإكمال الطلب يرجى تسجيل الدخول',
+                style: TextStyle(fontFamily: 'Cairo', fontSize: 12, fontWeight: FontWeight.bold, height: 1.4),
+              ),
+            ),
+            const SizedBox(width: 10),
+            ElevatedButton(
+              onPressed: onLogin,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFE60012),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              ),
+              child: const Text('دخول', style: TextStyle(fontFamily: 'Cairo', color: Colors.white, fontWeight: FontWeight.bold)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ErrorState extends StatelessWidget {
+  final VoidCallback onRetry;
+  const _ErrorState({required this.onRetry});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(Icons.error_outline, size: 60, color: Colors.red),
+          const SizedBox(height: 16),
+          const Text('تعذر تحميل المطاعم حالياً', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
+          TextButton(onPressed: onRetry, child: const Text('إعادة المحاولة')),
+        ],
+      ),
+    );
+  }
+}
+
+class _NoResultsState extends StatelessWidget {
+  const _NoResultsState();
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(CupertinoIcons.search, size: 60, color: Colors.grey.shade300),
+          const SizedBox(height: 16),
+          Text('لا توجد نتائج مطابقة لبحثك', style: TextStyle(fontFamily: 'Cairo', color: Colors.grey.shade600)),
+        ],
+      ),
+    );
+  }
+}
+
+// Keep the existing Menu Screen as is or minimal styling if needed
 class ShoppingStoreMenuScreen extends StatefulWidget {
   final Map<String, dynamic> profile;
   final List<Map<String, dynamic>> products;
@@ -500,7 +803,6 @@ class _ShoppingStoreMenuScreenState extends State<ShoppingStoreMenuScreen>
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<AppProvider>();
-    final query = _searchController.text.trim().toLowerCase();
     final allProducts = widget.products
         .map((row) => Map<String, dynamic>.from(row))
         .toList();
@@ -556,10 +858,10 @@ class _ShoppingStoreMenuScreenState extends State<ShoppingStoreMenuScreen>
               ),
               const SizedBox(height: 12),
               if (products.isEmpty)
-                _StoreMenuEmptyState(
-                  hasSearch: query.isNotEmpty,
-                  isRestaurant: widget.storeKind == MerchantStoreKind.restaurant,
-                )
+                const Center(child: Padding(
+                  padding: EdgeInsets.all(40.0),
+                  child: Text('لا توجد وجبات متاحة حالياً', style: TextStyle(fontFamily: 'Cairo')),
+                ))
               else
                 ...products.map((item) {
                   return _ProductCard(
@@ -709,8 +1011,8 @@ class _StoreHeader extends StatelessWidget {
                   label: const Text('واتساب'),
                   style: OutlinedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 12),
-                    foregroundColor: Colors.deepOrange,
-                    side: const BorderSide(color: Colors.deepOrange),
+                    foregroundColor: const Color(0xFFE60012),
+                    side: const BorderSide(color: Color(0xFFE60012)),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(14),
                     ),
@@ -726,7 +1028,7 @@ class _StoreHeader extends StatelessWidget {
                   icon: const Icon(Icons.call_rounded),
                   label: const Text('اتصال'),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.deepOrange,
+                    backgroundColor: const Color(0xFFE60012),
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 12),
                     shape: RoundedRectangleBorder(
@@ -850,7 +1152,7 @@ class _ProductCard extends StatelessWidget {
                       Text(
                         '${price.toPrice()} د.ع',
                         style: const TextStyle(
-                          color: Colors.deepOrange,
+                          color: Color(0xFFE60012),
                           fontWeight: FontWeight.w900,
                           fontFamily: 'Cairo',
                         ),
@@ -863,7 +1165,7 @@ class _ProductCard extends StatelessWidget {
                             vertical: 7,
                           ),
                           minSize: 0,
-                          color: Colors.deepOrange,
+                          color: const Color(0xFFE60012),
                           borderRadius: BorderRadius.circular(12),
                           onPressed: () => onAdd(buttonContext),
                           child: const Text(
@@ -959,7 +1261,7 @@ class _StoreCartNavButton extends StatelessWidget {
                   child: Icon(
                     CupertinoIcons.cart_fill,
                     size: 24,
-                    color: Colors.deepOrange,
+                    color: Color(0xFFE60012),
                   ),
                 ),
                 if (count > 0)
@@ -989,141 +1291,6 @@ class _StoreCartNavButton extends StatelessWidget {
               ],
             ),
           ),
-        ),
-      ),
-    );
-  }
-}
-
-class _StoreMenuEmptyState extends StatelessWidget {
-  final bool hasSearch;
-  final bool isRestaurant;
-
-  const _StoreMenuEmptyState({
-    required this.hasSearch,
-    required this.isRestaurant,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 32),
-      child: Column(
-        children: [
-          Container(
-            width: 80,
-            height: 80,
-            decoration: BoxDecoration(
-              color: Colors.deepOrange.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(22),
-            ),
-            child: Icon(
-              hasSearch
-                  ? CupertinoIcons.search
-                  : (isRestaurant
-                      ? Icons.restaurant_menu_rounded
-                      : Icons.storefront_rounded),
-              color: Colors.deepOrange,
-              size: 40,
-            ),
-          ),
-          const SizedBox(height: 16),
-          Text(
-            hasSearch
-                ? 'لا توجد نتائج مطابقة'
-                : (isRestaurant
-                    ? 'لا توجد أصناف في منيو هذا المطعم بعد'
-                    : 'لا توجد منتجات في هذا المتجر بعد'),
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              fontFamily: 'Cairo',
-              fontWeight: FontWeight.w900,
-              fontSize: 17,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            hasSearch
-                ? 'جرّب كلمة بحث مختلفة'
-                : 'سيظهر المنيو هنا عندما يضيف التاجر منتجاته.',
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              fontFamily: 'Cairo',
-              color: Colors.grey,
-              height: 1.4,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _EmptyState extends StatelessWidget {
-  final String message;
-  final VoidCallback? onRetry;
-
-  const _EmptyState({
-    required this.message,
-    this.onRetry,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              width: 88,
-              height: 88,
-              decoration: BoxDecoration(
-                color: Colors.deepOrange.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(24),
-              ),
-              child: Icon(
-                message.contains('مطاعم')
-                    ? Icons.restaurant_rounded
-                    : Icons.storefront_rounded,
-                color: Colors.deepOrange,
-                size: 44,
-              ),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              message,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                fontFamily: 'Cairo',
-                fontWeight: FontWeight.w900,
-                fontSize: 18,
-              ),
-            ),
-            const SizedBox(height: 8),
-            const Text(
-              'عندما يسجّل تاجر مطعمه ويضيف منتجات، ستظهر هنا للزبائن.',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontFamily: 'Cairo',
-                color: Colors.grey,
-                height: 1.45,
-              ),
-            ),
-            if (onRetry != null) ...[
-              const SizedBox(height: 16),
-              CupertinoButton(
-                color: Colors.deepOrange,
-                borderRadius: BorderRadius.circular(14),
-                onPressed: onRetry,
-                child: const Text(
-                  'تحديث',
-                  style: TextStyle(fontFamily: 'Cairo'),
-                ),
-              ),
-            ],
-          ],
         ),
       ),
     );

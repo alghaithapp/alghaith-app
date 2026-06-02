@@ -402,19 +402,16 @@ class _LoginCard extends StatelessWidget {
           ),
           const SizedBox(height: 20),
           _SupportButton(onPressed: onSupportPressed),
-          const SizedBox(height: 10),
-          TextButton(
-            onPressed: () {
-              final provider = context.read<AppProvider>();
-              provider.setGuestMode();
-            },
+          const SizedBox(height: 15),
+          GestureDetector(
+            onTap: () => context.read<AppProvider>().setGuestMode(),
             child: const Text(
-              'دخول كزائر',
+              'الدخول كزائر للتطبيق',
               style: TextStyle(
                 fontFamily: 'Cairo',
-                fontWeight: FontWeight.bold,
+                fontSize: 16,
+                fontWeight: FontWeight.w900,
                 color: Color(0xFFE84A3A),
-                decoration: TextDecoration.underline,
               ),
             ),
           ),

@@ -160,7 +160,7 @@ class AlGhaithApp extends StatelessWidget {
         return const StartupSplashScreen();
       }
 
-      if (!appProvider.hasPhoneSession) {
+      if (!appProvider.hasPhoneSession && !appProvider.isGuestMode) {
         return const ExitConfirmScope(child: PhoneLoginScreen());
       }
 
@@ -184,7 +184,9 @@ class AlGhaithApp extends StatelessWidget {
         return const ExitConfirmScope(child: AdminDashboardScreen());
       }
 
-      if (appProvider.isCustomer && !appProvider.hasCompletedCustomerProfile) {
+      if (appProvider.isCustomer &&
+          !appProvider.hasCompletedCustomerProfile &&
+          !appProvider.isGuestMode) {
         return const ExitConfirmScope(child: CustomerSetupScreen());
       }
 

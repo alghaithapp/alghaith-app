@@ -37,6 +37,7 @@ class _MerchantSetupScreenState extends State<MerchantSetupScreen> {
   String? _profileImageBase64;
   final List<String> _workSampleImagesBase64 = [];
   String? _selectedProfessionalCategoryId;
+  String? _selectedRestaurantCategory;
   double? _storeLatitude;
   double? _storeLongitude;
 
@@ -96,6 +97,8 @@ class _MerchantSetupScreenState extends State<MerchantSetupScreen> {
       _profileImageBase64 ??= provider.merchantProfileImageBase64;
       _selectedProfessionalCategoryId ??=
           provider.merchantProfessionalCategoryId;
+      _selectedRestaurantCategory ??=
+          provider.merchantStore?['restaurantCategory']?.toString();
       _storeLatitude ??= provider.merchantLatitude;
       _storeLongitude ??= provider.merchantLongitude;
       if (_workSampleImagesBase64.isEmpty) {
@@ -342,6 +345,33 @@ class _MerchantSetupScreenState extends State<MerchantSetupScreen> {
                         icon: Icons.badge_rounded,
                         onTap: _pickLogoImage,
                       ),
+                      const SizedBox(height: 20),
+                      _sectionTitle('تصنيف المطعم'),
+                      const SizedBox(height: 6),
+                      const Text(
+                        'حدد التخصص الأساسي لمطعمك ليظهر في الفلتر الصحيح للزبائن.',
+                        style: TextStyle(color: Colors.grey, fontSize: 12, fontFamily: 'Cairo'),
+                      ),
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _ChoiceChip(
+                              label: 'مشويات',
+                              selected: _selectedRestaurantCategory == 'مشويات',
+                              onTap: () => setState(() => _selectedRestaurantCategory = 'مشويات'),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: _ChoiceChip(
+                              label: 'وجبات سريعة',
+                              selected: _selectedRestaurantCategory == 'وجبات سريعة',
+                              onTap: () => setState(() => _selectedRestaurantCategory = 'وجبات سريعة'),
+                            ),
+                          ),
+                        ],
+                      ),
                     ] else ...[
                       _ImagePickCard(
                         title: 'الصورة الشخصية',
@@ -520,6 +550,10 @@ class _MerchantSetupScreenState extends State<MerchantSetupScreen> {
                               _showMessage('يرجى إضافة صورة المطعم وشعاره');
                               return;
                             }
+                            if (_selectedRestaurantCategory == null) {
+                              _showMessage('يرجى اختيار تصنيف المطعم (مشويات أو وجبات سريعة)');
+                              return;
+                            }
                           }
 
                           if (_isProfessionalSetup) {
@@ -559,6 +593,7 @@ class _MerchantSetupScreenState extends State<MerchantSetupScreen> {
                             'image': '',
                             'coverImageBase64': _coverImageBase64,
                             'logoImageBase64': _logoImageBase64,
+                            'restaurantCategory': _selectedRestaurantCategory,
                             'profileImageBase64': _isRestaurantSetup
                                 ? _logoImageBase64
                                 : _profileImageBase64,
@@ -801,6 +836,49 @@ class _MerchantSetupScreenState extends State<MerchantSetupScreen> {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _ChoiceChip extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _ChoiceChip({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(vertical: 14),
+        decoration: BoxDecoration(
+          color: selected ? Colors.orange : Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: selected ? Colors.orange : Colors.grey.shade300,
+            width: 1.5,
+          ),
+          boxShadow: selected
+              ? [BoxShadow(color: Colors.orange.withValues(alpha: 0.2), blurRadius: 8, offset: const Offset(0, 4))]
+              : null,
+        ),
+        alignment: Alignment.center,
+        child: Text(
+          label,
+          style: TextStyle(
+            color: selected ? Colors.white : Colors.black87,
+            fontWeight: FontWeight.bold,
+            fontFamily: 'Cairo',
+          ),
+        ),
+      ),
     );
   }
 }

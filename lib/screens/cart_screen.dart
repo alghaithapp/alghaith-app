@@ -11,6 +11,13 @@ import '../core/config/app_config.dart';
 import '../utils/extensions.dart';
 import '../widgets/app_image.dart';
 
+const _brandRed = Color(0xFFE60012);
+const _brandRedGradient = LinearGradient(
+  colors: [_brandRed, Color(0xFFFF3D00)],
+  begin: Alignment.centerLeft,
+  end: Alignment.centerRight,
+);
+
 class CartScreen extends StatefulWidget {
   const CartScreen({super.key});
 
@@ -26,6 +33,12 @@ class _CartScreenState extends State<CartScreen> {
   double? _deliveryDistanceKm;
   String? _lastAutoCalcSignature;
   bool _autoCalcScheduled = false;
+  
+  // 1: Normal, 2: Fast
+  int _deliveryOption = 1;
+
+  final TextEditingController _notesController = TextEditingController();
+  final TextEditingController _promoController = TextEditingController();
 
   @override
   void initState() {
@@ -37,6 +50,13 @@ class _CartScreenState extends State<CartScreen> {
         unawaited(_recalculateDeliveryFee(provider));
       }
     });
+  }
+
+  @override
+  void dispose() {
+    _notesController.dispose();
+    _promoController.dispose();
+    super.dispose();
   }
 
   String _merchantAddress(List<dynamic> cart) {
@@ -217,7 +237,7 @@ class _CartScreenState extends State<CartScreen> {
       if (!enabled) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('يرجى تفعيل خدمة الموقع في الهاتف.')),
+            const SnackBar(content: Text('يرجى تفعيل خدمة الموقع في الهاتف.', style: TextStyle(fontFamily: 'Cairo'))),
           );
         }
         return;
@@ -230,7 +250,7 @@ class _CartScreenState extends State<CartScreen> {
           permission == geo.LocationPermission.deniedForever) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('تم رفض إذن الموقع.')),
+            const SnackBar(content: Text('تم رفض إذن الموقع.', style: TextStyle(fontFamily: 'Cairo'))),
           );
         }
         return;
@@ -307,7 +327,7 @@ class _CartScreenState extends State<CartScreen> {
     if (appProvider.customerLatitude == null || appProvider.customerLongitude == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('يرجى تحديد موقعك من الخريطة قبل إتمام الطلب.'),
+          content: Text('يرجى تحديد موقعك من الخريطة قبل إتمام الطلب.', style: TextStyle(fontFamily: 'Cairo')),
         ),
       );
       return;
@@ -315,7 +335,7 @@ class _CartScreenState extends State<CartScreen> {
     if (appProvider.customerAddress.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('يرجى تحديد موقعك أولاً لحساب رسوم التوصيل.'),
+          content: Text('يرجى تحديد موقعك أولاً لحساب رسوم التوصيل.', style: TextStyle(fontFamily: 'Cairo')),
         ),
       );
       return;
@@ -326,7 +346,7 @@ class _CartScreenState extends State<CartScreen> {
       if (_deliveryFeeIqd <= 0) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('تعذر حساب رسوم التوصيل. حاول تحديد موقعك مجدداً.'),
+            content: Text('تعذر حساب رسوم التوصيل. حاول تحديد موقعك مجدداً.', style: TextStyle(fontFamily: 'Cairo')),
           ),
         );
         return;
@@ -334,18 +354,21 @@ class _CartScreenState extends State<CartScreen> {
     }
     setState(() => _isCheckingOut = true);
     try {
-      final count = await appProvider.checkout(deliveryFeeIqd: _deliveryFeeIqd);
+      final count = await appProvider.checkout(
+        deliveryFeeIqd: _deliveryOption == 2 ? (_deliveryFeeIqd + 2000) : _deliveryFeeIqd,
+      );
       if (!mounted || count == 0) return;
       await showCupertinoDialog(
         context: context,
         builder: (context) => CupertinoAlertDialog(
-          title: const Text('تم تقديم الطلب بنجاح!'),
+          title: const Text('تم تقديم الطلب بنجاح!', style: TextStyle(fontFamily: 'Cairo')),
           content: Text(
             'تم إرسال $count ${count == 1 ? 'طلب' : 'طلبات'} للتاجر. يمكنك متابعة حالة الطلب من صفحة الطلبات.',
+            style: const TextStyle(fontFamily: 'Cairo'),
           ),
           actions: [
             CupertinoDialogAction(
-              child: const Text('حسنًا'),
+              child: const Text('حسنًا', style: TextStyle(fontFamily: 'Cairo')),
               onPressed: () => Navigator.pop(context),
             ),
           ],
@@ -358,6 +381,7 @@ class _CartScreenState extends State<CartScreen> {
         SnackBar(
           content: Text(
             message.isEmpty ? 'تعذر إتمام الطلب حالياً.' : message,
+            style: const TextStyle(fontFamily: 'Cairo'),
           ),
         ),
       );
@@ -371,331 +395,872 @@ class _CartScreenState extends State<CartScreen> {
     final appProvider = Provider.of<AppProvider>(context);
     _scheduleAutoFeeCalculation(appProvider);
     final cart = appProvider.cart;
-    final deliveryFee = _deliveryFeeIqd;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final restaurantName = cart.isNotEmpty ? (cart.first.merchantStoreName ?? 'المطعم') : '';
+    
+    final finalDeliveryFee = _deliveryOption == 2 ? (_deliveryFeeIqd + 2000) : _deliveryFeeIqd;
+    final totalAmount = appProvider.cartTotal + finalDeliveryFee;
 
-    return CupertinoPageScaffold(
-      backgroundColor:
-          isDark ? const Color(0xFF111111) : const Color(0xFFF2F2F7),
-      navigationBar: const CupertinoNavigationBar(
-        middle: Text('السلة',
-            style: TextStyle(fontWeight: FontWeight.bold)),
-        border: null,
-      ),
-      child: cart.isEmpty
-          ? Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(CupertinoIcons.cart,
-                      size: 80, color: CupertinoColors.systemGrey4),
-                  const SizedBox(height: 16),
-                  const Text("سلتك فارغة حالياً",
-                      style:
-                          TextStyle(color: CupertinoColors.systemGrey)),
-                ],
-              ),
-            )
-          : SafeArea(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  children: [
-                    ListView.builder(
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      itemCount: cart.length,
-                      itemBuilder: (context, index) {
-                        final item = cart[index];
-                        return Container(
-                          margin: const EdgeInsets.only(bottom: 12),
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: isDark
-                                ? const Color(0xFF1E1E1E)
-                                : CupertinoColors.white,
-                            borderRadius: BorderRadius.circular(15),
-                          ),
-                          child: Row(
-                            children: [
-                              AppImage(
-                                imageData: item.image,
-                                width: 60,
-                                height: 60,
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(item.nameAr,
-                                        style: const TextStyle(
-                                            fontWeight: FontWeight.bold,
-                                            fontSize: 14)),
-                                    Text("${item.price.toLocaleString()} د.ع",
-                                        style: const TextStyle(
-                                            color: Colors.orange,
-                                            fontWeight: FontWeight.bold,
-                                            fontSize: 13)),
-                                  ],
-                                ),
-                              ),
-                              Row(
-                                children: [
-                                  CupertinoButton(
-                                    padding: EdgeInsets.zero,
-                                    onPressed: item.count > 1
-                                        ? () => appProvider
-                                            .decrementCartItem(item.id)
-                                        : () =>
-                                            appProvider.removeFromCart(item.id),
-                                    child: Icon(
-                                      item.count > 1
-                                          ? CupertinoIcons.minus_circle
-                                          : CupertinoIcons.delete_solid,
-                                      color: item.count > 1
-                                          ? CupertinoColors.systemGrey
-                                          : CupertinoColors.systemRed,
-                                    ),
-                                  ),
-                                  Text("${item.count}",
-                                      style: const TextStyle(
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 15)),
-                                  CupertinoButton(
-                                    padding: EdgeInsets.zero,
-                                    onPressed: () =>
-                                        appProvider.incrementCartItem(item.id),
-                                    child: const Icon(
-                                        CupertinoIcons.plus_circle_fill,
-                                        color: Colors.orange),
-                                  ),
-                                ],
-                              )
-                            ],
-                          ),
-                        );
-                      },
-                    ),
-
-                    const SizedBox(height: 10),
-                    Container(
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
-                        color: isDark ? const Color(0xFF1E1E1E) : CupertinoColors.white,
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'موقع التوصيل',
-                            style: TextStyle(
-                              fontFamily: 'Cairo',
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            appProvider.customerAddress.trim().isEmpty
-                                ? 'لم يتم تحديد الموقع بعد'
-                                : appProvider.customerAddress,
-                            style: TextStyle(
-                              fontFamily: 'Cairo',
-                              fontSize: 12,
-                              color: isDark ? Colors.white70 : Colors.black87,
-                            ),
-                          ),
-                          if (appProvider.customerLatitude != null &&
-                              appProvider.customerLongitude != null) ...[
-                            const SizedBox(height: 4),
-                            Text(
-                              'الإحداثيات: ${appProvider.customerLatitude!.toStringAsFixed(5)}, ${appProvider.customerLongitude!.toStringAsFixed(5)}',
-                              style: const TextStyle(
-                                fontFamily: 'Cairo',
-                                fontSize: 11,
-                                color: Colors.grey,
-                              ),
-                            ),
-                          ],
-                          if (_deliveryDistanceKm != null) ...[
-                            const SizedBox(height: 6),
-                            Text(
-                              'المسافة التقديرية: ${_deliveryDistanceKm!.toStringAsFixed(1)} كم',
-                              style: const TextStyle(
-                                fontFamily: 'Cairo',
-                                fontSize: 12,
-                                color: Colors.orange,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          ],
-                          const SizedBox(height: 10),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: CupertinoButton(
-                                  padding: const EdgeInsets.symmetric(vertical: 10),
-                                  color: Colors.orange[700],
-                                  borderRadius: BorderRadius.circular(12),
-                                  onPressed: _isLocating
-                                      ? null
-                                      : () => _detectCurrentLocation(appProvider),
-                                  child: _isLocating
-                                      ? const CupertinoActivityIndicator(color: Colors.white)
-                                      : const Text(
-                                          'تحديد موقعي',
-                                          style: TextStyle(
-                                            fontFamily: 'Cairo',
-                                            color: Colors.white,
-                                            fontWeight: FontWeight.w700,
-                                          ),
-                                        ),
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: OutlinedButton(
-                                  onPressed: () => _pickLocationFromMap(appProvider),
-                                  child: const Text(
-                                    'اختيار من الخريطة',
-                                    style: TextStyle(fontFamily: 'Cairo'),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                          if (_isCalculatingDelivery) ...[
-                            const SizedBox(height: 8),
-                            const Row(
-                              children: [
-                                SizedBox(
-                                  width: 14,
-                                  height: 14,
-                                  child: CircularProgressIndicator(strokeWidth: 2),
-                                ),
-                                SizedBox(width: 8),
-                                Text(
-                                  'يتم تحديث أجور التوصيل تلقائيًا...',
-                                  style: TextStyle(
-                                    fontFamily: 'Cairo',
-                                    fontSize: 12,
-                                    color: Colors.grey,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
-
-                    const SizedBox(height: 10),
-
-                    Container(
-                      padding: const EdgeInsets.all(20),
-                      decoration: BoxDecoration(
-                          color: isDark
-                              ? const Color(0xFF1E1E1E)
-                              : CupertinoColors.white,
-                          borderRadius: BorderRadius.circular(20)),
-                      child: Column(
-                        children: [
-                          _buildSummaryRow("المجموع الفرعي",
-                              "${appProvider.cartTotal.toLocaleString()} د.ع"),
-                          const SizedBox(height: 10),
-                          _buildSummaryRow(
-                              "رسوم التوصيل",
-                              deliveryFee > 0
-                                  ? "${deliveryFee.toLocaleString()} د.ع"
-                                  : "حدد موقعك أولاً"),
-                          const Padding(
-                            padding: EdgeInsets.symmetric(vertical: 12.0),
-                            child: Divider(height: 1, color: Color(0xFFE5E5EA)),
-                          ),
-                          _buildSummaryRow("المجموع الكلي",
-                              "${(appProvider.cartTotal + (deliveryFee > 0 ? deliveryFee : 0)).toLocaleString()} د.ع",
-                              isTotal: true),
-                        ],
-                      ),
-                    ),
-
-                    const SizedBox(height: 20),
-
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                          color: Colors.orange.withValues(alpha: 0.05),
-                          borderRadius: BorderRadius.circular(15),
-                          border: Border.all(
-                              color: Colors.orange.withValues(alpha: 0.1))),
-                      child: const Row(
-                        children: [
-                          Icon(CupertinoIcons.info,
-                              color: Colors.orange, size: 20),
-                          SizedBox(width: 10),
-                          Expanded(
-                            child: Text(
-                              "الدفع يتم نقداً عند استلام الطلب من المندوب",
-                              style: TextStyle(
-                                  fontSize: 11,
-                                  color: Colors.brown,
-                                  fontWeight: FontWeight.w500),
-                            ),
-                          )
-                        ],
-                      ),
-                    ),
-
-                    const SizedBox(height: 30),
-
-                    SizedBox(
-                      width: double.infinity,
-                      child: CupertinoButton(
-                        color: Colors.orange[800],
-                        borderRadius: BorderRadius.circular(15),
-                        onPressed: _isCheckingOut
-                            ? null
-                            : () => _handleCheckout(appProvider),
-                        child: _isCheckingOut
-                            ? const CupertinoActivityIndicator(
-                                color: Colors.white,
-                              )
-                            : const Text(
-                                'إتمام الطلب - الدفع عند الاستلام',
-                                style: TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 16,
-                                    color: Colors.white),
-                              ),
-                      ),
-                    ),
-                    const SizedBox(height: 100),
-                  ],
+    return Directionality(
+      textDirection: TextDirection.rtl,
+      child: Scaffold(
+        backgroundColor: Colors.white,
+        body: cart.isEmpty ? _buildEmptyState() : Stack(
+          children: [
+            Column(
+              children: [
+                _buildHeader(context, cart.length, restaurantName),
+                Expanded(
+                  child: ListView(
+                    padding: const EdgeInsets.fromLTRB(20, 0, 20, 150),
+                    children: [
+                      ...cart.map((item) => _CartItemCard(
+                        item: item,
+                        onIncrement: () => appProvider.incrementCartItem(item.id),
+                        onDecrement: () {
+                          if (item.count > 1) {
+                            appProvider.decrementCartItem(item.id);
+                          } else {
+                            appProvider.removeFromCart(item.id);
+                          }
+                        },
+                        onFavorite: () => appProvider.toggleFavoriteItem(item),
+                      )),
+                      const SizedBox(height: 12),
+                      _buildLocationSection(appProvider),
+                      const SizedBox(height: 24),
+                      _buildDeliveryOptions(),
+                      const SizedBox(height: 24),
+                      _buildPromoSection(),
+                      const SizedBox(height: 24),
+                      _buildNotesSection(),
+                      const SizedBox(height: 24),
+                      _buildOrderSummary(appProvider.cartTotal, finalDeliveryFee, totalAmount),
+                      const SizedBox(height: 24),
+                      _buildPaymentNotice(),
+                    ],
+                  ),
                 ),
-              ),
+              ],
             ),
+            _buildStickyCheckoutBar(totalAmount, cart.length, appProvider),
+          ],
+        ),
+      ),
     );
   }
 
-  Widget _buildSummaryRow(String label, String value, {bool isTotal = false}) {
+  Widget _buildHeader(BuildContext context, int count, String restaurant) {
+    return Container(
+      padding: EdgeInsets.only(top: MediaQuery.of(context).padding.top + 10, bottom: 20),
+      color: Colors.white,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          Positioned(
+            right: 16,
+            child: _CircleIconButton(
+              icon: Icons.arrow_forward_ios_rounded,
+              onTap: () => Navigator.pop(context),
+            ),
+          ),
+          Column(
+            children: [
+              const Text(
+                'سلة المشتريات',
+                style: TextStyle(
+                  fontFamily: 'Cairo',
+                  fontWeight: FontWeight.w900,
+                  fontSize: 22,
+                ),
+              ),
+              Text(
+                '$count أصناف من $restaurant',
+                style: TextStyle(
+                  fontFamily: 'Cairo',
+                  fontSize: 13,
+                  color: Colors.grey.shade600,
+                ),
+              ),
+            ],
+          ),
+          Positioned(
+            left: 16,
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                _CircleIconButton(
+                  icon: Icons.shopping_cart_outlined,
+                  onTap: () {},
+                ),
+                if (count > 0)
+                  Positioned(
+                    top: -2,
+                    right: -2,
+                    child: Container(
+                      padding: const EdgeInsets.all(5),
+                      decoration: const BoxDecoration(
+                        color: _brandRed,
+                        shape: BoxShape.circle,
+                      ),
+                      child: Text(
+                        '$count',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLocationSection(AppProvider appProvider) {
+    final hasLocation = appProvider.customerLatitude != null;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'موقع التوصيل',
+          style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w900, fontSize: 18),
+        ),
+        const SizedBox(height: 12),
+        Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(24),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.05),
+                blurRadius: 20,
+                offset: const Offset(0, 8),
+              ),
+            ],
+          ),
+          child: IntrinsicHeight(
+            child: Row(
+              children: [
+                Expanded(
+                  flex: 3,
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (!hasLocation) ...[
+                          const Icon(Icons.location_off_rounded, color: Colors.grey, size: 32),
+                          const SizedBox(height: 8),
+                          const Text(
+                            'لم يتم تحديد الموقع بعد',
+                            style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w800),
+                          ),
+                          const Text(
+                            'حدد موقعك لحساب رسوم التوصيل',
+                            style: TextStyle(fontFamily: 'Cairo', fontSize: 11, color: Colors.grey),
+                          ),
+                        ] else ...[
+                          const Icon(Icons.location_on_rounded, color: _brandRed, size: 32),
+                          const SizedBox(height: 8),
+                          Text(
+                            appProvider.customerAddress,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w800, fontSize: 13),
+                          ),
+                        ],
+                        const SizedBox(height: 16),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: _SmallButton(
+                                label: 'تحديد موقعي',
+                                color: _brandRed,
+                                textColor: Colors.white,
+                                isLoading: _isLocating,
+                                onTap: () => _detectCurrentLocation(appProvider),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: _SmallButton(
+                                label: 'من الخريطة',
+                                color: Colors.white,
+                                textColor: Colors.black87,
+                                border: true,
+                                onTap: () => _pickLocationFromMap(appProvider),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                Expanded(
+                  flex: 2,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade100,
+                      borderRadius: const BorderRadius.horizontal(left: Radius.circular(24)),
+                    ),
+                    clipBehavior: Clip.antiAlias,
+                    child: Stack(
+                      children: [
+                        Image.asset(
+                          'assets/images/map_preview.png', // Fallback local image if Mapbox preview not ready
+                          fit: BoxFit.cover,
+                          width: double.infinity,
+                          height: double.infinity,
+                          errorBuilder: (ctx, err, stack) => Container(color: Colors.grey.shade200),
+                        ),
+                        Center(
+                          child: Icon(Icons.location_on_rounded, color: _brandRed, size: 36),
+                        ),
+                        if (_deliveryDistanceKm != null)
+                          Positioned(
+                            bottom: 8,
+                            right: 8,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(12),
+                                boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 4)],
+                              ),
+                              child: Text(
+                                '${_deliveryDistanceKm!.toStringAsFixed(1)} كم',
+                                style: const TextStyle(fontFamily: 'Cairo', fontSize: 10, fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDeliveryOptions() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'خيارات التوصيل',
+          style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w900, fontSize: 18),
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(
+              child: _DeliveryOptionCard(
+                title: 'توصيل عادي',
+                time: '30 - 45 دقيقة',
+                selected: _deliveryOption == 1,
+                onTap: () => setState(() => _deliveryOption = 1),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _DeliveryOptionCard(
+                title: 'توصيل سريع',
+                time: '15 - 20 دقيقة',
+                selected: _deliveryOption == 2,
+                onTap: () => setState(() => _deliveryOption = 2),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildPromoSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'كود الخصم',
+          style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w900, fontSize: 18),
+        ),
+        const SizedBox(height: 12),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: [
+              BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 15, offset: const Offset(0, 5)),
+            ],
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _promoController,
+                  decoration: const InputDecoration(
+                    hintText: 'أدخل رمز الخصم',
+                    hintStyle: TextStyle(fontFamily: 'Cairo', fontSize: 14, color: Colors.grey),
+                    border: InputBorder.none,
+                  ),
+                ),
+              ),
+              _SmallButton(
+                label: 'تطبيق',
+                color: _brandRed,
+                textColor: Colors.white,
+                onTap: () {},
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildNotesSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'ملاحظات الطلب',
+          style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w900, fontSize: 18),
+        ),
+        const SizedBox(height: 12),
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: [
+              BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 15, offset: const Offset(0, 5)),
+            ],
+          ),
+          child: TextField(
+            controller: _notesController,
+            maxLines: 3,
+            decoration: const InputDecoration(
+              hintText: 'ملاحظات إضافية للمطعم أو المندوب',
+              hintStyle: TextStyle(fontFamily: 'Cairo', fontSize: 14, color: Colors.grey),
+              border: InputBorder.none,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildOrderSummary(int subtotal, int delivery, int total) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'ملخص الطلب',
+          style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w900, fontSize: 18),
+        ),
+        const SizedBox(height: 12),
+        Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(24),
+            boxShadow: [
+              BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 20, offset: const Offset(0, 8)),
+            ],
+          ),
+          child: Column(
+            children: [
+              _SummaryRow(label: 'المجموع الفرعي', value: '${subtotal.toPrice()} د.ع'),
+              const SizedBox(height: 14),
+              _SummaryRow(
+                label: 'رسوم التوصيل', 
+                value: delivery > 0 ? '${delivery.toPrice()} د.ع' : 'حدد الموقع',
+                valueColor: delivery > 0 ? Colors.black : Colors.red,
+              ),
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 16),
+                child: Divider(height: 1),
+              ),
+              _SummaryRow(
+                label: 'المجموع الكلي', 
+                value: '${total.toPrice()} د.ع', 
+                isLarge: true,
+                valueColor: _brandRed,
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildPaymentNotice() {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF7ED),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: Colors.orange.shade100),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.payments_outlined, color: Colors.orange, size: 28),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'الدفع نقداً عند استلام الطلب من المندوب',
+                  style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w900, fontSize: 14, color: Color(0xFF9A3412)),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'يرجى تجهيز المبلغ المطلوب عند الاستلام',
+                  style: TextStyle(fontFamily: 'Cairo', fontSize: 12, color: Colors.orange.shade800),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStickyCheckoutBar(int total, int count, AppProvider provider) {
+    return Positioned(
+      bottom: 20,
+      left: 20,
+      right: 20,
+      child: Container(
+        height: 80,
+        decoration: BoxDecoration(
+          gradient: _brandRedGradient,
+          borderRadius: BorderRadius.circular(40),
+          boxShadow: [
+            BoxShadow(
+              color: _brandRed.withValues(alpha: 0.4),
+              blurRadius: 20,
+              offset: const Offset(0, 10),
+            ),
+          ],
+        ),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(40),
+            onTap: _isCheckingOut ? null : () => _handleCheckout(provider),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: Row(
+                children: [
+                  Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '${total.toPrice()} د.ع',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontFamily: 'Cairo',
+                          fontWeight: FontWeight.w900,
+                          fontSize: 20,
+                        ),
+                      ),
+                      Text(
+                        '$count أصناف',
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.8),
+                          fontFamily: 'Cairo',
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const Spacer(),
+                  if (_isCheckingOut)
+                    const CupertinoActivityIndicator(color: Colors.white)
+                  else ...[
+                    const Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Text(
+                          'إتمام الطلب',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontFamily: 'Cairo',
+                            fontWeight: FontWeight.w900,
+                            fontSize: 18,
+                          ),
+                        ),
+                        Text(
+                          'الدفع عند الاستلام',
+                          style: TextStyle(
+                            color: Colors.white70,
+                            fontFamily: 'Cairo',
+                            fontSize: 11,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(width: 12),
+                    const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 20),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(40),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(40),
+              decoration: BoxDecoration(
+                color: Colors.grey.shade50,
+                shape: BoxShape.circle,
+              ),
+              child: Icon(Icons.shopping_cart_outlined, size: 100, color: Colors.grey.shade300),
+            ),
+            const SizedBox(height: 32),
+            const Text(
+              'سلتك فارغة حالياً',
+              style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w900, fontSize: 24),
+            ),
+            const SizedBox(height: 12),
+            const Text(
+              'أضف بعض المنتجات للبدء بالتسوق',
+              style: TextStyle(fontFamily: 'Cairo', color: Colors.grey, fontSize: 16),
+            ),
+            const SizedBox(height: 40),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: () => Navigator.pop(context),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: _brandRed,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+                  elevation: 0,
+                ),
+                child: const Text('استعراض المنتجات', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _CartItemCard extends StatelessWidget {
+  final dynamic item;
+  final VoidCallback onIncrement;
+  final VoidCallback onDecrement;
+  final VoidCallback onFavorite;
+
+  const _CartItemCard({
+    required this.item,
+    required this.onIncrement,
+    required this.onDecrement,
+    required this.onFavorite,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(28),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Stack(
+            children: [
+              ClipRRect(
+                borderRadius: const BorderRadius.horizontal(right: Radius.circular(28)),
+                child: SizedBox(
+                  width: 110,
+                  height: 110,
+                  child: AppImage(imageData: item.image),
+                ),
+              ),
+              Positioned(
+                top: 8,
+                right: 8,
+                child: GestureDetector(
+                  onTap: onFavorite,
+                  child: Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
+                    child: Icon(
+                      item.isFavorite ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+                      color: item.isFavorite ? _brandRed : Colors.grey,
+                      size: 16,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    item.nameAr,
+                    style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w900, fontSize: 16),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    item.descriptionAr ?? '',
+                    style: const TextStyle(fontFamily: 'Cairo', fontSize: 11, color: Colors.grey, height: 1.3),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    '${item.price.toPrice()} د.ع',
+                    style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w900, color: _brandRed, fontSize: 15),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          Column(
+            children: [
+              _QtyBtn(icon: Icons.add, onTap: onIncrement),
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: Text(
+                  '${item.count}',
+                  style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w900, fontSize: 16),
+                ),
+              ),
+              _QtyBtn(
+                icon: item.count > 1 ? Icons.remove : Icons.delete_outline_rounded,
+                color: item.count > 1 ? Colors.white : Colors.red.shade50,
+                iconColor: item.count > 1 ? Colors.black87 : Colors.red,
+                onTap: onDecrement,
+              ),
+            ],
+          ),
+          const SizedBox(width: 12),
+        ],
+      ),
+    );
+  }
+}
+
+class _QtyBtn extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback onTap;
+  final Color? color;
+  final Color? iconColor;
+
+  const _QtyBtn({required this.icon, required this.onTap, this.color, this.iconColor});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 32,
+        height: 32,
+        decoration: BoxDecoration(
+          color: color ?? Colors.white,
+          shape: BoxShape.circle,
+          border: Border.all(color: Colors.grey.shade200),
+        ),
+        child: Icon(icon, size: 18, color: iconColor ?? Colors.black87),
+      ),
+    );
+  }
+}
+
+class _DeliveryOptionCard extends StatelessWidget {
+  final String title;
+  final String time;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _DeliveryOptionCard({
+    required this.title,
+    required this.time,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: selected ? const Color(0xFFFFF1F2) : Colors.white,
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: selected ? _brandRed : Colors.grey.shade200, width: 2),
+        ),
+        child: Column(
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(
+                    fontFamily: 'Cairo',
+                    fontWeight: FontWeight.w900,
+                    color: selected ? _brandRed : Colors.black87,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                if (selected)
+                  const Icon(Icons.check_circle_rounded, color: _brandRed, size: 16),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Text(
+              time,
+              style: TextStyle(fontFamily: 'Cairo', fontSize: 11, color: selected ? _brandRed.withValues(alpha: 0.7) : Colors.grey),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SummaryRow extends StatelessWidget {
+  final String label;
+  final String value;
+  final bool isLarge;
+  final Color? valueColor;
+
+  const _SummaryRow({required this.label, required this.value, this.isLarge = false, this.valueColor});
+
+  @override
+  Widget build(BuildContext context) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(label,
-            style: TextStyle(
-                color: isTotal
-                    ? CupertinoColors.black
-                    : CupertinoColors.systemGrey,
-                fontWeight: isTotal ? FontWeight.bold : FontWeight.normal,
-                fontSize: isTotal ? 17 : 14)),
-        Text(value,
-            style: TextStyle(
-                color: isTotal ? Colors.orange[800] : CupertinoColors.black,
-                fontWeight: isTotal ? FontWeight.w900 : FontWeight.bold,
-                fontSize: isTotal ? 20 : 14)),
+        Text(
+          label,
+          style: TextStyle(
+            fontFamily: 'Cairo',
+            fontWeight: isLarge ? FontWeight.w900 : FontWeight.w700,
+            fontSize: isLarge ? 18 : 14,
+            color: isLarge ? Colors.black : Colors.grey.shade600,
+          ),
+        ),
+        Text(
+          value,
+          style: TextStyle(
+            fontFamily: 'Cairo',
+            fontWeight: FontWeight.w900,
+            fontSize: isLarge ? 22 : 16,
+            color: valueColor ?? Colors.black87,
+          ),
+        ),
       ],
+    );
+  }
+}
+
+class _CircleIconButton extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback onTap;
+
+  const _CircleIconButton({required this.icon, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 44,
+        height: 44,
+        decoration: BoxDecoration(
+          color: Colors.grey.shade50,
+          shape: BoxShape.circle,
+          border: Border.all(color: Colors.grey.shade100),
+        ),
+        child: Icon(icon, size: 20, color: Colors.black87),
+      ),
+    );
+  }
+}
+
+class _SmallButton extends StatelessWidget {
+  final String label;
+  final Color color;
+  final Color textColor;
+  final bool border;
+  final bool isLoading;
+  final VoidCallback onTap;
+
+  const _SmallButton({
+    required this.label,
+    required this.color,
+    required this.textColor,
+    this.border = false,
+    this.isLoading = false,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        decoration: BoxDecoration(
+          color: color,
+          borderRadius: BorderRadius.circular(12),
+          border: border ? Border.all(color: Colors.grey.shade300) : null,
+        ),
+        alignment: Alignment.center,
+        child: isLoading
+            ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+            : Text(
+                label,
+                style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 11, color: textColor),
+              ),
+      ),
     );
   }
 }
@@ -703,7 +1268,6 @@ class _CartScreenState extends State<CartScreen> {
 class _GeoPoint {
   final double latitude;
   final double longitude;
-
   const _GeoPoint(this.latitude, this.longitude);
 }
 
@@ -711,30 +1275,19 @@ class _PickedLocation {
   final String address;
   final double latitude;
   final double longitude;
-
-  const _PickedLocation({
-    required this.address,
-    required this.latitude,
-    required this.longitude,
-  });
+  const _PickedLocation({required this.address, required this.latitude, required this.longitude});
 }
 
 class _CustomerMapPickerScreen extends StatefulWidget {
   final double? initialLatitude;
   final double? initialLongitude;
-
-  const _CustomerMapPickerScreen({
-    required this.initialLatitude,
-    required this.initialLongitude,
-  });
-
+  const _CustomerMapPickerScreen({required this.initialLatitude, required this.initialLongitude});
   @override
   State<_CustomerMapPickerScreen> createState() => _CustomerMapPickerScreenState();
 }
 
 class _CustomerMapPickerScreenState extends State<_CustomerMapPickerScreen> {
   static final Position _defaultCenter = Position(44.3661, 33.3152);
-
   MapboxMap? _map;
   CircleAnnotationManager? _circleManager;
   Position _center = _defaultCenter;
@@ -765,7 +1318,7 @@ class _CustomerMapPickerScreenState extends State<_CustomerMapPickerScreen> {
       await manager.create(
         CircleAnnotationOptions(
           geometry: Point(coordinates: _center),
-          circleColor: const Color(0xFFE60012).value,
+          circleColor: _brandRed.value,
           circleRadius: 8,
           circleStrokeColor: Colors.white.value,
           circleStrokeWidth: 2,
@@ -789,164 +1342,76 @@ class _CustomerMapPickerScreenState extends State<_CustomerMapPickerScreen> {
 
   Future<String> _reverseGeocode(double lat, double lng) async {
     final token = AppConfig.mapboxPublicToken.trim();
-    if (token.isEmpty) {
-      return '${lat.toStringAsFixed(5)}, ${lng.toStringAsFixed(5)}';
-    }
+    if (token.isEmpty) return '${lat.toStringAsFixed(5)}, ${lng.toStringAsFixed(5)}';
     try {
-      final uri = Uri.parse(
-        'https://api.mapbox.com/geocoding/v5/mapbox.places/'
-        '$lng,$lat.json?language=ar&country=iq&limit=1&access_token=$token',
-      );
+      final uri = Uri.parse('https://api.mapbox.com/geocoding/v5/mapbox.places/$lng,$lat.json?language=ar&country=iq&limit=1&access_token=$token');
       final response = await http.get(uri).timeout(AppConfig.apiTimeout);
-      if (response.statusCode < 200 || response.statusCode >= 300) {
-        return '${lat.toStringAsFixed(5)}, ${lng.toStringAsFixed(5)}';
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        final payload = jsonDecode(response.body);
+        if (payload is Map && payload['features'] is List) {
+          final features = payload['features'] as List;
+          if (features.isNotEmpty && features.first is Map) {
+            return (features.first['place_name']?.toString() ?? '').trim();
+          }
+        }
       }
-      final payload = jsonDecode(response.body);
-      if (payload is! Map || payload['features'] is! List) {
-        return '${lat.toStringAsFixed(5)}, ${lng.toStringAsFixed(5)}';
-      }
-      final features = payload['features'] as List;
-      if (features.isEmpty || features.first is! Map) {
-        return '${lat.toStringAsFixed(5)}, ${lng.toStringAsFixed(5)}';
-      }
-      final address = (features.first['place_name']?.toString() ?? '').trim();
-      if (address.isEmpty) {
-        return '${lat.toStringAsFixed(5)}, ${lng.toStringAsFixed(5)}';
-      }
-      return address;
-    } catch (_) {
-      return '${lat.toStringAsFixed(5)}, ${lng.toStringAsFixed(5)}';
-    }
+    } catch (_) {}
+    return '${lat.toStringAsFixed(5)}, ${lng.toStringAsFixed(5)}';
   }
 
   Future<void> _confirmLocation() async {
     setState(() => _isResolving = true);
     await _readCenterFromMap();
-    final address = await _reverseGeocode(
-      _center.lat.toDouble(),
-      _center.lng.toDouble(),
-    );
+    final address = await _reverseGeocode(_center.lat.toDouble(), _center.lng.toDouble());
     if (!mounted) return;
-    setState(() {
-      _resolvedAddress = address;
-      _isResolving = false;
-    });
-    Navigator.of(context).pop(
-      _PickedLocation(
-        address: address,
-        latitude: _center.lat.toDouble(),
-        longitude: _center.lng.toDouble(),
-      ),
-    );
-  }
-
-  Future<void> _moveToCurrentLocation() async {
-    final enabled = await geo.Geolocator.isLocationServiceEnabled();
-    if (!enabled) return;
-    var permission = await geo.Geolocator.checkPermission();
-    if (permission == geo.LocationPermission.denied) {
-      permission = await geo.Geolocator.requestPermission();
-    }
-    if (permission == geo.LocationPermission.denied ||
-        permission == geo.LocationPermission.deniedForever) {
-      return;
-    }
-    final current = await geo.Geolocator.getCurrentPosition(
-      locationSettings: const geo.LocationSettings(
-        accuracy: geo.LocationAccuracy.high,
-      ),
-    );
-    final target = Position(current.longitude, current.latitude);
-    setState(() => _center = target);
-    await _map?.setCamera(
-      CameraOptions(
-        center: Point(coordinates: target),
-        zoom: 15.0,
-      ),
-    );
-    await _refreshCenterMarker();
+    Navigator.of(context).pop(_PickedLocation(address: address, latitude: _center.lat.toDouble(), longitude: _center.lng.toDouble()));
   }
 
   @override
   Widget build(BuildContext context) {
-    return CupertinoPageScaffold(
-      navigationBar: const CupertinoNavigationBar(
-        middle: Text(
-          'تحديد موقع التوصيل',
-          style: TextStyle(fontFamily: 'Cairo'),
+    return Directionality(
+      textDirection: TextDirection.rtl,
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('تحديد موقع التوصيل', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
+          backgroundColor: Colors.white,
+          foregroundColor: Colors.black87,
+          elevation: 0,
         ),
-      ),
-      child: SafeArea(
-        child: Column(
+        body: Stack(
           children: [
-            Expanded(
-              child: Stack(
-                children: [
-                  Positioned.fill(
-                    child: MapWidget(
-                      styleUri: 'mapbox://styles/mapbox/streets-v12',
-                      cameraOptions: CameraOptions(
-                        center: Point(coordinates: _center),
-                        zoom: 14.0,
-                      ),
-                      onMapCreated: _onMapCreated,
-                    ),
-                  ),
-                  Positioned(
-                    right: 12,
-                    bottom: 12,
-                    child: CupertinoButton(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                      color: Colors.white,
-                      onPressed: _moveToCurrentLocation,
-                      child: const Text(
-                        'موقعي',
-                        style: TextStyle(
-                          fontFamily: 'Cairo',
-                          color: Colors.black87,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+            MapWidget(
+              styleUri: 'mapbox://styles/mapbox/streets-v12',
+              cameraOptions: CameraOptions(center: Point(coordinates: _center), zoom: 14.0),
+              onMapCreated: _onMapCreated,
             ),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(14),
-              color: Colors.white,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    _resolvedAddress.isEmpty
-                        ? 'حرّك الخريطة ثم اضغط تأكيد الموقع'
-                        : _resolvedAddress,
-                    style: const TextStyle(
-                      fontFamily: 'Cairo',
-                      fontSize: 12,
+            Positioned(
+              bottom: 24,
+              left: 20,
+              right: 20,
+              child: Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(24), boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 20)]),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text('حرّك الخريطة لتحديد موقعك بدقة', style: TextStyle(fontFamily: 'Cairo', fontSize: 13, color: Colors.grey)),
+                    const SizedBox(height: 16),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: _isResolving ? null : _confirmLocation,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: _brandRed,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        ),
+                        child: _isResolving ? const CupertinoActivityIndicator(color: Colors.white) : const Text('تأكيد الموقع', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 10),
-                  SizedBox(
-                    width: double.infinity,
-                    child: CupertinoButton(
-                      color: Colors.deepOrange,
-                      onPressed: _isResolving ? null : _confirmLocation,
-                      child: _isResolving
-                          ? const CupertinoActivityIndicator(color: Colors.white)
-                          : const Text(
-                              'تأكيد هذا الموقع',
-                              style: TextStyle(
-                                fontFamily: 'Cairo',
-                                color: Colors.white,
-                                fontWeight: FontWeight.w800,
-                              ),
-                            ),
-                    ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ],
