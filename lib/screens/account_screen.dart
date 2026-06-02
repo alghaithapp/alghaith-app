@@ -1,20 +1,15 @@
-import 'dart:convert';
-import 'dart:io';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../providers/app_provider.dart';
+import '../utils/account_role_switch.dart';
 import '../utils/extensions.dart';
 import '../utils/helpers.dart';
 import '../utils/merchant_service_labels.dart';
 import '../widgets/app_image.dart';
 import '../widgets/app_logo.dart';
 import 'notifications_screen.dart';
-import 'orders_screen.dart';
-import 'addresses_screen.dart';
-import 'payment_methods_screen.dart';
-import 'app_settings_screen.dart';
 import 'merchant/merchant_dashboard_screen.dart';
 import 'merchant/merchant_orders_screen.dart';
 import 'merchant/product_form_screen.dart';
@@ -22,7 +17,9 @@ import 'merchant/merchant_products_screen.dart';
 import 'merchant/merchant_store_settings_screen.dart';
 import 'real_estate_form_screen.dart';
 import 'account_full_screen.dart';
-import 'phone_login_screen.dart';
+import 'account_deletion_screen.dart';
+import 'customer_account_view.dart';
+import 'guest_account_view.dart';
 
 class AccountScreen extends StatelessWidget {
   const AccountScreen({super.key});
@@ -32,122 +29,15 @@ class AccountScreen extends StatelessWidget {
     final appProvider = Provider.of<AppProvider>(context);
 
     if (appProvider.isGuestMode) {
-      return const _GuestAccountView();
+      return const GuestAccountView();
     }
 
     if (appProvider.isMerchant) {
       return const _MerchantAccountView();
     }
 
-    return const _CustomerAccountView();
+    return const CustomerAccountView();
   }
-}
-
-class _GuestAccountView extends StatelessWidget {
-  const _GuestAccountView();
-
-  @override
-  Widget build(BuildContext context) {
-    return CupertinoPageScaffold(
-      backgroundColor: const Color(0xFFF2F2F7),
-      navigationBar: const CupertinoNavigationBar(
-        middle: Text('حسابي', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
-      ),
-      child: SafeArea(
-        child: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24.0),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Icon(CupertinoIcons.person_circle, size: 100, color: Colors.grey),
-                const SizedBox(height: 20),
-                const Text(
-                  'سجل دخولك الآن',
-                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, fontFamily: 'Cairo'),
-                ),
-                const SizedBox(height: 10),
-                const Text(
-                  'يرجى تسجيل الدخول للوصول إلى طلباتك، عناويني، وإدارة حسابك بشكل كامل.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: Colors.grey, fontFamily: 'Cairo'),
-                ),
-                const SizedBox(height: 30),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.orange,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                    ),
-                    onPressed: () {
-                      final provider = context.read<AppProvider>();
-                      provider.resetAll();
-                    },
-                    child: const Text('تسجيل الدخول', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontFamily: 'Cairo')),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-Future<void> _switchAccountRoleWithLoading(
-  BuildContext context,
-  AppProvider provider,
-  String role, {
-  required String loadingMessage,
-  required String errorMessage,
-}) async {
-  BuildContext? dialogContext;
-  showDialog<void>(
-    context: context,
-    useRootNavigator: true,
-    barrierDismissible: false,
-    builder: (ctx) {
-      dialogContext = ctx;
-      return AlertDialog(
-        content: Row(
-          children: [
-            const SizedBox(
-              width: 18,
-              height: 18,
-              child: CircularProgressIndicator(strokeWidth: 2.2),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                loadingMessage,
-                style: const TextStyle(fontFamily: 'Cairo'),
-              ),
-            ),
-          ],
-        ),
-      );
-    },
-  ).then((_) {
-    dialogContext = null;
-  });
-
-  var switched = false;
-  try {
-    switched = await provider.setUserRole(role);
-  } finally {
-    final ctx = dialogContext;
-    if (ctx != null) {
-      Navigator.of(ctx, rootNavigator: true).pop();
-    }
-  }
-
-  if (!context.mounted || switched) return;
-  ScaffoldMessenger.of(context).showSnackBar(
-    SnackBar(content: Text(errorMessage)),
-  );
 }
 
 class _MerchantAccountView extends StatelessWidget {
@@ -271,7 +161,7 @@ class _MerchantAccountView extends StatelessWidget {
               subtitle: 'احتفظ بنفس الدخول واستخدم واجهة الزبون',
               icon: CupertinoIcons.person_fill,
               color: Colors.orange,
-              onTap: () => _switchAccountRoleWithLoading(
+              onTap: () => switchAccountRoleWithLoading(
                 context,
                 appProvider,
                 'customer',
@@ -547,6 +437,14 @@ class _MerchantAccountView extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 16),
+            _DeleteAccountButton(
+              onTap: () => Navigator.of(context).push(
+                CupertinoPageRoute(
+                  builder: (_) => const AccountDeletionScreen(),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
             _LogoutButton(
               onTap: () => appProvider.resetAll(),
             ),
@@ -628,499 +526,39 @@ class _RoleSwitchCard extends StatelessWidget {
   }
 }
 
-class _CustomerAccountView extends StatelessWidget {
-  const _CustomerAccountView();
+class _DeleteAccountButton extends StatelessWidget {
+  final VoidCallback onTap;
+
+  const _DeleteAccountButton({required this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    final appProvider = Provider.of<AppProvider>(context);
-
-    return CupertinoPageScaffold(
-      backgroundColor: const Color(0xFFF2F2F7),
-      navigationBar: CupertinoNavigationBar(
-        leading: const Padding(
-          padding: EdgeInsets.only(top: 2),
-          child: AppLogo(size: 28),
-        ),
-        middle: const Text('حسابي',
-            style: TextStyle(
-                fontWeight: FontWeight.bold, fontFamily: 'Cairo')),
-        trailing: GestureDetector(
-          onTap: () => Navigator.of(context, rootNavigator: true).push(
-            CupertinoPageRoute(
-                builder: (context) => const NotificationsScreen()),
-          ),
-          child: const Icon(CupertinoIcons.bell_fill,
-              color: Colors.orange, size: 22),
-        ),
-      ),
-      child: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                    color: CupertinoColors.white,
-                    borderRadius: BorderRadius.circular(20)),
-                child: Row(
-                  children: [
-                    _CustomerAvatar(appProvider: appProvider),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(appProvider.customerName,
-                              style: const TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 18,
-                                  fontFamily: 'Cairo')),
-                          const SizedBox(height: 4),
-                          Text(appProvider.customerPhone,
-                              style: const TextStyle(
-                                  color: CupertinoColors.systemGrey,
-                                  fontSize: 12,
-                                  fontFamily: 'Cairo')),
-                        ],
-                      ),
-                    ),
-                    CupertinoButton(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 8),
-                      color: Colors.orange,
-                      borderRadius: BorderRadius.circular(14),
-                      minimumSize: Size.zero,
-                      onPressed: () => _showEditProfileDialog(
-                        context,
-                        appProvider,
-                      ),
-                      child: const Text(
-                        'تعديل',
-                        style: const TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                          fontFamily: 'Cairo',
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 25),
-              _RoleSwitchCard(
-                title: 'الانتقال إلى حساب التاجر',
-                subtitle: 'استخدم نفس الحساب وادخل إلى واجهة التاجر',
-                icon: Icons.storefront_rounded,
-                color: Colors.deepOrange,
-                onTap: () => _switchAccountRoleWithLoading(
-                  context,
-                  appProvider,
-                  'merchant',
-                  loadingMessage: 'يرجى الانتظار... جارٍ التحويل إلى حساب التاجر',
-                  errorMessage: 'تعذر الانتقال إلى حساب التاجر حالياً.',
-                ),
-              ),
-              const SizedBox(height: 25),
-              _RoleSwitchCard(
-                title: 'بيانات الحساب الكامل',
-                subtitle: 'عرض كل بيانات الحساب من مكان واحد',
-                icon: Icons.badge_rounded,
-                color: Colors.purple,
-                onTap: () => Navigator.of(context).push(
-                  CupertinoPageRoute(
-                    builder: (_) => const AccountFullScreen(),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 25),
-              Container(
-                decoration: BoxDecoration(
-                    color: CupertinoColors.white,
-                    borderRadius: BorderRadius.circular(20)),
-                clipBehavior: Clip.antiAlias,
-                child: Column(
-                  children: [
-                    _buildSettingItem(
-                      context,
-                      CupertinoIcons.location_fill,
-                      'عناويني',
-                      color: Colors.orange,
-                      onTap: () => Navigator.of(context, rootNavigator: true)
-                          .push(CupertinoPageRoute(
-                              builder: (context) => const AddressesScreen())),
-                    ),
-                    _buildSettingItem(
-                      context,
-                      CupertinoIcons.creditcard_fill,
-                      'طرق الدفع',
-                      color: Colors.amber,
-                      onTap: () => Navigator.of(context, rootNavigator: true)
-                          .push(CupertinoPageRoute(
-                              builder: (context) =>
-                                  const PaymentMethodsScreen())),
-                    ),
-                    _buildSettingItem(
-                      context,
-                      CupertinoIcons.doc_text_fill,
-                      'سجل الطلبات',
-                      color: Colors.blue,
-                      onTap: () => Navigator.of(context, rootNavigator: true)
-                          .push(CupertinoPageRoute(
-                              builder: (context) => const OrdersScreen())),
-                    ),
-                    _buildSettingItem(
-                      context,
-                      CupertinoIcons.settings,
-                      'الإعدادات',
-                      color: Colors.grey,
-                      onTap: () => Navigator.of(context, rootNavigator: true)
-                          .push(CupertinoPageRoute(
-                              builder: (context) => const AppSettingsScreen())),
-                    ),
-                    _buildSettingItem(
-                      context,
-                      Icons.headset_mic,
-                      'اتصل بنا (واتساب)',
-                      color: Colors.green,
-                      onTap: () => AppHelpers.launchWhatsApp(
-                          AppHelpers.supportWhatsAppNumber,
-                          'مرحبا، أحتاج مساعدة في تطبيق الغيث'),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 30),
-              GestureDetector(
-                onTap: () => appProvider.resetAll(),
-                child: Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                      color: CupertinoColors.white,
-                      borderRadius: BorderRadius.circular(25)),
-                  child: Row(
-                    children: [
-                      const Icon(CupertinoIcons.power,
-                          color: CupertinoColors.systemRed),
-                      const SizedBox(width: 15),
-                      Text('تسجيل الخروج',
-                          style: const TextStyle(
-                              color: CupertinoColors.systemRed,
-                              fontWeight: FontWeight.bold,
-                              fontFamily: 'Cairo')),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(height: 16),
-              GestureDetector(
-                onTap: () => _showDeleteAccountDialog(context, appProvider),
-                child: Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                      color: CupertinoColors.white.withValues(alpha: 0.5),
-                      borderRadius: BorderRadius.circular(25),
-                      border: Border.all(color: CupertinoColors.systemRed.withValues(alpha: 0.3))),
-                  child: Row(
-                    children: [
-                      const Icon(CupertinoIcons.trash,
-                          color: CupertinoColors.systemRed, size: 20),
-                      const SizedBox(width: 15),
-                      Text('حذف الحساب نهائياً',
-                          style: const TextStyle(
-                              color: CupertinoColors.systemRed,
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                              fontFamily: 'Cairo')),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSettingItem(BuildContext context, IconData icon, String title,
-      {required Color color, required VoidCallback onTap}) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: CupertinoColors.white,
-          border: Border(
-              bottom: BorderSide(
-                  color: CupertinoColors.systemGrey6.withValues(alpha: 0.5))),
+          color: CupertinoColors.white.withValues(alpha: 0.5),
+          borderRadius: BorderRadius.circular(25),
+          border: Border.all(
+            color: CupertinoColors.systemRed.withValues(alpha: 0.3),
+          ),
         ),
-        child: Row(
+        child: const Row(
           children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(10)),
-              child: Icon(icon, color: color, size: 20),
+            Icon(CupertinoIcons.trash,
+                color: CupertinoColors.systemRed, size: 20),
+            SizedBox(width: 15),
+            Text(
+              'حذف الحساب نهائياً',
+              style: TextStyle(
+                color: CupertinoColors.systemRed,
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                fontFamily: 'Cairo',
+              ),
             ),
-            const SizedBox(width: 15),
-            Text(title,
-                style: const TextStyle(
-                    fontWeight: FontWeight.w600,
-                    fontSize: 15,
-                    fontFamily: 'Cairo')),
-            const Spacer(),
-            Icon(CupertinoIcons.chevron_left,
-                color: Colors.grey[300], size: 16),
           ],
-        ),
-      ),
-    );
-  }
-
-  Future<void> _showEditProfileDialog(
-    BuildContext context,
-    AppProvider provider,
-  ) async {
-    final nameController = TextEditingController(text: provider.customerName);
-    final phoneController = TextEditingController(text: provider.customerPhone);
-    String? selectedAvatarBase64 = provider.customerAvatarBase64;
-
-    await showDialog(
-      context: context,
-      builder: (dialogContext) {
-        return StatefulBuilder(
-          builder: (context, setStateDialog) {
-            Widget avatarPreview;
-            if (selectedAvatarBase64 != null &&
-                selectedAvatarBase64!.isNotEmpty) {
-              avatarPreview = AppImage(
-                imageData: selectedAvatarBase64,
-                width: 72,
-                height: 72,
-                borderRadius: BorderRadius.circular(36),
-              );
-            } else {
-              avatarPreview = const CircleAvatar(
-                radius: 36,
-                backgroundColor: Colors.orange,
-                child: Icon(
-                  CupertinoIcons.person_fill,
-                  color: Colors.white,
-                  size: 38,
-                ),
-              );
-            }
-
-            return AlertDialog(
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(24),
-              ),
-              title: const Text(
-                'تعديل الملف الشخصي',
-                style: const TextStyle(
-                  fontFamily: 'Cairo',
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-              content: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Stack(
-                      alignment: Alignment.bottomRight,
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(4),
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            border: Border.all(color: Colors.orange, width: 2),
-                          ),
-                          child: avatarPreview,
-                        ),
-                        GestureDetector(
-                          onTap: () async {
-                            final picked = await AppHelpers.pickImage(context);
-                            if (picked == null) return;
-
-                            final imageRef =
-                                await provider.uploadImage(File(picked.path));
-                            if (!context.mounted) return;
-                            if (imageRef != null) {
-                              setStateDialog(() {
-                                selectedAvatarBase64 = imageRef;
-                              });
-                            } else {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text(
-                                    'تعذر رفع الصورة. تحقق من الاتصال وحاول مجدداً.',
-                                    style: const TextStyle(fontFamily: 'Cairo'),
-                                  ),
-                                ),
-                              );
-                            }
-                          },
-                          child: Container(
-                            padding: const EdgeInsets.all(8),
-                            decoration: const BoxDecoration(
-                              color: Colors.orange,
-                              shape: BoxShape.circle,
-                            ),
-                            child: const Icon(
-                              CupertinoIcons.camera_fill,
-                              color: Colors.white,
-                              size: 16,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    _profileField(
-                      label: 'الاسم',
-                      controller: nameController,
-                    ),
-                    const SizedBox(height: 12),
-                    _profileField(
-                      label: 'رقم الهاتف',
-                      controller: phoneController,
-                      keyboardType: TextInputType.phone,
-                    ),
-                  ],
-                ),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(dialogContext),
-                  child: const Text('إلغاء'),
-                ),
-                ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.orange,
-                    foregroundColor: Colors.white,
-                  ),
-                  onPressed: () async {
-                    try {
-                      await provider.updateCustomerProfile(
-                        name: nameController.text,
-                        phone: phoneController.text,
-                        avatarBase64: selectedAvatarBase64,
-                      );
-                      if (!dialogContext.mounted) return;
-                      Navigator.pop(dialogContext);
-                    } catch (error) {
-                      if (!dialogContext.mounted) return;
-                      ScaffoldMessenger.of(dialogContext).showSnackBar(
-                        SnackBar(
-                          content: Text(
-                            'تعذر حفظ الصورة: $error',
-                            style: const TextStyle(fontFamily: 'Cairo'),
-                          ),
-                        ),
-                      );
-                    }
-                  },
-                  child: const Text('حفظ'),
-                ),
-              ],
-            );
-          },
-        );
-      },
-    );
-  }
-
-  Widget _profileField({
-    required String label,
-    required TextEditingController controller,
-    TextInputType keyboardType = TextInputType.text,
-  }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: const TextStyle(
-            fontSize: 13,
-            color: Colors.grey,
-            fontFamily: 'Cairo',
-          ),
-        ),
-        const SizedBox(height: 8),
-        TextField(
-          controller: controller,
-          keyboardType: keyboardType,
-          decoration: InputDecoration(
-            filled: true,
-            fillColor: const Color(0xFFF7F8FC),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(14),
-              borderSide: BorderSide.none,
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Future<void> _showDeleteAccountDialog(BuildContext context, AppProvider provider) async {
-    final confirmed = await showCupertinoDialog<bool>(
-      context: context,
-      builder: (context) => CupertinoAlertDialog(
-        title: const Text('حذف الحساب', style: TextStyle(fontFamily: 'Cairo')),
-        content: const Text(
-          'هل أنت متأكد من رغبتك في حذف حسابك نهائياً؟ سيؤدي هذا إلى مسح كافة بياناتك وطلباتك ولا يمكن التراجع عن هذه الخطوة.',
-          style: TextStyle(fontFamily: 'Cairo'),
-        ),
-        actions: [
-          CupertinoDialogAction(
-            child: const Text('إلغاء'),
-            onPressed: () => Navigator.pop(context, false),
-          ),
-          CupertinoDialogAction(
-            isDestructiveAction: true,
-            child: const Text('حذف الحساب'),
-            onPressed: () => Navigator.pop(context, true),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed == true) {
-      provider.resetAll();
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('تم تقديم طلب حذف الحساب بنجاح.', style: TextStyle(fontFamily: 'Cairo')),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
-  }
-}
-
-class _CustomerAvatar extends StatelessWidget {
-  final AppProvider appProvider;
-
-  const _CustomerAvatar({required this.appProvider});
-
-  @override
-  Widget build(BuildContext context) {
-    final avatarBase64 = appProvider.customerAvatarBase64;
-    return ClipOval(
-      child: SizedBox(
-        width: 70,
-        height: 70,
-        child: AppImage(
-          imageData: avatarBase64,
-          width: 70,
-          height: 70,
-          fit: BoxFit.cover,
         ),
       ),
     );

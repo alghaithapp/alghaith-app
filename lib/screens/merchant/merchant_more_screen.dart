@@ -2,10 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../providers/app_provider.dart';
-import '../../utils/helpers.dart';
 import '../../widgets/app_image.dart';
 import '../../widgets/app_logo.dart';
-import '../../widgets/whatsapp_icon.dart';
 import 'merchant_notifications_screen.dart';
 import 'merchant_offers_screen.dart';
 import 'merchant_profile_screen.dart';
@@ -154,7 +152,7 @@ class MerchantMoreScreen extends StatelessWidget {
         _MoreTile(
           cardColor: cardColor,
           title: 'الدعم الفني',
-          subtitle: 'تواصل سريع عبر واتساب أو الاتصال بخصوص ${labels.storeLabelAr}',
+          subtitle: 'تواصل سريع عبر واتساب أو الاتصال مع فريق الدعم',
           icon: Icons.support_agent_rounded,
           onTap: () => Navigator.of(context).push(
               MaterialPageRoute(builder: (_) => const MerchantSupportScreen())),
@@ -247,21 +245,6 @@ class MerchantMoreScreen extends StatelessWidget {
               provider.resetAll();
             }
           },
-        ),
-        const SizedBox(height: 14),
-        ElevatedButton.icon(
-          style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.deepOrange,
-            foregroundColor: Colors.white,
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-            padding: const EdgeInsets.symmetric(vertical: 14),
-          ),
-          onPressed: () => AppHelpers.launchWhatsApp(
-              AppHelpers.supportWhatsAppNumber,
-              'مرحبا، أحتاج إلى الدعم الفني في الغيث'),
-          icon: const WhatsAppIcon(size: 36),
-          label: const Text('واتساب الدعم'),
         ),
       ],
     );

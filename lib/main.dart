@@ -257,6 +257,7 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    context.read<AppProvider>().addListener(_onAppProviderChanged);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       final provider = context.read<AppProvider>();
@@ -276,10 +277,21 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
 
   @override
   void dispose() {
+    context.read<AppProvider>().removeListener(_onAppProviderChanged);
     WidgetsBinding.instance.removeObserver(this);
     _orderRefreshTimer?.cancel();
     _notificationEntry?.remove();
     super.dispose();
+  }
+
+  void _onAppProviderChanged() {
+    if (!mounted) return;
+    final tab = context.read<AppProvider>().takePendingMainTab();
+    if (tab == null) return;
+    final clamped = tab.clamp(0, _screens.length - 1);
+    if (_currentIndex != clamped) {
+      setState(() => _currentIndex = clamped);
+    }
   }
 
   Future<void> _pollCustomerOrders() async {

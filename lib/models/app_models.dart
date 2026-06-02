@@ -4,7 +4,7 @@ class ServiceCategory {
   final String titleEn;
   final String image;
 
-  ServiceCategory({
+  const ServiceCategory({
     required this.id,
     required this.titleAr,
     required this.titleEn,

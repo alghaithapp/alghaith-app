@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 
-import '../../providers/app_provider.dart';
 import '../../utils/helpers.dart';
 import '../../widgets/whatsapp_icon.dart';
 
@@ -10,15 +8,12 @@ class MerchantSupportScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final provider = context.watch<AppProvider>();
-    final labels = provider.merchantLabels;
-
     return Scaffold(
       backgroundColor: const Color(0xFFF4F4F6),
       appBar: AppBar(
-        title: Text(
-          'دعم ${labels.storeLabelAr}',
-          style: const TextStyle(
+        title: const Text(
+          'الدعم الفني',
+          style: TextStyle(
             fontFamily: 'Cairo',
             fontWeight: FontWeight.w900,
           ),
@@ -29,16 +24,16 @@ class MerchantSupportScreen extends StatelessWidget {
         children: [
           _SupportCard(
             title: 'واتساب',
-            subtitle: 'تواصل سريع مع فريق دعم ${labels.storeLabelAr}',
+            subtitle: 'تواصل سريع مع فريق الدعم الفني',
             iconWidget: const WhatsAppIcon(size: 36),
             onTap: () => AppHelpers.launchWhatsApp(
               AppHelpers.supportWhatsAppNumber,
-              'مرحبا، لدي مشكلة في حساب ${labels.storeLabelAr}',
+              'مرحبا، أحتاج إلى الدعم الفني في الغيث',
             ),
           ),
           _SupportCard(
             title: 'اتصال',
-            subtitle: 'اتصل مباشرة بالدعم بخصوص ${labels.storeLabelAr}',
+            subtitle: 'اتصال مباشر مع فريق الدعم',
             icon: Icons.phone_rounded,
             onTap: () => AppHelpers.makePhoneCall('07701234567'),
           ),

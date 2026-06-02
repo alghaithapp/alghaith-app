@@ -8,6 +8,8 @@ import 'package:provider/provider.dart';
 import 'dart:convert';
 import '../providers/app_provider.dart';
 import '../core/config/app_config.dart';
+import '../core/navigation/customer_navigation.dart';
+import '../core/ui/app_bottom_nav_style.dart';
 import '../models/app_models.dart';
 import '../utils/extensions.dart';
 import '../widgets/app_image.dart';
@@ -541,7 +543,7 @@ class _CartScreenState extends State<CartScreen> {
         children: [
           _CircleIconButton(
             icon: Icons.arrow_forward_ios_rounded,
-            onTap: () => Navigator.pop(context),
+            onTap: () => goToCustomerHome(context),
           ),
           Expanded(
             child: Padding(
@@ -1162,27 +1164,11 @@ class _CartScreenState extends State<CartScreen> {
                     ),
                   ),
                   const SizedBox(height: 40),
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: () => Navigator.pop(context),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: _brandRed,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 18),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(28),
-                        ),
-                        elevation: 0,
-                      ),
-                      child: const Text(
-                        'استعراض المنتجات',
-                        style: TextStyle(
-                          fontFamily: 'Cairo',
-                          fontWeight: FontWeight.w900,
-                          fontSize: 16,
-                        ),
-                      ),
+                  AppBottomNavStyle.primaryActionButton(
+                    onPressed: () => goToCustomerHome(context),
+                    child: const Text(
+                      'استعراض المنتجات',
+                      style: TextStyle(fontSize: 16),
                     ),
                   ),
                 ],

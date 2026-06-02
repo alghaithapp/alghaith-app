@@ -2133,6 +2133,25 @@ class AppProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  int? _pendingMainTab;
+
+  void requestMainShellTab(int index) {
+    if (index < 0) return;
+    _pendingMainTab = index;
+    notifyListeners();
+  }
+
+  int? takePendingMainTab() {
+    final tab = _pendingMainTab;
+    _pendingMainTab = null;
+    return tab;
+  }
+
+  void goToCustomerHomeTab() {
+    resetHome();
+    requestMainShellTab(0);
+  }
+
   void toggleFavorite(String id) {
     final target = isCustomer ? _catalogItems : _items;
     final index = target.indexWhere((item) => item.id == id);

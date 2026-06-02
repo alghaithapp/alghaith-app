@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../core/ui/app_bottom_nav_style.dart';
 import '../providers/app_provider.dart';
 import '../models/app_models.dart';
 import '../utils/extensions.dart';
@@ -517,21 +518,15 @@ class _OrdersScreenState extends State<OrdersScreen> {
             ],
           ),
           const SizedBox(height: 10),
-          SizedBox(
-            width: double.infinity,
-            child: CupertinoButton(
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              color: Colors.deepOrange,
-              borderRadius: BorderRadius.circular(10),
-              onPressed: onReorder,
-              child: const Text(
-                'إعادة نفس الطلب',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w700,
-                  fontFamily: 'Cairo',
-                  fontSize: 12,
-                ),
+          AppBottomNavStyle.primaryActionButton(
+            onPressed: onReorder,
+            radius: 10,
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: const Text(
+              'إعادة نفس الطلب',
+              style: TextStyle(
+                fontWeight: FontWeight.w700,
+                fontSize: 12,
               ),
             ),
           ),
