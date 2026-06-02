@@ -48,6 +48,7 @@ class AppProvider extends ChangeNotifier {
   bool _isRestoring = false; 
   bool _isSyncing = false;   
   bool _isLoggingIn = false;
+  bool _isGuestMode = false;
   Timer? _bootWatchdog;
   String _customerName = '';
   String _customerPhone = '';
@@ -384,6 +385,16 @@ class AppProvider extends ChangeNotifier {
 
   bool get isCourierAvailable =>
       _courierProfile?['available'] as bool? ?? true;
+
+  bool get isGuestMode => _isGuestMode;
+
+  void setGuestMode() {
+    _isGuestMode = true;
+    _userRole = 'customer'; // نعامل الزائر كزبون في الواجهة الرئيسية
+    _isHydrating = false;
+    _isReady = true;
+    notifyListeners();
+  }
 
   bool get driverAcceptsTaxi => _userRole == 'driver' || _driverServiceEnabled('taxi');
   bool get driverAcceptsDelivery => false;
@@ -2991,6 +3002,7 @@ class AppProvider extends ChangeNotifier {
 
   void resetAll() {
     _isRestoring = false;
+    _isGuestMode = false;
     final previousPhone = _authPhone;
     
     // مسح البيانات من الذاكرة فقط

@@ -30,6 +30,10 @@ class AccountScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final appProvider = Provider.of<AppProvider>(context);
 
+    if (appProvider.isGuestMode) {
+      return const _GuestAccountView();
+    }
+
     if (appProvider.isMerchant) {
       return const _MerchantAccountView();
     }
