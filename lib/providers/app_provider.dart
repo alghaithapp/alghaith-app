@@ -2027,21 +2027,81 @@ class AppProvider extends ChangeNotifier {
     final target = isCustomer ? _catalogItems : _items;
     final index = target.indexWhere((item) => item.id == id);
     if (index != -1) {
-      target[index].isFavorite = !target[index].isFavorite;
-      if (target[index].isFavorite) {
-        _favoriteItemIds.add(id);
-      } else {
-        _favoriteItemIds.remove(id);
-      }
-      if (_authPhone != null && _authPhone!.isNotEmpty) {
-        unawaited(SupabaseService.saveCustomerFavorite(
-          _authPhone!,
-          id,
-          isFavorite: target[index].isFavorite,
-        ));
-      }
-      notifyListeners();
+      toggleFavoriteItem(target[index]);
+      return;
     }
+
+    if (!_favoriteItemIds.contains(id)) return;
+    _favoriteItemIds.remove(id);
+    if (_authPhone != null && _authPhone!.isNotEmpty) {
+      unawaited(SupabaseService.saveCustomerFavorite(
+        _authPhone!,
+        id,
+        isFavorite: false,
+      ));
+    }
+    notifyListeners();
+  }
+
+  bool isFavoriteId(String id) => _favoriteItemIds.contains(id);
+
+  ListItem listItemFromStoreProduct(
+    Map<String, dynamic> product,
+    Map<String, dynamic> profile,
+  ) {
+    final row = Map<String, dynamic>.from(product)
+      ..['merchant_phone'] = profile['phone']?.toString()
+      ..['merchant_store_name'] = profile['store_name']?.toString() ?? ''
+      ..['merchant_address'] = profile['address']?.toString() ?? ''
+      ..['merchant_latitude'] =
+          profile['latitude'] ?? profile['lat'] ?? profile['merchant_latitude']
+      ..['merchant_longitude'] = profile['longitude'] ??
+          profile['lng'] ??
+          profile['merchant_longitude']
+      ..['merchant_open_time'] = profile['open_time']?.toString()
+      ..['merchant_close_time'] = profile['close_time']?.toString()
+      ..['merchant_is_open'] = profile['is_open'];
+    final item = _listItemFromCatalogRow(row);
+    return item.copyWith(isFavorite: _favoriteItemIds.contains(item.id));
+  }
+
+  void toggleFavoriteItem(ListItem item) {
+    final target = isCustomer ? _catalogItems : _items;
+    final id = item.id;
+    final index = target.indexWhere((entry) => entry.id == id);
+    final currentlyFavorite =
+        index != -1 ? target[index].isFavorite : _favoriteItemIds.contains(id);
+    final nextFavorite = !currentlyFavorite;
+
+    if (index == -1) {
+      if (isCustomer) {
+        _catalogItems.add(item.copyWith(isFavorite: nextFavorite));
+      }
+    } else {
+      target[index].isFavorite = nextFavorite;
+    }
+
+    if (nextFavorite) {
+      _favoriteItemIds.add(id);
+    } else {
+      _favoriteItemIds.remove(id);
+    }
+
+    if (_authPhone != null && _authPhone!.isNotEmpty) {
+      unawaited(SupabaseService.saveCustomerFavorite(
+        _authPhone!,
+        id,
+        isFavorite: nextFavorite,
+      ));
+    }
+    notifyListeners();
+  }
+
+  void toggleFavoriteStoreProduct(
+    Map<String, dynamic> product,
+    Map<String, dynamic> profile,
+  ) {
+    toggleFavoriteItem(listItemFromStoreProduct(product, profile));
   }
 
   bool addToCart(ListItem item) {
@@ -2091,14 +2151,7 @@ class AppProvider extends ChangeNotifier {
     Map<String, dynamic> product,
     Map<String, dynamic> profile,
   ) {
-    final row = Map<String, dynamic>.from(product)
-      ..['merchant_phone'] = profile['phone']?.toString()
-      ..['merchant_store_name'] = profile['store_name']?.toString() ?? ''
-      ..['merchant_address'] = profile['address']?.toString() ?? ''
-      ..['merchant_open_time'] = profile['open_time']?.toString()
-      ..['merchant_close_time'] = profile['close_time']?.toString()
-      ..['merchant_is_open'] = profile['is_open'];
-    return addToCart(_listItemFromCatalogRow(row));
+    return addToCart(listItemFromStoreProduct(product, profile));
   }
 
   void incrementCartItem(String id) {
