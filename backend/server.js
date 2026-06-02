@@ -35,7 +35,10 @@ const {
   listProfessionalProfiles,
   listShoppingStores,
   listRestaurantStores,
+  listServiceStores,
   listCatalogProducts,
+  listOfferCatalogProducts,
+  getMarketplaceStats,
   listRealEstateListings,
   getMerchantIncomingOrders,
   updateIncomingOrderStatus,
@@ -46,6 +49,7 @@ const {
   updateCourierDeliveryStatus,
   getAdminReports,
 } = require('./supabase_repo');
+const { validatePromoCode } = require('./promo_codes');
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -524,7 +528,11 @@ app.use('/db', (req, res, next) => {
     '/professionals',
     '/shopping-stores',
     '/restaurant-stores',
+    '/service-stores',
     '/catalog',
+    '/offers-catalog',
+    '/marketplace-stats',
+    '/validate-promo',
     '/real-estate-listings',
   ]);
 
@@ -864,6 +872,54 @@ app.get('/db/catalog', async (req, res) => {
   } catch (error) {
     console.error('list catalog error:', error);
     return res.status(500).json({ message: error?.message || 'Failed to load catalog.' });
+  }
+});
+
+app.get('/db/service-stores', async (req, res) => {
+  try {
+    const serviceId = String(parseQueryValue(req.query.serviceId) || '').trim();
+    const productCategory = String(parseQueryValue(req.query.productCategory) || serviceId).trim();
+    const subCategoryId = String(parseQueryValue(req.query.subCategoryId) || '').trim();
+    if (!serviceId) {
+      return res.status(400).json({ message: 'serviceId is required.' });
+    }
+    const rows = await listServiceStores(serviceId, productCategory, subCategoryId);
+    return res.json(rows);
+  } catch (error) {
+    console.error('list service-stores error:', error);
+    return res.status(500).json({ message: error?.message || 'Failed to load service stores.' });
+  }
+});
+
+app.get('/db/offers-catalog', async (req, res) => {
+  try {
+    const rows = await listOfferCatalogProducts();
+    return res.json(rows);
+  } catch (error) {
+    console.error('list offers-catalog error:', error);
+    return res.status(500).json({ message: error?.message || 'Failed to load offers catalog.' });
+  }
+});
+
+app.get('/db/marketplace-stats', async (req, res) => {
+  try {
+    const rows = await getMarketplaceStats();
+    return res.json(rows);
+  } catch (error) {
+    console.error('marketplace-stats error:', error);
+    return res.status(500).json({ message: error?.message || 'Failed to load marketplace stats.' });
+  }
+});
+
+app.post('/db/validate-promo', async (req, res) => {
+  try {
+    const code = String(req.body?.code || req.body?.promoCode || '').trim();
+    const subtotalIqd = Number(req.body?.subtotalIqd ?? req.body?.subtotal ?? 0);
+    const result = validatePromoCode(code, subtotalIqd);
+    return res.json(result);
+  } catch (error) {
+    console.error('validate-promo error:', error);
+    return res.status(500).json({ message: error?.message || 'Failed to validate promo code.' });
   }
 });
 

@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import '../core/catalog/marketplace_stats.dart';
+import '../core/checkout/cart_promo.dart';
 import '../core/config/app_config.dart';
 import '../core/utils/phone_utils.dart';
 import '../data/models/account_snapshot.dart';
@@ -28,7 +30,10 @@ class AppProvider extends ChangeNotifier {
   List<MerchantReview> _merchantReviews = [];
   List<ListItem> _items = [];
   List<ListItem> _catalogItems = [];
+  MarketplaceStatsSnapshot? _marketplaceStats;
+  bool _marketplaceStatsLoading = false;
   List<CartItem> _cart = [];
+  CartPromoDefinition? _appliedCartPromo;
   List<ActiveOrder> _orders = [];
   List<ActiveOrder> _merchantIncomingOrders = [];
   List<ActiveOrder> _courierPoolOrders = [];
@@ -994,6 +999,38 @@ class AppProvider extends ChangeNotifier {
       _applyFavoriteSelections();
       notifyListeners();
     }
+  }
+
+  Future<void> refreshMarketplaceStats({bool force = false}) async {
+    if (!SupabaseService.isConfigured) return;
+    if (_marketplaceStatsLoading) return;
+    if (!force &&
+        _marketplaceStats != null &&
+        _marketplaceStats!.updatedAt != null &&
+        DateTime.now().difference(_marketplaceStats!.updatedAt!) <
+            const Duration(minutes: 3)) {
+      return;
+    }
+    _marketplaceStatsLoading = true;
+    notifyListeners();
+    try {
+      final row = await SupabaseService.loadMarketplaceStats();
+      _marketplaceStats = MarketplaceStatsSnapshot.fromMap(row);
+    } catch (error) {
+      debugPrint('MARKETPLACE_STATS_ERROR: $error');
+    } finally {
+      _marketplaceStatsLoading = false;
+      notifyListeners();
+    }
+  }
+
+  int marketplaceCategoryCount(String categoryId) {
+    return _marketplaceStats?.totalForCategory(categoryId) ?? 0;
+  }
+
+  ListItem catalogItemFromRow(Map<String, dynamic> row) {
+    final item = _listItemFromCatalogRow(row);
+    return item.copyWith(isFavorite: _favoriteItemIds.contains(item.id));
   }
 
   List<ListItem> _buildLocalCatalogFallback() {
@@ -2052,6 +2089,8 @@ class AppProvider extends ChangeNotifier {
   }
 
   List<ListItem> get items => isCustomer ? _catalogItems : _items;
+  MarketplaceStatsSnapshot? get marketplaceStats => _marketplaceStats;
+  bool get marketplaceStatsLoading => _marketplaceStatsLoading;
   List<ActiveOrder> get merchantIncomingOrders =>
       List<ActiveOrder>.unmodifiable(_merchantIncomingOrders);
   List<CartItem> get cart => _cart;
@@ -2249,12 +2288,16 @@ class AppProvider extends ChangeNotifier {
 
   void removeFromCart(String id) {
     _cart.removeWhere((i) => i.id == id);
+    if (_cart.isEmpty) {
+      _appliedCartPromo = null;
+    }
     notifyListeners();
   }
 
   void clearCart() {
     if (_cart.isEmpty) return;
     _cart.clear();
+    _appliedCartPromo = null;
     notifyListeners();
   }
 
@@ -2291,6 +2334,64 @@ class AppProvider extends ChangeNotifier {
 
   int get cartTotal =>
       _cart.fold(0, (sum, item) => sum + (item.price * item.count));
+
+  CartPromoDefinition? get appliedCartPromo => _appliedCartPromo;
+
+  int get cartPromoDiscountIqd =>
+      _appliedCartPromo?.discountForSubtotal(cartTotal) ?? 0;
+
+  int get cartPayableTotal => cartTotal - cartPromoDiscountIqd;
+
+  Future<CartPromoApplyResult> applyCartPromoCode(String code) async {
+    final normalized = code.trim();
+    if (normalized.isEmpty) {
+      return const CartPromoApplyResult(
+        success: false,
+        messageAr: 'يرجى إدخال كود الخصم.',
+      );
+    }
+    if (!SupabaseService.isConfigured) {
+      return const CartPromoApplyResult(
+        success: false,
+        messageAr: 'الخدمة غير متاحة حالياً.',
+      );
+    }
+    try {
+      final row = await SupabaseService.validatePromoCode(
+        code: normalized,
+        subtotalIqd: cartTotal,
+      );
+      final valid = row['valid'] == true;
+      if (!valid) {
+        return CartPromoApplyResult(
+          success: false,
+          messageAr: row['messageAr']?.toString() ??
+              'كود الخصم غير صحيح أو منتهي.',
+        );
+      }
+      final promo = CartPromoDefinition.fromMap(row);
+      _appliedCartPromo = promo;
+      notifyListeners();
+      return CartPromoApplyResult(
+        success: true,
+        messageAr: 'تم تطبيق ${promo.labelAr} بنجاح.',
+        promo: promo,
+        discountAmountIqd: promo.discountForSubtotal(cartTotal),
+      );
+    } catch (error) {
+      debugPrint('PROMO_VALIDATE_ERROR: $error');
+      return const CartPromoApplyResult(
+        success: false,
+        messageAr: 'تعذر التحقق من كود الخصم. حاول مجدداً.',
+      );
+    }
+  }
+
+  void clearCartPromo() {
+    if (_appliedCartPromo == null) return;
+    _appliedCartPromo = null;
+    notifyListeners();
+  }
 
   int get cartCount => _cart.fold(0, (sum, item) => sum + item.count);
 
@@ -2738,13 +2839,57 @@ class AppProvider extends ChangeNotifier {
     );
   }
 
-  Future<int> checkout({int deliveryFeeIqd = 0}) async {
+  String _composeCheckoutNoteAr({
+    required String customerNotes,
+    required int deliveryFeeIqd,
+    String? promoCode,
+    required int promoDiscountIqd,
+  }) {
+    final parts = <String>[];
+    if (customerNotes.isNotEmpty) parts.add(customerNotes);
+    if (deliveryFeeIqd > 0) {
+      parts.add('رسوم التوصيل: $deliveryFeeIqd د.ع');
+    }
+    if (promoDiscountIqd > 0 && (promoCode ?? '').isNotEmpty) {
+      parts.add('كود الخصم $promoCode: -$promoDiscountIqd د.ع');
+    }
+    return parts.join('\n');
+  }
+
+  String _composeCheckoutNoteEn({
+    required String customerNotes,
+    required int deliveryFeeIqd,
+    String? promoCode,
+    required int promoDiscountIqd,
+  }) {
+    final parts = <String>[];
+    if (customerNotes.isNotEmpty) parts.add(customerNotes);
+    if (deliveryFeeIqd > 0) {
+      parts.add('Delivery fee: $deliveryFeeIqd IQD');
+    }
+    if (promoDiscountIqd > 0 && (promoCode ?? '').isNotEmpty) {
+      parts.add('Promo $promoCode: -$promoDiscountIqd IQD');
+    }
+    return parts.join('\n');
+  }
+
+  Future<int> checkout({
+    int deliveryFeeIqd = 0,
+    String? orderNotes,
+  }) async {
     if (_cart.isEmpty) return 0;
 
     final customerPhone = _trimmedOrNull(_authPhone);
     if (customerPhone == null) {
       throw StateError(
         'انتهت جلسة تسجيل الدخول. يرجى تسجيل الدخول مرة أخرى قبل إتمام الطلب.',
+      );
+    }
+
+    final promoDiscountTotal = cartPromoDiscountIqd;
+    if (_appliedCartPromo != null && promoDiscountTotal <= 0) {
+      throw StateError(
+        'كود الخصم لم يعد ينطبق على السلة الحالية.',
       );
     }
 
@@ -2758,7 +2903,10 @@ class AppProvider extends ChangeNotifier {
         customerPhone.isNotEmpty ? customerPhone : _trimmedOrNull(_customerPhone) ?? '';
 
     var createdCount = 0;
+    var remainingPromoDiscount = promoDiscountTotal;
     final stagedOrders = <({ActiveOrder order, List<CartItem> items})>[];
+    final trimmedNotes = orderNotes?.trim() ?? '';
+    final promoCode = _appliedCartPromo?.code;
 
     for (final entry in grouped.entries) {
       final items = entry.value;
@@ -2809,7 +2957,25 @@ class AppProvider extends ChangeNotifier {
           : (_customerAddress.isNotEmpty ? _customerAddress : 'Location not set');
 
       final orderDeliveryFee = createdCount == 0 ? deliveryFeeIqd : 0;
-      final totalPrice = subtotal + (orderDeliveryFee > 0 ? orderDeliveryFee : 0);
+      final orderPromoDiscount = createdCount == 0
+          ? remainingPromoDiscount.clamp(0, subtotal)
+          : 0;
+      remainingPromoDiscount -= orderPromoDiscount;
+      final totalPrice = subtotal +
+          (orderDeliveryFee > 0 ? orderDeliveryFee : 0) -
+          orderPromoDiscount;
+      final orderNoteAr = _composeCheckoutNoteAr(
+        customerNotes: trimmedNotes,
+        deliveryFeeIqd: orderDeliveryFee,
+        promoCode: orderPromoDiscount > 0 ? promoCode : null,
+        promoDiscountIqd: orderPromoDiscount,
+      );
+      final orderNoteEn = _composeCheckoutNoteEn(
+        customerNotes: trimmedNotes,
+        deliveryFeeIqd: orderDeliveryFee,
+        promoCode: orderPromoDiscount > 0 ? promoCode : null,
+        promoDiscountIqd: orderPromoDiscount,
+      );
       final newOrder = ActiveOrder(
         id: orderId,
         orderNumber: '#$shortOrder',
@@ -2823,10 +2989,8 @@ class AppProvider extends ChangeNotifier {
         customerPhone: effectiveCustomerPhone,
         addressAr: finalAddressAr,
         addressEn: finalAddressEn,
-        noteAr:
-            orderDeliveryFee > 0 ? 'رسوم التوصيل: $orderDeliveryFee د.ع' : '',
-        noteEn:
-            orderDeliveryFee > 0 ? 'Delivery fee: $orderDeliveryFee IQD' : '',
+        noteAr: orderNoteAr,
+        noteEn: orderNoteEn,
         paymentMethodAr: 'نقداً عند الاستلام',
         paymentMethodEn: 'Cash on Delivery',
         statusKey: 'pending',
@@ -2898,6 +3062,9 @@ class AppProvider extends ChangeNotifier {
           '${item.id}:${item.optionAr ?? ''}:${item.optionEn ?? ''}',
         ),
       );
+      if (_cart.isEmpty) {
+        _appliedCartPromo = null;
+      }
       notifyListeners();
     }
 

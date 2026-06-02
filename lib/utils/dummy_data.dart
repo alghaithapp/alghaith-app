@@ -1,68 +1,9 @@
 import '../models/app_models.dart';
+import '../core/catalog/marketplace_catalog.dart';
 
 class DummyData {
-  static final List<ServiceCategory> categories = [
-    ServiceCategory(
-      id: 'restaurant',
-      titleAr: 'المطاعم',
-      titleEn: 'Restaurants',
-      image: 'assets/images/cat_restaurant.png',
-    ),
-    ServiceCategory(
-      id: 'product',
-      titleAr: 'التسوق',
-      titleEn: 'Shopping',
-      image: 'assets/images/cat_shopping.png',
-    ),
-    ServiceCategory(
-      id: 'cars',
-      titleAr: 'السيارات',
-      titleEn: 'Cars',
-      image: 'assets/images/cat_cars.png',
-    ),
-    ServiceCategory(
-      id: 'professionals',
-      titleAr: 'المهنيين',
-      titleEn: 'Professionals',
-      image: 'assets/images/cat_professionals.png',
-    ),
-    ServiceCategory(
-      id: 'beauty',
-      titleAr: 'الصحة والجمال',
-      titleEn: 'Health & Beauty',
-      image: 'assets/images/cat_beauty.png',
-    ),
-    ServiceCategory(
-      id: 'tourism',
-      titleAr: 'السياحة والسفر',
-      titleEn: 'Tourism & Travel',
-      image: 'assets/images/cat_tourism.png',
-    ),
-    ServiceCategory(
-      id: 'real_estate',
-      titleAr: 'العقارات',
-      titleEn: 'Real Estate',
-      image: 'assets/images/cat_real_estate.png',
-    ),
-    ServiceCategory(
-      id: 'offers',
-      titleAr: 'العروض والخصومات',
-      titleEn: 'Offers',
-      image: 'assets/images/cat_offers.png',
-    ),
-    ServiceCategory(
-      id: 'global_shopping',
-      titleAr: 'التسوق العالمي',
-      titleEn: 'Global Shopping',
-      image: 'assets/images/cat_global.png',
-    ),
-    ServiceCategory(
-      id: 'used',
-      titleAr: 'المنتجات المستعملة',
-      titleEn: 'Used Products',
-      image: 'assets/images/cat_used.png',
-    ),
-  ];
+  static List<ServiceCategory> get categories =>
+      MarketplaceCatalog.homeCategories;
 
   static final List<ServiceCategory> shoppingSubCategories = [
     ServiceCategory(

@@ -11,6 +11,7 @@ import '../core/config/app_config.dart';
 import '../models/app_models.dart';
 import '../utils/extensions.dart';
 import '../widgets/app_image.dart';
+import 'catalog_search_screen.dart';
 
 const _brandRed = Color(0xFFE60012);
 const _brandRedGradient = LinearGradient(
@@ -30,6 +31,7 @@ class _CartScreenState extends State<CartScreen> {
   bool _isCheckingOut = false;
   bool _isLocating = false;
   bool _isCalculatingDelivery = false;
+  bool _isApplyingPromo = false;
   int _deliveryFeeIqd = 0;
   double? _deliveryDistanceKm;
   String? _lastAutoCalcSignature;
@@ -38,6 +40,7 @@ class _CartScreenState extends State<CartScreen> {
   // 1: Normal, 2: Fast
   int _deliveryOption = 1;
 
+  final ScrollController _scrollController = ScrollController();
   final TextEditingController _notesController = TextEditingController();
   final TextEditingController _promoController = TextEditingController();
 
@@ -47,6 +50,10 @@ class _CartScreenState extends State<CartScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       final provider = context.read<AppProvider>();
+      final appliedPromo = provider.appliedCartPromo;
+      if (appliedPromo != null) {
+        _promoController.text = appliedPromo.code;
+      }
       if (provider.cart.isNotEmpty && provider.customerAddress.trim().isNotEmpty) {
         unawaited(_recalculateDeliveryFee(provider));
       }
@@ -55,9 +62,62 @@ class _CartScreenState extends State<CartScreen> {
 
   @override
   void dispose() {
+    _scrollController.dispose();
     _notesController.dispose();
     _promoController.dispose();
     super.dispose();
+  }
+
+  Future<void> _applyPromoCode(AppProvider provider) async {
+    if (_isApplyingPromo) return;
+    final code = _promoController.text.trim();
+    if (provider.appliedCartPromo != null &&
+        provider.appliedCartPromo!.code.toUpperCase() == code.toUpperCase()) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'كود الخصم مطبّق بالفعل.',
+            style: TextStyle(fontFamily: 'Cairo'),
+          ),
+        ),
+      );
+      return;
+    }
+    setState(() => _isApplyingPromo = true);
+    try {
+      final result = await provider.applyCartPromoCode(code);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            result.messageAr,
+            style: const TextStyle(fontFamily: 'Cairo'),
+          ),
+          backgroundColor: result.success ? const Color(0xFF15803D) : null,
+        ),
+      );
+      if (result.success && result.promo != null) {
+        _promoController.text = result.promo!.code;
+      }
+    } finally {
+      if (mounted) setState(() => _isApplyingPromo = false);
+    }
+  }
+
+  void _onHeaderCartTap(AppProvider provider) {
+    if (_scrollController.hasClients && _scrollController.offset > 80) {
+      unawaited(
+        _scrollController.animateTo(
+          0,
+          duration: const Duration(milliseconds: 350),
+          curve: Curves.easeOutCubic,
+        ),
+      );
+      return;
+    }
+    Navigator.of(context).push(
+      CupertinoPageRoute(builder: (_) => const CatalogSearchScreen()),
+    );
   }
 
   String _merchantAddress(List<dynamic> cart) {
@@ -357,6 +417,7 @@ class _CartScreenState extends State<CartScreen> {
     try {
       final count = await appProvider.checkout(
         deliveryFeeIqd: _deliveryOption == 2 ? (_deliveryFeeIqd + 2000) : _deliveryFeeIqd,
+        orderNotes: _notesController.text.trim(),
       );
       if (!mounted || count == 0) return;
       await showCupertinoDialog(
@@ -399,19 +460,22 @@ class _CartScreenState extends State<CartScreen> {
     final restaurantName = cart.isNotEmpty ? (cart.first.merchantStoreName ?? 'المطعم') : '';
     
     final finalDeliveryFee = _deliveryOption == 2 ? (_deliveryFeeIqd + 2000) : _deliveryFeeIqd;
-    final totalAmount = appProvider.cartTotal + finalDeliveryFee;
+    final subtotal = appProvider.cartTotal;
+    final promoDiscount = appProvider.cartPromoDiscountIqd;
+    final totalAmount = subtotal - promoDiscount + finalDeliveryFee;
 
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
         backgroundColor: Colors.white,
-        body: cart.isEmpty ? _buildEmptyState() : Stack(
+        body: cart.isEmpty ? _buildEmptyState(appProvider) : Stack(
           children: [
             Column(
               children: [
-                _buildHeader(context, cart.length, restaurantName),
+                _buildHeader(context, cart.length, restaurantName, appProvider),
                 Expanded(
                   child: ListView(
+                    controller: _scrollController,
                     padding: const EdgeInsets.fromLTRB(20, 0, 20, 170),
                     children: [
                       ...cart.map((item) => _CartItemCard(
@@ -432,9 +496,15 @@ class _CartScreenState extends State<CartScreen> {
                       const SizedBox(height: 24),
                       _buildDeliveryOptions(),
                       const SizedBox(height: 24),
-                      _buildOrderSummary(appProvider.cartTotal, finalDeliveryFee, totalAmount),
+                      _buildPromoSection(appProvider),
                       const SizedBox(height: 24),
-                      _buildPromoSection(),
+                      _buildOrderSummary(
+                        subtotal,
+                        promoDiscount,
+                        finalDeliveryFee,
+                        totalAmount,
+                        appProvider.appliedCartPromo?.labelAr,
+                      ),
                       const SizedBox(height: 24),
                       _buildNotesSection(),
                       const SizedBox(height: 24),
@@ -452,73 +522,87 @@ class _CartScreenState extends State<CartScreen> {
     );
   }
 
-  Widget _buildHeader(BuildContext context, int count, String restaurant) {
+  Widget _buildHeader(
+    BuildContext context,
+    int count,
+    String restaurant,
+    AppProvider provider,
+  ) {
     return Container(
-      padding: EdgeInsets.only(top: MediaQuery.of(context).padding.top + 10, bottom: 20),
+      padding: EdgeInsets.only(
+        top: MediaQuery.of(context).padding.top + 10,
+        bottom: 20,
+        left: 16,
+        right: 16,
+      ),
       color: Colors.white,
-      child: Stack(
-        alignment: Alignment.center,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Positioned(
-            right: 16,
-            child: _CircleIconButton(
-              icon: Icons.arrow_forward_ios_rounded,
-              onTap: () => Navigator.pop(context),
+          _CircleIconButton(
+            icon: Icons.arrow_forward_ios_rounded,
+            onTap: () => Navigator.pop(context),
+          ),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text(
+                    'سلة المشتريات',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontFamily: 'Cairo',
+                      fontWeight: FontWeight.w900,
+                      fontSize: 24,
+                      color: Color(0xFF1A1A1A),
+                    ),
+                  ),
+                  if (count > 0 && restaurant.isNotEmpty)
+                    Text(
+                      '$count ${count == 1 ? 'صنف' : 'أصناف'} من $restaurant',
+                      textAlign: TextAlign.center,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontFamily: 'Cairo',
+                        fontSize: 13,
+                        color: Colors.grey.shade600,
+                      ),
+                    ),
+                ],
+              ),
             ),
           ),
-          Column(
+          Stack(
+            clipBehavior: Clip.none,
             children: [
-              const Text(
-                'سلة المشتريات',
-                style: TextStyle(
-                  fontFamily: 'Cairo',
-                  fontWeight: FontWeight.w900,
-                  fontSize: 24,
-                  color: Color(0xFF1A1A1A),
-                ),
+              _CircleIconButton(
+                icon: Icons.shopping_cart_outlined,
+                onTap: () => _onHeaderCartTap(provider),
               ),
-              if (count > 0 && restaurant.isNotEmpty)
-                Text(
-                  '$count ${count == 1 ? 'صنف' : 'أصناف'} من $restaurant',
-                  style: TextStyle(
-                    fontFamily: 'Cairo',
-                    fontSize: 13,
-                    color: Colors.grey.shade600,
-                  ),
-                ),
-            ],
-          ),
-          Positioned(
-            left: 16,
-            child: Stack(
-              clipBehavior: Clip.none,
-              children: [
-                _CircleIconButton(
-                  icon: Icons.shopping_cart_outlined,
-                  onTap: () {},
-                ),
-                if (count > 0)
-                  Positioned(
-                    top: -2,
-                    right: -2,
-                    child: Container(
-                      padding: const EdgeInsets.all(5),
-                      decoration: const BoxDecoration(
-                        color: _brandRed,
-                        shape: BoxShape.circle,
-                      ),
-                      child: Text(
-                        '$count',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
-                        ),
+              if (count > 0)
+                Positioned(
+                  top: -2,
+                  left: -2,
+                  child: Container(
+                    padding: const EdgeInsets.all(5),
+                    decoration: const BoxDecoration(
+                      color: _brandRed,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Text(
+                      '$count',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
                       ),
                     ),
                   ),
-              ],
-            ),
+                ),
+            ],
           ),
         ],
       ),
@@ -717,7 +801,10 @@ class _CartScreenState extends State<CartScreen> {
     );
   }
 
-  Widget _buildPromoSection() {
+  Widget _buildPromoSection(AppProvider provider) {
+    final appliedPromo = provider.appliedCartPromo;
+    final discount = provider.cartPromoDiscountIqd;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -740,6 +827,9 @@ class _CartScreenState extends State<CartScreen> {
               Expanded(
                 child: TextField(
                   controller: _promoController,
+                  enabled: !_isApplyingPromo,
+                  textCapitalization: TextCapitalization.characters,
+                  onSubmitted: (_) => _applyPromoCode(provider),
                   decoration: const InputDecoration(
                     hintText: 'أدخل رمز الخصم',
                     hintStyle: TextStyle(fontFamily: 'Cairo', fontSize: 14, color: Colors.grey),
@@ -747,15 +837,45 @@ class _CartScreenState extends State<CartScreen> {
                   ),
                 ),
               ),
-              _SmallButton(
-                label: 'تطبيق',
-                color: _brandRed,
-                textColor: Colors.white,
-                onTap: () {},
+              const SizedBox(width: 8),
+              SizedBox(
+                width: 72,
+                child: _SmallButton(
+                  label: provider.appliedCartPromo != null ? 'إزالة' : 'تطبيق',
+                  color: provider.appliedCartPromo != null
+                      ? Colors.grey.shade100
+                      : _brandRed,
+                  textColor: provider.appliedCartPromo != null
+                      ? Colors.black87
+                      : Colors.white,
+                  border: provider.appliedCartPromo != null,
+                  isLoading: _isApplyingPromo,
+                  onTap: () {
+                    if (provider.appliedCartPromo != null) {
+                      provider.clearCartPromo();
+                      _promoController.clear();
+                      return;
+                    }
+                    unawaited(_applyPromoCode(provider));
+                  },
+                ),
               ),
             ],
           ),
         ),
+        if (appliedPromo != null && discount > 0)
+          Padding(
+            padding: const EdgeInsets.only(top: 10),
+            child: Text(
+              '${appliedPromo.labelAr} (-${discount.toPrice()} \u062f.\u0639)',
+              style: const TextStyle(
+                fontFamily: 'Cairo',
+                fontWeight: FontWeight.w700,
+                fontSize: 13,
+                color: Color(0xFF166534),
+              ),
+            ),
+          ),
       ],
     );
   }
@@ -792,7 +912,13 @@ class _CartScreenState extends State<CartScreen> {
     );
   }
 
-  Widget _buildOrderSummary(int subtotal, int delivery, int total) {
+  Widget _buildOrderSummary(
+    int subtotal,
+    int promoDiscount,
+    int delivery,
+    int total,
+    String? promoLabel,
+  ) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -813,6 +939,14 @@ class _CartScreenState extends State<CartScreen> {
           child: Column(
             children: [
               _SummaryRow(label: 'المجموع الفرعي', value: '${subtotal.toPrice()} د.ع'),
+              if (promoDiscount > 0) ...[
+                const SizedBox(height: 14),
+                _SummaryRow(
+                  label: promoLabel ?? '\u062e\u0635\u0645',
+                  value: '-${promoDiscount.toPrice()} د.ع',
+                  valueColor: const Color(0xFF15803D),
+                ),
+              ],
               const SizedBox(height: 14),
               _SummaryRow(
                 label: 'رسوم التوصيل', 
@@ -977,10 +1111,10 @@ class _CartScreenState extends State<CartScreen> {
     );
   }
 
-  Widget _buildEmptyState() {
+  Widget _buildEmptyState(AppProvider provider) {
     return Column(
       children: [
-        _buildHeader(context, 0, ''),
+        _buildHeader(context, 0, '', provider),
         Expanded(
           child: Center(
             child: Padding(

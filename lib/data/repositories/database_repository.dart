@@ -100,6 +100,62 @@ class DatabaseRepository {
         .toList();
   }
 
+  Future<List<Map<String, dynamic>>> loadServiceStores({
+    required String serviceId,
+    String? productCategory,
+    String? subCategoryId,
+  }) async {
+    final result = await ApiClient.instance.get(
+      '/db/service-stores',
+      queryParameters: {
+        'serviceId': serviceId.trim(),
+        if (productCategory != null && productCategory.trim().isNotEmpty)
+          'productCategory': productCategory.trim(),
+        if (subCategoryId != null && subCategoryId.trim().isNotEmpty)
+          'subCategoryId': subCategoryId.trim(),
+      },
+    );
+    if (result is! List) return const [];
+    return result
+        .whereType<Map>()
+        .map((item) => Map<String, dynamic>.from(item))
+        .toList();
+  }
+
+  Future<List<Map<String, dynamic>>> loadOffersCatalog() async {
+    final result = await ApiClient.instance.get('/db/offers-catalog');
+    if (result is! List) return const [];
+    return result
+        .whereType<Map>()
+        .map((item) => Map<String, dynamic>.from(item))
+        .toList();
+  }
+
+  Future<Map<String, dynamic>> loadMarketplaceStats() async {
+    final result = await ApiClient.instance.get('/db/marketplace-stats');
+    if (result is Map) {
+      return Map<String, dynamic>.from(result);
+    }
+    return const {};
+  }
+
+  Future<Map<String, dynamic>> validatePromoCode({
+    required String code,
+    required int subtotalIqd,
+  }) async {
+    final result = await ApiClient.instance.post(
+      '/db/validate-promo',
+      body: {
+        'code': code.trim(),
+        'subtotalIqd': subtotalIqd,
+      },
+    );
+    if (result is Map) {
+      return Map<String, dynamic>.from(result);
+    }
+    return const {'valid': false, 'messageAr': 'تعذر التحقق من كود الخصم.'};
+  }
+
   Future<List<Map<String, dynamic>>> loadCatalog({
     String? category,
     String? subCategoryId,

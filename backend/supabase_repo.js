@@ -1357,6 +1357,236 @@ async function listShoppingStores(subCategoryId = '') {
   });
 }
 
+async function listServiceStores(serviceId = '', productCategory = '', subCategoryId = '') {
+  const normalizedService = String(serviceId || '').trim();
+  const normalizedCategory = String(productCategory || normalizedService).trim();
+  if (!normalizedService) return [];
+  return listMerchantStoresByService({
+    serviceId: normalizedService,
+    productCategory: normalizedCategory,
+    subCategoryId,
+  });
+}
+
+async function listOfferCatalogProducts() {
+  const stateRows = await selectMany('app_state');
+  const offersByPhone = new Map();
+
+  for (const row of stateRows) {
+    const state = row.state && typeof row.state === 'object' ? row.state : {};
+    const offers = Array.isArray(state.merchantOffers) ? state.merchantOffers : [];
+    const activeOffers = offers.filter(
+      (offer) => offer && offer.isActive !== false
+    );
+    if (!activeOffers.length) continue;
+    const phone = String(row.phone || '').trim();
+    if (phone) offersByPhone.set(phone, activeOffers);
+  }
+
+  if (offersByPhone.size === 0) {
+    return listCatalogProducts('offers', '');
+  }
+
+  const products = await listCatalogProducts('', '');
+  const result = [];
+
+  for (const product of products) {
+    const phone = String(product.merchant_phone || product.phone || '').trim();
+    const phoneVariants = getPhoneVariants(phone);
+    let matchedOffers = [];
+    for (const variant of phoneVariants) {
+      if (offersByPhone.has(variant)) {
+        matchedOffers = offersByPhone.get(variant);
+        break;
+      }
+    }
+    if (!matchedOffers.length) continue;
+
+    const nameAr = String(product.name_ar || '').trim();
+    let bestOffer = null;
+    for (const offer of matchedOffers) {
+      const names = Array.isArray(offer.productNamesAr)
+        ? offer.productNamesAr
+        : [];
+      const matches =
+        names.length === 0 ||
+        names.some((name) => {
+          const label = String(name || '').trim();
+          return label && nameAr.includes(label);
+        });
+      if (!matches) continue;
+      const discount = Number(offer.discountPercent || 0);
+      if (
+        !bestOffer ||
+        discount > Number(bestOffer.discountPercent || 0)
+      ) {
+        bestOffer = offer;
+      }
+    }
+    if (!bestOffer) continue;
+
+    const price = Number(product.price || 0);
+    const discount = Number(bestOffer.discountPercent || 0);
+    const discountedPrice = Math.max(
+      0,
+      Math.round((price * (100 - discount)) / 100)
+    );
+    result.push({
+      ...product,
+      category: product.category || 'offers',
+      offer_title_ar: bestOffer.titleAr || '',
+      offer_discount_percent: discount,
+      original_price: price,
+      discounted_price: discountedPrice,
+    });
+  }
+
+  return result.sort(
+    (a, b) => Number(b.offer_discount_percent || 0) - Number(a.offer_discount_percent || 0)
+  );
+}
+
+const MARKETPLACE_CATEGORY_DEFS = [
+  { id: 'restaurant', serviceId: 'restaurant', productCategory: 'restaurant' },
+  { id: 'product', serviceId: 'product', productCategory: 'product' },
+  { id: 'tourism', serviceId: 'tourism', productCategory: 'tourism' },
+  { id: 'beauty', serviceId: 'beauty', productCategory: 'beauty' },
+  { id: 'used', serviceId: 'used', productCategory: 'used' },
+  { id: 'offers', serviceId: 'offers', productCategory: 'offers' },
+  { id: 'cars', serviceId: 'cars', productCategory: 'cars' },
+  { id: 'real_estate', serviceId: 'real_estate', productCategory: 'real_estate' },
+  { id: 'global_shopping', serviceId: 'product', productCategory: 'product' },
+];
+
+async function getMarketplaceStats() {
+  const profiles = await selectMany('merchant_profiles');
+  const openProfiles = profiles.filter((row) => row.is_open !== false);
+  const products = await selectMany(
+    'merchant_products',
+    [],
+    { column: 'created_at', ascending: false }
+  );
+  const availableProducts = products.filter((row) => row.is_available !== false);
+  const profileByPhone = buildProfileByPhoneMap(openProfiles);
+
+  const storeCountByService = {};
+  for (const def of MARKETPLACE_CATEGORY_DEFS) {
+    const stores = await listMerchantStoresByService({
+      serviceId: def.serviceId,
+      productCategory: def.productCategory,
+      subCategoryId: '',
+    });
+    storeCountByService[def.id] = stores.length;
+  }
+
+  const categories = MARKETPLACE_CATEGORY_DEFS.map((def) => {
+    const categoryProducts = availableProducts.filter((row) => {
+      const productService = String(row.category || row.service_id || '').trim();
+      if (productService !== def.productCategory) return false;
+      const phone = String(row.phone || '').trim();
+      const profile = findProfileForPhone(profileByPhone, phone);
+      if (!profile) return false;
+      const serviceIds = profileServiceIds(profile);
+      if (
+        def.serviceId &&
+        !serviceIds.includes(def.serviceId) &&
+        productService !== def.serviceId
+      ) {
+        return false;
+      }
+      return true;
+    });
+
+    const subCategoryCounts = {};
+    for (const row of categoryProducts) {
+      const subId = String(row.sub_category || '').trim() || '_all';
+      subCategoryCounts[subId] = (subCategoryCounts[subId] || 0) + 1;
+    }
+
+    return {
+      id: def.id,
+      storeCount: storeCountByService[def.id] || 0,
+      productCount: categoryProducts.length,
+      subCategories: Object.entries(subCategoryCounts).map(([id, count]) => ({
+        id: id === '_all' ? '' : id,
+        productCount: count,
+      })),
+    };
+  });
+
+  const resolvedCategories = await Promise.all(
+    categories.map(async (entry) => {
+      const def = MARKETPLACE_CATEGORY_DEFS.find((item) => item.id === entry.id);
+      const subCategories = await Promise.all(
+        entry.subCategories.map(async (sub) => {
+          if (!sub.id || !def) {
+            return { ...sub, storeCount: entry.storeCount };
+          }
+          const stores = await listMerchantStoresByService({
+            serviceId: def.serviceId,
+            productCategory: def.productCategory,
+            subCategoryId: sub.id,
+          });
+          return {
+            ...sub,
+            storeCount: stores.length,
+          };
+        })
+      );
+      return {
+        ...entry,
+        subCategories,
+        totalCount: Math.max(entry.storeCount, entry.productCount),
+      };
+    })
+  );
+
+  let offerCount = 0;
+  try {
+    const offers = await listOfferCatalogProducts();
+    offerCount = offers.length;
+  } catch (_) {
+    offerCount = 0;
+  }
+
+  const professionals = await listProfessionalProfiles('');
+  const realEstate = await listRealEstateListings('');
+
+  return {
+    categories: [
+      ...resolvedCategories.map((entry) => {
+        if (entry.id === 'offers') {
+          return {
+            ...entry,
+            productCount: offerCount,
+            totalCount: offerCount,
+          };
+        }
+        if (entry.id === 'real_estate') {
+          return {
+            ...entry,
+            storeCount: realEstate.length,
+            productCount: realEstate.length,
+            totalCount: realEstate.length,
+          };
+        }
+        return entry;
+      }),
+      {
+        id: 'professionals',
+        storeCount: professionals.length,
+        productCount: professionals.length,
+        totalCount: professionals.length,
+        subCategories: [],
+      },
+    ],
+    offerCount,
+    professionalCount: professionals.length,
+    realEstateCount: realEstate.length,
+    updatedAt: nowIso(),
+  };
+}
+
 async function listRestaurantStores(subCategoryId = '') {
   return listMerchantStoresByService({
     serviceId: 'restaurant',
@@ -1403,6 +1633,13 @@ async function listCatalogProducts(category = '', subCategoryId = '') {
         categoryFilter === 'restaurant' &&
         !serviceIds.includes('restaurant') &&
         productService !== 'restaurant'
+      ) {
+        return false;
+      }
+      if (
+        ['tourism', 'beauty', 'used', 'offers', 'cars'].includes(categoryFilter) &&
+        !serviceIds.includes(categoryFilter) &&
+        productService !== categoryFilter
       ) {
         return false;
       }
@@ -1495,7 +1732,10 @@ module.exports = {
   listProfessionalProfiles,
   listShoppingStores,
   listRestaurantStores,
+  listServiceStores,
   listCatalogProducts,
+  listOfferCatalogProducts,
+  getMarketplaceStats,
   listRealEstateListings,
   getMerchantIncomingOrders,
   updateIncomingOrderStatus,

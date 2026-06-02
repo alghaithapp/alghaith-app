@@ -51,6 +51,29 @@ class SupabaseService {
   }) =>
       _db.loadRestaurantStores(subCategoryId: subCategoryId);
 
+  static Future<List<Map<String, dynamic>>> loadServiceStores({
+    required String serviceId,
+    String? productCategory,
+    String? subCategoryId,
+  }) =>
+      _db.loadServiceStores(
+        serviceId: serviceId,
+        productCategory: productCategory,
+        subCategoryId: subCategoryId,
+      );
+
+  static Future<List<Map<String, dynamic>>> loadOffersCatalog() =>
+      _db.loadOffersCatalog();
+
+  static Future<Map<String, dynamic>> loadMarketplaceStats() =>
+      _db.loadMarketplaceStats();
+
+  static Future<Map<String, dynamic>> validatePromoCode({
+    required String code,
+    required int subtotalIqd,
+  }) =>
+      _db.validatePromoCode(code: code, subtotalIqd: subtotalIqd);
+
   static Future<List<Map<String, dynamic>>> loadCatalog({
     String? category,
     String? subCategoryId,

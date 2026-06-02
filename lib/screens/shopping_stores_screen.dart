@@ -16,11 +16,21 @@ enum MerchantStoreKind { shopping, restaurant }
 class ShoppingStoresScreen extends StatefulWidget {
   final ServiceCategory? subCategory;
   final MerchantStoreKind storeKind;
+  final String? serviceId;
+  final String? productCategory;
+  final String? titleAr;
+  final String? subtitleAr;
+  final bool showCuisineFilters;
 
   const ShoppingStoresScreen({
     super.key,
     this.subCategory,
     this.storeKind = MerchantStoreKind.shopping,
+    this.serviceId,
+    this.productCategory,
+    this.titleAr,
+    this.subtitleAr,
+    this.showCuisineFilters = false,
   });
 
   @override
@@ -39,6 +49,13 @@ class _ShoppingStoresScreenState extends State<ShoppingStoresScreen> {
   ];
 
   Future<List<Map<String, dynamic>>> _loadStores() {
+    if (widget.serviceId != null && widget.serviceId!.trim().isNotEmpty) {
+      return SupabaseService.loadServiceStores(
+        serviceId: widget.serviceId!,
+        productCategory: widget.productCategory ?? widget.serviceId,
+        subCategoryId: widget.subCategory?.id,
+      );
+    }
     if (widget.storeKind == MerchantStoreKind.restaurant) {
       return SupabaseService.loadRestaurantStores(
         subCategoryId: widget.subCategory?.id,
@@ -72,6 +89,14 @@ class _ShoppingStoresScreenState extends State<ShoppingStoresScreen> {
     final appProvider = context.watch<AppProvider>();
     final query = _searchController.text.trim().toLowerCase();
     final primaryRed = const Color(0xFFE60012);
+    final headerTitle = widget.titleAr ??
+        (widget.storeKind == MerchantStoreKind.restaurant
+            ? 'المطاعم'
+            : 'المتاجر');
+    final headerSubtitle = widget.subtitleAr ??
+        (widget.storeKind == MerchantStoreKind.restaurant
+            ? 'اختر مطعمك المفضل واطلب بسهولة'
+            : 'اختر متجرك واطلب بسهولة');
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -98,8 +123,8 @@ class _ShoppingStoresScreenState extends State<ShoppingStoresScreen> {
                             ),
                             Column(
                               children: [
-                                const Text(
-                                  'المطاعم',
+                                Text(
+                                  headerTitle,
                                   style: TextStyle(
                                     fontFamily: 'Cairo',
                                     fontSize: 24,
@@ -108,7 +133,7 @@ class _ShoppingStoresScreenState extends State<ShoppingStoresScreen> {
                                   ),
                                 ),
                                 Text(
-                                  'اختر مطعمك المفضل واطلب بسهولة',
+                                  headerSubtitle,
                                   style: TextStyle(
                                     fontFamily: 'Cairo',
                                     fontSize: 13,
@@ -137,46 +162,64 @@ class _ShoppingStoresScreenState extends State<ShoppingStoresScreen> {
                 ),
 
                 // 2. Category Filters
-                SliverToBoxAdapter(
-                  child: Container(
-                    height: 55,
-                    margin: const EdgeInsets.symmetric(vertical: 10),
-                    child: ListView.builder(
-                      scrollDirection: Axis.horizontal,
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      itemCount: _filters.length,
-                      itemBuilder: (context, index) {
-                        final filter = _filters[index];
-                        final isSelected = _selectedFilter == filter;
-                        return GestureDetector(
-                          onTap: () => setState(() => _selectedFilter = filter),
-                          child: AnimatedContainer(
-                            duration: const Duration(milliseconds: 300),
-                            margin: const EdgeInsets.symmetric(horizontal: 5, vertical: 5),
-                            padding: const EdgeInsets.symmetric(horizontal: 20),
-                            decoration: BoxDecoration(
-                              color: isSelected ? primaryRed : const Color(0xFFF5F5F5),
-                              borderRadius: BorderRadius.circular(25),
-                              boxShadow: isSelected
-                                  ? [BoxShadow(color: primaryRed.withValues(alpha: 0.3), blurRadius: 8, offset: const Offset(0, 4))]
-                                  : null,
-                            ),
-                            alignment: Alignment.center,
-                            child: Text(
-                              filter,
-                              style: TextStyle(
-                                fontFamily: 'Cairo',
-                                fontWeight: FontWeight.bold,
-                                fontSize: 13,
-                                color: isSelected ? Colors.white : const Color(0xFF4A4A4A),
+                if (widget.showCuisineFilters)
+                  SliverToBoxAdapter(
+                    child: Container(
+                      height: 55,
+                      margin: const EdgeInsets.symmetric(vertical: 10),
+                      child: ListView.builder(
+                        scrollDirection: Axis.horizontal,
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        itemCount: _filters.length,
+                        itemBuilder: (context, index) {
+                          final filter = _filters[index];
+                          final isSelected = _selectedFilter == filter;
+                          return GestureDetector(
+                            onTap: () =>
+                                setState(() => _selectedFilter = filter),
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 300),
+                              margin: const EdgeInsets.symmetric(
+                                horizontal: 5,
+                                vertical: 5,
+                              ),
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 20),
+                              decoration: BoxDecoration(
+                                color: isSelected
+                                    ? primaryRed
+                                    : const Color(0xFFF5F5F5),
+                                borderRadius: BorderRadius.circular(25),
+                                boxShadow: isSelected
+                                    ? [
+                                        BoxShadow(
+                                          color: primaryRed.withValues(
+                                            alpha: 0.3,
+                                          ),
+                                          blurRadius: 8,
+                                          offset: const Offset(0, 4),
+                                        ),
+                                      ]
+                                    : null,
+                              ),
+                              alignment: Alignment.center,
+                              child: Text(
+                                filter,
+                                style: TextStyle(
+                                  fontFamily: 'Cairo',
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 13,
+                                  color: isSelected
+                                      ? Colors.white
+                                      : const Color(0xFF4A4A4A),
+                                ),
                               ),
                             ),
-                          ),
-                        );
-                      },
+                          );
+                        },
+                      ),
                     ),
                   ),
-                ),
 
                 // 3. Restaurants List
                 FutureBuilder<List<Map<String, dynamic>>>(
@@ -209,7 +252,9 @@ class _ShoppingStoresScreenState extends State<ShoppingStoresScreen> {
                       final resCat = p['restaurantCategory']?.toString() ?? '';
                       
                       final matchesQuery = name.contains(query) || desc.contains(query);
-                      final matchesFilter = _selectedFilter == 'الكل' || resCat == _selectedFilter;
+                      final matchesFilter = !widget.showCuisineFilters ||
+                          _selectedFilter == 'الكل' ||
+                          resCat == _selectedFilter;
 
                       return matchesQuery && matchesFilter;
                     }).toList();
