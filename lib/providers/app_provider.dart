@@ -390,7 +390,10 @@ class AppProvider extends ChangeNotifier {
 
   void setGuestMode() {
     _isGuestMode = true;
-    _userRole = 'customer'; // نعامل الزائر كزبون في الواجهة الرئيسية
+    _userRole = 'customer';
+    _authPhone = null;
+    _sessionToken = null;
+    SupabaseService.setSessionToken(null);
     _isHydrating = false;
     _isReady = true;
     notifyListeners();
@@ -1291,6 +1294,7 @@ class AppProvider extends ChangeNotifier {
       'isOpen': row['is_open'] as bool? ?? true,
       'serviceIds': _decodeStringList(row['service_ids']),
       'activeServiceId': row['active_service_id']?.toString(),
+      'restaurantCategory': row['restaurant_category']?.toString(),
       'professionalCategoryId': row['professional_category_id']?.toString(),
       'professionalInfo': row['professional_info'],
       'profileImageBase64': row['profile_image_base64']?.toString(),
@@ -1576,6 +1580,7 @@ class AppProvider extends ChangeNotifier {
           'is_open': _merchantStore?['isOpen'] ?? _merchantStore?['is_open'] ?? true,
           'service_ids': serviceIds,
           'active_service_id': _merchantStore?['activeServiceId'],
+          'restaurant_category': _merchantStore?['restaurantCategory'],
           'professional_category_id': _merchantStore?['professionalCategoryId'],
           'professional_info': _merchantStore?['professionalInfo'],
           'work_sample_images_base64':
@@ -1830,6 +1835,7 @@ class AppProvider extends ChangeNotifier {
           : 0.0,
       'serviceIds': normalizedServiceIds,
       'activeServiceId': activeServiceId,
+      'restaurantCategory': storeData['restaurantCategory']?.toString(),
       if (storeData['professionalCategoryId'] != null)
         'professionalCategoryId': storeData['professionalCategoryId'],
       if (storeData['professionalInfo'] is Map &&
@@ -2241,6 +2247,12 @@ class AppProvider extends ChangeNotifier {
 
   void removeFromCart(String id) {
     _cart.removeWhere((i) => i.id == id);
+    notifyListeners();
+  }
+
+  void clearCart() {
+    if (_cart.isEmpty) return;
+    _cart.clear();
     notifyListeners();
   }
 
