@@ -415,6 +415,7 @@ class _CartScreenState extends State<CartScreen> {
                     children: [
                       ...cart.map((item) => _CartItemCard(
                         item: item,
+                        isFavorite: appProvider.isFavoriteId(item.id),
                         onIncrement: () => appProvider.incrementCartItem(item.id),
                         onDecrement: () {
                           if (item.count > 1) {
@@ -423,7 +424,7 @@ class _CartScreenState extends State<CartScreen> {
                             appProvider.removeFromCart(item.id);
                           }
                         },
-                        onFavorite: () => appProvider.toggleFavoriteItem(item),
+                        onFavorite: () => appProvider.toggleFavorite(item.id),
                       )),
                       const SizedBox(height: 12),
                       _buildLocationSection(appProvider),
@@ -975,12 +976,14 @@ class _CartScreenState extends State<CartScreen> {
 
 class _CartItemCard extends StatelessWidget {
   final dynamic item;
+  final bool isFavorite;
   final VoidCallback onIncrement;
   final VoidCallback onDecrement;
   final VoidCallback onFavorite;
 
   const _CartItemCard({
     required this.item,
+    required this.isFavorite,
     required this.onIncrement,
     required this.onDecrement,
     required this.onFavorite,
@@ -1022,8 +1025,8 @@ class _CartItemCard extends StatelessWidget {
                     padding: const EdgeInsets.all(6),
                     decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
                     child: Icon(
-                      item.isFavorite ? Icons.favorite_rounded : Icons.favorite_border_rounded,
-                      color: item.isFavorite ? _brandRed : Colors.grey,
+                      isFavorite ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+                      color: isFavorite ? _brandRed : Colors.grey,
                       size: 16,
                     ),
                   ),
