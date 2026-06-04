@@ -294,12 +294,15 @@ class DatabaseRepository {
 
   Future<List<Map<String, dynamic>>> loadRealEstateListings({
     String? subCategoryId,
+    String? listingMode,
   }) async {
     final result = await ApiClient.instance.get(
       '/db/real-estate-listings',
       queryParameters: {
         if (subCategoryId != null && subCategoryId.trim().isNotEmpty)
           'subCategoryId': subCategoryId.trim(),
+        if (listingMode != null && listingMode.trim().isNotEmpty)
+          'listingMode': listingMode.trim(),
       },
     );
     if (result is! List) return const [];

@@ -13,11 +13,13 @@ import '../widgets/app_image.dart';
 class RealEstateFormScreen extends StatefulWidget {
   final String mode;
   final ListItem? item;
+  final String? initialSubCategoryId;
 
   const RealEstateFormScreen({
     super.key,
     required this.mode,
     this.item,
+    this.initialSubCategoryId,
   });
 
   @override
@@ -49,8 +51,9 @@ class _RealEstateFormScreenState extends State<RealEstateFormScreen> {
     _bedroomsController.text = item?.bedrooms?.toString() ?? '';
     _floorsController.text = item?.floorCount?.toString() ?? '';
     _imageBase64 = item?.imageBase64;
-    _selectedSubCategoryId =
-        item?.subCategory ?? (widget.mode == 'sell' ? 'house' : 'land');
+    _selectedSubCategoryId = item?.subCategory ??
+        widget.initialSubCategoryId ??
+        (widget.mode == 'sell' ? 'house' : 'land');
   }
 
   @override

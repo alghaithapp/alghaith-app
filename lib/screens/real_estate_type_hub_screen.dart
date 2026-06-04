@@ -4,22 +4,68 @@ import 'package:flutter/material.dart';
 import '../models/app_models.dart';
 import '../utils/dummy_data.dart';
 import '../widgets/app_image.dart';
-import 'catalog_products_screen.dart';
+import 'real_estate_form_screen.dart';
+import 'real_estate_listings_screen.dart';
 
-/// أنواع المركبات داخل «طلب سيارة» — الصورة تحمل الاسم في التصميم.
-class CarRequestHubScreen extends StatelessWidget {
-  const CarRequestHubScreen({super.key});
+/// المستوى الثاني: أنواع العقار (دار، أرض، …) حسب شراء/بيع/إيجار.
+class RealEstateTypeHubScreen extends StatelessWidget {
+  final String dealId;
+  final String dealTitleAr;
+
+  const RealEstateTypeHubScreen({
+    super.key,
+    required this.dealId,
+    required this.dealTitleAr,
+  });
+
+  String get _subtitle {
+    switch (dealId) {
+      case 'buy':
+        return 'اختر نوع العقار الذي تبحث عن شرائه';
+      case 'sell':
+        return 'اختر نوع العقار الذي تريد بيعه';
+      case 'rent':
+        return 'اختر نوع العقار الذي تريد استئجاره';
+      default:
+        return 'اختر نوع العقار';
+    }
+  }
+
+  void _openType(BuildContext context, ServiceCategory type) {
+    if (dealId == 'sell') {
+      Navigator.of(context).push(
+        CupertinoPageRoute(
+          builder: (_) => RealEstateFormScreen(
+            mode: 'sell',
+            initialSubCategoryId: type.id,
+          ),
+        ),
+      );
+      return;
+    }
+
+    final listingMode = dealId == 'buy' ? 'sell' : 'rent';
+    Navigator.of(context).push(
+      CupertinoPageRoute(
+        builder: (_) => RealEstateListingsScreen(
+          subCategoryId: type.id,
+          listingMode: listingMode,
+          titleAr: '${dealTitleAr.trim()} — ${type.titleAr}',
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
-    final options = DummyData.carRequestVehicleTypes;
+    final types = DummyData.realEstateSubCategories;
 
     return CupertinoPageScaffold(
       backgroundColor: const Color(0xFFF2F2F7),
-      navigationBar: const CupertinoNavigationBar(
+      navigationBar: CupertinoNavigationBar(
         middle: Text(
-          'طلب سيارة',
-          style: TextStyle(
+          dealTitleAr,
+          style: const TextStyle(
             fontWeight: FontWeight.bold,
             fontFamily: 'Cairo',
           ),
@@ -29,14 +75,14 @@ class CarRequestHubScreen extends StatelessWidget {
         child: CustomScrollView(
           physics: const BouncingScrollPhysics(),
           slivers: [
-            const SliverToBoxAdapter(
+            SliverToBoxAdapter(
               child: Padding(
-                padding: EdgeInsets.fromLTRB(20, 12, 20, 8),
+                padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
                 child: Align(
                   alignment: Alignment.centerRight,
                   child: Text(
-                    'اختر نوع الخدمة — تصفّح إعلانات التجار',
-                    style: TextStyle(
+                    _subtitle,
+                    style: const TextStyle(
                       fontFamily: 'Cairo',
                       fontSize: 14,
                       color: CupertinoColors.systemGrey,
@@ -56,23 +102,13 @@ class CarRequestHubScreen extends StatelessWidget {
                 ),
                 delegate: SliverChildBuilderDelegate(
                   (context, index) {
-                    final option = options[index];
-                    return _CarRequestTypeCard(
-                      option: option,
-                      onTap: () => Navigator.of(context).push(
-                        CupertinoPageRoute(
-                          builder: (_) => CatalogProductsScreen(
-                            category: 'cars',
-                            subCategoryId: option.id,
-                            titleAr: option.titleAr,
-                            subtitleAr:
-                                'إعلانات وخدمات — تواصل مع المعلن عبر واتساب أو الاتصال',
-                          ),
-                        ),
-                      ),
+                    final type = types[index];
+                    return _TypeCard(
+                      type: type,
+                      onTap: () => _openType(context, type),
                     );
                   },
-                  childCount: options.length,
+                  childCount: types.length,
                 ),
               ),
             ),
@@ -83,12 +119,12 @@ class CarRequestHubScreen extends StatelessWidget {
   }
 }
 
-class _CarRequestTypeCard extends StatelessWidget {
-  final ServiceCategory option;
+class _TypeCard extends StatelessWidget {
+  final ServiceCategory type;
   final VoidCallback onTap;
 
-  const _CarRequestTypeCard({
-    required this.option,
+  const _TypeCard({
+    required this.type,
     required this.onTap,
   });
 
@@ -111,7 +147,7 @@ class _CarRequestTypeCard extends StatelessWidget {
         child: ClipRRect(
           borderRadius: BorderRadius.circular(16),
           child: AppImage(
-            imageData: option.image,
+            imageData: type.image,
             width: double.infinity,
             height: double.infinity,
             fit: BoxFit.cover,

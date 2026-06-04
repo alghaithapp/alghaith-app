@@ -9,11 +9,13 @@ import '../widgets/app_image.dart';
 
 class RealEstateListingsScreen extends StatefulWidget {
   final String? subCategoryId;
+  final String? listingMode;
   final String? titleAr;
 
   const RealEstateListingsScreen({
     super.key,
     this.subCategoryId,
+    this.listingMode,
     this.titleAr,
   });
 
@@ -33,6 +35,7 @@ class _RealEstateListingsScreenState extends State<RealEstateListingsScreen> {
     _selectedSubCategoryId = widget.subCategoryId;
     _futureListings = SupabaseService.loadRealEstateListings(
       subCategoryId: _selectedSubCategoryId,
+      listingMode: widget.listingMode,
     );
   }
 
@@ -89,6 +92,7 @@ class _RealEstateListingsScreenState extends State<RealEstateListingsScreen> {
                       _selectedSubCategoryId = selected ? null : filter.id;
                       _futureListings = SupabaseService.loadRealEstateListings(
                         subCategoryId: _selectedSubCategoryId,
+                        listingMode: widget.listingMode,
                       );
                     });
                   },

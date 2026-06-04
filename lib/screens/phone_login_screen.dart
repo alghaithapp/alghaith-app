@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
+import '../core/theme/app_colors.dart';
 import '../providers/app_provider.dart';
 import '../services/phone_auth_api.dart';
 import '../utils/helpers.dart';
@@ -237,7 +238,7 @@ class _LoginBackdrop extends StatelessWidget {
     return Container(
       decoration: const BoxDecoration(
         gradient: LinearGradient(
-          colors: [Color(0xFFFFFCFA), Color(0xFFFFEFE6), Color(0xFFFCE1D6)],
+          colors: [Color(0xFFF8FBFB), Color(0xFFEAF3F3), Color(0xFFDDEDED)],
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
         ),
@@ -249,7 +250,7 @@ class _LoginBackdrop extends StatelessWidget {
             left: -70,
             child: _BlurBlob(
               size: 240,
-              colors: const [Color(0xFFFFE2D3), Color(0xFFFFA46B)],
+              colors: const [Color(0xFFFFE6BF), AppColors.accent],
             ),
           ),
           Positioned(
@@ -257,7 +258,7 @@ class _LoginBackdrop extends StatelessWidget {
             right: -80,
             child: _BlurBlob(
               size: 250,
-              colors: const [Color(0xFFFFD5C6), Color(0xFFE84A3A)],
+              colors: const [Color(0xFFB9DEE0), AppColors.primary],
             ),
           ),
         ],
@@ -324,7 +325,7 @@ class _LoginCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(28),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFFE84A3A).withValues(alpha: 0.10),
+            color: AppColors.primary.withValues(alpha: 0.12),
             blurRadius: 30,
             offset: const Offset(0, 18),
           ),
@@ -342,7 +343,7 @@ class _LoginCard extends StatelessWidget {
               fontSize: 24,
               fontWeight: FontWeight.w900,
               fontFamily: 'Cairo',
-              color: Color(0xFF261816),
+              color: AppColors.primary,
             ),
           ),
           const SizedBox(height: 8),
@@ -352,7 +353,7 @@ class _LoginCard extends StatelessWidget {
             style: TextStyle(
               fontSize: 13.5,
               fontFamily: 'Cairo',
-              color: Color(0xFF7A5A50),
+              color: Color(0xFF5A6B6E),
             ),
           ),
           const SizedBox(height: 20),
@@ -411,7 +412,7 @@ class _LoginCard extends StatelessWidget {
                 fontFamily: 'Cairo',
                 fontSize: 16,
                 fontWeight: FontWeight.w900,
-                color: Color(0xFFE84A3A),
+                color: AppColors.primary,
               ),
             ),
           ),
@@ -433,8 +434,8 @@ class _PhoneField extends StatefulWidget {
 class _PhoneFieldState extends State<_PhoneField> {
   static const _validColor = Color(0xFF16A34A);
   static const _invalidColor = Color(0xFFDC2626);
-  static const _neutralBorderColor = Color(0xFFF2D8CF);
-  static const _neutralTextColor = Color(0xFF261816);
+  static const _neutralBorderColor = Color(0xFFCDE3E5);
+  static const _neutralTextColor = Color(0xFF1A1A1A);
 
   @override
   void initState() {
@@ -471,7 +472,7 @@ class _PhoneFieldState extends State<_PhoneField> {
         ? _validColor
         : hasInput
             ? _invalidColor
-            : const Color(0xFFE84A3A);
+            : AppColors.accent;
 
     return AnimatedContainer(
       duration: const Duration(milliseconds: 200),
@@ -532,14 +533,14 @@ class _MethodCard extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: selected ? const Color(0xFFFFF4EF) : Colors.white,
+          color: selected ? const Color(0xFFFFF6E6) : Colors.white,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: selected ? const Color(0xFFE84A3A) : const Color(0xFFF0E7E3)),
+          border: Border.all(color: selected ? AppColors.accent : const Color(0xFFE2ECEC)),
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon, size: 18, color: const Color(0xFFE84A3A)),
+            Icon(icon, size: 18, color: AppColors.primary),
             const SizedBox(width: 8),
             Text(title, style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 12)),
           ],
@@ -592,8 +593,8 @@ class _CodeField extends StatelessWidget {
                   controller.text = pasted.length > 6 ? pasted.substring(0, 6) : pasted;
                 }
               },
-              icon: const Icon(CupertinoIcons.doc_on_clipboard_fill, size: 16, color: Color(0xFFE84A3A)),
-              label: const Text('لصق', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, color: Color(0xFFE84A3A))),
+              icon: const Icon(CupertinoIcons.doc_on_clipboard_fill, size: 16, color: AppColors.primary),
+              label: const Text('لصق', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, color: AppColors.primary)),
             ),
           ),
         ],
@@ -617,7 +618,8 @@ class _ActionButton extends StatelessWidget {
       child: ElevatedButton(
         onPressed: onPressed,
         style: ElevatedButton.styleFrom(
-          backgroundColor: const Color(0xFFE84A3A),
+          backgroundColor: AppColors.accent,
+          foregroundColor: Colors.white,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         ),
         child: showLoading 
@@ -637,7 +639,7 @@ class _SupportButton extends StatelessWidget {
     return TextButton.icon(
       onPressed: onPressed,
       icon: const WhatsAppIcon(size: 20),
-      label: const Text('الدعم والمساعدة', style: TextStyle(fontFamily: 'Cairo', color: Color(0xFF7A5A50))),
+      label: const Text('الدعم والمساعدة', style: TextStyle(fontFamily: 'Cairo', color: Color(0xFF5A6B6E))),
     );
   }
 }

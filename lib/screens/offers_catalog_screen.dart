@@ -99,20 +99,6 @@ class _OffersCatalogScreenState extends State<OffersCatalogScreen> {
       child: SafeArea(
         child: Column(
           children: [
-            const Padding(
-              padding: EdgeInsets.fromLTRB(16, 8, 16, 0),
-              child: Align(
-                alignment: Alignment.centerRight,
-                child: Text(
-                  'عروض مخفّضة — تواصل مع المتجر عبر واتساب أو الاتصال',
-                  style: TextStyle(
-                    fontFamily: 'Cairo',
-                    fontSize: 13,
-                    color: CupertinoColors.systemGrey,
-                  ),
-                ),
-              ),
-            ),
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
               child: CupertinoSearchTextField(

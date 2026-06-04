@@ -4,21 +4,21 @@ import 'package:flutter/material.dart';
 import '../models/app_models.dart';
 import '../utils/dummy_data.dart';
 import '../widgets/app_image.dart';
-import 'catalog_products_screen.dart';
+import 'real_estate_type_hub_screen.dart';
 
-/// أنواع المركبات داخل «طلب سيارة» — الصورة تحمل الاسم في التصميم.
-class CarRequestHubScreen extends StatelessWidget {
-  const CarRequestHubScreen({super.key});
+/// المستوى الأول: شراء — بيع — إيجار.
+class RealEstateDealHubScreen extends StatelessWidget {
+  const RealEstateDealHubScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
-    final options = DummyData.carRequestVehicleTypes;
+    final deals = DummyData.realEstateDealOptions;
 
     return CupertinoPageScaffold(
       backgroundColor: const Color(0xFFF2F2F7),
       navigationBar: const CupertinoNavigationBar(
         middle: Text(
-          'طلب سيارة',
+          'العقارات',
           style: TextStyle(
             fontWeight: FontWeight.bold,
             fontFamily: 'Cairo',
@@ -35,7 +35,7 @@ class CarRequestHubScreen extends StatelessWidget {
                 child: Align(
                   alignment: Alignment.centerRight,
                   child: Text(
-                    'اختر نوع الخدمة — تصفّح إعلانات التجار',
+                    'اختر نوع العملية',
                     style: TextStyle(
                       fontFamily: 'Cairo',
                       fontSize: 14,
@@ -56,23 +56,20 @@ class CarRequestHubScreen extends StatelessWidget {
                 ),
                 delegate: SliverChildBuilderDelegate(
                   (context, index) {
-                    final option = options[index];
-                    return _CarRequestTypeCard(
-                      option: option,
+                    final deal = deals[index];
+                    return _DealCard(
+                      deal: deal,
                       onTap: () => Navigator.of(context).push(
                         CupertinoPageRoute(
-                          builder: (_) => CatalogProductsScreen(
-                            category: 'cars',
-                            subCategoryId: option.id,
-                            titleAr: option.titleAr,
-                            subtitleAr:
-                                'إعلانات وخدمات — تواصل مع المعلن عبر واتساب أو الاتصال',
+                          builder: (_) => RealEstateTypeHubScreen(
+                            dealId: deal.id,
+                            dealTitleAr: deal.titleAr,
                           ),
                         ),
                       ),
                     );
                   },
-                  childCount: options.length,
+                  childCount: deals.length,
                 ),
               ),
             ),
@@ -83,12 +80,12 @@ class CarRequestHubScreen extends StatelessWidget {
   }
 }
 
-class _CarRequestTypeCard extends StatelessWidget {
-  final ServiceCategory option;
+class _DealCard extends StatelessWidget {
+  final ServiceCategory deal;
   final VoidCallback onTap;
 
-  const _CarRequestTypeCard({
-    required this.option,
+  const _DealCard({
+    required this.deal,
     required this.onTap,
   });
 
@@ -111,7 +108,7 @@ class _CarRequestTypeCard extends StatelessWidget {
         child: ClipRRect(
           borderRadius: BorderRadius.circular(16),
           child: AppImage(
-            imageData: option.image,
+            imageData: deal.image,
             width: double.infinity,
             height: double.infinity,
             fit: BoxFit.cover,

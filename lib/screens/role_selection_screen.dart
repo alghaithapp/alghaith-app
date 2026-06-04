@@ -161,7 +161,7 @@ class RoleSelectionScreen extends StatelessWidget {
                       child: _RoleCard(
                         title: 'مندوب توصيل',
                         subtitle:
-                            'توصيل طلبات المطاعm والتسوق — حساب مستقل لا يتحول لزبون/تاجر',
+                            'توصيل طلبات المطاعم والتسوق — حساب مستقل لا يتحول لزبون/تاجر',
                         icon: Icons.motorcycle,
                         accentColor: const Color(0xFF00A3A3),
                         onTap: () => _pickRole(context, appProvider, 'delivery'),

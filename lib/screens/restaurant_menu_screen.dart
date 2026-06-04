@@ -987,20 +987,25 @@ class _MenuItemCard extends StatelessWidget {
                         ),
                       ),
                       const Spacer(),
-                      if (quantity == 0)
-                        Builder(
-                          builder: (buttonContext) => _AddButton(
-                            onTap: item.isAvailable
-                                ? () => onAdd(buttonContext)
-                                : null,
-                          ),
-                        )
-                      else
-                        _QuantityControls(
-                          quantity: quantity,
-                          onAdd: () => onAdd(context),
-                          onRemove: onDecrement,
+                      SizedBox(
+                        width: 116,
+                        child: Align(
+                          alignment: AlignmentDirectional.centerEnd,
+                          child: quantity == 0
+                              ? Builder(
+                                  builder: (buttonContext) => _AddButton(
+                                    onTap: item.isAvailable
+                                        ? () => onAdd(buttonContext)
+                                        : null,
+                                  ),
+                                )
+                              : _QuantityControls(
+                                  quantity: quantity,
+                                  onAdd: () => onAdd(context),
+                                  onRemove: onDecrement,
+                                ),
                         ),
+                      ),
                     ],
                   ),
                 ],

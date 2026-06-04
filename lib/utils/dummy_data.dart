@@ -96,6 +96,28 @@ class DummyData {
     ),
   ];
 
+  /// شراء — بيع — إيجار (المستوى الأول في العقارات).
+  static final List<ServiceCategory> realEstateDealOptions = [
+    ServiceCategory(
+      id: 'buy',
+      titleAr: 'شراء',
+      titleEn: 'Buy',
+      image: 'assets/images/re_buy.png',
+    ),
+    ServiceCategory(
+      id: 'sell',
+      titleAr: 'بيع',
+      titleEn: 'Sell',
+      image: 'assets/images/re_sell.png',
+    ),
+    ServiceCategory(
+      id: 'rent',
+      titleAr: 'إيجار',
+      titleEn: 'Rent',
+      image: 'assets/images/re_rent.png',
+    ),
+  ];
+
   static final List<ServiceCategory> realEstateSubCategories = [
     ServiceCategory(
       id: 'house',

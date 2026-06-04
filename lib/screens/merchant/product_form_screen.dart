@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 
 import '../../models/app_models.dart';
 import '../../providers/app_provider.dart';
+import '../../core/catalog/marketplace_catalog.dart';
 import '../../utils/dummy_data.dart';
 import '../../utils/helpers.dart';
 import '../../utils/merchant_service_labels.dart';
@@ -16,12 +17,14 @@ class ProductFormScreen extends StatefulWidget {
   final bool isRestaurant;
   final String? serviceId;
   final ListItem? item;
+  final String? initialSubCategoryId;
 
   const ProductFormScreen({
     super.key,
     required this.isRestaurant,
     this.serviceId,
     this.item,
+    this.initialSubCategoryId,
   });
 
   @override
@@ -52,7 +55,8 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
     _imageLabel = item == null ? null : 'selected';
     _isAvailable = item?.isAvailable ?? true;
     _selectedServiceId = widget.serviceId;
-    _selectedSubCategoryId = item?.subCategory;
+    _selectedSubCategoryId =
+        item?.subCategory ?? widget.initialSubCategoryId;
     _selectedSectionId = item?.sectionId;
   }
 
@@ -79,10 +83,28 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
         : availableServiceIds.first;
     final showServicePicker = appProvider.merchantHasMultipleServices;
     final labels = merchantServiceLabels(serviceId);
-    final showSubCategoryPicker = serviceId == 'product';
-    final shoppingSubCategories = showSubCategoryPicker
+    final showShoppingSubCategoryPicker = serviceId == 'product';
+    final showCarsSubCategoryPicker = serviceId == 'cars';
+    final showSubCategoryPicker =
+        showShoppingSubCategoryPicker || showCarsSubCategoryPicker;
+    final shoppingSubCategories = showShoppingSubCategoryPicker
         ? DummyData.shoppingSubCategories
         : const <ServiceCategory>[];
+    final carsSubCategories = showCarsSubCategoryPicker
+        ? MarketplaceCatalog.carsPublishSubCategories
+            .map(
+              (sub) => ServiceCategory(
+                id: sub.id,
+                titleAr: sub.titleAr,
+                titleEn: sub.titleEn,
+                image: sub.image,
+              ),
+            )
+            .toList()
+        : const <ServiceCategory>[];
+    final subCategoryOptions = showShoppingSubCategoryPicker
+        ? shoppingSubCategories
+        : carsSubCategories;
     final storeSections = showSubCategoryPicker
         ? appProvider.merchantProductSections
         : const [];
@@ -161,7 +183,9 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                     ],
                     if (showSubCategoryPicker) ...[
                       Text(
-                        'اختر قسم التسوق',
+                        showShoppingSubCategoryPicker
+                            ? 'اختر قسم التسوق'
+                            : 'اختر نوع خدمة السيارات',
                         style: const TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w800,
@@ -170,11 +194,11 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                       ),
                       const SizedBox(height: 12),
                       DropdownButtonFormField<String>(
-                        value: shoppingSubCategories.any((element) =>
+                        value: subCategoryOptions.any((element) =>
                                 element.id == _selectedSubCategoryId)
                             ? _selectedSubCategoryId
                             : null,
-                        items: shoppingSubCategories.map((subCategory) {
+                        items: subCategoryOptions.map((subCategory) {
                           return DropdownMenuItem<String>(
                             value: subCategory.id,
                             child: Text(
@@ -189,7 +213,9 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                         validator: (value) {
                           if (showSubCategoryPicker &&
                               (value == null || value.isEmpty)) {
-                            return 'اختر قسمًا فرعيًا للمنتج';
+                            return showShoppingSubCategoryPicker
+                                ? 'اختر قسمًا فرعيًا للمنتج'
+                                : 'اختر نوع الخدمة (4 راكب، حمل، باص، …)';
                           }
                           return null;
                         },
@@ -559,7 +585,7 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
       price: price,
       rating: widget.item?.rating ?? 4.8,
       category: serviceId,
-      subCategory: serviceId == 'product'
+      subCategory: (serviceId == 'product' || serviceId == 'cars')
           ? (_selectedSubCategoryId ?? widget.item?.subCategory)
           : widget.item?.subCategory,
       sectionId: serviceId == 'product' ? _selectedSectionId : widget.item?.sectionId,

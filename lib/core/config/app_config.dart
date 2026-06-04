@@ -37,6 +37,17 @@ class AppConfig {
   static const int taxiFareOfficialIncrementIqd = 250;
   static const int deliveryFeePerKmIqd = 1000;
 
+  /// التقريب يتم لأقرب فئة قابلة للدفع (250 د.ع للأعلى): 250, 500, 750, 1000...
+  static const int deliveryFeeRoundingStepIqd = 250;
+
+  /// الحد الأدنى لأي توصيل حتى لو كانت المسافة أقل من كيلومتر.
+  static const int deliveryFeeMinIqd = 1000;
+
+  /// معامل تصحيح المسافة عند تعذّر مسار Mapbox والرجوع للخط المستقيم.
+  /// الطريق الفعلي في المدن أطول من الخط المستقيم بنحو 30%، فنضرب
+  /// المسافة المستقيمة بهذا المعامل لتقريبها من المسافة الحقيقية.
+  static const double straightLineRoadFactor = 1.3;
+
   static int calculateTaxiFare(double distanceKm) {
     final safeDistance = distanceKm.isFinite && distanceKm > 0 ? distanceKm : 0;
     final rawFare = (safeDistance / taxiFareStepDistanceKm) * taxiFareStepPriceIqd;
@@ -48,9 +59,12 @@ class AppConfig {
 
   static int calculateDeliveryFee(double distanceKm) {
     if (!distanceKm.isFinite || distanceKm <= 0) return 0;
-    final normalizedKm = distanceKm.ceil();
-    final fee = normalizedKm * deliveryFeePerKmIqd;
-    return fee <= 0 ? deliveryFeePerKmIqd : fee;
+    final rawFee = distanceKm * deliveryFeePerKmIqd;
+    // تقريب للأعلى لأقرب فئة 250 د.ع (1200→1250، 1700→1750، 2050→2250).
+    final roundedFee =
+        (rawFee / deliveryFeeRoundingStepIqd).ceil() * deliveryFeeRoundingStepIqd;
+    // حد أدنى 1000 د.ع لأي توصيل (مثل مسافة 500 متر).
+    return roundedFee < deliveryFeeMinIqd ? deliveryFeeMinIqd : roundedFee;
   }
 
   static void validate({bool throwOnError = true}) {

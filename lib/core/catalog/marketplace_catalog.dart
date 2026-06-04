@@ -98,9 +98,9 @@ class MarketplaceCatalog {
       entryMode: CategoryEntryMode.directStores,
       apiServiceId: 'restaurant',
       apiProductCategory: 'restaurant',
-      hubTitleAr: 'المطاعm',
+      hubTitleAr: 'المطاعم',
       hubSubtitleAr: 'اختر مطعمك المفضل',
-      storeTitleAr: 'المطاعm',
+      storeTitleAr: 'المطاعم',
       storeSubtitleAr: 'اختر مطعمك المفضل واطلب بسهولة',
       showCuisineFilters: true,
     ),
@@ -275,6 +275,14 @@ class MarketplaceCatalog {
     MarketplaceSubCategory(id: 'car_buy', titleAr: 'شراء سيارة', titleEn: 'Buy Car', image: 'assets/images/car_buy.png', browseMode: SubCategoryBrowseMode.catalog),
   ];
 
+  /// أنواع «طلب سيارة» + بيع/شراء — للنشر من التاجر.
+  static const List<MarketplaceSubCategory> _carServiceSubCategories = [
+    MarketplaceSubCategory(id: 'car_4seat', titleAr: 'سيارة 4 راكب', titleEn: '4-Seat Car', image: 'assets/images/car_req_4seat.png', browseMode: SubCategoryBrowseMode.catalog),
+    MarketplaceSubCategory(id: 'car_truck', titleAr: 'سيارة حمل', titleEn: 'Truck', image: 'assets/images/car_req_truck.png', browseMode: SubCategoryBrowseMode.catalog),
+    MarketplaceSubCategory(id: 'car_bus', titleAr: 'سيارة باص', titleEn: 'Bus', image: 'assets/images/car_req_bus.png', browseMode: SubCategoryBrowseMode.catalog),
+    MarketplaceSubCategory(id: 'car_starx11', titleAr: 'سيارة ستاركس 11 نفر', titleEn: 'Starx 11 Seats', image: 'assets/images/car_req_starx11.png', browseMode: SubCategoryBrowseMode.catalog),
+  ];
+
   static const List<MarketplaceSubCategory> _tourismSubCategories = [
     MarketplaceSubCategory(id: 'groups', titleAr: 'كروبات سياحية', titleEn: 'Tour Groups', image: 'assets/images/tour_groups.png', browseMode: SubCategoryBrowseMode.catalog),
     MarketplaceSubCategory(id: 'hotels', titleAr: 'حجز فنادق', titleEn: 'Hotel Booking', image: 'assets/images/tour_hotels.png', browseMode: SubCategoryBrowseMode.catalog),
@@ -344,4 +352,19 @@ class MarketplaceCatalog {
   /// كل ما عدا المطاعم والتسوق = إعلان/تواصل (واتساب واتصال).
   static bool isContactListingCategory(String? categoryId) =>
       !usesShoppingCart(categoryId);
+
+  static const Set<String> carServiceSubCategoryIds = {
+    'car_4seat',
+    'car_truck',
+    'car_bus',
+    'car_starx11',
+  };
+
+  /// أقسام السيارات التي ينشر فيها التاجر (بدون طلب تكسي).
+  static List<MarketplaceSubCategory> get carsPublishSubCategories => [
+    ..._carServiceSubCategories,
+    ..._carsSubCategories.where(
+      (sub) => sub.id == 'car_sell' || sub.id == 'car_buy',
+    ),
+  ];
 }

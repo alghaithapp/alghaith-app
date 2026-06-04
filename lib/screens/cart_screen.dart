@@ -187,7 +187,9 @@ class _CartScreenState extends State<CartScreen> {
       destination.longitude,
     );
     if (!meters.isFinite || meters <= 0) return null;
-    return meters / 1000;
+    // الطريق الفعلي أطول من الخط المستقيم؛ نطبّق معامل تصحيح حتى لا
+    // يقلّ سعر التوصيل عند تعذّر مسار Mapbox.
+    return (meters / 1000) * AppConfig.straightLineRoadFactor;
   }
 
   Future<void> _recalculateDeliveryFee(AppProvider appProvider) async {
