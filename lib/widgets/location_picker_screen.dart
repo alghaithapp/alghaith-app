@@ -69,7 +69,7 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
       await manager.create(
         CircleAnnotationOptions(
           geometry: Point(coordinates: _center),
-          circleColor: const Color(0xFFE60012).value,
+          circleColor: const Color(0xFFF5A01D).value,
           circleRadius: 8,
           circleStrokeColor: Colors.white.value,
           circleStrokeWidth: 2,

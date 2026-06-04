@@ -6,11 +6,16 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/theme/app_colors.dart';
 import '../../providers/app_provider.dart';
 import '../../utils/dummy_data.dart';
 import '../../utils/helpers.dart';
+import '../../utils/merchant_profile_fields.dart';
+import '../../services/image_storage_service.dart';
 import '../../widgets/app_image.dart';
 import '../../widgets/location_picker_screen.dart';
+import '../../widgets/merchant/merchant_image_upload_slot.dart';
+import '../../widgets/merchant/merchant_working_hours_picker.dart';
 
 class MerchantStoreSettingsScreen extends StatefulWidget {
   const MerchantStoreSettingsScreen({super.key});
@@ -27,8 +32,8 @@ class _MerchantStoreSettingsScreenState
   late final TextEditingController _phoneController;
   late final TextEditingController _whatsappController;
   late final TextEditingController _addressController;
-  late final TextEditingController _openController;
-  late final TextEditingController _closeController;
+  String _openTime = '';
+  String _closeTime = '';
   late final TextEditingController _deliveryAreasController;
   late final TextEditingController _deliveryFeeController;
   bool _isOpen = true;
@@ -49,8 +54,6 @@ class _MerchantStoreSettingsScreenState
     _phoneController = TextEditingController();
     _whatsappController = TextEditingController();
     _addressController = TextEditingController();
-    _openController = TextEditingController();
-    _closeController = TextEditingController();
     _deliveryAreasController = TextEditingController();
     _deliveryFeeController = TextEditingController();
   }
@@ -64,33 +67,31 @@ class _MerchantStoreSettingsScreenState
     _phoneController.text = provider.merchantPhone;
     _whatsappController.text = provider.merchantWhatsApp;
     _addressController.text = provider.merchantAddress;
-    _openController.text = provider.merchantOpenTime;
-    _closeController.text = provider.merchantCloseTime;
+    _openTime = provider.merchantOpenTime;
+    _closeTime = provider.merchantCloseTime;
     _deliveryAreasController.text = provider.merchantDeliveryAreas;
     _deliveryFeeController.text = provider.merchantDeliveryFee.toString();
     _isOpen = provider.isMerchantStoreOpen;
-    _coverImageBase64 ??= _extractBase64(provider.merchantCoverImage);
-    _logoImageBase64 ??= _extractBase64(provider.merchantLogoImage);
-    _profileImageBase64 ??= provider.merchantProfileImageBase64;
+    _coverImageBase64 ??=
+        ImageStorageService.merchantUploadedImageRef(provider.merchantCoverImage);
+    _logoImageBase64 ??=
+        ImageStorageService.merchantUploadedImageRef(provider.merchantLogoImage);
+    _profileImageBase64 ??=
+        ImageStorageService.merchantUploadedImageRef(
+          provider.merchantProfileImageBase64,
+        );
     _selectedProfessionalCategoryId ??= provider.merchantProfessionalCategoryId;
     _selectedRestaurantCategory ??=
         provider.merchantStore?['restaurantCategory']?.toString();
     _storeLatitude ??= provider.merchantLatitude;
     _storeLongitude ??= provider.merchantLongitude;
     if (_workSampleImagesBase64.isEmpty) {
-      _workSampleImagesBase64.addAll(provider.merchantWorkSampleImagesBase64);
+      _workSampleImagesBase64.addAll(
+        provider.merchantWorkSampleImagesBase64.where(
+          ImageStorageService.isMerchantUploadedImage,
+        ),
+      );
     }
-  }
-
-  String? _extractBase64(String value) {
-    final trimmed = value.trim();
-    if (trimmed.isEmpty) return null;
-    if (trimmed.startsWith('iVBOR') ||
-        trimmed.startsWith('/9j/') ||
-        trimmed.length > 80) {
-      return trimmed;
-    }
-    return null;
   }
 
   @override
@@ -100,8 +101,6 @@ class _MerchantStoreSettingsScreenState
     _phoneController.dispose();
     _whatsappController.dispose();
     _addressController.dispose();
-    _openController.dispose();
-    _closeController.dispose();
     _deliveryAreasController.dispose();
     _deliveryFeeController.dispose();
     super.dispose();
@@ -177,7 +176,7 @@ class _MerchantStoreSettingsScreenState
                       ),
                       selected: selected,
                       onSelected: (_) => provider.setMerchantActiveService(serviceId),
-                      selectedColor: Colors.deepOrange,
+                      selectedColor: AppColors.accent,
                       backgroundColor: Colors.white,
                       labelStyle: TextStyle(
                         color: selected ? Colors.white : Colors.black87,
@@ -206,7 +205,7 @@ class _MerchantStoreSettingsScreenState
                         avatar: const Icon(
                           Icons.add_circle_outline_rounded,
                           size: 18,
-                          color: Colors.deepOrange,
+                          color: AppColors.accent,
                         ),
                         label: Text(
                           category.titleAr,
@@ -231,27 +230,31 @@ class _MerchantStoreSettingsScreenState
             ),
           ),
           const SizedBox(height: 12),
-          _ImagePreview(
+          MerchantImagePreviewBanner(
             title: labels.coverLabelAr,
-            image: _coverImageBase64 ?? provider.merchantCoverImage,
+            imageRef: _coverImageBase64,
           ),
           const SizedBox(height: 12),
-          _ImagePreview(
+          MerchantImagePreviewBanner(
             title: labels.logoLabelAr,
-            image: _logoImageBase64 ?? provider.merchantLogoImage,
+            imageRef: _logoImageBase64,
           ),
           const SizedBox(height: 12),
-          _ImagePickerCard(
+          MerchantImageUploadSlot(
             title: labels.coverLabelAr,
             subtitle: 'اختر صورة الغلاف الرئيسية للمطعم أو المتجر',
-            imageBase64: _coverImageBase64,
+            imageRef: _coverImageBase64,
+            icon: Icons.storefront_rounded,
+            style: MerchantImageUploadStyle.row,
             onTap: _pickCoverImage,
           ),
           const SizedBox(height: 12),
-          _ImagePickerCard(
+          MerchantImageUploadSlot(
             title: labels.logoLabelAr,
             subtitle: 'اختر الشعار الظاهر في الواجهة',
-            imageBase64: _logoImageBase64,
+            imageRef: _logoImageBase64,
+            icon: Icons.badge_rounded,
+            style: MerchantImageUploadStyle.row,
             onTap: _pickLogoImage,
           ),
           if (provider.merchantActiveServiceId == 'restaurant') ...[
@@ -314,10 +317,12 @@ class _MerchantStoreSettingsScreenState
           ),
           const SizedBox(height: 10),
           if (isProfessional) ...[
-            _ImagePickerCard(
+            MerchantImageUploadSlot(
               title: 'الصورة الشخصية',
               subtitle: 'تظهر هذه الصورة في حساب التاجر وملف صاحب المهنة',
-              imageBase64: _profileImageBase64,
+              imageRef: _profileImageBase64,
+              icon: Icons.person_rounded,
+              style: MerchantImageUploadStyle.row,
               onTap: _pickProfileImage,
             ),
             const SizedBox(height: 12),
@@ -365,23 +370,13 @@ class _MerchantStoreSettingsScreenState
             ),
           ],
           const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: _Field(
-                  label: 'يفتح',
-                  controller: _openController,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _Field(
-                  label: 'يغلق',
-                  controller: _closeController,
-                ),
-              ),
-            ],
+          MerchantWorkingHoursPicker(
+            openTime: _openTime,
+            closeTime: _closeTime,
+            onOpenTimeChanged: (value) => setState(() => _openTime = value),
+            onCloseTimeChanged: (value) => setState(() => _closeTime = value),
           ),
+          const SizedBox(height: 12),
           _Field(
               label: labels.deliveryAreasLabelAr,
               controller: _deliveryAreasController,
@@ -396,7 +391,7 @@ class _MerchantStoreSettingsScreenState
               margin: const EdgeInsets.only(bottom: 12),
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
-                color: Colors.orange.withValues(alpha: 0.08),
+                color: AppColors.accent.withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(16),
               ),
               child: Text(
@@ -420,7 +415,7 @@ class _MerchantStoreSettingsScreenState
           const SizedBox(height: 12),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.deepOrange,
+              backgroundColor: AppColors.accent,
               foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(18)),
@@ -436,6 +431,14 @@ class _MerchantStoreSettingsScreenState
                 );
                 return;
               }
+              if (_openTime.trim().isEmpty || _closeTime.trim().isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('يرجى تحديد وقت الافتتاح ووقت الإغلاق'),
+                  ),
+                );
+                return;
+              }
               provider.updateMerchantStore({
                 'name': _nameController.text.trim(),
                 'description': _descController.text.trim(),
@@ -444,8 +447,8 @@ class _MerchantStoreSettingsScreenState
                 'address': _addressController.text.trim(),
                 'latitude': _storeLatitude,
                 'longitude': _storeLongitude,
-                'openTime': _openController.text.trim(),
-                'closeTime': _closeController.text.trim(),
+                'openTime': _openTime,
+                'closeTime': _closeTime,
                 'deliveryAreas': _deliveryAreasController.text.trim(),
                 'deliveryFee': hideFee
                     ? 0
@@ -472,8 +475,8 @@ class _MerchantStoreSettingsScreenState
                         'longitude': _storeLongitude,
                         'phone': _phoneController.text.trim(),
                         'whatsapp': _whatsappController.text.trim(),
-                        'openTime': _openController.text.trim(),
-                        'closeTime': _closeController.text.trim(),
+                        'openTime': _openTime,
+                        'closeTime': _closeTime,
                         'profileImageBase64': _profileImageBase64,
                         'workSampleImagesBase64':
                             List<String>.from(_workSampleImagesBase64),
@@ -539,6 +542,11 @@ class _MerchantStoreSettingsScreenState
 
   Widget _buildStoreLocationCard() {
     final hasLocation = _storeLatitude != null && _storeLongitude != null;
+    final locationLabel = MerchantProfileFields.locationSummary(
+      address: _addressController.text.trim(),
+      latitude: _storeLatitude,
+      longitude: _storeLongitude,
+    );
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(12),
@@ -559,9 +567,9 @@ class _MerchantStoreSettingsScreenState
           ),
           const SizedBox(height: 6),
           Text(
-            hasLocation
-                ? '${_storeLatitude!.toStringAsFixed(5)}, ${_storeLongitude!.toStringAsFixed(5)}'
-                : 'حدد الموقع بدقة ليتم احتساب رسوم التوصيل من المطعم إلى الزبون بمسار حقيقي.',
+            locationLabel.isNotEmpty
+                ? locationLabel
+                : 'حدد الموقع على الخريطة وأدخل العنوان النصي في حقل «العنوان» أعلاه.',
             style: const TextStyle(
               fontFamily: 'Cairo',
               color: Colors.black87,
@@ -573,7 +581,7 @@ class _MerchantStoreSettingsScreenState
           ElevatedButton.icon(
             onPressed: _pickStoreLocation,
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.deepOrange,
+              backgroundColor: AppColors.accent,
               foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(10),
@@ -668,10 +676,10 @@ class _CategoryChoiceButton extends StatelessWidget {
         duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.symmetric(vertical: 12),
         decoration: BoxDecoration(
-          color: selected ? Colors.deepOrange : const Color(0xFFF7F8FC),
+          color: selected ? AppColors.accent : const Color(0xFFF7F8FC),
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
-            color: selected ? Colors.deepOrange : Colors.grey.shade200,
+            color: selected ? AppColors.accent : Colors.grey.shade200,
           ),
         ),
         alignment: Alignment.center,
@@ -702,131 +710,6 @@ class _SectionTitle extends StatelessWidget {
         fontFamily: 'Cairo',
         fontWeight: FontWeight.w900,
         fontSize: 17,
-      ),
-    );
-  }
-}
-
-class _ImagePreview extends StatelessWidget {
-  final String title;
-  final String image;
-
-  const _ImagePreview({
-    required this.title,
-    required this.image,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    if (image.trim().isEmpty) {
-      return Container(
-        height: 150,
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(24),
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              Colors.orange.withValues(alpha: 0.18),
-              Colors.deepOrange.withValues(alpha: 0.10),
-            ],
-          ),
-        ),
-        child: Center(
-          child: Text(
-            title,
-            style: const TextStyle(
-              color: Colors.white,
-              fontFamily: 'Cairo',
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-        ),
-      );
-    }
-    final isBase64 = image.startsWith('iVBOR') ||
-        image.startsWith('/9j/') ||
-        image.length > 80 && !image.startsWith('assets/');
-
-    return Container(
-      height: 150,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(24),
-      ),
-      child: AppImage(
-        imageData: image,
-        borderRadius: BorderRadius.circular(24),
-      ),
-    );
-  }
-}
-
-class _ImagePickerCard extends StatelessWidget {
-  final String title;
-  final String subtitle;
-  final String? imageBase64;
-  final VoidCallback onTap;
-
-  const _ImagePickerCard({
-    required this.title,
-    required this.subtitle,
-    required this.imageBase64,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: Colors.grey.shade200),
-        ),
-        child: Row(
-          children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(16),
-              child: Container(
-                width: 84,
-                height: 84,
-                color: const Color(0xFFF7F8FC),
-                child: imageBase64 != null && imageBase64!.isNotEmpty
-                    ? AppImage(imageData: imageBase64)
-                    : const Icon(Icons.add_a_photo_rounded,
-                        color: Colors.deepOrange, size: 32),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: const TextStyle(
-                      fontFamily: 'Cairo',
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    subtitle,
-                    style: const TextStyle(
-                      fontFamily: 'Cairo',
-                      color: Colors.grey,
-                      fontSize: 12,
-                      height: 1.4,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const Icon(Icons.chevron_right_rounded),
-          ],
-        ),
       ),
     );
   }
@@ -884,7 +767,7 @@ class _SampleImagesRow extends StatelessWidget {
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Icon(Icons.add_photo_alternate_rounded,
-                            color: Colors.deepOrange, size: 30),
+                            color: AppColors.accent, size: 30),
                         SizedBox(height: 6),
                         Text(
                           'إضافة',

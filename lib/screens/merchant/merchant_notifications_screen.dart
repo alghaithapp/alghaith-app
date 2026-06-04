@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../models/app_notification.dart';
 import '../../providers/app_provider.dart';
 
 class MerchantNotificationsScreen extends StatelessWidget {
@@ -13,12 +14,36 @@ class MerchantNotificationsScreen extends StatelessWidget {
     final items = provider.notifications;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF4F4F6),
+      backgroundColor: const Color(0xFFF2F2F7),
       appBar: AppBar(
+        backgroundColor: const Color(0xFFF2F2F7),
+        elevation: 0,
         title: Text(
           'إشعارات ${labels.storeLabelAr}',
-          style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w900),
+          style: const TextStyle(
+            fontFamily: 'Cairo',
+            fontWeight: FontWeight.w900,
+            color: Color(0xFF1C1C1E),
+          ),
         ),
+        actions: [
+          if (items.any((n) => !n.read))
+            TextButton(
+              onPressed: () {
+                for (final n in items.where((e) => !e.read)) {
+                  provider.markNotificationRead(n.id);
+                }
+              },
+              child: const Text(
+                'قراءة الكل',
+                style: TextStyle(
+                  fontFamily: 'Cairo',
+                  fontWeight: FontWeight.w800,
+                  color: Color(0xFFF5A01D),
+                ),
+              ),
+            ),
+        ],
       ),
       body: ListView(
         padding: const EdgeInsets.all(16),
@@ -26,39 +51,95 @@ class MerchantNotificationsScreen extends StatelessWidget {
           if (items.isEmpty)
             Container(
               padding: const EdgeInsets.all(18),
-              decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(24)),
-              child: const Text('لا توجد إشعارات بعد.', style: TextStyle(fontFamily: 'Cairo')),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(24),
+              ),
+              child: const Text(
+                'لا توجد إشعارات بعد.',
+                style: TextStyle(fontFamily: 'Cairo'),
+              ),
             )
           else
-            ...items.map((item) {
-              final title = item['title']?.toString() ?? '';
-              final body  = item['body']?.toString()  ?? '';
-              return Container(
-                margin: const EdgeInsets.only(bottom: 12),
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(24)),
-                child: Row(
-                  children: [
-                    CircleAvatar(
-                      backgroundColor: Colors.deepOrange.withValues(alpha: 0.10),
-                      child: const Icon(Icons.campaign_rounded, color: Colors.deepOrange),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(title, style: const TextStyle(fontWeight: FontWeight.w900, fontFamily: 'Cairo')),
-                          const SizedBox(height: 4),
-                          Text(body, style: const TextStyle(color: Colors.grey, fontSize: 12, height: 1.4, fontFamily: 'Cairo')),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            }),
+            ...items.map((item) => _MerchantNotificationTile(item: item)),
         ],
+      ),
+    );
+  }
+}
+
+class _MerchantNotificationTile extends StatelessWidget {
+  final AppNotificationItem item;
+
+  const _MerchantNotificationTile({required this.item});
+
+  @override
+  Widget build(BuildContext context) {
+    final provider = context.read<AppProvider>();
+    return GestureDetector(
+      onTap: () {
+        if (!item.read) provider.markNotificationRead(item.id);
+      },
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(
+            color: item.read
+                ? Colors.transparent
+                : const Color(0xFFF5A01D).withValues(alpha: 0.2),
+          ),
+        ),
+        child: Row(
+          children: [
+            CircleAvatar(
+              backgroundColor: item.read
+                  ? Colors.grey.shade100
+                  : const Color(0xFFFFEBEE),
+              child: Icon(
+                Icons.campaign_rounded,
+                color: item.read ? Colors.grey : const Color(0xFFF5A01D),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    item.title,
+                    style: TextStyle(
+                      fontWeight: FontWeight.w900,
+                      fontFamily: 'Cairo',
+                      color: item.read ? Colors.black54 : Colors.black,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    item.body,
+                    style: const TextStyle(
+                      color: Colors.grey,
+                      fontSize: 12,
+                      height: 1.4,
+                      fontFamily: 'Cairo',
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (!item.read)
+              Container(
+                width: 8,
+                height: 8,
+                decoration: const BoxDecoration(
+                  color: Color(0xFFF5A01D),
+                  shape: BoxShape.circle,
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }

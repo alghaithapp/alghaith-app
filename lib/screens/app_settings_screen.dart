@@ -14,12 +14,11 @@ class AppSettingsScreen extends StatefulWidget {
 }
 
 class _AppSettingsScreenState extends State<AppSettingsScreen> {
-  bool _notifications = true;
-
   @override
   Widget build(BuildContext context) {
     final appProvider = context.watch<AppProvider>();
     final darkMode = appProvider.darkMode;
+    final inAppAlerts = appProvider.inAppAlertsEnabled;
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return CupertinoPageScaffold(
@@ -39,9 +38,11 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
           padding: const EdgeInsets.all(16),
           children: [
             _buildSwitchItem(
-              title: 'التنبيهات',
-              value: _notifications,
-              onChanged: (val) => setState(() => _notifications = val),
+              title: 'التنبيهات المنبثقة',
+              subtitle:
+                  'عند الإيقاف تختفي النوافذ والبانرات فقط، وتبقى الإشعارات في صفحة الإشعارات',
+              value: inAppAlerts,
+              onChanged: appProvider.setInAppAlertsEnabled,
               icon: CupertinoIcons.bell_fill,
               color: Colors.orange,
             ),
@@ -109,6 +110,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
 
   Widget _buildSwitchItem({
     required String title,
+    String? subtitle,
     required bool value,
     required ValueChanged<bool> onChanged,
     required IconData icon,
@@ -123,17 +125,37 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
         borderRadius: BorderRadius.circular(16),
       ),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           Icon(icon, color: color),
           const SizedBox(width: 14),
-          Text(
-            title,
-            style: const TextStyle(
-              fontWeight: FontWeight.w700,
-              fontFamily: 'Cairo',
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontFamily: 'Cairo',
+                  ),
+                ),
+                if (subtitle != null) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    subtitle,
+                    style: TextStyle(
+                      fontFamily: 'Cairo',
+                      fontSize: 11,
+                      color: Colors.grey.shade600,
+                      height: 1.35,
+                    ),
+                  ),
+                ],
+              ],
             ),
           ),
-          const Spacer(),
+          const SizedBox(width: 8),
           CupertinoSwitch(
             value: value,
             activeTrackColor: Colors.orange,

@@ -55,11 +55,13 @@ class SupabaseService {
     required String serviceId,
     String? productCategory,
     String? subCategoryId,
+    String? marketplaceCategory,
   }) =>
       _db.loadServiceStores(
         serviceId: serviceId,
         productCategory: productCategory,
         subCategoryId: subCategoryId,
+        marketplaceCategory: marketplaceCategory,
       );
 
   static Future<List<Map<String, dynamic>>> loadOffersCatalog() =>

@@ -6,13 +6,18 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/theme/app_colors.dart';
 import '../../providers/app_provider.dart';
 import '../../services/image_storage_service.dart';
 import '../../utils/dummy_data.dart';
 import '../../utils/helpers.dart';
+import '../../utils/merchant_profile_fields.dart';
 import '../../utils/merchant_service_labels.dart';
+import '../../services/image_storage_service.dart';
 import '../../widgets/app_image.dart';
 import '../../widgets/location_picker_screen.dart';
+import '../../widgets/merchant/merchant_image_upload_slot.dart';
+import '../../widgets/merchant/merchant_working_hours_picker.dart';
 
 class MerchantSetupScreen extends StatefulWidget {
   const MerchantSetupScreen({super.key});
@@ -27,8 +32,8 @@ class _MerchantSetupScreenState extends State<MerchantSetupScreen> {
   final TextEditingController _phoneController = TextEditingController();
   final TextEditingController _whatsappController = TextEditingController();
   final TextEditingController _addressController = TextEditingController();
-  final TextEditingController _openTimeController = TextEditingController();
-  final TextEditingController _closeTimeController = TextEditingController();
+  String _openTime = '';
+  String _closeTime = '';
   final TextEditingController _deliveryFeeController = TextEditingController();
 
   final List<String> _selectedServiceIds = ['restaurant'];
@@ -50,8 +55,6 @@ class _MerchantSetupScreenState extends State<MerchantSetupScreen> {
     _phoneController.dispose();
     _whatsappController.dispose();
     _addressController.dispose();
-    _openTimeController.dispose();
-    _closeTimeController.dispose();
     _deliveryFeeController.dispose();
     super.dispose();
   }
@@ -63,6 +66,16 @@ class _MerchantSetupScreenState extends State<MerchantSetupScreen> {
   bool get _requiresStoreLocation =>
       _selectedServiceIds.contains('restaurant') ||
       _selectedServiceIds.contains('product');
+
+  bool get _showsStoreBrandingImages =>
+      _selectedServiceIds.contains('restaurant') ||
+      _selectedServiceIds.contains('product');
+
+  String get _brandingServiceId {
+    if (_selectedServiceIds.contains('restaurant')) return 'restaurant';
+    if (_selectedServiceIds.contains('product')) return 'product';
+    return _primaryServiceId;
+  }
 
   @override
   void initState() {
@@ -82,19 +95,24 @@ class _MerchantSetupScreenState extends State<MerchantSetupScreen> {
       if (_addressController.text.isEmpty) {
         _addressController.text = provider.merchantAddress;
       }
-      if (_openTimeController.text.isEmpty) {
-        _openTimeController.text = provider.merchantOpenTime;
+      if (_openTime.isEmpty) {
+        setState(() => _openTime = provider.merchantOpenTime);
       }
-      if (_closeTimeController.text.isEmpty) {
-        _closeTimeController.text = provider.merchantCloseTime;
+      if (_closeTime.isEmpty) {
+        setState(() => _closeTime = provider.merchantCloseTime);
       }
       if (_deliveryFeeController.text.isEmpty &&
           provider.merchantDeliveryFee > 0) {
         _deliveryFeeController.text = provider.merchantDeliveryFee.toString();
       }
-      _coverImageBase64 ??= _extractBase64(provider.merchantCoverImage);
-      _logoImageBase64 ??= _extractBase64(provider.merchantLogoImage);
-      _profileImageBase64 ??= provider.merchantProfileImageBase64;
+      _coverImageBase64 ??=
+          ImageStorageService.merchantUploadedImageRef(provider.merchantCoverImage);
+      _logoImageBase64 ??=
+          ImageStorageService.merchantUploadedImageRef(provider.merchantLogoImage);
+      _profileImageBase64 ??=
+          ImageStorageService.merchantUploadedImageRef(
+            provider.merchantProfileImageBase64,
+          );
       _selectedProfessionalCategoryId ??=
           provider.merchantProfessionalCategoryId;
       _selectedRestaurantCategory ??=
@@ -102,7 +120,11 @@ class _MerchantSetupScreenState extends State<MerchantSetupScreen> {
       _storeLatitude ??= provider.merchantLatitude;
       _storeLongitude ??= provider.merchantLongitude;
       if (_workSampleImagesBase64.isEmpty) {
-        _workSampleImagesBase64.addAll(provider.merchantWorkSampleImagesBase64);
+        _workSampleImagesBase64.addAll(
+          provider.merchantWorkSampleImagesBase64.where(
+            ImageStorageService.isMerchantUploadedImage,
+          ),
+        );
       }
       setState(() {});
     });
@@ -125,14 +147,11 @@ class _MerchantSetupScreenState extends State<MerchantSetupScreen> {
     );
   }
 
-  String? _extractBase64(String value) {
-    return ImageStorageService.normalizeImageRef(value);
-  }
-
   @override
   Widget build(BuildContext context) {
     final appProvider = Provider.of<AppProvider>(context);
     final labels = merchantServiceLabels(_primaryServiceId);
+    final brandLabels = merchantServiceLabels(_brandingServiceId);
     final hideFee = _primaryServiceId == 'professionals' ||
         _primaryServiceId == 'restaurant';
 
@@ -188,8 +207,8 @@ class _MerchantSetupScreenState extends State<MerchantSetupScreen> {
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
                       colors: [
-                        Colors.orange.shade700,
-                        Colors.deepOrange.shade400
+                        AppColors.accentDark,
+                        AppColors.accent
                       ],
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
@@ -197,7 +216,7 @@ class _MerchantSetupScreenState extends State<MerchantSetupScreen> {
                     borderRadius: BorderRadius.circular(28),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.orange.withValues(alpha: 0.18),
+                        color: AppColors.accent.withValues(alpha: 0.18),
                         blurRadius: 24,
                         offset: const Offset(0, 12),
                       ),
@@ -324,58 +343,71 @@ class _MerchantSetupScreenState extends State<MerchantSetupScreen> {
                     _buildLocationCard(),
                     const SizedBox(height: 20),
                     _sectionTitle(
-                      _isRestaurantSetup
-                          ? 'صورة المطعم وشعاره'
+                      _showsStoreBrandingImages
+                          ? 'صورة ${brandLabels.storeLabelAr} وشعاره'
                           : (_isProfessionalSetup
                               ? 'الصورة الشخصية والأعمال'
                               : 'الصور والهوية'),
                     ),
                     const SizedBox(height: 12),
-                    if (_isRestaurantSetup) ...[
-                      _ImagePickCard(
-                        title: 'صورة المطعم',
-                        imageBase64: _coverImageBase64,
+                    if (_showsStoreBrandingImages) ...[
+                      MerchantImageUploadSlot(
+                        title: brandLabels.coverLabelAr,
+                        imageRef: _coverImageBase64,
                         icon: Icons.storefront_rounded,
                         onTap: _pickCoverImage,
                       ),
                       const SizedBox(height: 12),
-                      _ImagePickCard(
-                        title: 'شعار المطعم',
-                        imageBase64: _logoImageBase64,
+                      MerchantImageUploadSlot(
+                        title: brandLabels.logoLabelAr,
+                        imageRef: _logoImageBase64,
                         icon: Icons.badge_rounded,
                         onTap: _pickLogoImage,
                       ),
-                      const SizedBox(height: 20),
-                      _sectionTitle('تصنيف المطعم'),
-                      const SizedBox(height: 6),
-                      const Text(
-                        'حدد التخصص الأساسي لمطعمك ليظهر في الفلتر الصحيح للزبائن.',
-                        style: TextStyle(color: Colors.grey, fontSize: 12, fontFamily: 'Cairo'),
-                      ),
-                      const SizedBox(height: 12),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: _ChoiceChip(
-                              label: 'مشويات',
-                              selected: _selectedRestaurantCategory == 'مشويات',
-                              onTap: () => setState(() => _selectedRestaurantCategory = 'مشويات'),
-                            ),
+                      if (_isRestaurantSetup) ...[
+                        const SizedBox(height: 20),
+                        _sectionTitle('تصنيف المطعم'),
+                        const SizedBox(height: 6),
+                        const Text(
+                          'حدد التخصص الأساسي لمطعمك ليظهر في الفلتر الصحيح للزبائن.',
+                          style: TextStyle(
+                            color: Colors.grey,
+                            fontSize: 12,
+                            fontFamily: 'Cairo',
                           ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: _ChoiceChip(
-                              label: 'وجبات سريعة',
-                              selected: _selectedRestaurantCategory == 'وجبات سريعة',
-                              onTap: () => setState(() => _selectedRestaurantCategory = 'وجبات سريعة'),
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: _ChoiceChip(
+                                label: 'مشويات',
+                                selected:
+                                    _selectedRestaurantCategory == 'مشويات',
+                                onTap: () => setState(
+                                  () => _selectedRestaurantCategory = 'مشويات',
+                                ),
+                              ),
                             ),
-                          ),
-                        ],
-                      ),
-                    ] else ...[
-                      _ImagePickCard(
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: _ChoiceChip(
+                                label: 'وجبات سريعة',
+                                selected: _selectedRestaurantCategory ==
+                                    'وجبات سريعة',
+                                onTap: () => setState(
+                                  () => _selectedRestaurantCategory =
+                                      'وجبات سريعة',
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ] else if (_isProfessionalSetup) ...[
+                      MerchantImageUploadSlot(
                         title: 'الصورة الشخصية',
-                        imageBase64: _profileImageBase64,
+                        imageRef: _profileImageBase64,
                         icon: Icons.person_rounded,
                         onTap: _pickProfileImage,
                       ),
@@ -425,11 +457,11 @@ class _MerchantSetupScreenState extends State<MerchantSetupScreen> {
                               vertical: 12,
                             ),
                             decoration: BoxDecoration(
-                              color: selected ? Colors.orange : Colors.white,
+                              color: selected ? AppColors.accent : Colors.white,
                               borderRadius: BorderRadius.circular(999),
                               border: Border.all(
                                 color: selected
-                                    ? Colors.orange
+                                    ? AppColors.accent
                                     : Colors.grey.shade300,
                               ),
                             ),
@@ -461,16 +493,13 @@ class _MerchantSetupScreenState extends State<MerchantSetupScreen> {
                             ? 'أوقات وإعدادات ${labels.storeLabelAr}'
                             : 'أوقات ورسوم ${labels.storeLabelAr}'),
                     const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        Expanded(
-                            child: _buildField(
-                                'يفتح', _openTimeController)),
-                        const SizedBox(width: 12),
-                        Expanded(
-                            child: _buildField(
-                                'يغلق', _closeTimeController)),
-                      ],
+                    MerchantWorkingHoursPicker(
+                      openTime: _openTime,
+                      closeTime: _closeTime,
+                      onOpenTimeChanged: (value) =>
+                          setState(() => _openTime = value),
+                      onCloseTimeChanged: (value) =>
+                          setState(() => _closeTime = value),
                     ),
                     const SizedBox(height: 14),
                     if (!hideFee) ...[
@@ -483,7 +512,7 @@ class _MerchantSetupScreenState extends State<MerchantSetupScreen> {
                       Container(
                         padding: const EdgeInsets.all(14),
                         decoration: BoxDecoration(
-                          color: Colors.orange.withValues(alpha: 0.08),
+                          color: AppColors.accent.withValues(alpha: 0.08),
                           borderRadius: BorderRadius.circular(16),
                         ),
                         child: Text(
@@ -533,7 +562,7 @@ class _MerchantSetupScreenState extends State<MerchantSetupScreen> {
                       width: double.infinity,
                       child: CupertinoButton(
                         padding: const EdgeInsets.symmetric(vertical: 16),
-                        color: Colors.orange,
+                        color: AppColors.accent,
                         borderRadius: BorderRadius.circular(18),
                         onPressed: () async {
                           final name = _nameController.text.trim();
@@ -542,14 +571,18 @@ class _MerchantSetupScreenState extends State<MerchantSetupScreen> {
                             return;
                           }
 
-                          if (_isRestaurantSetup) {
-                            if (_coverImageBase64 == null ||
-                                _coverImageBase64!.isEmpty ||
-                                _logoImageBase64 == null ||
-                                _logoImageBase64!.isEmpty) {
-                              _showMessage('يرجى إضافة صورة المطعم وشعاره');
+                          if (_showsStoreBrandingImages) {
+                            if (!ImageStorageService
+                                    .isMerchantUploadedImage(_coverImageBase64) ||
+                                !ImageStorageService
+                                    .isMerchantUploadedImage(_logoImageBase64)) {
+                              _showMessage(
+                                'يرجى رفع ${brandLabels.coverLabelAr} و${brandLabels.logoLabelAr}',
+                              );
                               return;
                             }
+                          }
+                          if (_isRestaurantSetup) {
                             if (_selectedRestaurantCategory == null) {
                               _showMessage('يرجى اختيار تصنيف المطعم (مشويات أو وجبات سريعة)');
                               return;
@@ -560,8 +593,8 @@ class _MerchantSetupScreenState extends State<MerchantSetupScreen> {
                             final address = _addressController.text.trim();
                             final phone = _phoneController.text.trim();
                             final whatsapp = _whatsappController.text.trim();
-                            final openTime = _openTimeController.text.trim();
-                            final closeTime = _closeTimeController.text.trim();
+                            final openTime = _openTime.trim();
+                            final closeTime = _closeTime.trim();
                             final professionId =
                                 _selectedProfessionalCategoryId;
                             if (address.isEmpty ||
@@ -579,6 +612,12 @@ class _MerchantSetupScreenState extends State<MerchantSetupScreen> {
                               (_storeLatitude == null ||
                                   _storeLongitude == null)) {
                             _showMessage('حدد موقع ${labels.storeLabelAr} على الخريطة أولاً');
+                            return;
+                          }
+                          if (_openTime.trim().isEmpty ||
+                              _closeTime.trim().isEmpty) {
+                            _showMessage(
+                                'يرجى تحديد وقت الافتتاح ووقت الإغلاق');
                             return;
                           }
 
@@ -602,8 +641,8 @@ class _MerchantSetupScreenState extends State<MerchantSetupScreen> {
                             'address': _addressController.text.trim(),
                             'latitude': _storeLatitude,
                             'longitude': _storeLongitude,
-                            'openTime': _openTimeController.text.trim(),
-                            'closeTime': _closeTimeController.text.trim(),
+                            'openTime': _openTime.trim(),
+                            'closeTime': _closeTime.trim(),
                             'deliveryFee': hideFee
                                 ? 0
                                 : int.tryParse(
@@ -622,9 +661,8 @@ class _MerchantSetupScreenState extends State<MerchantSetupScreen> {
                                     'longitude': _storeLongitude,
                                     'phone': _phoneController.text.trim(),
                                     'whatsapp': _whatsappController.text.trim(),
-                                    'openTime': _openTimeController.text.trim(),
-                                    'closeTime':
-                                        _closeTimeController.text.trim(),
+                                    'openTime': _openTime.trim(),
+                                    'closeTime': _closeTime.trim(),
                                     'profileImageBase64': _profileImageBase64,
                                     'workSampleImagesBase64': List<String>.from(
                                         _workSampleImagesBase64),
@@ -765,9 +803,13 @@ class _MerchantSetupScreenState extends State<MerchantSetupScreen> {
           ),
           const SizedBox(height: 8),
           Text(
-            hasLocation
-                ? 'تم تحديد الموقع: ${_storeLatitude!.toStringAsFixed(5)}, ${_storeLongitude!.toStringAsFixed(5)}'
-                : 'يرجى تحديد موقع المتجر بدقة ليتم حساب كلفة التوصيل بخط طريق حقيقي.',
+            MerchantProfileFields.locationSummary(
+              address: _addressController.text.trim(),
+              latitude: _storeLatitude,
+              longitude: _storeLongitude,
+            ).isNotEmpty
+                ? 'العنوان: ${MerchantProfileFields.locationSummary(address: _addressController.text.trim(), latitude: _storeLatitude, longitude: _storeLongitude)}'
+                : 'يرجى تحديد موقع المتجر على الخريطة وكتابة العنوان النصي.',
             style: const TextStyle(
               fontFamily: 'Cairo',
               color: Colors.black87,
@@ -778,7 +820,7 @@ class _MerchantSetupScreenState extends State<MerchantSetupScreen> {
           const SizedBox(height: 10),
           CupertinoButton(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            color: Colors.deepOrange,
+            color: AppColors.accent,
             borderRadius: BorderRadius.circular(12),
             onPressed: _pickStoreLocation,
             child: Text(
@@ -859,14 +901,14 @@ class _ChoiceChip extends StatelessWidget {
         duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.symmetric(vertical: 14),
         decoration: BoxDecoration(
-          color: selected ? Colors.orange : Colors.white,
+          color: selected ? AppColors.accent : Colors.white,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: selected ? Colors.orange : Colors.grey.shade300,
+            color: selected ? AppColors.accent : Colors.grey.shade300,
             width: 1.5,
           ),
           boxShadow: selected
-              ? [BoxShadow(color: Colors.orange.withValues(alpha: 0.2), blurRadius: 8, offset: const Offset(0, 4))]
+              ? [BoxShadow(color: AppColors.accent.withValues(alpha: 0.2), blurRadius: 8, offset: const Offset(0, 4))]
               : null,
         ),
         alignment: Alignment.center,
@@ -877,72 +919,6 @@ class _ChoiceChip extends StatelessWidget {
             fontWeight: FontWeight.bold,
             fontFamily: 'Cairo',
           ),
-        ),
-      ),
-    );
-  }
-}
-
-class _ImagePickCard extends StatelessWidget {
-  final String title;
-  final String? imageBase64;
-  final IconData icon;
-  final VoidCallback onTap;
-
-  const _ImagePickCard({
-    required this.title,
-    required this.imageBase64,
-    required this.icon,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        height: 180,
-        width: double.infinity,
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(22),
-          border: Border.all(color: Colors.grey.shade200),
-        ),
-        child: Stack(
-          children: [
-            Positioned.fill(
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(22),
-                child: imageBase64 != null && imageBase64!.isNotEmpty
-                    ? AppImage(imageData: imageBase64)
-                    : Container(
-                        color: const Color(0xFFF7F8FC),
-                        child: Icon(icon, size: 56, color: Colors.orange),
-                      ),
-              ),
-            ),
-            Positioned(
-              left: 12,
-              right: 12,
-              bottom: 12,
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                decoration: BoxDecoration(
-                  color: Colors.black.withValues(alpha: 0.45),
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: Text(
-                  title,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontFamily: 'Cairo',
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ),
-            ),
-          ],
         ),
       ),
     );
@@ -994,7 +970,7 @@ class _SampleImagesRow extends StatelessWidget {
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Icon(Icons.add_photo_alternate_rounded,
-                            color: Colors.deepOrange, size: 30),
+                            color: AppColors.accent, size: 30),
                         SizedBox(height: 6),
                         Text(
                           'إضافة',

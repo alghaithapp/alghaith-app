@@ -104,6 +104,7 @@ class DatabaseRepository {
     required String serviceId,
     String? productCategory,
     String? subCategoryId,
+    String? marketplaceCategory,
   }) async {
     final result = await ApiClient.instance.get(
       '/db/service-stores',
@@ -113,6 +114,9 @@ class DatabaseRepository {
           'productCategory': productCategory.trim(),
         if (subCategoryId != null && subCategoryId.trim().isNotEmpty)
           'subCategoryId': subCategoryId.trim(),
+        if (marketplaceCategory != null &&
+            marketplaceCategory.trim().isNotEmpty)
+          'marketplaceCategory': marketplaceCategory.trim(),
       },
     );
     if (result is! List) return const [];

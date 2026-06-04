@@ -71,7 +71,6 @@ const SHOPPING_SUB_CATEGORIES = [
   { id: 'clothes', titleAr: 'ملابس', titleEn: 'Clothing', image: 'https://images.unsplash.com/photo-1489987707025-afc232f7ea0f?auto=format&fit=crop&w=400' },
   { id: 'grocery', titleAr: 'بقالة', titleEn: 'Grocery', image: 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=400' },
   { id: 'meat', titleAr: 'لحوم', titleEn: 'Meat', image: 'https://images.unsplash.com/photo-1607623814075-e51df1bdc82f?auto=format&fit=crop&w=400' },
-  { id: 'electronics', titleAr: 'كهربائيات', titleEn: 'Electronics', image: 'https://images.unsplash.com/photo-1498049794561-7780e7231661?auto=format&fit=crop&w=400' },
   { id: 'food', titleAr: 'مواد غذائية', titleEn: 'Food Items', image: 'https://images.unsplash.com/photo-1506617564039-2f3b650ad755?auto=format&fit=crop&w=400' },
   { id: 'home_goods', titleAr: 'مواد منزلية', titleEn: 'Home Goods', image: 'https://images.unsplash.com/photo-1513694203232-719a280e022f?auto=format&fit=crop&w=400' },
   { id: 'construction', titleAr: 'مواد انشائية', titleEn: 'Construction', image: 'https://images.unsplash.com/photo-1504307651254-35680f356dfd?auto=format&fit=crop&w=400' },

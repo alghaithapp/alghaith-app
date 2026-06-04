@@ -2,11 +2,13 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../core/catalog/marketplace_catalog.dart';
 import '../models/app_models.dart';
 import '../providers/app_provider.dart';
 import '../services/supabase_service.dart';
 import '../utils/extensions.dart';
 import '../widgets/app_image.dart';
+import '../widgets/catalog_contact_buttons.dart';
 import 'cart_screen.dart';
 
 class CatalogProductsScreen extends StatefulWidget {
@@ -23,6 +25,9 @@ class CatalogProductsScreen extends StatefulWidget {
     this.subtitleAr,
   });
 
+  bool get _contactOnly =>
+      MarketplaceCatalog.isContactListingCategory(category);
+
   @override
   State<CatalogProductsScreen> createState() => _CatalogProductsScreenState();
 }
@@ -31,6 +36,8 @@ class _CatalogProductsScreenState extends State<CatalogProductsScreen> {
   final TextEditingController _searchController = TextEditingController();
   late Future<List<ListItem>> _futureProducts;
   String _query = '';
+
+  bool get _contactOnly => widget._contactOnly;
 
   @override
   void initState() {
@@ -95,26 +102,29 @@ class _CatalogProductsScreenState extends State<CatalogProductsScreen> {
               onPressed: _reload,
               child: const Icon(CupertinoIcons.refresh_thick, size: 22),
             ),
-            CupertinoButton(
-              padding: EdgeInsets.zero,
-              onPressed: () => Navigator.of(context).push(
-                CupertinoPageRoute(builder: (_) => const CartScreen()),
+            if (!_contactOnly)
+              CupertinoButton(
+                padding: EdgeInsets.zero,
+                onPressed: () => Navigator.of(context).push(
+                  CupertinoPageRoute(builder: (_) => const CartScreen()),
+                ),
+                child: const Icon(CupertinoIcons.cart, size: 22),
               ),
-              child: const Icon(CupertinoIcons.cart, size: 22),
-            ),
           ],
         ),
       ),
       child: SafeArea(
         child: Column(
           children: [
-            if (widget.subtitleAr != null)
+            if (widget.subtitleAr != null || _contactOnly)
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
                 child: Align(
                   alignment: Alignment.centerRight,
                   child: Text(
-                    widget.subtitleAr!,
+                    _contactOnly
+                        ? 'تواصل مع صاحب الإعلان عبر واتساب أو الاتصال'
+                        : widget.subtitleAr!,
                     style: const TextStyle(
                       fontFamily: 'Cairo',
                       fontSize: 13,
@@ -150,6 +160,7 @@ class _CatalogProductsScreenState extends State<CatalogProductsScreen> {
                     return _EmptyState(
                       hasQuery: _query.trim().isNotEmpty,
                       category: widget.titleAr,
+                      contactOnly: _contactOnly,
                     );
                   }
 
@@ -160,6 +171,7 @@ class _CatalogProductsScreenState extends State<CatalogProductsScreen> {
                       final item = items[index];
                       return _CatalogProductCard(
                         item: item,
+                        contactOnly: _contactOnly,
                         onAdd: () => provider.addToCart(item),
                         onToggleFavorite: () =>
                             provider.toggleFavoriteItem(item),
@@ -178,11 +190,13 @@ class _CatalogProductsScreenState extends State<CatalogProductsScreen> {
 
 class _CatalogProductCard extends StatelessWidget {
   final ListItem item;
+  final bool contactOnly;
   final VoidCallback onAdd;
   final VoidCallback onToggleFavorite;
 
   const _CatalogProductCard({
     required this.item,
+    required this.contactOnly,
     required this.onAdd,
     required this.onToggleFavorite,
   });
@@ -266,36 +280,50 @@ class _CatalogProductCard extends StatelessWidget {
                   ),
                 ],
                 const SizedBox(height: 12),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
+                if (contactOnly) ...[
+                  if (item.price > 0)
                     Text(
                       '${item.price.toLocaleString()} د.ع',
                       style: const TextStyle(
                         fontWeight: FontWeight.w900,
                         fontSize: 16,
-                        color: Color(0xFFE60012),
+                        color: Color(0xFFF5A01D),
                         fontFamily: 'Cairo',
                       ),
                     ),
-                    CupertinoButton(
-                      padding: const EdgeInsets.symmetric(horizontal: 18),
-                      color: const Color(0xFFE60012),
-                      borderRadius: BorderRadius.circular(20),
-                      onPressed: item.isAvailable ? onAdd : null,
-                      child: Text(
-                        item.actionLabelAr.isNotEmpty
-                            ? item.actionLabelAr
-                            : 'أضف للسلة',
+                  if (item.price > 0) const SizedBox(height: 10),
+                  CatalogContactButtons(item: item),
+                ] else
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        '${item.price.toLocaleString()} د.ع',
                         style: const TextStyle(
+                          fontWeight: FontWeight.w900,
+                          fontSize: 16,
+                          color: Color(0xFFF5A01D),
                           fontFamily: 'Cairo',
-                          fontWeight: FontWeight.bold,
-                          fontSize: 13,
                         ),
                       ),
-                    ),
-                  ],
-                ),
+                      CupertinoButton(
+                        padding: const EdgeInsets.symmetric(horizontal: 18),
+                        color: const Color(0xFFF5A01D),
+                        borderRadius: BorderRadius.circular(20),
+                        onPressed: item.isAvailable ? onAdd : null,
+                        child: Text(
+                          item.actionLabelAr.isNotEmpty
+                              ? item.actionLabelAr
+                              : 'أضف للسلة',
+                          style: const TextStyle(
+                            fontFamily: 'Cairo',
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
               ],
             ),
           ),
@@ -308,8 +336,13 @@ class _CatalogProductCard extends StatelessWidget {
 class _EmptyState extends StatelessWidget {
   final bool hasQuery;
   final String category;
+  final bool contactOnly;
 
-  const _EmptyState({required this.hasQuery, required this.category});
+  const _EmptyState({
+    required this.hasQuery,
+    required this.category,
+    required this.contactOnly,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -326,7 +359,11 @@ class _EmptyState extends StatelessWidget {
             ),
             const SizedBox(height: 16),
             Text(
-              hasQuery ? 'لا توجد نتائج' : 'لا توجد منتجات في $category حاليًا',
+              hasQuery
+                  ? 'لا توجد نتائج'
+                  : contactOnly
+                      ? 'لا توجد إعلانات في $category حاليًا'
+                      : 'لا توجد منتجات في $category حاليًا',
               textAlign: TextAlign.center,
               style: const TextStyle(
                 fontFamily: 'Cairo',
@@ -335,10 +372,12 @@ class _EmptyState extends StatelessWidget {
             ),
             if (!hasQuery) ...[
               const SizedBox(height: 8),
-              const Text(
-                'سيظهر المحتوى هنا عندما ينشر التجار منتجات في هذا القسم',
+              Text(
+                contactOnly
+                    ? 'سيظهر المحتوى هنا عندما ينشر التجار إعلانات في هذا القسم'
+                    : 'سيظهر المحتوى هنا عندما ينشر التجار منتجات في هذا القسم',
                 textAlign: TextAlign.center,
-                style: TextStyle(
+                style: const TextStyle(
                   fontFamily: 'Cairo',
                   fontSize: 13,
                   color: CupertinoColors.systemGrey2,

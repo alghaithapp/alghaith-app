@@ -5,92 +5,17 @@ class DummyData {
   static List<ServiceCategory> get categories =>
       MarketplaceCatalog.homeCategories;
 
-  static final List<ServiceCategory> shoppingSubCategories = [
-    ServiceCategory(
-      id: 'home_goods',
-      titleAr: 'مواد منزلية',
-      titleEn: 'Home Goods',
-      image: 'assets/images/shop_home_goods.png',
-    ),
-    ServiceCategory(
-      id: 'food_items',
-      titleAr: 'مواد غذائية',
-      titleEn: 'Food Items',
-      image: 'assets/images/shop_food_items.png',
-    ),
-    ServiceCategory(
-      id: 'construction',
-      titleAr: 'مواد إنشائية',
-      titleEn: 'Construction',
-      image: 'assets/images/shop_construction.png',
-    ),
-    ServiceCategory(
-      id: 'school',
-      titleAr: 'لوازم مدرسية',
-      titleEn: 'School Supplies',
-      image: 'assets/images/shop_school.png',
-    ),
-    ServiceCategory(
-      id: 'bakery',
-      titleAr: 'مخابز ومعجنات',
-      titleEn: 'Bakeries',
-      image: 'assets/images/shop_bakery.png',
-    ),
-    ServiceCategory(
-      id: 'electronics',
-      titleAr: 'كهربائيات',
-      titleEn: 'Electronics',
-      image: 'assets/images/shop_electronics.png',
-    ),
-    ServiceCategory(
-      id: 'meat',
-      titleAr: 'لحوم',
-      titleEn: 'Meat',
-      image: 'assets/images/shop_meat.png',
-    ),
-    ServiceCategory(
-      id: 'grocery',
-      titleAr: 'بقالة',
-      titleEn: 'Grocery',
-      image: 'assets/images/shop_grocery.png',
-    ),
-    ServiceCategory(
-      id: 'shoes_bags',
-      titleAr: 'أحذية وحقائب',
-      titleEn: 'Shoes & Bags',
-      image: 'assets/images/shop_shoes_bags.png',
-    ),
-    ServiceCategory(
-      id: 'kids_clothing',
-      titleAr: 'ملابس أطفال',
-      titleEn: 'Kids Clothing',
-      image: 'assets/images/shop_kids_clothing.png',
-    ),
-    ServiceCategory(
-      id: 'women_clothing',
-      titleAr: 'ملابس نسائية',
-      titleEn: 'Women Clothing',
-      image: 'assets/images/shop_women_clothing.png',
-    ),
-    ServiceCategory(
-      id: 'men_clothing',
-      titleAr: 'ملابس رجالية',
-      titleEn: 'Men Clothing',
-      image: 'assets/images/shop_men_clothing.png',
-    ),
-    ServiceCategory(
-      id: 'cosmetics',
-      titleAr: 'مستحضرات تجميل',
-      titleEn: 'Cosmetics',
-      image: 'assets/images/shop_cosmetics.png',
-    ),
-    ServiceCategory(
-      id: 'gifts',
-      titleAr: 'زهور وهدايا',
-      titleEn: 'Flowers & Gifts',
-      image: 'assets/images/shop_gifts.png',
-    ),
-  ];
+  static List<ServiceCategory> get shoppingSubCategories =>
+      MarketplaceCatalog.shoppingSubCategories
+          .map(
+            (sub) => ServiceCategory(
+              id: sub.id,
+              titleAr: sub.titleAr,
+              titleEn: sub.titleEn,
+              image: sub.image,
+            ),
+          )
+          .toList();
 
   static final List<ServiceCategory> carsSubCategories = [
     ServiceCategory(
@@ -119,26 +44,36 @@ class DummyData {
     ),
   ];
 
-  static final List<ServiceCategory> requestCarOptions = [
+  /// أنواع «طلب سيارة» — النص على الصورة في التصميم.
+  static final List<ServiceCategory> carRequestVehicleTypes = [
     ServiceCategory(
-      id: 'truck',
+      id: 'car_4seat',
+      titleAr: 'سيارة 4 راكب',
+      titleEn: '4-Seat Car',
+      image: 'assets/images/car_req_4seat.png',
+    ),
+    ServiceCategory(
+      id: 'car_truck',
       titleAr: 'سيارة حمل',
       titleEn: 'Truck',
-      image: 'assets/images/cat_cars.png',
+      image: 'assets/images/car_req_truck.png',
     ),
     ServiceCategory(
-      id: 'bus',
+      id: 'car_bus',
       titleAr: 'سيارة باص',
       titleEn: 'Bus',
-      image: 'assets/images/cat_cars.png',
+      image: 'assets/images/car_req_bus.png',
     ),
     ServiceCategory(
-      id: 'starx',
-      titleAr: 'سيارة ستاركس',
-      titleEn: 'Starx',
-      image: 'assets/images/cat_cars.png',
+      id: 'car_starx11',
+      titleAr: 'سيارة ستاركس 11 نفر',
+      titleEn: 'Starx 11 Seats',
+      image: 'assets/images/car_req_starx11.png',
     ),
   ];
+
+  @Deprecated('Use carRequestVehicleTypes')
+  static List<ServiceCategory> get requestCarOptions => carRequestVehicleTypes;
 
   static final List<ServiceCategory> tourismSubCategories = [
     ServiceCategory(
@@ -215,38 +150,17 @@ class DummyData {
     ),
   ];
 
-  static final List<ServiceCategory> professionalsSubCategories = [
-    ServiceCategory(
-      id: 'plumber',
-      titleAr: 'سباك',
-      titleEn: 'Plumber',
-      image: 'assets/images/prof_plumber.png',
-    ),
-    ServiceCategory(
-      id: 'electrician',
-      titleAr: 'كهربائي',
-      titleEn: 'Electrician',
-      image: 'assets/images/prof_electrician.png',
-    ),
-    ServiceCategory(
-      id: 'ac_tech',
-      titleAr: 'فني تكييف',
-      titleEn: 'AC Technician',
-      image: 'assets/images/prof_ac.png',
-    ),
-    ServiceCategory(
-      id: 'carpenter',
-      titleAr: 'نجار',
-      titleEn: 'Carpenter',
-      image: 'assets/images/prof_carpenter.png',
-    ),
-    ServiceCategory(
-      id: 'cleaner',
-      titleAr: 'تنظيف منازل',
-      titleEn: 'Home Cleaner',
-      image: 'assets/images/prof_cleaner.png',
-    ),
-  ];
+  static List<ServiceCategory> get professionalsSubCategories =>
+      MarketplaceCatalog.professionalsSubCategories
+          .map(
+            (sub) => ServiceCategory(
+              id: sub.id,
+              titleAr: sub.titleAr,
+              titleEn: sub.titleEn,
+              image: sub.image,
+            ),
+          )
+          .toList();
 
   static final List<ServiceCategory> healthSubCategories = [
     ServiceCategory(

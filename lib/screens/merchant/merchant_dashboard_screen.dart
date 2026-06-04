@@ -3,20 +3,20 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/theme/app_colors.dart';
 import '../../providers/app_provider.dart';
 import '../../models/app_models.dart';
+import '../../models/app_notification.dart';
 import '../../services/image_storage_service.dart';
 import '../../utils/extensions.dart';
-import '../../utils/helpers.dart';
 import '../../widgets/app_image.dart';
-import '../../widgets/whatsapp_icon.dart';
 import 'merchant_notifications_screen.dart';
 import 'merchant_orders_screen.dart';
 import 'merchant_profile_screen.dart';
 import 'order_details_screen.dart';
 
 const _bg = Color(0xFFF2F2F7);
-const _brand = Color(0xFFE60012);
+const _brand = Color(0xFFF5A01D);
 
 class MerchantDashboardScreen extends StatelessWidget {
   const MerchantDashboardScreen({super.key});
@@ -36,10 +36,6 @@ class MerchantDashboardScreen extends StatelessWidget {
     final address = provider.merchantAddress.trim().isNotEmpty
         ? provider.merchantAddress
         : '—';
-    final phone = provider.merchantPhone.trim();
-    final whatsapp = provider.merchantWhatsApp.trim().isNotEmpty
-        ? provider.merchantWhatsApp
-        : phone;
     final rating = provider.merchantRating;
     final ratingLabel =
         rating > 0 ? rating.toStringAsFixed(1) : '—';
@@ -60,8 +56,6 @@ class MerchantDashboardScreen extends StatelessWidget {
                 onToggleOpen: provider.toggleMerchantOpenStatus,
                 profileImage: provider.merchantProfileImageBase64,
                 coverImage: provider.merchantCoverImage,
-                phone: phone,
-                whatsapp: whatsapp,
                 productsCount: provider.merchantProductCount,
                 ordersCount: provider.merchantOrdersCount,
                 ratingLabel: ratingLabel,
@@ -113,7 +107,7 @@ class MerchantDashboardScreen extends StatelessWidget {
                       label: 'طلبات جديدة',
                       value: '${provider.merchantPendingOrdersCount}',
                       icon: Icons.notifications_active_rounded,
-                      color: Colors.orange,
+                      color: AppColors.accent,
                     ),
                     const SizedBox(width: 10),
                     _StatCard(
@@ -232,8 +226,6 @@ class _HeroCard extends StatelessWidget {
   final VoidCallback onToggleOpen;
   final String? profileImage;
   final String coverImage;
-  final String phone;
-  final String whatsapp;
   final int productsCount;
   final int ordersCount;
   final String ratingLabel;
@@ -248,8 +240,6 @@ class _HeroCard extends StatelessWidget {
     required this.onToggleOpen,
     required this.profileImage,
     required this.coverImage,
-    required this.phone,
-    required this.whatsapp,
     required this.productsCount,
     required this.ordersCount,
     required this.ratingLabel,
@@ -374,31 +364,6 @@ class _HeroCard extends StatelessWidget {
                   ],
                 ),
               ),
-              const SizedBox(width: 8),
-              Column(
-                children: [
-                  _HeroActionButton(
-                    label: 'اتصال',
-                    icon: Icons.call_rounded,
-                    color: Colors.greenAccent,
-                    onTap: phone.isNotEmpty
-                        ? () => AppHelpers.makePhoneCall(phone)
-                        : null,
-                  ),
-                  const SizedBox(height: 8),
-                  _HeroActionButton(
-                    label: 'واتساب',
-                    iconWidget: const WhatsAppIcon(size: 22),
-                    color: Colors.green,
-                    onTap: whatsapp.isNotEmpty
-                        ? () => AppHelpers.launchWhatsApp(
-                              whatsapp,
-                              'مرحباً، أتواصل من لوحة التاجر في الغيث',
-                            )
-                        : null,
-                  ),
-                ],
-              ),
             ],
           ),
           const SizedBox(height: 16),
@@ -520,63 +485,6 @@ class _StoreStatusSwitch extends StatelessWidget {
                 ),
               ),
             ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _HeroActionButton extends StatelessWidget {
-  final String label;
-  final IconData? icon;
-  final Widget? iconWidget;
-  final Color color;
-  final VoidCallback? onTap;
-
-  const _HeroActionButton({
-    required this.label,
-    this.icon,
-    this.iconWidget,
-    required this.color,
-    this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final enabled = onTap != null;
-    return Opacity(
-      opacity: enabled ? 1 : 0.45,
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(14),
-          child: Ink(
-            width: 56,
-            padding: const EdgeInsets.symmetric(vertical: 8),
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                iconWidget ??
-                    Icon(icon, color: color, size: 20),
-                const SizedBox(height: 4),
-                Text(
-                  label,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 10,
-                    fontWeight: FontWeight.w700,
-                    fontFamily: 'Cairo',
-                  ),
-                ),
-              ],
-            ),
           ),
         ),
       ),
@@ -970,14 +878,14 @@ _StatusBadgeData _orderStatusBadge(ActiveOrder order) {
     final color = switch (order.statusKey) {
       'completed' => Colors.green,
       'cancelled' || 'rejected' => Colors.red,
-      _ => Colors.orange,
+      _ => AppColors.accent,
     };
     return _StatusBadgeData(order.statusAr, color);
   }
   return switch (order.statusKey) {
     'pending' => const _StatusBadgeData('جديد', Colors.blue),
-    'accepted' => const _StatusBadgeData('قيد التحضير', Colors.orange),
-    'preparing' => const _StatusBadgeData('قيد التحضير', Colors.orange),
+    'accepted' => const _StatusBadgeData('قيد التحضير', AppColors.accent),
+    'preparing' => const _StatusBadgeData('قيد التحضير', AppColors.accent),
     'completed' => const _StatusBadgeData('مكتمل', Colors.green),
     'cancelled' || 'rejected' => const _StatusBadgeData('ملغي', Colors.red),
     _ => _StatusBadgeData(order.statusAr, Colors.grey),
@@ -1026,7 +934,7 @@ class _OrdersEmptyCard extends StatelessWidget {
 }
 
 class _AlertsCard extends StatelessWidget {
-  final List<Map<String, String>> alerts;
+  final List<AppNotificationItem> alerts;
 
   const _AlertsCard({required this.alerts});
 
@@ -1081,9 +989,10 @@ class _AlertsCard extends StatelessWidget {
                 endIndent: 16,
               ),
             _AlertRow(
-              title: alerts[i]['title'] ?? '',
-              body: alerts[i]['body'] ?? '',
+              title: alerts[i].title,
+              body: alerts[i].body,
               index: i,
+              unread: !alerts[i].read,
             ),
           ],
         ],
@@ -1096,15 +1005,17 @@ class _AlertRow extends StatelessWidget {
   final String title;
   final String body;
   final int index;
+  final bool unread;
 
   const _AlertRow({
     required this.title,
     required this.body,
     required this.index,
+    this.unread = false,
   });
 
   static const _iconColors = [
-    Colors.orange,
+    AppColors.accent,
     Colors.green,
     Colors.purple,
   ];

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../providers/app_provider.dart';
+import '../../utils/account_role_switch.dart';
 import '../../widgets/app_image.dart';
 import '../../widgets/app_logo.dart';
 import 'merchant_notifications_screen.dart';
@@ -162,63 +163,13 @@ class MerchantMoreScreen extends StatelessWidget {
           title: 'الانتقال إلى حساب الزبون',
           subtitle: 'استخدم نفس التسجيل وانتقل لواجهة الزبون',
           icon: Icons.person_rounded,
-          onTap: () async {
-            BuildContext? loadingDialogContext;
-            showDialog<void>(
-              context: context,
-              useRootNavigator: true,
-              barrierDismissible: false,
-              builder: (dialogContext) {
-                loadingDialogContext = dialogContext;
-                return const AlertDialog(
-                  content: Row(
-                    children: [
-                      SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2.2),
-                      ),
-                      SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          'يرجى الانتظار... جارٍ التحويل إلى حساب الزبون',
-                          style: TextStyle(fontFamily: 'Cairo'),
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              },
-            ).then((_) {
-              loadingDialogContext = null;
-            });
-
-            final switchFuture = provider.setUserRole('customer');
-            var switched = false;
-            try {
-              await Future<void>.delayed(const Duration(milliseconds: 250));
-              if (provider.userRole == 'customer') {
-                final dialogCtx = loadingDialogContext;
-                if (dialogCtx != null) {
-                  Navigator.of(dialogCtx, rootNavigator: true).pop();
-                }
-              }
-              switched = await switchFuture;
-            } finally {
-              final dialogCtx = loadingDialogContext;
-              if (dialogCtx != null) {
-                Navigator.of(dialogCtx, rootNavigator: true).pop();
-              }
-            }
-
-            if (context.mounted && !switched) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('تعذر الانتقال إلى حساب الزبون حالياً.'),
-                ),
-              );
-            }
-          },
+          onTap: () => switchAccountRoleWithLoading(
+            context,
+            provider,
+            'customer',
+            loadingMessage: 'يرجى الانتظار... جارٍ التحويل إلى حساب الزبون',
+            errorMessage: 'تعذر الانتقال إلى حساب الزبون حالياً.',
+          ),
         ),
         _MoreTile(
           cardColor: cardColor,

@@ -6,6 +6,7 @@ import '../core/catalog/marketplace_catalog.dart';
 import '../providers/app_provider.dart';
 import 'category_items_screen.dart';
 import 'catalog_search_screen.dart';
+import '../core/theme/app_colors.dart';
 import '../widgets/app_image.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -23,7 +24,6 @@ class _HomeScreenState extends State<HomeScreen> {
       final provider = context.read<AppProvider>();
       if (provider.isCustomer) {
         provider.refreshCustomerCatalog();
-        provider.refreshMarketplaceStats();
       }
     });
   }
@@ -92,13 +92,13 @@ class _HomeScreenState extends State<HomeScreen> {
                 crossAxisCount: 2,
                 crossAxisSpacing: 7,
                 mainAxisSpacing: 7,
-                childAspectRatio: 0.85,
+                // مربّع ليتوافق مع صور الأقسام (768×768) دون قصّ
+                childAspectRatio: 1,
               ),
               delegate: SliverChildBuilderDelegate(
                 (context, index) {
                   final cat = categories[index];
                   final isActive = appProvider.selectedCategory == cat.id;
-                  final count = appProvider.marketplaceCategoryCount(cat.id);
                   return GestureDetector(
                     onTap: () {
                       appProvider.setCategory(cat.id);
@@ -115,7 +115,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         borderRadius: BorderRadius.circular(15),
                         border: Border.all(
                           color: isActive
-                              ? Colors.orange
+                              ? AppColors.accent
                               : Colors.transparent,
                           width: 2,
                         ),
@@ -127,42 +127,14 @@ class _HomeScreenState extends State<HomeScreen> {
                           ),
                         ],
                       ),
-                      child: Stack(
-                        fit: StackFit.expand,
-                        children: [
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(15),
-                            child: AppImage(
-                              imageData: cat.image,
-                              width: double.infinity,
-                              height: double.infinity,
-                            ),
-                          ),
-                          if (count > 0)
-                            Positioned(
-                              top: 8,
-                              left: 8,
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 8,
-                                  vertical: 3,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFFE60012),
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: Text(
-                                  '$count',
-                                  style: const TextStyle(
-                                    fontFamily: 'Cairo',
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 11,
-                                    color: Colors.white,
-                                  ),
-                                ),
-                              ),
-                            ),
-                        ],
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(15),
+                        child: AppImage(
+                          imageData: cat.image,
+                          width: double.infinity,
+                          height: double.infinity,
+                          fit: BoxFit.contain,
+                        ),
                       ),
                     ),
                   );

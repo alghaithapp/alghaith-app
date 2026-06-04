@@ -1,4 +1,5 @@
 import '../../models/app_models.dart';
+import '../../models/app_notification.dart';
 import '../../models/merchant_models.dart';
 
 /// لقطة حالة الحساب للتخزين المحلي والمزامنة.
@@ -13,6 +14,7 @@ class AccountSnapshot {
     this.customerLongitude,
     this.customerAvatarRef,
     this.darkMode = false,
+    this.inAppAlertsEnabled = true,
     this.driverType,
     this.driverProfile,
     this.courierProfile,
@@ -26,6 +28,7 @@ class AccountSnapshot {
     this.selectedCategory = 'all',
     this.activeSubCategory,
     this.pendingOrderStatusSyncQueue = const [],
+    this.notifications = const [],
   });
 
   final String? userRole;
@@ -37,6 +40,7 @@ class AccountSnapshot {
   final double? customerLongitude;
   final String? customerAvatarRef;
   final bool darkMode;
+  final bool inAppAlertsEnabled;
   final String? driverType;
   final Map<String, dynamic>? driverProfile;
   final Map<String, dynamic>? courierProfile;
@@ -50,6 +54,7 @@ class AccountSnapshot {
   final String selectedCategory;
   final String? activeSubCategory;
   final List<Map<String, dynamic>> pendingOrderStatusSyncQueue;
+  final List<AppNotificationItem> notifications;
 
   Map<String, dynamic> toJson() {
     return {
@@ -62,6 +67,7 @@ class AccountSnapshot {
       'customerLongitude': customerLongitude,
       'customerAvatarBase64': customerAvatarRef,
       'darkMode': darkMode,
+      'inAppAlertsEnabled': inAppAlertsEnabled,
       'driverType': driverType,
       'driverProfile': driverProfile,
       'courierProfile': courierProfile,
@@ -75,6 +81,7 @@ class AccountSnapshot {
       'selectedCategory': selectedCategory,
       'activeSubCategory': activeSubCategory,
       'pendingOrderStatusSyncQueue': pendingOrderStatusSyncQueue,
+      'notifications': notifications.map((e) => e.toMap()).toList(),
     };
   }
 
@@ -89,6 +96,9 @@ class AccountSnapshot {
       customerLongitude: (json['customerLongitude'] as num?)?.toDouble(),
       customerAvatarRef: json['customerAvatarBase64']?.toString(),
       darkMode: json['darkMode'] as bool? ?? false,
+      inAppAlertsEnabled: json['inAppAlertsEnabled'] as bool? ??
+          json['notificationsEnabled'] as bool? ??
+          true,
       driverType: json['driverType']?.toString(),
       driverProfile: json['driverProfile'] is Map
           ? Map<String, dynamic>.from(json['driverProfile'] as Map)
@@ -110,7 +120,17 @@ class AccountSnapshot {
       pendingOrderStatusSyncQueue: _parseDynamicMaps(
         json['pendingOrderStatusSyncQueue'],
       ),
+      notifications: _parseNotifications(json['notifications']),
     );
+  }
+
+  static List<AppNotificationItem> _parseNotifications(dynamic value) {
+    if (value is! List) return const [];
+    return value
+        .whereType<Map>()
+        .map((e) => AppNotificationItem.fromMap(Map<String, dynamic>.from(e)))
+        .where((n) => n.id.isNotEmpty && n.title.isNotEmpty)
+        .toList();
   }
 
   static List<MerchantOffer> _parseOffers(dynamic value) {

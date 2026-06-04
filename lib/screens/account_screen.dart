@@ -2,11 +2,13 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../core/theme/app_colors.dart';
 import '../providers/app_provider.dart';
 import '../utils/account_role_switch.dart';
 import '../utils/extensions.dart';
 import '../utils/helpers.dart';
 import '../utils/merchant_service_labels.dart';
+import '../widgets/merchant/quick_publish_panel.dart';
 import '../widgets/app_image.dart';
 import '../widgets/app_logo.dart';
 import 'notifications_screen.dart';
@@ -80,7 +82,7 @@ class _MerchantAccountView extends StatelessWidget {
                 builder: (context) => const NotificationsScreen()),
           ),
           child: const Icon(CupertinoIcons.bell_fill,
-              color: Colors.orange, size: 22),
+              color: AppColors.accent, size: 22),
         ),
       ),
       child: SafeArea(
@@ -103,7 +105,7 @@ class _MerchantAccountView extends StatelessWidget {
                     width: 60,
                     height: 60,
                     decoration: BoxDecoration(
-                      color: Colors.orange.shade100,
+                      color: AppColors.accentLight.withValues(alpha: 0.35),
                       shape: BoxShape.circle,
                     ),
                     child: AppImage(
@@ -160,7 +162,7 @@ class _MerchantAccountView extends StatelessWidget {
               title: 'الانتقال إلى حساب الزبون',
               subtitle: 'احتفظ بنفس الدخول واستخدم واجهة الزبون',
               icon: CupertinoIcons.person_fill,
-              color: Colors.orange,
+              color: AppColors.accent,
               onTap: () => switchAccountRoleWithLoading(
                 context,
                 appProvider,
@@ -192,7 +194,7 @@ class _MerchantAccountView extends StatelessWidget {
                         child: _MetricTile(
                           label: 'الطلبات',
                           value: '${appProvider.merchantOrdersCount}',
-                          color: Colors.orange,
+                          color: AppColors.accent,
                         ),
                       ),
                     ],
@@ -310,7 +312,7 @@ class _MerchantAccountView extends StatelessWidget {
                     title: 'لوحة التاجر',
                     subtitle:
                         'مؤشرات الأداء والملخصات الخاصة بـ ${labels.storeLabelAr}',
-                    color: Colors.orange,
+                    color: AppColors.accent,
                     onTap: () => Navigator.of(context).push(CupertinoPageRoute(
                         builder: (_) => const MerchantDashboardScreen())),
                   ),
@@ -760,39 +762,10 @@ class _LogoutButton extends StatelessWidget {
   }
 }
 
-String _servicePublishLabel(String serviceId) {
-  switch (serviceId) {
-    case 'restaurant':
-      return 'نشر منيو';
-    case 'product':
-      return 'نشر منتجات';
-    case 'real_estate':
-      return 'نشر عقار';
-    case 'professionals':
-      return 'تحديث الملف';
-    case 'cars':
-      return 'نشر سيارة';
-    default:
-      return 'نشر الآن';
-  }
-}
+String _servicePublishLabel(String serviceId) => merchantPublishLabel(serviceId);
 
-String _servicePublishSubtitle(String serviceId) {
-  switch (serviceId) {
-    case 'restaurant':
-      return 'أضف وجباتك ومنيو مطعمك من هنا.';
-    case 'product':
-      return 'أضف المنتجات واختر القسم الفرعي المناسب.';
-    case 'real_estate':
-      return 'أنشئ إعلان بيع أو إيجار للعقار.';
-    case 'professionals':
-      return 'حدّث ملفك المهني وصور أعمالك ووسائل التواصل.';
-    case 'cars':
-      return 'أنشئ إعلانًا أو خدمة خاصة بالسيارات.';
-    default:
-      return 'نشر المحتوى الخاص بهذه الخدمة.';
-  }
-}
+String _servicePublishSubtitle(String serviceId) =>
+    merchantPublishSubtitle(serviceId);
 
 void _openServicePublisher(
   BuildContext context,
@@ -845,7 +818,7 @@ class _ServiceStatusPills extends StatelessWidget {
             ),
             selected: selected,
             onSelected: (_) => onActivate(serviceId),
-            selectedColor: Colors.deepOrange,
+            selectedColor: AppColors.accent,
             backgroundColor: Colors.white,
             labelStyle: TextStyle(
               color: selected ? Colors.white : Colors.black87,
@@ -884,12 +857,12 @@ class _ServiceManagementCard extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         decoration: BoxDecoration(
           color: active
-              ? Colors.deepOrange.withValues(alpha: 0.06)
+              ? AppColors.accent.withValues(alpha: 0.06)
               : const Color(0xFFF8F9FC),
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
             color: active
-                ? Colors.deepOrange.withValues(alpha: 0.25)
+                ? AppColors.accent.withValues(alpha: 0.25)
                 : const Color(0xFFE6E8F0),
           ),
         ),
@@ -919,7 +892,7 @@ class _ServiceManagementCard extends StatelessWidget {
                         ),
                         decoration: BoxDecoration(
                           color: active
-                              ? Colors.deepOrange.withValues(alpha: 0.12)
+                              ? AppColors.accent.withValues(alpha: 0.12)
                               : Colors.green.withValues(alpha: 0.12),
                           borderRadius: BorderRadius.circular(999),
                         ),
@@ -928,7 +901,7 @@ class _ServiceManagementCard extends StatelessWidget {
                           style: TextStyle(
                             fontFamily: 'Cairo',
                             fontWeight: FontWeight.w700,
-                            color: active ? Colors.deepOrange : Colors.green,
+                            color: active ? AppColors.accent : Colors.green,
                             fontSize: 11,
                           ),
                         ),
@@ -953,7 +926,7 @@ class _ServiceManagementCard extends StatelessWidget {
             ElevatedButton.icon(
               onPressed: onPublish,
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.deepOrange,
+                backgroundColor: AppColors.accent,
                 foregroundColor: Colors.white,
                 padding:
                     const EdgeInsets.symmetric(horizontal: 12, vertical: 10),

@@ -144,7 +144,7 @@ class _CatalogResultCard extends StatelessWidget {
                   style: const TextStyle(
                     fontFamily: 'Cairo',
                     fontWeight: FontWeight.w800,
-                    color: Colors.deepOrange,
+                    color: const Color(0xFFF5A01D),
                   ),
                 ),
               ],
@@ -162,7 +162,7 @@ class _CatalogResultCard extends StatelessWidget {
           ),
           CupertinoButton(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            color: Colors.orange,
+            color: const Color(0xFFF5A01D),
             minimumSize: Size.zero,
             onPressed: onAdd,
             child: const Text(

@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 const accountBackground = Color(0xFFF2F2F7);
 const accountHeadline = Color(0xFF1A1A1A);
 const accountBodyGray = Color(0xFF6B7280);
-const accountBrandRed = Color(0xFFE60012);
+const accountBrandRed = Color(0xFFF5A01D);
 
 abstract final class AccountUi {
   static const brandGradient = LinearGradient(

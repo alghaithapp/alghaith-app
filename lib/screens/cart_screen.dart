@@ -15,7 +15,7 @@ import '../utils/extensions.dart';
 import '../widgets/app_image.dart';
 import 'catalog_search_screen.dart';
 
-const _brandRed = Color(0xFFE60012);
+const _brandRed = Color(0xFFF5A01D);
 const _brandRedGradient = LinearGradient(
   colors: [_brandRed, Color(0xFFFF3D00)],
   begin: Alignment.centerLeft,

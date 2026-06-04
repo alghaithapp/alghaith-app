@@ -3,7 +3,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/theme/app_colors.dart';
 import '../../providers/app_provider.dart';
+import '../../utils/role_switch_notifications.dart';
 import '../../widgets/safe_bottom_bar.dart';
 import 'merchant_dashboard_screen.dart';
 import 'merchant_earnings_screen.dart';
@@ -28,12 +30,12 @@ class _MerchantShellState extends State<MerchantShell> {
   // قائمة الإشعارات المنتظرة (تُعرض واحداً تلو الآخر)
   final List<_BannerData> _pendingBanners = [];
 
-  final List<Widget> _screens = const [
-    MerchantDashboardScreen(),
-    MerchantOrdersScreen(),
-    MerchantProductsScreen(),
-    MerchantEarningsScreen(),
-    MerchantMoreScreen(),
+  late final List<Widget> _screens = [
+    const MerchantDashboardScreen(),
+    MerchantOrdersScreen(onNavigateHome: () => setState(() => _currentIndex = 0)),
+    const MerchantProductsScreen(),
+    const MerchantEarningsScreen(),
+    const MerchantMoreScreen(),
   ];
 
   @override
@@ -54,6 +56,7 @@ class _MerchantShellState extends State<MerchantShell> {
       _refreshTimer = Timer.periodic(const Duration(seconds: 20), (_) {
         _pollForNewOrders();
       });
+      RoleSwitchNotificationPresenter.showIfNeeded(context);
     });
   }
 
@@ -69,6 +72,7 @@ class _MerchantShellState extends State<MerchantShell> {
     final provider = context.read<AppProvider>();
     await provider.refreshMerchantIncomingOrders();
     if (!mounted) return;
+    provider.tickMerchantNotificationTimers();
 
     final orders = provider.merchantIncomingOrders;
     final newCount = provider.merchantPendingOrdersCount;
@@ -117,7 +121,11 @@ class _MerchantShellState extends State<MerchantShell> {
     _lastPendingCount = newCount;
     _lastOrderStatuses = {for (final o in orders) o.id: o.statusKey};
 
-    _showNextBanner();
+    if (provider.inAppAlertsEnabled) {
+      _showNextBanner();
+    } else {
+      _pendingBanners.clear();
+    }
   }
 
   void _enqueueBanner(_BannerData data) {
@@ -125,6 +133,11 @@ class _MerchantShellState extends State<MerchantShell> {
   }
 
   void _showNextBanner() {
+    final provider = context.read<AppProvider>();
+    if (!provider.inAppAlertsEnabled) {
+      _pendingBanners.clear();
+      return;
+    }
     if (_notificationEntry != null) return; // يوجد بانر يعرض حالياً
     if (_pendingBanners.isEmpty) return;
     final data = _pendingBanners.removeAt(0);
@@ -132,6 +145,7 @@ class _MerchantShellState extends State<MerchantShell> {
   }
 
   void _showBanner(_BannerData data) {
+    if (!context.read<AppProvider>().inAppAlertsEnabled) return;
     _notificationEntry?.remove();
     _notificationEntry = null;
 
@@ -141,6 +155,10 @@ class _MerchantShellState extends State<MerchantShell> {
       builder: (_) => _MerchantNotificationBanner(
         data: data,
         onTap: () {
+          context.read<AppProvider>().markNotificationsReadForOrder(
+            data.orderNumber,
+            'merchant',
+          );
           entry.remove();
           _notificationEntry = null;
           setState(() => _currentIndex = 1);
@@ -165,7 +183,7 @@ class _MerchantShellState extends State<MerchantShell> {
     final destinations = [
       const NavigationDestination(
         icon: Icon(Icons.dashboard_outlined),
-        selectedIcon: Icon(Icons.dashboard_rounded, color: Colors.deepOrange),
+        selectedIcon: Icon(Icons.dashboard_rounded, color: AppColors.accent),
         label: 'الرئيسية',
       ),
       NavigationDestination(
@@ -177,36 +195,40 @@ class _MerchantShellState extends State<MerchantShell> {
         selectedIcon: Badge(
           isLabelVisible: provider.merchantPendingOrdersCount > 0,
           label: Text('${provider.merchantPendingOrdersCount}'),
-          child: const Icon(Icons.receipt_long_rounded, color: Colors.deepOrange),
+          child: const Icon(Icons.receipt_long_rounded, color: AppColors.accent),
         ),
         label: 'الطلبات',
       ),
       NavigationDestination(
         icon: const Icon(Icons.inventory_2_outlined),
         selectedIcon:
-            const Icon(Icons.inventory_2_rounded, color: Colors.deepOrange),
+            const Icon(Icons.inventory_2_rounded, color: AppColors.accent),
         label: labels.productsTitleAr,
       ),
       const NavigationDestination(
         icon: Icon(Icons.payments_outlined),
-        selectedIcon: Icon(Icons.payments_rounded, color: Colors.deepOrange),
+        selectedIcon: Icon(Icons.payments_rounded, color: AppColors.accent),
         label: 'الأرباح',
       ),
       const NavigationDestination(
         icon: Icon(Icons.more_horiz_outlined),
-        selectedIcon: Icon(Icons.more_horiz_rounded, color: Colors.deepOrange),
+        selectedIcon: Icon(Icons.more_horiz_rounded, color: AppColors.accent),
         label: 'المزيد',
       ),
     ];
 
+    final hideBottomNav = _currentIndex == 1;
+
     return Scaffold(
       backgroundColor:
-          isDark ? const Color(0xFF101010) : const Color(0xFFF4F4F6),
+          isDark ? const Color(0xFF101010) : const Color(0xFFF2F2F7),
       body: SafeArea(
         bottom: false,
         child: _screens[_currentIndex],
       ),
-      bottomNavigationBar: SafeBottomBar(
+      bottomNavigationBar: hideBottomNav
+          ? null
+          : SafeBottomBar(
         color: isDark ? const Color(0xFF171717) : Colors.white,
         boxShadow: [
           BoxShadow(

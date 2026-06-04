@@ -3,10 +3,12 @@ import 'dart:async';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:animate_do/animate_do.dart';
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
 import 'core/config/app_config.dart';
+import 'core/theme/app_colors.dart';
+import 'core/theme/app_theme.dart';
+import 'core/ui/app_bottom_nav_style.dart';
 import 'core/ui/app_system_ui.dart';
 import 'providers/app_provider.dart';
 import 'screens/home_screen.dart';
@@ -26,6 +28,7 @@ import 'screens/merchant/merchant_shell.dart';
 import 'screens/admin/admin_dashboard_screen.dart';
 import 'services/supabase_service.dart';
 import 'widgets/app_logo.dart';
+import 'utils/role_switch_notifications.dart';
 import 'widgets/customer_order_notifications.dart';
 import 'widgets/exit_confirm_scope.dart';
 import 'widgets/safe_bottom_bar.dart';
@@ -198,23 +201,9 @@ class AlGhaithApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       themeMode: appProvider.themeMode,
       // تحديد لون الخلفية الافتراضي لمنع الشاشة الرصاصية
-      color: const Color(0xFFF2F2F7),
-      theme: ThemeData(
-        platform: TargetPlatform.iOS,
-        primarySwatch: Colors.orange,
-        textTheme: GoogleFonts.cairoTextTheme(),
-        scaffoldBackgroundColor: const Color(0xFFF2F2F7),
-      ),
-      darkTheme: ThemeData(
-        brightness: Brightness.dark,
-        platform: TargetPlatform.iOS,
-        primarySwatch: Colors.orange,
-        textTheme: GoogleFonts.cairoTextTheme(ThemeData.dark().textTheme),
-        scaffoldBackgroundColor: const Color(0xFF111111),
-        cupertinoOverrideTheme: const CupertinoThemeData(
-          brightness: Brightness.dark,
-        ),
-      ),
+      color: AppColors.scaffold,
+      theme: AppTheme.light,
+      darkTheme: AppTheme.dark,
       builder: (context, child) {
         return AppSystemUiScope(
           child: Directionality(
@@ -272,6 +261,7 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
       _orderRefreshTimer = Timer.periodic(const Duration(seconds: 20), (_) {
         _pollCustomerOrders();
       });
+      RoleSwitchNotificationPresenter.showIfNeeded(context);
     });
   }
 
@@ -299,6 +289,7 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
     final provider = context.read<AppProvider>();
     await provider.refreshCustomerOrders();
     if (!mounted) return;
+    provider.tickCustomerNotificationTimers();
 
     for (final order in provider.orders) {
       final previous = _lastOrderSnapshots[order.id];
@@ -306,7 +297,7 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
         order: order,
         previous: previous,
       );
-      if (banner != null) {
+      if (banner != null && provider.inAppAlertsEnabled) {
         _pendingBanners.add(banner);
       }
     }
@@ -319,10 +310,18 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
         ),
     };
 
-    _showNextCustomerBanner();
+    if (provider.inAppAlertsEnabled) {
+      _showNextCustomerBanner();
+    } else {
+      _pendingBanners.clear();
+    }
   }
 
   void _showNextCustomerBanner() {
+    if (!context.read<AppProvider>().inAppAlertsEnabled) {
+      _pendingBanners.clear();
+      return;
+    }
     if (_notificationEntry != null) return;
     if (_pendingBanners.isEmpty) return;
     final data = _pendingBanners.removeAt(0);
@@ -330,6 +329,7 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
   }
 
   void _showCustomerBanner(CustomerBannerData data) {
+    if (!context.read<AppProvider>().inAppAlertsEnabled) return;
     _notificationEntry?.remove();
     _notificationEntry = null;
 
@@ -339,6 +339,10 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
       builder: (_) => CustomerOrderNotificationBanner(
         data: data,
         onTap: () {
+          context.read<AppProvider>().markNotificationsReadForOrder(
+            data.orderNumber,
+            'customer',
+          );
           entry.remove();
           _notificationEntry = null;
           setState(() => _currentIndex = 3);
@@ -414,11 +418,15 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
         ? Badge(
             label: Text('$badgeCount'),
             child: Icon(icon,
-                color: isActive ? Colors.orange[800] : CupertinoColors.systemGrey,
+                color: isActive
+                    ? AppBottomNavStyle.activeColor
+                    : CupertinoColors.systemGrey,
                 size: isActive ? 26 : 24),
           )
         : Icon(icon,
-            color: isActive ? Colors.orange[800] : CupertinoColors.systemGrey,
+            color: isActive
+                ? AppBottomNavStyle.activeColor
+                : CupertinoColors.systemGrey,
             size: isActive ? 26 : 24);
     return GestureDetector(
       onTap: () {
@@ -441,8 +449,9 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
             style: TextStyle(
                 fontSize: 10,
                 fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
-                color:
-                    isActive ? Colors.orange[800] : CupertinoColors.systemGrey,
+                color: isActive
+                    ? AppBottomNavStyle.activeColor
+                    : CupertinoColors.systemGrey,
                 fontFamily: 'Cairo'),
           )
         ],
@@ -467,14 +476,12 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
-                    colors: isActive
-                        ? [Colors.orange[900]!, Colors.orange[700]!]
-                        : [Colors.orange[700]!, Colors.orange[500]!],
+                    colors: AppBottomNavStyle.primaryGradientColors,
                   ),
                   shape: BoxShape.circle,
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.orange.withValues(alpha: 0.4),
+                      color: AppColors.accent.withValues(alpha: 0.4),
                       blurRadius: 15,
                       spreadRadius: 2,
                       offset: const Offset(0, 5),
@@ -494,7 +501,8 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
                           child: Container(
                             padding: const EdgeInsets.all(4),
                             decoration: const BoxDecoration(
-                                color: Colors.red, shape: BoxShape.circle),
+                                color: AppColors.primary,
+                                shape: BoxShape.circle),
                             constraints: const BoxConstraints(
                                 minWidth: 18, minHeight: 18),
                             child: Text(
@@ -518,8 +526,9 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
             style: TextStyle(
                 fontSize: 10,
                 fontWeight: FontWeight.bold,
-                color:
-                    isActive ? Colors.orange[800] : CupertinoColors.systemGrey,
+                color: isActive
+                    ? AppBottomNavStyle.activeColor
+                    : CupertinoColors.systemGrey,
                 fontFamily: 'Cairo'),
           )
         ],
@@ -542,13 +551,7 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
               width: 58,
               height: 58,
               decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: isActive
-                      ? [Colors.orange[900]!, Colors.deepOrange[700]!]
-                      : [Colors.orange[700]!, Colors.orange[500]!],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
+                gradient: AppBottomNavStyle.primaryGradient,
                 borderRadius: BorderRadius.circular(18),
                 border: Border.all(
                   color: Colors.white.withValues(alpha: 0.22),
@@ -556,7 +559,7 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.orange.withValues(alpha: 0.28),
+                    color: AppColors.accent.withValues(alpha: 0.28),
                     blurRadius: 16,
                     spreadRadius: 1,
                     offset: const Offset(0, 6),
@@ -578,12 +581,12 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
                         height: 20,
                         alignment: Alignment.center,
                         decoration: BoxDecoration(
-                          color: Colors.red,
+                          color: AppColors.primary,
                           borderRadius: BorderRadius.circular(999),
                           border: Border.all(color: Colors.white, width: 1.5),
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.red.withValues(alpha: 0.25),
+                              color: AppColors.primary.withValues(alpha: 0.25),
                               blurRadius: 8,
                               offset: const Offset(0, 3),
                             ),
@@ -609,7 +612,9 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
             style: TextStyle(
               fontSize: 10,
               fontWeight: FontWeight.bold,
-              color: isActive ? Colors.orange[800] : CupertinoColors.systemGrey,
+              color: isActive
+                  ? AppBottomNavStyle.activeColor
+                  : CupertinoColors.systemGrey,
               fontFamily: 'Cairo',
             ),
           ),

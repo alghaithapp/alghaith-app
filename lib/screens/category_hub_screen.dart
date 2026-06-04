@@ -29,7 +29,9 @@ class _CategoryHubScreenState extends State<CategoryHubScreen> {
   Widget build(BuildContext context) {
     final provider = context.watch<AppProvider>();
     final stats = provider.marketplaceStats?.category(widget.category.id);
-    final subs = widget.category.subCategories;
+    final subs = widget.category.id == 'product'
+        ? MarketplaceCatalog.shoppingSubCategories
+        : widget.category.subCategories;
 
     return CupertinoPageScaffold(
       backgroundColor: const Color(0xFFF2F2F7),
@@ -78,7 +80,7 @@ class _CategoryHubScreenState extends State<CategoryHubScreen> {
                                 fontFamily: 'Cairo',
                                 fontSize: 13,
                                 fontWeight: FontWeight.w600,
-                                color: Color(0xFFE60012),
+                                color: Color(0xFFF5A01D),
                               ),
                             ),
                           ],
@@ -163,59 +165,30 @@ class _SubCategoryCard extends StatelessWidget {
                 fit: BoxFit.cover,
               ),
             ),
-            Container(
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(20),
-                gradient: LinearGradient(
-                  begin: Alignment.bottomCenter,
-                  end: Alignment.topCenter,
-                  colors: [
-                    Colors.black.withValues(alpha: 0.65),
-                    Colors.transparent,
-                  ],
-                ),
-              ),
-            ),
-            Positioned(
-              right: 16,
-              left: 16,
-              bottom: 14,
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      sub.titleAr,
-                      style: const TextStyle(
-                        fontFamily: 'Cairo',
-                        fontWeight: FontWeight.bold,
-                        fontSize: 18,
-                        color: Colors.white,
-                      ),
+            if (count > 0)
+              Positioned(
+                top: 8,
+                left: 8,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF5A01D),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    '$count',
+                    style: const TextStyle(
+                      fontFamily: 'Cairo',
+                      fontWeight: FontWeight.bold,
+                      fontSize: 12,
+                      color: Colors.white,
                     ),
                   ),
-                  if (count > 0)
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFE60012),
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Text(
-                        '$count',
-                        style: const TextStyle(
-                          fontFamily: 'Cairo',
-                          fontWeight: FontWeight.bold,
-                          fontSize: 12,
-                          color: Colors.white,
-                        ),
-                      ),
-                    ),
-                ],
+                ),
               ),
-            ),
           ],
         ),
       ),

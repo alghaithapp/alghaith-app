@@ -30,34 +30,46 @@ void openMerchantPublisher(BuildContext context, String serviceId) {
 }
 
 String merchantPublishLabel(String serviceId) {
-  switch (serviceId) {
+  switch (normalizeMerchantServiceId(serviceId)) {
     case 'restaurant':
       return 'نشر منيو';
     case 'product':
       return 'نشر منتجات';
+    case 'offers':
+      return 'نشر عرض';
     case 'real_estate':
       return 'نشر عقار';
     case 'professionals':
       return 'تحديث الملف';
     case 'cars':
       return 'نشر سيارة';
+    case 'tourism':
+      return 'نشر باقة';
+    case 'used':
+      return 'نشر إعلان';
     default:
-      return 'نشر الآن';
+      return 'نشر ${merchantServiceLabels(serviceId).itemSingularAr}';
   }
 }
 
 String merchantPublishSubtitle(String serviceId) {
-  switch (serviceId) {
+  switch (normalizeMerchantServiceId(serviceId)) {
     case 'restaurant':
       return 'أضف وجباتك ومنيو مطعمك مباشرة.';
     case 'product':
       return 'أنشئ منتجًا واختر القسم الفرعي المناسب.';
+    case 'offers':
+      return 'أضف عروضك ومنتجاتك المخفّضة.';
     case 'real_estate':
       return 'أنشئ إعلان بيع أو إيجار للعقار.';
     case 'professionals':
       return 'حدّث ملفك المهني وبيانات التواصل.';
     case 'cars':
       return 'أنشئ إعلانًا أو خدمة خاصة بالسيارات.';
+    case 'tourism':
+      return 'أضف باقاتك وعروض السفر.';
+    case 'used':
+      return 'انشر إعلانات المستعمل.';
     default:
       return 'ابدأ النشر في هذه الخدمة.';
   }

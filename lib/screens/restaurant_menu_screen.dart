@@ -7,11 +7,13 @@ import '../models/app_models.dart';
 import '../providers/app_provider.dart';
 import '../utils/extensions.dart';
 import '../utils/helpers.dart';
+import '../utils/merchant_profile_fields.dart';
+import '../core/theme/app_colors.dart';
 import '../widgets/app_image.dart';
 import 'cart_screen.dart';
 
-const _brandRed = Color(0xFFE60012);
-const _brandRedDark = Color(0xFFC4000F);
+const _brandRed = AppColors.accent;
+const _brandRedDark = AppColors.accentDark;
 
 class RestaurantMenuScreen extends StatefulWidget {
   final Map<String, dynamic> storeProfile;
@@ -83,7 +85,7 @@ class _RestaurantMenuScreenState extends State<RestaurantMenuScreen>
       categoryLabelAr: 'مطعم',
       categoryLabelEn: 'Restaurant',
       image: 'assets/images/cat_restaurant.png',
-      address: profile['address']?.toString(),
+      address: MerchantProfileFields.addressFromMap(profile),
       merchantPhone: phone,
       merchantStoreName: profile['store_name']?.toString(),
       merchantLatitude: _toDouble(
@@ -92,8 +94,9 @@ class _RestaurantMenuScreenState extends State<RestaurantMenuScreen>
       merchantLongitude: _toDouble(
         profile['longitude'] ?? profile['lng'] ?? profile['merchant_longitude'],
       ),
-      merchantOpenTime: profile['open_time']?.toString(),
-      merchantCloseTime: profile['close_time']?.toString(),
+      merchantOpenTime: MerchantProfileFields.timeFromMap(profile, isOpen: true),
+      merchantCloseTime:
+          MerchantProfileFields.timeFromMap(profile, isOpen: false),
       merchantIsOpen: profile['is_open'] is bool
           ? profile['is_open'] as bool
           : (profile['is_open']?.toString().toLowerCase() == 'true'),
@@ -240,11 +243,10 @@ class _RestaurantMenuScreenState extends State<RestaurantMenuScreen>
   }
 
   String get _workingHoursLabel {
-    final open = _restaurant.merchantOpenTime?.trim() ?? '';
-    final close = _restaurant.merchantCloseTime?.trim() ?? '';
-    if (open.isEmpty && close.isEmpty) return 'أوقات العمل غير متاحة';
-    if (open.isNotEmpty && close.isNotEmpty) return '$open — $close';
-    return open.isNotEmpty ? 'يفتح $open' : 'يغلق $close';
+    return MerchantProfileFields.workingHoursLabel({
+      'openTime': _restaurant.merchantOpenTime,
+      'closeTime': _restaurant.merchantCloseTime,
+    });
   }
 
   @override

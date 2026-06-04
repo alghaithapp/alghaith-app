@@ -8,11 +8,16 @@ import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
 import 'package:provider/provider.dart';
 
 import '../../models/app_models.dart';
+import '../../core/theme/app_colors.dart';
+import '../../core/ui/app_bottom_nav_style.dart';
 import '../../providers/app_provider.dart';
 import 'delivery_earnings_screen.dart';
 import 'delivery_setup_screen.dart';
 import '../../utils/extensions.dart';
 import '../../utils/helpers.dart';
+import '../../utils/role_notification_poller.dart';
+import '../../utils/role_switch_notifications.dart';
+import '../../screens/notifications_screen.dart';
 import '../../widgets/safe_bottom_bar.dart';
 
 class DeliveryShell extends StatefulWidget {
@@ -37,7 +42,7 @@ class _DeliveryShellState extends State<DeliveryShell> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<AppProvider>().refreshCourierOrders();
+      RoleSwitchNotificationPresenter.showIfNeeded(context);
     });
   }
 
@@ -45,7 +50,11 @@ class _DeliveryShellState extends State<DeliveryShell> {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    return Scaffold(
+    return RoleNotificationPoller(
+      role: 'delivery',
+      onRefresh: (provider) => provider.refreshCourierOrders(),
+      pollBanners: (provider) => provider.pollCourierBanners(),
+      child: Scaffold(
       backgroundColor:
           isDark ? const Color(0xFF111111) : const Color(0xFFF2F2F7),
       body: SafeArea(
@@ -77,6 +86,7 @@ class _DeliveryShellState extends State<DeliveryShell> {
           ),
         ),
       ),
+      ),
     );
   }
 
@@ -89,7 +99,7 @@ class _DeliveryShellState extends State<DeliveryShell> {
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(icon,
-              color: isActive ? Colors.orange[800] : CupertinoColors.systemGrey,
+              color: isActive ? AppBottomNavStyle.activeColor : CupertinoColors.systemGrey,
               size: 26),
           const SizedBox(height: 4),
           Text(
@@ -97,7 +107,7 @@ class _DeliveryShellState extends State<DeliveryShell> {
             style: TextStyle(
               fontSize: 9,
               fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
-              color: isActive ? Colors.orange[800] : CupertinoColors.systemGrey,
+              color: isActive ? AppBottomNavStyle.activeColor : CupertinoColors.systemGrey,
               fontFamily: 'Cairo',
             ),
           ),
@@ -144,7 +154,7 @@ class DeliveryDashboardScreen extends StatelessWidget {
                     child: _StatBox(
                         label: 'جديدة',
                         value: '$waiting',
-                        color: Colors.orange)),
+                        color: AppColors.accent)),
                 const SizedBox(width: 10),
                 Expanded(
                     child: _StatBox(
@@ -532,6 +542,41 @@ class DeliveryAccountScreen extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 12),
+            ListTile(
+              tileColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              leading: const Icon(Icons.notifications_outlined,
+                  color: Color(0xFF007A7A)),
+              title: const Text(
+                'الإشعارات',
+                style: TextStyle(
+                  fontFamily: 'Cairo',
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              trailing: appProvider.unreadNotificationCount > 0
+                  ? CircleAvatar(
+                      radius: 12,
+                      backgroundColor: const Color(0xFFF5A01D),
+                      child: Text(
+                        '${appProvider.unreadNotificationCount}',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    )
+                  : null,
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => const NotificationsScreen(),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
             _InfoTile(
               label: 'الاسم',
               value: '${profile['name'] ?? appProvider.deliveryCourierName}',
@@ -567,7 +612,7 @@ class DeliveryAccountScreen extends StatelessWidget {
             ),
             const SizedBox(height: 12),
             CupertinoButton.filled(
-              color: Colors.orange.shade800,
+              color: AppColors.accentDark,
               onPressed: () {
                 Navigator.of(context).push(
                   CupertinoPageRoute(
@@ -642,7 +687,7 @@ class _DeliveryOrderCard extends StatelessWidget {
           Row(
             children: [
               const Icon(CupertinoIcons.bag_fill,
-                  color: Colors.orange, size: 18),
+                  color: AppColors.accent, size: 18),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
@@ -836,7 +881,7 @@ class _ActiveDeliveryCard extends StatelessWidget {
             style: const TextStyle(
               fontFamily: 'Cairo',
               fontWeight: FontWeight.w800,
-              color: Colors.deepOrange,
+              color: AppColors.accent,
             ),
           ),
           const SizedBox(height: 12),
@@ -865,7 +910,7 @@ class _ActiveDeliveryCard extends StatelessWidget {
                 CupertinoButton(
                   padding:
                       const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                  color: Colors.orange,
+                  color: AppColors.accent,
                   borderRadius: BorderRadius.circular(12),
                   minimumSize: const ui.Size(0, 0),
                   onPressed: () => appProvider.markDeliveryPickedUp(order.id),
@@ -966,7 +1011,7 @@ class _DeliveryMapPreviewScreenState extends State<_DeliveryMapPreviewScreen> {
       await manager.create(
         CircleAnnotationOptions(
           geometry: Point(coordinates: _customerPosition),
-          circleColor: const Color(0xFFE60012).value,
+          circleColor: const Color(0xFFF5A01D).value,
           circleRadius: 8,
           circleStrokeColor: Colors.white.value,
           circleStrokeWidth: 2,

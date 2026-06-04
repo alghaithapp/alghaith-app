@@ -10,6 +10,7 @@ import '../../utils/dummy_data.dart';
 import '../../utils/helpers.dart';
 import '../../utils/merchant_service_labels.dart';
 import '../../widgets/app_image.dart';
+import 'merchant_store_sections_screen.dart';
 
 class ProductFormScreen extends StatefulWidget {
   final bool isRestaurant;
@@ -38,6 +39,7 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
   bool _isAvailable = true;
   String? _selectedServiceId;
   String? _selectedSubCategoryId;
+  String? _selectedSectionId;
 
   @override
   void initState() {
@@ -51,6 +53,7 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
     _isAvailable = item?.isAvailable ?? true;
     _selectedServiceId = widget.serviceId;
     _selectedSubCategoryId = item?.subCategory;
+    _selectedSectionId = item?.sectionId;
   }
 
   @override
@@ -80,6 +83,9 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
     final shoppingSubCategories = showSubCategoryPicker
         ? DummyData.shoppingSubCategories
         : const <ServiceCategory>[];
+    final storeSections = showSubCategoryPicker
+        ? appProvider.merchantProductSections
+        : const [];
     final isEdit = widget.item != null;
     final title = isEdit
         ? labels.editItemAr
@@ -196,6 +202,93 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                           ),
                         ),
                       ),
+                      const SizedBox(height: 16),
+                    ],
+                    if (showSubCategoryPicker) ...[
+                      Row(
+                        children: [
+                          const Expanded(
+                            child: Text(
+                              'قسم داخل متجرك',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w800,
+                                fontFamily: 'Cairo',
+                              ),
+                            ),
+                          ),
+                          TextButton(
+                            onPressed: () async {
+                              await Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (_) =>
+                                      const MerchantStoreSectionsScreen(),
+                                ),
+                              );
+                              if (mounted) setState(() {});
+                            },
+                            child: const Text(
+                              'إدارة الأقسام',
+                              style: TextStyle(fontFamily: 'Cairo'),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      if (storeSections.isEmpty)
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFFF3E0),
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          child: const Text(
+                            'أنشئ قسماً واحداً على الأقل (مكسرات، حلويات…) ثم اختره للمنتج.',
+                            style: TextStyle(
+                              fontFamily: 'Cairo',
+                              fontSize: 13,
+                              height: 1.4,
+                            ),
+                          ),
+                        )
+                      else
+                        DropdownButtonFormField<String>(
+                          value: storeSections
+                                  .any((s) => s.id == _selectedSectionId)
+                              ? _selectedSectionId
+                              : null,
+                          items: storeSections
+                              .map(
+                                (section) => DropdownMenuItem<String>(
+                                  value: section.id,
+                                  child: Text(
+                                    section.nameAr,
+                                    style:
+                                        const TextStyle(fontFamily: 'Cairo'),
+                                  ),
+                                ),
+                              )
+                              .toList(),
+                          onChanged: (value) {
+                            setState(() => _selectedSectionId = value);
+                          },
+                          validator: (value) {
+                            if (storeSections.isNotEmpty &&
+                                (value == null || value.isEmpty)) {
+                              return 'اختر قسم المتجر للمنتج';
+                            }
+                            return null;
+                          },
+                          decoration: InputDecoration(
+                            filled: true,
+                            fillColor: const Color(0xFFF7F8FC),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(14),
+                              borderSide: BorderSide.none,
+                            ),
+                          ),
+                        ),
                       const SizedBox(height: 16),
                     ],
                     Text(
@@ -443,6 +536,14 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
       );
       return;
     }
+    if (serviceId == 'product' && provider.merchantProductSections.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('أنشئ قسماً داخل متجرك أولاً من «إدارة الأقسام».'),
+        ),
+      );
+      return;
+    }
 
     final isEdit = widget.item != null;
     final labels = merchantServiceLabels(serviceId);
@@ -461,6 +562,7 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
       subCategory: serviceId == 'product'
           ? (_selectedSubCategoryId ?? widget.item?.subCategory)
           : widget.item?.subCategory,
+      sectionId: serviceId == 'product' ? _selectedSectionId : widget.item?.sectionId,
       categoryLabelAr: labels.productsTitleAr,
       categoryLabelEn: labels.productsTitleEn,
       image: (_imageBase64 != null && _imageBase64!.startsWith('http'))

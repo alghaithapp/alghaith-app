@@ -152,6 +152,24 @@ class ImageStorageService {
     return trimmed;
   }
 
+  /// صور مدمجة في التطبيق (ليست رفع المستخدم).
+  static bool isBundledAssetImage(String? value) {
+    final trimmed = value?.trim() ?? '';
+    return trimmed.startsWith('assets/');
+  }
+
+  /// صورة رفعها التاجر (رابط أو Base64) — تستبعد مسارات assets الافتراضية.
+  static bool isMerchantUploadedImage(String? value) {
+    final ref = normalizeImageRef(value);
+    if (ref == null || ref.isEmpty) return false;
+    if (isBundledAssetImage(ref)) return false;
+    return isRemoteUrl(ref) || isBase64Image(ref);
+  }
+
+  static String? merchantUploadedImageRef(String? value) {
+    return isMerchantUploadedImage(value) ? normalizeImageRef(value) : null;
+  }
+
   static String? resolveDisplayImage({
     String? imageBase64,
     String? image,

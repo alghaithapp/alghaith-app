@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../core/ui/account_ui.dart';
+import '../core/theme/app_colors.dart';
 import '../providers/app_provider.dart';
 import '../utils/account_role_switch.dart';
 import '../utils/helpers.dart';
@@ -24,7 +25,7 @@ class CustomerAccountView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<AppProvider>();
-    final notificationCount = provider.notifications.length;
+    final notificationCount = provider.unreadNotificationCount;
 
     return Scaffold(
       backgroundColor: accountBackground,
@@ -43,7 +44,7 @@ class CustomerAccountView extends StatelessWidget {
                     const SizedBox(height: 14),
                     _NavigationCard(
                       icon: Icons.storefront_rounded,
-                      iconColor: Colors.deepOrange,
+                      iconColor: AppColors.accent,
                       title: 'الانتقال إلى حساب التاجر',
                       subtitle: 'استخدم نفس الحساب وادخل إلى واجهة التاجر',
                       onTap: () => switchAccountRoleWithLoading(
@@ -334,7 +335,7 @@ class _SettingsListCard extends StatelessWidget {
       ),
       _SettingsItemData(
         icon: CupertinoIcons.doc_text_fill,
-        color: Colors.orange,
+        color: AppColors.accent,
         title: 'سجل الطلبات',
         onTap: () => Navigator.of(context, rootNavigator: true).push(
           CupertinoPageRoute(builder: (_) => const OrdersScreen()),
@@ -603,7 +604,7 @@ Future<void> _showEditProfileDialog(
           } else {
             avatarPreview = const CircleAvatar(
               radius: 36,
-              backgroundColor: Colors.orange,
+              backgroundColor: AppColors.accent,
               child: Icon(
                 CupertinoIcons.person_fill,
                 color: Colors.white,
@@ -634,7 +635,7 @@ Future<void> _showEditProfileDialog(
                         padding: const EdgeInsets.all(4),
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          border: Border.all(color: Colors.orange, width: 2),
+                          border: Border.all(color: AppColors.accent, width: 2),
                         ),
                         child: avatarPreview,
                       ),
@@ -664,7 +665,7 @@ Future<void> _showEditProfileDialog(
                         child: Container(
                           padding: const EdgeInsets.all(8),
                           decoration: const BoxDecoration(
-                            color: Colors.orange,
+                            color: AppColors.accent,
                             shape: BoxShape.circle,
                           ),
                           child: const Icon(
@@ -694,7 +695,7 @@ Future<void> _showEditProfileDialog(
               ),
               ElevatedButton(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.orange,
+                  backgroundColor: AppColors.accent,
                   foregroundColor: Colors.white,
                 ),
                 onPressed: () async {

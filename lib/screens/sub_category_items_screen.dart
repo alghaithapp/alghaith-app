@@ -263,7 +263,7 @@ class _SubCategoryItemsScreenState extends State<SubCategoryItemsScreen>
                                                   style: const TextStyle(
                                                     fontWeight: FontWeight.w900,
                                                     fontSize: 17,
-                                                    color: Colors.orange,
+                                                    color: const Color(0xFFF5A01D),
                                                   ),
                                                 ),
                                               ],
@@ -274,7 +274,7 @@ class _SubCategoryItemsScreenState extends State<SubCategoryItemsScreen>
                                                   padding: const EdgeInsets.symmetric(
                                                     horizontal: 20,
                                                   ),
-                                                  color: Colors.orange,
+                                                  color: const Color(0xFFF5A01D),
                                                   borderRadius:
                                                       BorderRadius.circular(12),
                                                   onPressed: () async {

@@ -13,7 +13,7 @@ class GuestAccountView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final notificationCount =
-        context.watch<AppProvider>().notifications.length;
+        context.watch<AppProvider>().unreadNotificationCount;
 
     return Scaffold(
       backgroundColor: accountBackground,

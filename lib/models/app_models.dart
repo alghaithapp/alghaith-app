@@ -22,6 +22,8 @@ class ListItem {
   final double? rating;
   final String category;
   final String? subCategory;
+  /// قسم داخل متجر التاجر (مكسرات، حلويات، …) — ليس قسم التسوق العام.
+  final String? sectionId;
   final String categoryLabelAr;
   final String categoryLabelEn;
   final String image;
@@ -57,6 +59,7 @@ class ListItem {
     this.rating,
     required this.category,
     this.subCategory,
+    this.sectionId,
     required this.categoryLabelAr,
     required this.categoryLabelEn,
     required this.image,
@@ -93,6 +96,7 @@ class ListItem {
     double? rating,
     String? category,
     String? subCategory,
+    String? sectionId,
     String? categoryLabelAr,
     String? categoryLabelEn,
     String? image,
@@ -128,6 +132,7 @@ class ListItem {
       rating: rating ?? this.rating,
       category: category ?? this.category,
       subCategory: subCategory ?? this.subCategory,
+      sectionId: sectionId ?? this.sectionId,
       categoryLabelAr: categoryLabelAr ?? this.categoryLabelAr,
       categoryLabelEn: categoryLabelEn ?? this.categoryLabelEn,
       image: image ?? this.image,
@@ -166,6 +171,7 @@ class ListItem {
       'rating': rating,
       'category': category,
       'subCategory': subCategory,
+      'sectionId': sectionId,
       'categoryLabelAr': categoryLabelAr,
       'categoryLabelEn': categoryLabelEn,
       'image': image,
@@ -204,6 +210,9 @@ class ListItem {
       rating: (map['rating'] as num?)?.toDouble(),
       category: (map['category'] as String?) ?? '',
       subCategory: map['subCategory'] as String?,
+      sectionId: (map['sectionId'] as String?)?.trim().isNotEmpty == true
+          ? (map['sectionId'] as String?)?.trim()
+          : (map['section_id'] as String?)?.trim(),
       categoryLabelAr: (map['categoryLabelAr'] as String?) ?? '',
       categoryLabelEn: (map['categoryLabelEn'] as String?) ?? '',
       image: (map['image'] as String?) ?? '',

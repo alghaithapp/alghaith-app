@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
 
+import '../theme/app_colors.dart';
+
 /// ألوان واجهة الشريط السفلي — مصدر واحد للأزرار الرئيسية.
 abstract final class AppBottomNavStyle {
-  static Color get activeOrange => Colors.orange.shade800;
+  static Color get activeColor => AppColors.accent;
 
   static List<Color> get primaryGradientColors => [
-        Colors.orange.shade700,
-        Colors.orange.shade500,
+        AppColors.accentDark,
+        AppColors.accent,
+        AppColors.accentLight,
       ];
 
   static LinearGradient get primaryGradient => LinearGradient(
@@ -21,7 +24,7 @@ abstract final class AppBottomNavStyle {
       borderRadius: BorderRadius.circular(radius),
       boxShadow: [
         BoxShadow(
-          color: Colors.orange.withValues(alpha: 0.28),
+          color: AppColors.accent.withValues(alpha: 0.35),
           blurRadius: 14,
           offset: const Offset(0, 6),
         ),

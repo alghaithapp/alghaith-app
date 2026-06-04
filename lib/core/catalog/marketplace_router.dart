@@ -8,6 +8,7 @@ import '../../screens/professionals_directory_screen.dart';
 import '../../screens/real_estate_form_screen.dart';
 import '../../screens/real_estate_listings_screen.dart';
 import '../../screens/shopping_stores_screen.dart';
+import '../../screens/car_request_hub_screen.dart';
 import '../../screens/taxi_request_screen.dart';
 import 'marketplace_catalog.dart';
 
@@ -23,6 +24,7 @@ class MarketplaceRouter {
               : MerchantStoreKind.shopping,
           serviceId: def.apiServiceId,
           productCategory: def.apiProductCategory,
+          marketplaceCategory: def.id,
           titleAr: def.storeTitleAr,
           subtitleAr: def.storeSubtitleAr,
           showCuisineFilters: def.showCuisineFilters,
@@ -30,7 +32,7 @@ class MarketplaceRouter {
       case CategoryEntryMode.offers:
         return const OffersCatalogScreen();
       case CategoryEntryMode.realEstate:
-        return const RealEstateListingsScreen();
+        return CategoryHubScreen(category: def);
       case CategoryEntryMode.professionals:
         return CategoryHubScreen(category: def);
       case CategoryEntryMode.cars:
@@ -121,14 +123,23 @@ class MarketplaceRouter {
       if (sub.id == 'car_request') {
         Navigator.of(context).push(
           CupertinoPageRoute(
-            builder: (_) => const _ComingSoonFeatureScreen(
-              title: 'طلب سيارة',
-              subtitle: 'قريبًا',
-            ),
+            builder: (_) => const CarRequestHubScreen(),
           ),
         );
         return;
       }
+    }
+
+    if (category.id == 'real_estate') {
+      Navigator.of(context).push(
+        CupertinoPageRoute(
+          builder: (_) => RealEstateListingsScreen(
+            subCategoryId: sub.id,
+            titleAr: sub.titleAr,
+          ),
+        ),
+      );
+      return;
     }
 
     if (category.id == 'professionals') {
@@ -152,6 +163,7 @@ class MarketplaceRouter {
                 : MerchantStoreKind.shopping,
             serviceId: category.apiServiceId,
             productCategory: category.apiProductCategory,
+            marketplaceCategory: category.id,
             titleAr: sub.titleAr,
             subtitleAr: category.storeSubtitleAr,
             showCuisineFilters: category.showCuisineFilters,

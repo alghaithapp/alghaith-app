@@ -16,7 +16,10 @@ import '../providers/app_provider.dart';
 import '../utils/extensions.dart';
 
 class TaxiRequestScreen extends StatefulWidget {
-  const TaxiRequestScreen({super.key});
+  /// عند الدخول من «طلب سيارة» — معرّف نوع المركبة (car_4seat، car_truck، …).
+  final String? initialVehicleTypeId;
+
+  const TaxiRequestScreen({super.key, this.initialVehicleTypeId});
 
   static const bool isComingSoon = true;
 
@@ -40,7 +43,7 @@ class _TaxiRequestScreenState extends State<TaxiRequestScreen> {
   Position? _dropoffPosition;
   List<Position> _routePolyline = const [];
 
-  String _selectedVehicleId = 'economy_taxi';
+  late String _selectedVehicleId;
   String _selectedPayment = 'cash';
   bool _showDrivers = false;
   bool _shareWithFamily = false;
@@ -49,6 +52,7 @@ class _TaxiRequestScreenState extends State<TaxiRequestScreen> {
   @override
   void initState() {
     super.initState();
+    _selectedVehicleId = _mapInitialVehicle(widget.initialVehicleTypeId);
     if (TaxiRequestScreen.isComingSoon) return;
     _pickupController.addListener(_scheduleDistanceUpdate);
     _dropoffController.addListener(_scheduleDistanceUpdate);
@@ -441,6 +445,21 @@ class _TaxiRequestScreenState extends State<TaxiRequestScreen> {
     return (value / 250).ceil() * 250;
   }
 
+  static String _mapInitialVehicle(String? carRequestTypeId) {
+    switch (carRequestTypeId) {
+      case 'car_4seat':
+        return 'economy_taxi';
+      case 'car_truck':
+        return 'truck';
+      case 'car_bus':
+        return 'bus';
+      case 'car_starx11':
+        return 'starx11';
+      default:
+        return 'economy_taxi';
+    }
+  }
+
   List<_VehicleOption> _vehicleOptions() {
     return [
       _VehicleOption(
@@ -458,6 +477,30 @@ class _TaxiRequestScreenState extends State<TaxiRequestScreen> {
         capacity: '4 مقاعد',
         emoji: '🚘',
         multiplier: 1.30,
+      ),
+      _VehicleOption(
+        id: 'truck',
+        name: 'سيارة حمل',
+        eta: '8 د',
+        capacity: 'حمل',
+        emoji: '🚚',
+        multiplier: 1.85,
+      ),
+      _VehicleOption(
+        id: 'bus',
+        name: 'سيارة باص',
+        eta: '10 د',
+        capacity: 'باص',
+        emoji: '🚌',
+        multiplier: 2.1,
+      ),
+      _VehicleOption(
+        id: 'starx11',
+        name: 'ستاركس 11 نفر',
+        eta: '6 د',
+        capacity: '11 راكب',
+        emoji: '🚐',
+        multiplier: 1.75,
       ),
     ];
   }
@@ -545,7 +588,7 @@ class _TaxiRequestScreenState extends State<TaxiRequestScreen> {
                         value: _dropoffController.text.trim().isEmpty
                             ? 'أدخل الوجهة'
                             : _dropoffController.text.trim(),
-                        glowColor: const Color(0xFFE60012),
+                        glowColor: const Color(0xFFF5A01D),
                         icon: CupertinoIcons.location_solid,
                       ),
                     ),
@@ -1080,7 +1123,7 @@ class _TaxiMapBackdropState extends State<_TaxiMapBackdrop> {
         await circles.create(
           CircleAnnotationOptions(
             geometry: Point(coordinates: dropoff),
-            circleColor: const Color(0xFFE60012).value,
+            circleColor: const Color(0xFFF5A01D).value,
             circleRadius: 7.5,
             circleStrokeColor: Colors.white.value,
             circleStrokeWidth: 2,
@@ -1158,7 +1201,7 @@ class _TaxiMapBackdropState extends State<_TaxiMapBackdrop> {
               title: dropoffAddress.isEmpty
                   ? 'حدد الوجهة'
                   : '${estimatedDistanceKm.toStringAsFixed(1)} كم',
-              color: const Color(0xFFE60012),
+              color: const Color(0xFFF5A01D),
             ),
           ),
           if (!_hasMapboxToken)
@@ -1533,7 +1576,7 @@ class _PremiumSearchFields extends StatelessWidget {
             controller: dropoffController,
             hint: 'إلى أين وجهتك؟',
             icon: CupertinoIcons.location_solid,
-            color: const Color(0xFFE60012),
+            color: const Color(0xFFF5A01D),
             onQuerySuggestions: onQuerySuggestions,
             onSuggestionSelected: onDropoffSuggestionSelected,
           ),
@@ -1613,7 +1656,7 @@ class _VehicleCard extends StatelessWidget {
           color: Colors.white,
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
-            color: selected ? const Color(0xFFE60012) : const Color(0xFFE8ECF5),
+            color: selected ? const Color(0xFFF5A01D) : const Color(0xFFE8ECF5),
             width: selected ? 1.7 : 1.0,
           ),
           boxShadow: [
@@ -1645,7 +1688,7 @@ class _VehicleCard extends StatelessWidget {
                 if (selected)
                   const Icon(
                     CupertinoIcons.check_mark_circled_solid,
-                    color: Color(0xFFE60012),
+                    color: Color(0xFFF5A01D),
                     size: 19,
                   ),
               ],
@@ -1676,7 +1719,7 @@ class _VehicleCard extends StatelessWidget {
               style: const TextStyle(
                 fontFamily: 'Cairo',
                 fontSize: 13,
-                color: Color(0xFFE60012),
+                color: Color(0xFFF5A01D),
                 fontWeight: FontWeight.w900,
               ),
             ),
@@ -1880,7 +1923,7 @@ class _SmallOptionChip extends StatelessWidget {
           color: selected ? const Color(0x1AE60012) : Colors.white,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: selected ? const Color(0xFFE60012) : const Color(0xFFE4E9F2),
+            color: selected ? const Color(0xFFF5A01D) : const Color(0xFFE4E9F2),
           ),
         ),
         child: Text(
@@ -1889,7 +1932,7 @@ class _SmallOptionChip extends StatelessWidget {
             fontFamily: 'Cairo',
             fontSize: 11,
             fontWeight: FontWeight.w800,
-            color: selected ? const Color(0xFFE60012) : const Color(0xFF33435A),
+            color: selected ? const Color(0xFFF5A01D) : const Color(0xFF33435A),
           ),
         ),
       ),
@@ -1909,7 +1952,7 @@ class _PremiumRequestButton extends StatelessWidget {
     return DecoratedBox(
       decoration: BoxDecoration(
         gradient: const LinearGradient(
-          colors: [Color(0xFFFF2D37), Color(0xFFE60012)],
+          colors: [Color(0xFFFF2D37), Color(0xFFF5A01D)],
           begin: Alignment.centerLeft,
           end: Alignment.centerRight,
         ),

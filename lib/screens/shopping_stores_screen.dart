@@ -7,6 +7,9 @@ import '../providers/app_provider.dart';
 import '../services/supabase_service.dart';
 import '../utils/extensions.dart';
 import '../utils/helpers.dart';
+import '../services/image_storage_service.dart';
+import '../utils/merchant_product_sections.dart';
+import '../utils/merchant_profile_fields.dart';
 import '../widgets/app_image.dart';
 import 'cart_screen.dart';
 import 'restaurant_menu_screen.dart';
@@ -21,6 +24,8 @@ class ShoppingStoresScreen extends StatefulWidget {
   final String? titleAr;
   final String? subtitleAr;
   final bool showCuisineFilters;
+  /// مثال: product | global_shopping | restaurant
+  final String? marketplaceCategory;
 
   const ShoppingStoresScreen({
     super.key,
@@ -28,6 +33,7 @@ class ShoppingStoresScreen extends StatefulWidget {
     this.storeKind = MerchantStoreKind.shopping,
     this.serviceId,
     this.productCategory,
+    this.marketplaceCategory,
     this.titleAr,
     this.subtitleAr,
     this.showCuisineFilters = false,
@@ -54,6 +60,7 @@ class _ShoppingStoresScreenState extends State<ShoppingStoresScreen> {
         serviceId: widget.serviceId!,
         productCategory: widget.productCategory ?? widget.serviceId,
         subCategoryId: widget.subCategory?.id,
+        marketplaceCategory: widget.marketplaceCategory,
       );
     }
     if (widget.storeKind == MerchantStoreKind.restaurant) {
@@ -69,6 +76,19 @@ class _ShoppingStoresScreenState extends State<ShoppingStoresScreen> {
   void _reloadStores() {
     setState(() {
       _futureStores = _loadStores();
+    });
+  }
+
+  bool _storeHasVisibleProducts(Map<String, dynamic> store) {
+    final products = store['products'];
+    if (products is! List || products.isEmpty) return false;
+    final subId = widget.subCategory?.id.trim() ?? '';
+    if (subId.isEmpty) return true;
+    return products.any((entry) {
+      if (entry is! Map) return false;
+      final map = Map<String, dynamic>.from(entry);
+      final raw = map['sub_category'] ?? map['subCategory'];
+      return raw?.toString().trim() == subId;
     });
   }
 
@@ -88,7 +108,7 @@ class _ShoppingStoresScreenState extends State<ShoppingStoresScreen> {
   Widget build(BuildContext context) {
     final appProvider = context.watch<AppProvider>();
     final query = _searchController.text.trim().toLowerCase();
-    final primaryRed = const Color(0xFFE60012);
+    final primaryRed = const Color(0xFFF5A01D);
     final headerTitle = widget.titleAr ??
         (widget.storeKind == MerchantStoreKind.restaurant
             ? 'المطاعم'
@@ -233,8 +253,10 @@ class _ShoppingStoresScreenState extends State<ShoppingStoresScreen> {
                       return SliverFillRemaining(child: _ErrorState(onRetry: _reloadStores));
                     }
 
-                    var stores = snapshot.data ?? [];
-                    
+                    var stores = (snapshot.data ?? [])
+                        .where(_storeHasVisibleProducts)
+                        .toList();
+
                     // Sorting: Open restaurants first
                     stores.sort((a, b) {
                       final aOpen = (a['profile'] as Map)['is_open'] as bool? ?? true;
@@ -331,7 +353,7 @@ class _PremiumRestaurantCard extends StatelessWidget {
     final products = (data['products'] as List).cast<Map<String, dynamic>>();
     final isOpen = profile['is_open'] as bool? ?? true;
     final rating = profile['rating']?.toDouble() ?? 4.8;
-    final primaryRed = const Color(0xFFE60012);
+    final primaryRed = const Color(0xFFF5A01D);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 20),
@@ -355,7 +377,11 @@ class _PremiumRestaurantCard extends StatelessWidget {
               ClipRRect(
                 borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
                 child: AppImage(
-                  imageData: profile['cover_image_url'] ?? profile['coverImageBase64'] ?? 'assets/images/cat_restaurant.png',
+                  imageData: ImageStorageService.merchantUploadedImageRef(
+                        profile['cover_image_url'] ??
+                            profile['coverImageBase64'],
+                      ) ??
+                      '',
                   height: 160,
                   width: double.infinity,
                   fit: BoxFit.cover,
@@ -421,7 +447,11 @@ class _PremiumRestaurantCard extends StatelessWidget {
                         ),
                         child: ClipOval(
                           child: AppImage(
-                            imageData: profile['profile_image_base64'] ?? profile['logoImageBase64'],
+                            imageData: ImageStorageService.merchantUploadedImageRef(
+                                  profile['profile_image_base64'] ??
+                                      profile['logoImageBase64'],
+                                ) ??
+                                '',
                           ),
                         ),
                       ),
@@ -473,8 +503,16 @@ class _PremiumRestaurantCard extends StatelessWidget {
                   spacing: 6,
                   runSpacing: 6,
                   children: [
-                    _PremiumInfoChip(icon: CupertinoIcons.location_solid, label: profile['address']?.toString() ?? 'بغداد'),
-                    _PremiumInfoChip(icon: CupertinoIcons.time, label: '${profile['open_time']} - ${profile['close_time']}'),
+                    _PremiumInfoChip(
+                      icon: CupertinoIcons.location_solid,
+                      label: MerchantProfileFields.addressFromMap(profile).isNotEmpty
+                          ? MerchantProfileFields.addressFromMap(profile)
+                          : 'بدون عنوان',
+                    ),
+                    _PremiumInfoChip(
+                      icon: CupertinoIcons.time,
+                      label: MerchantProfileFields.workingHoursLabel(profile),
+                    ),
                     _PremiumInfoChip(icon: CupertinoIcons.square_grid_2x2_fill, label: '${products.length} صنف'),
                   ],
                 ),
@@ -628,7 +666,7 @@ class _SearchBar extends StatelessWidget {
             color: Colors.grey.shade300,
             margin: const EdgeInsets.symmetric(horizontal: 10),
           ),
-          const Icon(CupertinoIcons.slider_horizontal_3, color: Color(0xFFE60012)),
+          const Icon(CupertinoIcons.slider_horizontal_3, color: Color(0xFFF5A01D)),
         ],
       ),
     );
@@ -688,7 +726,7 @@ class _GuestModeBanner extends StatelessWidget {
         top: false,
         child: Row(
           children: [
-            const Icon(CupertinoIcons.lock_shield_fill, color: Color(0xFFE60012), size: 32),
+            const Icon(CupertinoIcons.lock_shield_fill, color: Color(0xFFF5A01D), size: 32),
             const SizedBox(width: 15),
             const Expanded(
               child: Text(
@@ -700,7 +738,7 @@ class _GuestModeBanner extends StatelessWidget {
             ElevatedButton(
               onPressed: onLogin,
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFE60012),
+                backgroundColor: const Color(0xFFF5A01D),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
               ),
@@ -781,6 +819,7 @@ class _ShoppingStoreMenuScreenState extends State<ShoppingStoreMenuScreen>
   Offset _flyEnd = Offset.zero;
   bool _showFlyDot = false;
   int _cartPulseTick = 0;
+  String? _selectedSectionKey;
 
   @override
   void initState() {
@@ -851,7 +890,18 @@ class _ShoppingStoreMenuScreenState extends State<ShoppingStoreMenuScreen>
     final allProducts = widget.products
         .map((row) => Map<String, dynamic>.from(row))
         .toList();
-    final products = _filterProducts(allProducts);
+    final storeSections =
+        MerchantProductSections.parseFromProfile(widget.profile);
+    final sectionTabs = MerchantProductSections.tabsForStore(
+      sections: storeSections,
+      products: allProducts,
+    );
+    final filteredBySection = MerchantProductSections.filterProducts(
+      products: allProducts,
+      sections: storeSections,
+      selectedKey: _selectedSectionKey,
+    );
+    final products = _filterProducts(filteredBySection);
 
     final whatsappText = widget.profile['whatsapp']?.toString().trim() ?? '';
     final whatsapp = whatsappText.isNotEmpty
@@ -902,6 +952,53 @@ class _ShoppingStoreMenuScreenState extends State<ShoppingStoreMenuScreen>
                 onSubmitted: (_) => setState(() {}),
               ),
               const SizedBox(height: 12),
+              if (sectionTabs.length > 1) ...[
+                SizedBox(
+                  height: 44,
+                  child: ListView.separated(
+                    scrollDirection: Axis.horizontal,
+                    itemCount: sectionTabs.length,
+                    separatorBuilder: (_, __) => const SizedBox(width: 10),
+                    itemBuilder: (context, index) {
+                      final tab = sectionTabs[index];
+                      final selected = _selectedSectionKey == tab.key;
+                      return GestureDetector(
+                        onTap: () => setState(
+                          () => _selectedSectionKey = tab.key,
+                        ),
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 200),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 10,
+                          ),
+                          decoration: BoxDecoration(
+                            color: selected
+                                ? const Color(0xFFF5A01D)
+                                : Colors.white,
+                            borderRadius: BorderRadius.circular(999),
+                            border: Border.all(
+                              color: selected
+                                  ? const Color(0xFFF5A01D)
+                                  : const Color(0xFFE8E8E8),
+                            ),
+                          ),
+                          child: Text(
+                            tab.label,
+                            style: TextStyle(
+                              fontFamily: 'Cairo',
+                              fontWeight: FontWeight.w800,
+                              fontSize: 13,
+                              color: selected ? Colors.white : Colors.black87,
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+                const SizedBox(height: 12),
+              ],
               if (products.isEmpty)
                 const Center(child: Padding(
                   padding: EdgeInsets.all(40.0),
@@ -966,11 +1063,11 @@ class _ShoppingStoreMenuScreenState extends State<ShoppingStoreMenuScreen>
                         width: 20,
                         height: 20,
                         decoration: BoxDecoration(
-                          color: Colors.deepOrange,
+                          color: const Color(0xFFF5A01D),
                           shape: BoxShape.circle,
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.deepOrange.withValues(alpha: 0.4),
+                              color: const Color(0xFFF5A01D).withValues(alpha: 0.4),
                               blurRadius: 10,
                             ),
                           ],
@@ -999,7 +1096,7 @@ class _StoreHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final address = profile['address']?.toString() ?? '';
+    final address = MerchantProfileFields.addressFromMap(profile);
     final phone = profile['phone']?.toString().trim() ?? '';
     return Container(
       padding: const EdgeInsets.all(16),
@@ -1038,8 +1135,7 @@ class _StoreHeader extends StatelessWidget {
               ),
               _InfoChip(
                 icon: CupertinoIcons.time,
-                label:
-                    '${profile['open_time']?.toString() ?? ''} - ${profile['close_time']?.toString() ?? ''}',
+                label: MerchantProfileFields.workingHoursLabel(profile),
               ),
             ],
           ),
@@ -1056,8 +1152,8 @@ class _StoreHeader extends StatelessWidget {
                   label: const Text('واتساب'),
                   style: OutlinedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 12),
-                    foregroundColor: const Color(0xFFE60012),
-                    side: const BorderSide(color: Color(0xFFE60012)),
+                    foregroundColor: const Color(0xFFF5A01D),
+                    side: const BorderSide(color: Color(0xFFF5A01D)),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(14),
                     ),
@@ -1073,7 +1169,7 @@ class _StoreHeader extends StatelessWidget {
                   icon: const Icon(Icons.call_rounded),
                   label: const Text('اتصال'),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFE60012),
+                    backgroundColor: const Color(0xFFF5A01D),
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 12),
                     shape: RoundedRectangleBorder(
@@ -1197,7 +1293,7 @@ class _ProductCard extends StatelessWidget {
                       Text(
                         '${price.toPrice()} د.ع',
                         style: const TextStyle(
-                          color: Color(0xFFE60012),
+                          color: Color(0xFFF5A01D),
                           fontWeight: FontWeight.w900,
                           fontFamily: 'Cairo',
                         ),
@@ -1210,7 +1306,7 @@ class _ProductCard extends StatelessWidget {
                             vertical: 7,
                           ),
                           minSize: 0,
-                          color: const Color(0xFFE60012),
+                          color: const Color(0xFFF5A01D),
                           borderRadius: BorderRadius.circular(12),
                           onPressed: () => onAdd(buttonContext),
                           child: const Text(
@@ -1306,7 +1402,7 @@ class _StoreCartNavButton extends StatelessWidget {
                   child: Icon(
                     CupertinoIcons.cart_fill,
                     size: 24,
-                    color: Color(0xFFE60012),
+                    color: Color(0xFFF5A01D),
                   ),
                 ),
                 if (count > 0)

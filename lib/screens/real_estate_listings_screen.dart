@@ -9,10 +9,12 @@ import '../widgets/app_image.dart';
 
 class RealEstateListingsScreen extends StatefulWidget {
   final String? subCategoryId;
+  final String? titleAr;
 
   const RealEstateListingsScreen({
     super.key,
     this.subCategoryId,
+    this.titleAr,
   });
 
   @override
@@ -48,9 +50,11 @@ class _RealEstateListingsScreenState extends State<RealEstateListingsScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFFF5F6FA),
       appBar: AppBar(
-        title: const Text(
-          'العقارات',
-          style: TextStyle(
+        title: Text(
+          widget.titleAr?.trim().isNotEmpty == true
+              ? widget.titleAr!.trim()
+              : 'العقارات',
+          style: const TextStyle(
             fontFamily: 'Cairo',
             fontWeight: FontWeight.w900,
           ),
@@ -88,7 +92,7 @@ class _RealEstateListingsScreenState extends State<RealEstateListingsScreen> {
                       );
                     });
                   },
-                  selectedColor: Colors.deepOrange,
+                  selectedColor: const Color(0xFFF5A01D),
                   backgroundColor: Colors.white,
                   labelStyle: TextStyle(
                     color: selected ? Colors.white : Colors.black87,
@@ -275,7 +279,7 @@ class _PropertyCard extends StatelessWidget {
                             style: const TextStyle(
                               fontFamily: 'Cairo',
                               fontWeight: FontWeight.w900,
-                              color: Colors.deepOrange,
+                              color: const Color(0xFFF5A01D),
                               fontSize: 18,
                             ),
                           ),

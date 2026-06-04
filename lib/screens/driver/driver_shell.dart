@@ -5,9 +5,13 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/theme/app_colors.dart';
 import '../../models/app_models.dart';
 import '../../providers/app_provider.dart';
 import '../../utils/extensions.dart';
+import '../../utils/role_notification_poller.dart';
+import '../../utils/role_switch_notifications.dart';
+import '../../screens/notifications_screen.dart';
 import '../../widgets/app_image.dart';
 import '../../widgets/safe_bottom_bar.dart';
 
@@ -29,39 +33,52 @@ class _DriverShellState extends State<DriverShell> {
   ];
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      RoleSwitchNotificationPresenter.showIfNeeded(context);
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    const accentColor = Colors.orange;
+    const accentColor = AppColors.accent;
 
-    return Scaffold(
-      backgroundColor:
-          isDark ? const Color(0xFF111111) : const Color(0xFFF2F2F7),
-      body: SafeArea(
-        bottom: false,
-        child: _screens[_currentIndex],
-      ),
-      bottomNavigationBar: SafeBottomBar(
-        color: isDark
-            ? const Color(0xFF1A1A1A)
-            : Colors.white.withValues(alpha: 0.95),
-        boxShadow: [
-          BoxShadow(
-            color: accentColor.withValues(alpha: isDark ? 0.18 : 0.08),
-            blurRadius: 20,
-            offset: const Offset(0, -5),
-          ),
-        ],
-        child: SizedBox(
-          height: 64,
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              _navItem(0, CupertinoIcons.graph_square_fill, accentColor,
-                  'الرئيسية'),
-              _navItem(1, CupertinoIcons.bell_fill, accentColor, 'الطلبات'),
-              _navItem(2, Icons.local_taxi_rounded, accentColor, 'الرحلات'),
-              _navItem(3, CupertinoIcons.person_fill, accentColor, 'الحساب'),
-            ],
+    return RoleNotificationPoller(
+      role: 'driver',
+      onRefresh: (_) async {},
+      pollBanners: (provider) => provider.pollTaxiBanners(),
+      child: Scaffold(
+        backgroundColor:
+            isDark ? const Color(0xFF111111) : const Color(0xFFF2F2F7),
+        body: SafeArea(
+          bottom: false,
+          child: _screens[_currentIndex],
+        ),
+        bottomNavigationBar: SafeBottomBar(
+          color: isDark
+              ? const Color(0xFF1A1A1A)
+              : Colors.white.withValues(alpha: 0.95),
+          boxShadow: [
+            BoxShadow(
+              color: accentColor.withValues(alpha: isDark ? 0.18 : 0.08),
+              blurRadius: 20,
+              offset: const Offset(0, -5),
+            ),
+          ],
+          child: SizedBox(
+            height: 64,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: [
+                _navItem(0, CupertinoIcons.graph_square_fill, accentColor,
+                    'الرئيسية'),
+                _navItem(1, CupertinoIcons.bell_fill, accentColor, 'الطلبات'),
+                _navItem(2, Icons.local_taxi_rounded, accentColor, 'الرحلات'),
+                _navItem(3, CupertinoIcons.person_fill, accentColor, 'الحساب'),
+              ],
+            ),
           ),
         ),
       ),
@@ -135,7 +152,7 @@ class DriverDashboardScreen extends StatelessWidget {
                   ? Colors.green
                   : provider.driverAcceptsDelivery
                       ? Colors.blue
-                      : Colors.orange,
+                      : AppColors.accent,
             ),
             const SizedBox(height: 10),
             _ServiceModeChip(
@@ -144,7 +161,7 @@ class DriverDashboardScreen extends StatelessWidget {
                   ? Colors.green
                   : provider.driverAcceptsDelivery
                       ? Colors.blue
-                      : Colors.orange,
+                      : AppColors.accent,
             ),
             const SizedBox(height: 16),
             Row(
@@ -157,7 +174,7 @@ class DriverDashboardScreen extends StatelessWidget {
                             ? Colors.green
                             : provider.driverAcceptsDelivery
                                 ? Colors.blue
-                                : Colors.orange)),
+                                : AppColors.accent)),
                 const SizedBox(width: 10),
                 Expanded(
                     child: _StatBox(
@@ -168,7 +185,7 @@ class DriverDashboardScreen extends StatelessWidget {
                             ? Colors.deepPurple
                             : provider.driverAcceptsDelivery
                                 ? Colors.blue
-                                : Colors.orange)),
+                                : AppColors.accent)),
                 const SizedBox(width: 10),
                 Expanded(
                     child: _StatBox(
@@ -191,7 +208,7 @@ class DriverDashboardScreen extends StatelessWidget {
                   ? Colors.green
                   : provider.driverAcceptsDelivery
                       ? Colors.blue
-                      : Colors.orange,
+                      : AppColors.accent,
             ),
             const SizedBox(height: 12),
             if (!provider.driverAcceptsTaxi && !provider.driverAcceptsDelivery)
@@ -408,6 +425,38 @@ class DriverAccountScreen extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
+        ListTile(
+          tileColor: Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          leading: const Icon(Icons.notifications_outlined, color: AppColors.accent),
+          title: const Text(
+            'الإشعارات',
+            style: TextStyle(
+              fontFamily: 'Cairo',
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          trailing: provider.unreadNotificationCount > 0
+              ? CircleAvatar(
+                  radius: 12,
+                  backgroundColor: const Color(0xFFF5A01D),
+                  child: Text(
+                    '${provider.unreadNotificationCount}',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                )
+              : null,
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => const NotificationsScreen()),
+          ),
+        ),
+        const SizedBox(height: 12),
         Container(
           padding: const EdgeInsets.all(18),
           decoration: BoxDecoration(
@@ -500,7 +549,7 @@ class DriverAccountScreen extends StatelessWidget {
         SwitchListTile(
           value: isAvailable,
           onChanged: (value) => provider.setDriverAvailability(value),
-          activeThumbColor: Colors.orange,
+          activeThumbColor: AppColors.accent,
           tileColor: Colors.white,
           shape:
               RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
@@ -541,7 +590,7 @@ class DriverAccountScreen extends StatelessWidget {
         SizedBox(
           width: double.infinity,
           child: CupertinoButton(
-            color: Colors.deepOrange,
+            color: AppColors.accent,
             borderRadius: BorderRadius.circular(18),
             onPressed: () => _showEditProfileSheet(context),
             child: Text(
@@ -692,7 +741,7 @@ class DriverAccountScreen extends StatelessWidget {
                       SizedBox(
                         width: double.infinity,
                         child: CupertinoButton(
-                          color: Colors.deepOrange,
+                          color: AppColors.accent,
                           borderRadius: BorderRadius.circular(18),
                           padding: const EdgeInsets.symmetric(vertical: 15),
                           onPressed: () async {
@@ -875,10 +924,10 @@ class _TypePill extends StatelessWidget {
         duration: const Duration(milliseconds: 220),
         padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 10),
         decoration: BoxDecoration(
-          color: selected ? Colors.deepOrange : Colors.white,
+          color: selected ? AppColors.accent : Colors.white,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-              color: selected ? Colors.deepOrange : Colors.grey.shade300),
+              color: selected ? AppColors.accent : Colors.grey.shade300),
         ),
         child: Text(
           label,
@@ -945,7 +994,7 @@ class _ServiceControlCard extends StatelessWidget {
             subtitle: 'يظهر له طلبات التكسي',
             icon: Icons.local_taxi_rounded,
             active: taxiEnabled,
-            color: Colors.orange,
+            color: AppColors.accent,
             onChanged: onTaxiChanged,
           ),
           const SizedBox(height: 10),
@@ -1090,14 +1139,14 @@ class _TaxiRequestCard extends StatelessWidget {
                     : isOnWay
                         ? Colors.lightBlue
                         : isCancelRequested
-                            ? Colors.orange
+                            ? AppColors.accent
                         : isCancelled
                             ? Colors.grey
                         : isRejected
                             ? Colors.red
                             : isAccepted
                                 ? Colors.teal
-                                : Colors.orange;
+                                : AppColors.accent;
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -1254,7 +1303,7 @@ class _TaxiRequestCard extends StatelessWidget {
             Text(
               'الزبون طلب إلغاء الرحلة. اختر الموافقة أو رفض الإلغاء.',
               style: const TextStyle(
-                color: Colors.orange,
+                color: AppColors.accent,
                 fontSize: 12,
                 fontFamily: 'Cairo',
                 fontWeight: FontWeight.w700,
@@ -1289,10 +1338,10 @@ class _TaxiRequestPreview extends StatelessWidget {
             width: 48,
             height: 48,
             decoration: BoxDecoration(
-              color: Colors.orange.withValues(alpha: 0.12),
+              color: AppColors.accent.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(16),
             ),
-            child: const Icon(Icons.local_taxi_rounded, color: Colors.orange),
+            child: const Icon(Icons.local_taxi_rounded, color: AppColors.accent),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -1351,7 +1400,7 @@ class _DriverDeliveryOrderCard extends StatelessWidget {
           Row(
             children: [
               const Icon(CupertinoIcons.bag_fill,
-                  color: Colors.orange, size: 18),
+                  color: AppColors.accent, size: 18),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
@@ -1366,13 +1415,13 @@ class _DriverDeliveryOrderCard extends StatelessWidget {
                 padding:
                     const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                 decoration: BoxDecoration(
-                  color: Colors.orange.withValues(alpha: 0.1),
+                  color: AppColors.accent.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(999),
                 ),
                 child: Text(
                   'جديد',
                   style: const TextStyle(
-                    color: Colors.orange,
+                    color: AppColors.accent,
                     fontSize: 11,
                     fontWeight: FontWeight.bold,
                     fontFamily: 'Cairo',
@@ -1466,7 +1515,7 @@ class _DriverActiveDeliveryCard extends StatelessWidget {
                 CupertinoButton(
                   padding:
                       const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                  color: Colors.orange,
+                  color: AppColors.accent,
                   borderRadius: BorderRadius.circular(12),
                   minimumSize: Size.zero,
                   onPressed: () => provider.markDeliveryPickedUp(order.id),
@@ -1715,7 +1764,7 @@ class _EmptyState extends StatelessWidget {
       ),
       child: Column(
         children: [
-          const Icon(Icons.local_taxi_rounded, size: 54, color: Colors.orange),
+          const Icon(Icons.local_taxi_rounded, size: 54, color: AppColors.accent),
           const SizedBox(height: 12),
           Text(
             title,

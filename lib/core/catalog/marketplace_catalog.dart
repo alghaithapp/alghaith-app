@@ -247,13 +247,17 @@ class MarketplaceCatalog {
   static List<ServiceCategory> get homeCategories =>
       categories.map((entry) => entry.asServiceCategory).toList();
 
+  /// أقسام التسوق — مصدر واحد للزبون والتاجر.
+  static List<MarketplaceSubCategory> get shoppingSubCategories =>
+      _shoppingSubCategories;
+
   static const List<MarketplaceSubCategory> _shoppingSubCategories = [
     MarketplaceSubCategory(id: 'home_goods', titleAr: 'مواد منزلية', titleEn: 'Home Goods', image: 'assets/images/shop_home_goods.png'),
+    MarketplaceSubCategory(id: 'electrical_appliances', titleAr: 'أجهزة كهربائية', titleEn: 'Electrical Appliances', image: 'assets/images/shop_electronics.png'),
     MarketplaceSubCategory(id: 'food_items', titleAr: 'مواد غذائية', titleEn: 'Food Items', image: 'assets/images/shop_food_items.png'),
     MarketplaceSubCategory(id: 'construction', titleAr: 'مواد إنشائية', titleEn: 'Construction', image: 'assets/images/shop_construction.png'),
     MarketplaceSubCategory(id: 'school', titleAr: 'لوازم مدرسية', titleEn: 'School Supplies', image: 'assets/images/shop_school.png'),
     MarketplaceSubCategory(id: 'bakery', titleAr: 'مخابز ومعجنات', titleEn: 'Bakeries', image: 'assets/images/shop_bakery.png'),
-    MarketplaceSubCategory(id: 'electronics', titleAr: 'كهربائيات', titleEn: 'Electronics', image: 'assets/images/shop_electronics.png'),
     MarketplaceSubCategory(id: 'meat', titleAr: 'لحوم', titleEn: 'Meat', image: 'assets/images/shop_meat.png'),
     MarketplaceSubCategory(id: 'grocery', titleAr: 'بقالة', titleEn: 'Grocery', image: 'assets/images/shop_grocery.png'),
     MarketplaceSubCategory(id: 'shoes_bags', titleAr: 'أحذية وحقائب', titleEn: 'Shoes & Bags', image: 'assets/images/shop_shoes_bags.png'),
@@ -298,12 +302,24 @@ class MarketplaceCatalog {
     MarketplaceSubCategory(id: 'china', titleAr: 'الصين', titleEn: 'China', image: 'assets/images/global_china.png'),
   ];
 
+  /// أقسام المهنيين — مصدر واحد للزبون والتاجر.
+  static List<MarketplaceSubCategory> get professionalsSubCategories =>
+      _professionalsSubCategories;
+
   static const List<MarketplaceSubCategory> _professionalsSubCategories = [
     MarketplaceSubCategory(id: 'plumber', titleAr: 'سباك', titleEn: 'Plumber', image: 'assets/images/prof_plumber.png', browseMode: SubCategoryBrowseMode.catalog),
     MarketplaceSubCategory(id: 'electrician', titleAr: 'كهربائي', titleEn: 'Electrician', image: 'assets/images/prof_electrician.png', browseMode: SubCategoryBrowseMode.catalog),
     MarketplaceSubCategory(id: 'ac_tech', titleAr: 'فني تكييف', titleEn: 'AC Technician', image: 'assets/images/prof_ac.png', browseMode: SubCategoryBrowseMode.catalog),
     MarketplaceSubCategory(id: 'carpenter', titleAr: 'نجار', titleEn: 'Carpenter', image: 'assets/images/prof_carpenter.png', browseMode: SubCategoryBrowseMode.catalog),
     MarketplaceSubCategory(id: 'cleaner', titleAr: 'تنظيف منازل', titleEn: 'Home Cleaner', image: 'assets/images/prof_cleaner.png', browseMode: SubCategoryBrowseMode.catalog),
+    MarketplaceSubCategory(id: 'blacksmith', titleAr: 'حداد', titleEn: 'Blacksmith', image: 'assets/images/prof_blacksmith.png', browseMode: SubCategoryBrowseMode.catalog),
+    MarketplaceSubCategory(id: 'painter', titleAr: 'صباغ', titleEn: 'Painter', image: 'assets/images/prof_painter.png', browseMode: SubCategoryBrowseMode.catalog),
+    MarketplaceSubCategory(id: 'builder', titleAr: 'بناء', titleEn: 'Builder', image: 'assets/images/prof_builder.png', browseMode: SubCategoryBrowseMode.catalog),
+    MarketplaceSubCategory(id: 'cctv_tech', titleAr: 'فني كاميرات مراقبة', titleEn: 'CCTV Technician', image: 'assets/images/prof_cctv.png', browseMode: SubCategoryBrowseMode.catalog),
+    MarketplaceSubCategory(id: 'network_tech', titleAr: 'فني إنترنت وشبكات', titleEn: 'Network Technician', image: 'assets/images/prof_network.png', browseMode: SubCategoryBrowseMode.catalog),
+    MarketplaceSubCategory(id: 'loading_worker', titleAr: 'عامل تحميل وتنزيل', titleEn: 'Loading Worker', image: 'assets/images/prof_loading.png', browseMode: SubCategoryBrowseMode.catalog),
+    MarketplaceSubCategory(id: 'gardener', titleAr: 'عامل حدائق', titleEn: 'Gardener', image: 'assets/images/prof_gardener.png', browseMode: SubCategoryBrowseMode.catalog),
+    MarketplaceSubCategory(id: 'aluminum_glass', titleAr: 'فني ألمنيوم وزجاج', titleEn: 'Aluminum & Glass', image: 'assets/images/prof_aluminum_glass.png', browseMode: SubCategoryBrowseMode.catalog),
   ];
 
   static const List<MarketplaceSubCategory> _usedSubCategories = [
@@ -312,4 +328,20 @@ class MarketplaceCatalog {
     MarketplaceSubCategory(id: 'used_clothing', titleAr: 'ملابس', titleEn: 'Clothing', image: 'assets/images/shop_women_clothing.png', browseMode: SubCategoryBrowseMode.catalog),
     MarketplaceSubCategory(id: 'used_other', titleAr: 'متنوعات', titleEn: 'Other', image: 'assets/images/cat_used.png', browseMode: SubCategoryBrowseMode.catalog),
   ];
+
+  /// الخدمات التي تدعم الطلب عبر السلة (مطاعم + تسوق فقط).
+  static const Set<String> cartEnabledCategoryIds = {
+    'restaurant',
+    'product',
+  };
+
+  static bool usesShoppingCart(String? categoryId) {
+    final id = categoryId?.trim();
+    if (id == null || id.isEmpty) return false;
+    return cartEnabledCategoryIds.contains(id);
+  }
+
+  /// كل ما عدا المطاعم والتسوق = إعلان/تواصل (واتساب واتصال).
+  static bool isContactListingCategory(String? categoryId) =>
+      !usesShoppingCart(categoryId);
 }

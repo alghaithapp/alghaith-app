@@ -7,7 +7,7 @@ import '../providers/app_provider.dart';
 import '../services/supabase_service.dart';
 import '../utils/extensions.dart';
 import '../widgets/app_image.dart';
-import 'cart_screen.dart';
+import '../widgets/catalog_contact_buttons.dart';
 
 class OffersCatalogScreen extends StatefulWidget {
   const OffersCatalogScreen({super.key});
@@ -90,22 +90,10 @@ class _OffersCatalogScreenState extends State<OffersCatalogScreen> {
             fontFamily: 'Cairo',
           ),
         ),
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            CupertinoButton(
-              padding: EdgeInsets.zero,
-              onPressed: _reload,
-              child: const Icon(CupertinoIcons.refresh_thick, size: 22),
-            ),
-            CupertinoButton(
-              padding: EdgeInsets.zero,
-              onPressed: () => Navigator.of(context).push(
-                CupertinoPageRoute(builder: (_) => const CartScreen()),
-              ),
-              child: const Icon(CupertinoIcons.cart, size: 22),
-            ),
-          ],
+        trailing: CupertinoButton(
+          padding: EdgeInsets.zero,
+          onPressed: _reload,
+          child: const Icon(CupertinoIcons.refresh_thick, size: 22),
         ),
       ),
       child: SafeArea(
@@ -116,7 +104,7 @@ class _OffersCatalogScreenState extends State<OffersCatalogScreen> {
               child: Align(
                 alignment: Alignment.centerRight,
                 child: Text(
-                  'منتجات مخفّضة من المتاجر النشطة',
+                  'عروض مخفّضة — تواصل مع المتجر عبر واتساب أو الاتصال',
                   style: TextStyle(
                     fontFamily: 'Cairo',
                     fontSize: 13,
@@ -203,7 +191,6 @@ class _OffersCatalogScreenState extends State<OffersCatalogScreen> {
                       final entry = items[index];
                       return _OfferCard(
                         entry: entry,
-                        onAdd: () => provider.addToCart(entry.item),
                         onToggleFavorite: () =>
                             provider.toggleFavoriteItem(entry.item),
                       );
@@ -235,12 +222,10 @@ class _OfferItem {
 
 class _OfferCard extends StatelessWidget {
   final _OfferItem entry;
-  final VoidCallback onAdd;
   final VoidCallback onToggleFavorite;
 
   const _OfferCard({
     required this.entry,
-    required this.onAdd,
     required this.onToggleFavorite,
   });
 
@@ -283,7 +268,7 @@ class _OfferCard extends StatelessWidget {
                       vertical: 5,
                     ),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFE60012),
+                      color: const Color(0xFFF5A01D),
                       borderRadius: BorderRadius.circular(20),
                     ),
                     child: Text(
@@ -311,7 +296,7 @@ class _OfferCard extends StatelessWidget {
                       fontFamily: 'Cairo',
                       fontSize: 12,
                       fontWeight: FontWeight.w600,
-                      color: Color(0xFFE60012),
+                      color: Color(0xFFF5A01D),
                     ),
                   ),
                 Row(
@@ -349,48 +334,35 @@ class _OfferCard extends StatelessWidget {
                   ),
                 ],
                 const SizedBox(height: 12),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        if (entry.originalPrice > item.price)
-                          Text(
-                            '${entry.originalPrice.toLocaleString()} د.ع',
-                            style: const TextStyle(
-                              fontFamily: 'Cairo',
-                              fontSize: 12,
-                              color: CupertinoColors.systemGrey,
-                              decoration: TextDecoration.lineThrough,
-                            ),
-                          ),
-                        Text(
-                          '${item.price.toLocaleString()} د.ع',
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w900,
-                            fontSize: 16,
-                            color: Color(0xFFE60012),
-                            fontFamily: 'Cairo',
-                          ),
-                        ),
-                      ],
-                    ),
-                    CupertinoButton(
-                      padding: const EdgeInsets.symmetric(horizontal: 18),
-                      color: const Color(0xFFE60012),
-                      borderRadius: BorderRadius.circular(20),
-                      onPressed: onAdd,
-                      child: const Text(
-                        'أضف للسلة',
-                        style: TextStyle(
+                    if (entry.originalPrice > item.price)
+                      Text(
+                        '${entry.originalPrice.toLocaleString()} د.ع',
+                        style: const TextStyle(
                           fontFamily: 'Cairo',
-                          fontWeight: FontWeight.bold,
-                          fontSize: 13,
+                          fontSize: 12,
+                          color: CupertinoColors.systemGrey,
+                          decoration: TextDecoration.lineThrough,
                         ),
+                      ),
+                    Text(
+                      '${item.price.toLocaleString()} د.ع',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w900,
+                        fontSize: 16,
+                        color: Color(0xFFF5A01D),
+                        fontFamily: 'Cairo',
                       ),
                     ),
                   ],
+                ),
+                const SizedBox(height: 10),
+                CatalogContactButtons(
+                  item: item,
+                  inquiryMessage:
+                      'مرحبًا، أريد الاستفسار عن العرض: ${entry.offerTitle.isNotEmpty ? entry.offerTitle : item.nameAr}',
                 ),
               ],
             ),
