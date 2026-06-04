@@ -1,0 +1,61 @@
+# Codemagic — بناء iOS لتطبيق الغيث ورفعه إلى TestFlight
+# التوثيق: https://docs.codemagic.io/yaml-quick-start/building-a-flutter-app/
+
+workflows:
+  ios-release:
+    name: Al-Ghaith iOS Release
+    max_build_duration: 120
+    instance_type: mac_mini_m2
+
+    # اسم مفتاح App Store Connect API كما سجّلته في:
+    # Codemagic → Team settings → Integrations → App Store Connect
+    integrations:
+      app_store_connect: codemagic
+
+    environment:
+      flutter: stable
+      xcode: latest
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.alghaith.app
+      vars:
+        DATABASE_BACKEND_BASE_URL: https://alghaith-app-production.up.railway.app
+        PHONE_AUTH_BASE_URL: https://lively-wind-9d98.alghaithapp.workers.dev
+        # أضِف في واجهة Codemagic → Environment variables (مُعلّم Secure):
+        # MAPBOX_PUBLIC_TOKEN = pk.eyJ...
+
+    triggering:
+      events:
+        - push
+      branch_patterns:
+        - pattern: main
+          include: true
+
+    scripts:
+      - name: Get Flutter packages
+        script: flutter pub get
+
+      - name: Set up code signing on Xcode project
+        script: xcode-project use-profiles
+
+      - name: Build iOS IPA
+        script: |
+          set -e
+          flutter build ipa --release \
+            --dart-define=DATABASE_BACKEND_BASE_URL="$DATABASE_BACKEND_BASE_URL" \
+            --dart-define=PHONE_AUTH_BASE_URL="$PHONE_AUTH_BASE_URL" \
+            --dart-define=MAPBOX_PUBLIC_TOKEN="$MAPBOX_PUBLIC_TOKEN"
+
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - build/ios/ipa/*.dSYM.zip
+
+    publishing:
+      email:
+        notify:
+          success: true
+          failure: true
+      app_store_connect:
+        auth: integration
+        # أول مرة: أنشئ التطبيق في App Store Connect يدوياً ثم فعّل true
+        submit_to_testflight: false
