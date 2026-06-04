@@ -44,12 +44,21 @@ workflows:
 
     scripts:
       # يجب توليد ملفات iOS قبل use-profiles حتى يُعثر Codemagic على Scheme Runner
+      - name: Verify iOS project and scheme
+        script: |
+          set -e
+          test -f pubspec.yaml
+          test -f ios/Runner/Info.plist
+          test -f ios/Runner.xcodeproj/project.pbxproj
+          test -f ios/Runner.xcworkspace/contents.xcworkspacedata
+          test -f ios/Runner.xcodeproj/xcshareddata/xcschemes/Runner.xcscheme
+          echo "Runner scheme files OK"
+
       - name: Get Flutter packages
         script: |
           set -e
           flutter pub get
           flutter precache --ios
-          flutter build ios --config-only
 
       - name: Install CocoaPods dependencies
         script: |
