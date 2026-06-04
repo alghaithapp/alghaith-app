@@ -33,6 +33,8 @@ workflows:
         certificates:
           - algaith
       vars:
+        # Team ID من Apple (Gaith Mohammed) — يظهر في App Store profile
+        APPLE_TEAM_ID: "4THW4SKM37"
         CM_FLUTTER_SCHEME: Runner
         XCODE_SCHEME: Runner
         XCODE_WORKSPACE: ios/Runner.xcworkspace
@@ -82,6 +84,7 @@ workflows:
         script: |
           set -e
           flutter build ipa --release \
+            --export-options-plist=$HOME/export_options.plist \
             --dart-define=DATABASE_BACKEND_BASE_URL="$DATABASE_BACKEND_BASE_URL" \
             --dart-define=PHONE_AUTH_BASE_URL="$PHONE_AUTH_BASE_URL" \
             --dart-define=MAPBOX_PUBLIC_TOKEN="$MAPBOX_PUBLIC_TOKEN"
