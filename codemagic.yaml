@@ -17,7 +17,8 @@ workflows:
     # اسم مفتاح App Store Connect API كما سجّلته في:
     # Codemagic → Team settings → Integrations → App Store Connect
     integrations:
-      app_store_connect: codemagic
+      # يجب أن يطابق اسم المفتاح في Integrations → Developer Portal (عندك: algaith)
+      app_store_connect: algaith
 
     environment:
       flutter: stable
