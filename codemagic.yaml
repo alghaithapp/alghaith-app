@@ -24,9 +24,14 @@ workflows:
       flutter: stable
       xcode: latest
       cocoapods: default
-      # التوقيع يُجلب من Apple أثناء البناء (انظر fetch-signing-files أدناه).
-      # إن أردت التوقيع من الملفات المرفوعة في Code signing identities،
-      # أعد تفعيل ios_signing بعد رفع App Store profile لـ com.alghaith.app.
+      # يستخدم الملفات المرفوعة في Code signing identities (أسماء Reference):
+      # - شهادة: algaith (production)
+      # - profile: algaith_appstore (App Store لـ com.alghaith.app) — Upload يدوي من Apple
+      ios_signing:
+        provisioning_profiles:
+          - algaith_appstore
+        certificates:
+          - algaith
       vars:
         CM_FLUTTER_SCHEME: Runner
         XCODE_SCHEME: Runner
@@ -69,15 +74,6 @@ workflows:
           else
             find . -name Podfile -not -path "*/.*/*" -execdir pod install \;
           fi
-
-      - name: Fetch App Store signing files from Apple
-        script: |
-          set -e
-          app-store-connect fetch-signing-files "com.alghaith.app" \
-            --type IOS_APP_STORE \
-            --create \
-            --strict-match-identifier
-          keychain add-certificates
 
       - name: Set up code signing on Xcode project
         script: xcode-project use-profiles --project ios/Runner.xcodeproj
