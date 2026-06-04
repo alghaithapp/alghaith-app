@@ -29,7 +29,9 @@
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>نحتاج للوصول إلى موقعك لعرض الخدمات والمتاجر القريبة منك.</string>
+	<string>نحتاج للوصول إلى موقعك لعرض الخدمات والمتاجر القريبة منك وتحديد عنوان التوصيل.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>قد نستخدم موقعك أثناء استخدام التطبيق أو في الخلفية لتحديث التوصيل وتتبع الطلبات بدقة عند تفعيلك لهذه الميزة.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>نحتاج للوصول إلى الكاميرا لالتقاط صور للمنتجات أو تحديث ملفك الشخصي.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
