@@ -86,6 +86,8 @@ workflows:
 
     publishing:
       email:
+        recipients:
+          - alghaithapp@gmail.com
         notify:
           success: true
           failure: true
