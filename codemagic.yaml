@@ -1,5 +1,12 @@
 # Codemagic — بناء iOS لتطبيق الغيث ورفعه إلى TestFlight
 # التوثيق: https://docs.codemagic.io/yaml-quick-start/building-a-flutter-app/
+#
+# مهم: إذا ظهر خطأ Scheme "Runner" not found أثناء "Install Flutter dependencies"
+# فأنت تستخدم Workflow Editor وليس هذا الملف. الحل:
+#   1) Start new build → اختر workflow: "Al-Ghaith iOS Release" (ios-release)
+#   أو
+#   2) Workflow Editor → Post-clone script → flutter pub get
+#      (أو: bash scripts/codemagic_post_clone.sh)
 
 workflows:
   ios-release:
