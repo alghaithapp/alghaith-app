@@ -1068,7 +1068,8 @@ app.get('/db/admin/reports', async (req, res) => {
 app.get('/db/real-estate-listings', async (req, res) => {
   try {
     const subCategoryId = String(parseQueryValue(req.query.subCategoryId) || '').trim();
-    const rows = await listRealEstateListings(subCategoryId);
+    const listingMode = String(parseQueryValue(req.query.listingMode) || '').trim();
+    const rows = await listRealEstateListings(subCategoryId, listingMode);
     return res.json(rows);
   } catch (error) {
     console.error('list real-estate-listings error:', error);

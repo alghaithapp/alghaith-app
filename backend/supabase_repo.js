@@ -1724,8 +1724,9 @@ async function listCatalogProducts(category = '', subCategoryId = '') {
     });
 }
 
-async function listRealEstateListings(subCategoryId = '') {
+async function listRealEstateListings(subCategoryId = '', listingMode = '') {
   const target = String(subCategoryId || '').trim();
+  const modeFilter = String(listingMode || '').trim();
   const products = await selectMany(
     'merchant_products',
     [{ method: 'eq', column: 'category', value: 'real_estate' }],
@@ -1733,8 +1734,15 @@ async function listRealEstateListings(subCategoryId = '') {
   );
 
   const filteredProducts = products.filter((row) => {
-    if (!target) return true;
-    return String(row.sub_category || '').trim() === target;
+    if (row.is_available === false) return false;
+    if (target && String(row.sub_category || '').trim() !== target) {
+      return false;
+    }
+    if (modeFilter) {
+      const rowMode = String(row.listing_mode || 'sell').trim();
+      if (rowMode !== modeFilter) return false;
+    }
+    return true;
   });
 
   const profilesByPhone = new Map();
