@@ -309,7 +309,7 @@ async function sendOtpViaOtpiq(phoneNumber, verificationCode, channel = 'sms') {
 }
 
 app.get('/health', (_, res) => {
-  res.json({ ok: true, version: '1.1.9' });
+  res.json({ ok: true, version: '1.1.10' });
 });
 
 async function geocodeAddressWithMapbox(addressText) {
