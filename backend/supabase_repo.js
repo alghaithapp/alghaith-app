@@ -122,6 +122,46 @@ function profileServiceIds(profile) {
   return primary ? [primary] : [];
 }
 
+/** أقسام التسوق العالمي فقط — لا تُخلط مع التسوق المحلي. */
+const GLOBAL_SHOPPING_SUB_CATEGORY_IDS = new Set(['iran', 'china']);
+
+function profileHasService(profile, serviceId) {
+  const target = String(serviceId || '').trim();
+  if (!target) return false;
+  return profileServiceIds(profile).includes(target);
+}
+
+function productMatchesStoreListing({
+  row,
+  productCategory,
+  subCategoryId = '',
+  marketplaceCategory = '',
+}) {
+  if (row.is_available === false) return false;
+
+  const productService = String(row.category || row.service_id || '').trim();
+  if (productService !== String(productCategory || '').trim()) return false;
+
+  const sub = String(row.sub_category || '').trim();
+  const target = String(subCategoryId || '').trim();
+  const channel = String(marketplaceCategory || '').trim();
+
+  if (channel === 'global_shopping') {
+    if (!GLOBAL_SHOPPING_SUB_CATEGORY_IDS.has(sub)) return false;
+    if (target && sub !== target) return false;
+    return true;
+  }
+
+  if (channel === 'product' || channel === '') {
+    if (GLOBAL_SHOPPING_SUB_CATEGORY_IDS.has(sub)) return false;
+    if (target) return sub === target;
+    return true;
+  }
+
+  if (target) return sub === target;
+  return true;
+}
+
 function buildProfileByPhoneMap(profiles) {
   const map = new Map();
   for (const profile of profiles) {
@@ -478,6 +518,11 @@ async function saveMerchantProfile(phone, data = {}) {
       basePayload,
       'active_service_id',
       data.active_service_id ?? data.activeServiceId
+    );
+  }
+  if (await hasColumn('merchant_profiles', 'product_sections')) {
+    basePayload.product_sections = normalizeArray(
+      data.product_sections ?? data.productSections
     );
   }
   const phoneKey = await resolvePhoneKey(phone);
@@ -1223,6 +1268,9 @@ async function saveMerchantProduct(phone, data = {}) {
   }
   assignIfDefined(payload, 'category', data.category);
   assignIfDefined(payload, 'sub_category', data.sub_category ?? data.subCategory);
+  if (await hasColumn('merchant_products', 'section_id')) {
+    assignIfDefined(payload, 'section_id', data.section_id ?? data.sectionId);
+  }
   assignIfDefined(
     payload,
     'category_label_ar',
@@ -1310,16 +1358,18 @@ async function listMerchantStoresByService({
   serviceId,
   productCategory,
   subCategoryId = '',
+  marketplaceCategory = '',
 }) {
   const profiles = await selectMany('merchant_profiles');
-  const target = String(subCategoryId || '').trim();
+  const normalizedServiceId = String(serviceId || '').trim();
+  const channel = String(marketplaceCategory || '').trim();
   const result = [];
 
   for (const profile of profiles) {
-    const serviceIds = profileServiceIds(profile);
-    const hasService = serviceIds.includes(String(serviceId));
     const isOpen = profile.is_open !== false;
     if (!isOpen) continue;
+
+    if (!profileHasService(profile, normalizedServiceId)) continue;
 
     const phoneVariants = getPhoneVariants(profile.phone);
     const products = await selectMany(
@@ -1328,17 +1378,17 @@ async function listMerchantStoresByService({
       { column: 'created_at', ascending: false }
     );
 
-    const filteredProducts = products.filter((row) => {
-      if (row.is_available === false) return false;
-      const productService = String(
-        row.category || row.service_id || ''
-      ).trim();
-      if (productService !== String(productCategory).trim()) return false;
-      if (!target) return true;
-      return String(row.sub_category || '').trim() === target;
-    });
+    const filteredProducts = products.filter((row) =>
+      productMatchesStoreListing({
+        row,
+        productCategory,
+        subCategoryId,
+        marketplaceCategory: channel || normalizedServiceId,
+      })
+    );
 
-    if (!hasService && filteredProducts.length === 0) continue;
+    // يظهر المتجر فقط إن وُجد منتج واحد على الأقل يطابق القسم/النشاط.
+    if (filteredProducts.length === 0) continue;
 
     result.push({
       profile,
@@ -1354,10 +1404,16 @@ async function listShoppingStores(subCategoryId = '') {
     serviceId: 'product',
     productCategory: 'product',
     subCategoryId,
+    marketplaceCategory: 'product',
   });
 }
 
-async function listServiceStores(serviceId = '', productCategory = '', subCategoryId = '') {
+async function listServiceStores(
+  serviceId = '',
+  productCategory = '',
+  subCategoryId = '',
+  marketplaceCategory = ''
+) {
   const normalizedService = String(serviceId || '').trim();
   const normalizedCategory = String(productCategory || normalizedService).trim();
   if (!normalizedService) return [];
@@ -1365,6 +1421,7 @@ async function listServiceStores(serviceId = '', productCategory = '', subCatego
     serviceId: normalizedService,
     productCategory: normalizedCategory,
     subCategoryId,
+    marketplaceCategory: String(marketplaceCategory || '').trim(),
   });
 }
 
@@ -1475,26 +1532,23 @@ async function getMarketplaceStats() {
       serviceId: def.serviceId,
       productCategory: def.productCategory,
       subCategoryId: '',
+      marketplaceCategory: def.id,
     });
     storeCountByService[def.id] = stores.length;
   }
 
   const categories = MARKETPLACE_CATEGORY_DEFS.map((def) => {
     const categoryProducts = availableProducts.filter((row) => {
-      const productService = String(row.category || row.service_id || '').trim();
-      if (productService !== def.productCategory) return false;
       const phone = String(row.phone || '').trim();
       const profile = findProfileForPhone(profileByPhone, phone);
       if (!profile) return false;
-      const serviceIds = profileServiceIds(profile);
-      if (
-        def.serviceId &&
-        !serviceIds.includes(def.serviceId) &&
-        productService !== def.serviceId
-      ) {
-        return false;
-      }
-      return true;
+      if (!profileHasService(profile, def.serviceId)) return false;
+      return productMatchesStoreListing({
+        row,
+        productCategory: def.productCategory,
+        subCategoryId: '',
+        marketplaceCategory: def.id,
+      });
     });
 
     const subCategoryCounts = {};
@@ -1526,6 +1580,7 @@ async function getMarketplaceStats() {
             serviceId: def.serviceId,
             productCategory: def.productCategory,
             subCategoryId: sub.id,
+            marketplaceCategory: def.id,
           });
           return {
             ...sub,
@@ -1592,6 +1647,7 @@ async function listRestaurantStores(subCategoryId = '') {
     serviceId: 'restaurant',
     productCategory: 'restaurant',
     subCategoryId,
+    marketplaceCategory: 'restaurant',
   });
 }
 

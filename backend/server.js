@@ -880,10 +880,18 @@ app.get('/db/service-stores', async (req, res) => {
     const serviceId = String(parseQueryValue(req.query.serviceId) || '').trim();
     const productCategory = String(parseQueryValue(req.query.productCategory) || serviceId).trim();
     const subCategoryId = String(parseQueryValue(req.query.subCategoryId) || '').trim();
+    const marketplaceCategory = String(
+      parseQueryValue(req.query.marketplaceCategory) || ''
+    ).trim();
     if (!serviceId) {
       return res.status(400).json({ message: 'serviceId is required.' });
     }
-    const rows = await listServiceStores(serviceId, productCategory, subCategoryId);
+    const rows = await listServiceStores(
+      serviceId,
+      productCategory,
+      subCategoryId,
+      marketplaceCategory
+    );
     return res.json(rows);
   } catch (error) {
     console.error('list service-stores error:', error);
