@@ -58,6 +58,24 @@ class CustomerAccountView extends StatelessWidget {
                     ),
                     const SizedBox(height: 14),
                     _NavigationCard(
+                      icon: Icons.delivery_dining_rounded,
+                      iconColor: const Color(0xFF00A3A3),
+                      title: 'الانتقال إلى حساب مندوب التوصيل',
+                      subtitle: provider.hasCourierProfile
+                          ? 'استخدم نفس الحساب وادخل إلى واجهة المندوب'
+                          : 'سجّل بيانات المندوب أولاً لتفعيل الحساب',
+                      onTap: () => switchAccountRoleWithLoading(
+                        context,
+                        provider,
+                        'delivery',
+                        loadingMessage:
+                            'يرجى الانتظار... جارٍ التحويل إلى حساب المندوب',
+                        errorMessage:
+                            'تعذر الانتقال إلى حساب المندوب حالياً.',
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    _NavigationCard(
                       icon: Icons.badge_rounded,
                       iconColor: Colors.purple,
                       title: 'بيانات الحساب الكامل',

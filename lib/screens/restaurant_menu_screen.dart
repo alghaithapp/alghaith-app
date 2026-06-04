@@ -977,16 +977,20 @@ class _MenuItemCard extends StatelessWidget {
                   const SizedBox(height: 14),
                   Row(
                     children: [
-                      Text(
-                        '${item.price.toPrice()} د.ع',
-                        style: const TextStyle(
-                          fontFamily: 'Cairo',
-                          fontWeight: FontWeight.w900,
-                          fontSize: 16,
-                          color: _brandRed,
+                      Expanded(
+                        child: Text(
+                          '${item.price.toPrice()} د.ع',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontFamily: 'Cairo',
+                            fontWeight: FontWeight.w900,
+                            fontSize: 16,
+                            color: _brandRed,
+                          ),
                         ),
                       ),
-                      const Spacer(),
+                      const SizedBox(width: 8),
                       SizedBox(
                         width: 116,
                         child: Align(

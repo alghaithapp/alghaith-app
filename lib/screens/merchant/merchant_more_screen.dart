@@ -173,6 +173,21 @@ class MerchantMoreScreen extends StatelessWidget {
         ),
         _MoreTile(
           cardColor: cardColor,
+          title: 'الانتقال إلى حساب مندوب التوصيل',
+          subtitle: provider.hasCourierProfile
+              ? 'استخدم نفس التسجيل وانتقل لواجهة المندوب'
+              : 'سجّل بيانات المندوب أولاً لتفعيل الحساب',
+          icon: Icons.delivery_dining_rounded,
+          onTap: () => switchAccountRoleWithLoading(
+            context,
+            provider,
+            'delivery',
+            loadingMessage: 'يرجى الانتظار... جارٍ التحويل إلى حساب المندوب',
+            errorMessage: 'تعذر الانتقال إلى حساب المندوب حالياً.',
+          ),
+        ),
+        _MoreTile(
+          cardColor: cardColor,
           title: 'تسجيل الخروج',
           subtitle: 'العودة إلى شاشة الدخول',
           icon: Icons.logout_rounded,

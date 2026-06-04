@@ -804,10 +804,11 @@ class AppProvider extends ChangeNotifier {
           (role == 'admin' && _hasAdminAccess);
     }
     switch (locked) {
+      // حساب موحّد: الزبون والتاجر والمندوب يتبادلون بحرية.
+      // التسجيل الناقص (مثل ملف المندوب) يُكمَّل تلقائياً عبر توجيه الشاشات.
       case 'marketplace':
-        return role == 'customer' || role == 'merchant';
       case 'delivery':
-        return role == 'delivery';
+        return role == 'customer' || role == 'merchant' || role == 'delivery';
       case 'driver':
         return role == 'driver';
       default:
@@ -3626,7 +3627,8 @@ class AppProvider extends ChangeNotifier {
 
   /// بعد إكمال إعداد التاجر — تأكد من حفظ الدور + المتجر في السحابة.
   Future<void> activateMerchantRole() async {
-    if (_accountType != null && _accountType != 'marketplace') return;
+    // الحساب الموحّد (marketplace/delivery) يسمح بدور التاجر؛ التكسي فقط مستثنى.
+    if (_accountType == 'driver') return;
     if (_accountType == null) _accountType = 'marketplace';
     _userRole = 'merchant';
     notifyListeners();

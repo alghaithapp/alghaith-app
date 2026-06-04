@@ -115,13 +115,15 @@ class RoleSelectionScreen extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 28),
-                  if (!locked || appProvider.isMarketplaceAccount) ...[
+                  if (!locked ||
+                      appProvider.isMarketplaceAccount ||
+                      appProvider.isDeliveryAccount) ...[
                     FadeInRight(
                       delay: const Duration(milliseconds: 220),
                       child: _RoleCard(
                         title: 'حساب زبون / تاجر',
                         subtitle:
-                            'تسوق، طلبات، ومتجر خاص — لا يمكن تحويل هذا الرقم لمندوب توصيل',
+                            'تسوق، طلبات، ومتجر خاص — يمكنك التبديل لاحقاً بين الزبون والتاجر والمندوب',
                         icon: CupertinoIcons.person_crop_circle_fill,
                         accentColor: const Color(0xFFE53935),
                         onTap: () async {
@@ -155,13 +157,15 @@ class RoleSelectionScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: 14),
                   ],
-                  if (!locked || appProvider.isDeliveryAccount) ...[
+                  if (!locked ||
+                      appProvider.isDeliveryAccount ||
+                      appProvider.isMarketplaceAccount) ...[
                     FadeInUp(
                       delay: const Duration(milliseconds: 380),
                       child: _RoleCard(
                         title: 'مندوب توصيل',
                         subtitle:
-                            'توصيل طلبات المطاعم والتسوق — حساب مستقل لا يتحول لزبون/تاجر',
+                            'توصيل طلبات المطاعم والتسوق — يمكنك التبديل لاحقاً بين الزبون والتاجر والمندوب',
                         icon: Icons.motorcycle,
                         accentColor: const Color(0xFF00A3A3),
                         onTap: () => _pickRole(context, appProvider, 'delivery'),

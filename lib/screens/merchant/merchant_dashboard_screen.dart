@@ -59,7 +59,6 @@ class MerchantDashboardScreen extends StatelessWidget {
                 productsCount: provider.merchantProductCount,
                 ordersCount: provider.merchantOrdersCount,
                 ratingLabel: ratingLabel,
-                salesLabel: '${provider.totalSales.toPrice()} د.ع',
                 itemLabel: labels.itemPluralAr,
               ),
             ),
@@ -229,7 +228,6 @@ class _HeroCard extends StatelessWidget {
   final int productsCount;
   final int ordersCount;
   final String ratingLabel;
-  final String salesLabel;
   final String itemLabel;
 
   const _HeroCard({
@@ -243,7 +241,6 @@ class _HeroCard extends StatelessWidget {
     required this.productsCount,
     required this.ordersCount,
     required this.ratingLabel,
-    required this.salesLabel,
     required this.itemLabel,
   });
 
@@ -389,14 +386,6 @@ class _HeroCard extends StatelessWidget {
                   value: ratingLabel,
                 ),
               ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _HeroMiniStat(
-                  label: 'المبيعات',
-                  value: salesLabel,
-                  compact: true,
-                ),
-              ),
             ],
           ),
         ],
@@ -495,12 +484,10 @@ class _StoreStatusSwitch extends StatelessWidget {
 class _HeroMiniStat extends StatelessWidget {
   final String label;
   final String value;
-  final bool compact;
 
   const _HeroMiniStat({
     required this.label,
     required this.value,
-    this.compact = false,
   });
 
   @override
@@ -520,7 +507,7 @@ class _HeroMiniStat extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
               color: Colors.white,
-              fontSize: compact ? 10 : 13,
+              fontSize: 13,
               fontWeight: FontWeight.w900,
               fontFamily: 'Cairo',
             ),

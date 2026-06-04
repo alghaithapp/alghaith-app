@@ -393,17 +393,20 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
         ],
         child: SizedBox(
           height: 64,
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: [
               _buildNavItem(0, CupertinoIcons.house_fill, 'الرئيسية'),
               _buildNavItem(1, CupertinoIcons.heart_fill, 'المفضلة'),
               _buildSpecialCartItemCompact(
-                  2, CupertinoIcons.shopping_cart, 'السلة', cartCount),
+                  2, CupertinoIcons.shopping_cart, cartCount),
               _buildNavItem(3, CupertinoIcons.doc_text_fill, 'طلباتي',
                   badgeCount: appProvider.customerActiveOrdersCount),
               _buildNavItem(4, CupertinoIcons.person_fill, 'حسابي'),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -421,13 +424,13 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
                 color: isActive
                     ? AppBottomNavStyle.activeColor
                     : CupertinoColors.systemGrey,
-                size: isActive ? 26 : 24),
+                size: 34),
           )
         : Icon(icon,
             color: isActive
                 ? AppBottomNavStyle.activeColor
                 : CupertinoColors.systemGrey,
-            size: isActive ? 26 : 24);
+            size: 34);
     return GestureDetector(
       onTap: () {
         if (index == 0) {
@@ -537,9 +540,7 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
   }
 
   Widget _buildSpecialCartItemCompact(
-      int index, IconData icon, String label, int count) {
-    final bool isActive = _currentIndex == index;
-
+      int index, IconData icon, int count) {
     return GestureDetector(
       onTap: () => setState(() => _currentIndex = index),
       child: Column(
@@ -605,17 +606,6 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
                     ),
                 ],
               ),
-            ),
-          ),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 10,
-              fontWeight: FontWeight.bold,
-              color: isActive
-                  ? AppBottomNavStyle.activeColor
-                  : CupertinoColors.systemGrey,
-              fontFamily: 'Cairo',
             ),
           ),
         ],

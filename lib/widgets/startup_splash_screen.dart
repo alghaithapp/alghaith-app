@@ -2,6 +2,7 @@ import 'dart:ui';
 
 import 'package:flutter/material.dart';
 
+import '../core/theme/app_colors.dart';
 import 'app_logo.dart';
 
 class StartupSplashScreen extends StatelessWidget {
@@ -22,7 +23,7 @@ class _StartupSplashView extends StatelessWidget {
       body: Container(
         decoration: const BoxDecoration(
           gradient: LinearGradient(
-            colors: [Color(0xFFFFFCFA), Color(0xFFFFEFE6), Color(0xFFFCE1D6)],
+            colors: [Color(0xFFF8FBFB), Color(0xFFEAF3F3), Color(0xFFDDEDED)],
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
           ),
@@ -34,7 +35,7 @@ class _StartupSplashView extends StatelessWidget {
               left: -70,
               child: _BlurBlob(
                 size: 240,
-                colors: const [Color(0xFFFFE2D3), Color(0xFFFFA46B)],
+                colors: const [Color(0xFFFFE6BF), AppColors.accent],
               ),
             ),
             Positioned(
@@ -42,7 +43,7 @@ class _StartupSplashView extends StatelessWidget {
               right: -80,
               child: _BlurBlob(
                 size: 250,
-                colors: const [Color(0xFFFFD5C6), Color(0xFFE84A3A)],
+                colors: const [Color(0xFFB9DEE0), AppColors.primary],
               ),
             ),
             Positioned.fill(
@@ -61,15 +62,11 @@ class _StartupSplashView extends StatelessWidget {
                     child: Container(
                       padding: const EdgeInsets.fromLTRB(18, 24, 18, 18),
                       decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.86),
+                        color: Colors.white.withValues(alpha: 0.84),
                         borderRadius: BorderRadius.circular(28),
-                        border: Border.all(
-                          color: Colors.white.withValues(alpha: 0.95),
-                        ),
                         boxShadow: [
                           BoxShadow(
-                            color:
-                                const Color(0xFFE84A3A).withValues(alpha: 0.10),
+                            color: AppColors.primary.withValues(alpha: 0.12),
                             blurRadius: 30,
                             offset: const Offset(0, 18),
                           ),
@@ -79,29 +76,17 @@ class _StartupSplashView extends StatelessWidget {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Container(
-                            padding: const EdgeInsets.all(14),
+                            padding: const EdgeInsets.all(6),
                             decoration: BoxDecoration(
                               color: Colors.white.withValues(alpha: 0.92),
                               borderRadius: BorderRadius.circular(28),
                               border: Border.all(
-                                color: const Color(0xFFE84A3A)
-                                    .withValues(alpha: 0.12),
+                                color: const Color(0xFFE2ECEC),
                               ),
                             ),
-                            child: const AppLogo(size: 92),
+                            child: const AppLogo(size: 108),
                           ),
                           const SizedBox(height: 14),
-                          const Text(
-                            'الغيث',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              fontSize: 28,
-                              fontWeight: FontWeight.w900,
-                              fontFamily: 'Cairo',
-                              color: Color(0xFF261816),
-                            ),
-                          ),
-                          const SizedBox(height: 8),
                           const Text(
                             'منصة عراقية للخدمات والتسوق المحلي في مكان واحد',
                             textAlign: TextAlign.center,
@@ -110,7 +95,7 @@ class _StartupSplashView extends StatelessWidget {
                               height: 1.5,
                               fontWeight: FontWeight.w600,
                               fontFamily: 'Cairo',
-                              color: Color(0xFF7A5A50),
+                              color: Color(0xFF5A6B6E),
                             ),
                           ),
                           const SizedBox(height: 18),
@@ -122,15 +107,15 @@ class _StartupSplashView extends StatelessWidget {
                                 shape: BoxShape.circle,
                                 gradient: const LinearGradient(
                                   colors: [
-                                    Color(0xFFFF9B63),
-                                    Color(0xFFE84A3A)
+                                    AppColors.accentDark,
+                                    AppColors.accent,
                                   ],
                                   begin: Alignment.topLeft,
                                   end: Alignment.bottomRight,
                                 ),
                                 boxShadow: [
                                   BoxShadow(
-                                    color: const Color(0xFFE84A3A)
+                                    color: AppColors.accent
                                         .withValues(alpha: 0.22),
                                     blurRadius: 16,
                                     offset: const Offset(0, 8),
@@ -155,7 +140,7 @@ class _StartupSplashView extends StatelessWidget {
                               fontSize: 12.5,
                               fontWeight: FontWeight.w700,
                               fontFamily: 'Cairo',
-                              color: Color(0xFF8C665A),
+                              color: Color(0xFF5A6B6E),
                             ),
                           ),
                         ],
@@ -201,7 +186,7 @@ class _BackdropPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final linePaint = Paint()
-      ..color = const Color(0xFFB95A3E).withValues(alpha: 0.06)
+      ..color = AppColors.primary.withValues(alpha: 0.06)
       ..strokeWidth = 1.1
       ..style = PaintingStyle.stroke;
 

@@ -172,6 +172,23 @@ class _MerchantAccountView extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 14),
+            _RoleSwitchCard(
+              title: 'الانتقال إلى حساب مندوب التوصيل',
+              subtitle: appProvider.hasCourierProfile
+                  ? 'احتفظ بنفس الدخول واستخدم واجهة المندوب'
+                  : 'سجّل بيانات المندوب أولاً لتفعيل الحساب',
+              icon: Icons.delivery_dining_rounded,
+              color: const Color(0xFF00A3A3),
+              onTap: () => switchAccountRoleWithLoading(
+                context,
+                appProvider,
+                'delivery',
+                loadingMessage:
+                    'يرجى الانتظار... جارٍ التحويل إلى حساب المندوب',
+                errorMessage: 'تعذر الانتقال إلى حساب المندوب حالياً.',
+              ),
+            ),
+            const SizedBox(height: 14),
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(

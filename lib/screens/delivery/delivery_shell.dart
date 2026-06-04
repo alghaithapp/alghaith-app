@@ -13,6 +13,7 @@ import '../../core/ui/app_bottom_nav_style.dart';
 import '../../providers/app_provider.dart';
 import 'delivery_earnings_screen.dart';
 import 'delivery_setup_screen.dart';
+import '../../utils/account_role_switch.dart';
 import '../../utils/extensions.dart';
 import '../../utils/helpers.dart';
 import '../../utils/role_notification_poller.dart';
@@ -637,6 +638,38 @@ class DeliveryAccountScreen extends StatelessWidget {
               },
               child: Text(
                 'تعديل الملف',
+                style: const TextStyle(fontFamily: 'Cairo'),
+              ),
+            ),
+            const SizedBox(height: 10),
+            CupertinoButton.filled(
+              color: AppColors.primary,
+              onPressed: () => switchAccountRoleWithLoading(
+                context,
+                appProvider,
+                'customer',
+                loadingMessage:
+                    'يرجى الانتظار... جارٍ التحويل إلى حساب الزبون',
+                errorMessage: 'تعذر الانتقال إلى حساب الزبون حالياً.',
+              ),
+              child: Text(
+                'الانتقال إلى حساب الزبون',
+                style: const TextStyle(fontFamily: 'Cairo'),
+              ),
+            ),
+            const SizedBox(height: 10),
+            CupertinoButton.filled(
+              color: AppColors.accent,
+              onPressed: () => switchAccountRoleWithLoading(
+                context,
+                appProvider,
+                'merchant',
+                loadingMessage:
+                    'يرجى الانتظار... جارٍ التحويل إلى حساب التاجر',
+                errorMessage: 'تعذر الانتقال إلى حساب التاجر حالياً.',
+              ),
+              child: Text(
+                'الانتقال إلى حساب التاجر',
                 style: const TextStyle(fontFamily: 'Cairo'),
               ),
             ),
