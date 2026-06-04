@@ -38,9 +38,13 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   try {
     AppConfig.validate(throwOnError: false);
-    if (AppConfig.mapboxPublicToken.trim().isNotEmpty) {
+    if (AppConfig.isMapboxConfigured) {
       MapboxOptions.setAccessToken(AppConfig.mapboxPublicToken.trim());
       MapboxMapsOptions.setLanguage('ar');
+    } else {
+      debugPrint(
+        'Mapbox: MAPBOX_PUBLIC_TOKEN غير مضبوط — الخرائط ستُخفى حتى تمرير pk. عند التشغيل.',
+      );
     }
     await SupabaseService.initialize();
     await configureAppSystemUi();

@@ -325,10 +325,10 @@ class _CartScreenState extends State<CartScreen> {
           accuracy: geo.LocationAccuracy.high,
         ),
       );
-      final token = AppConfig.mapboxPublicToken.trim();
       String addressText =
           '${current.latitude.toStringAsFixed(5)}, ${current.longitude.toStringAsFixed(5)}';
-      if (token.isNotEmpty) {
+      if (AppConfig.isMapboxConfigured) {
+        final token = AppConfig.mapboxPublicToken.trim();
         try {
           final uri = Uri.parse(
             'https://api.mapbox.com/geocoding/v5/mapbox.places/'
@@ -1679,7 +1679,7 @@ class _MiniMapPreview extends StatelessWidget {
       child: Stack(
         fit: StackFit.expand,
         children: [
-          if (hasCoords && AppConfig.mapboxPublicToken.trim().isNotEmpty)
+          if (hasCoords && AppConfig.isMapboxConfigured)
             IgnorePointer(
               child: MapWidget(
                 styleUri: 'mapbox://styles/mapbox/streets-v12',
@@ -1830,8 +1830,10 @@ class _CustomerMapPickerScreenState extends State<_CustomerMapPickerScreen> {
   }
 
   Future<String> _reverseGeocode(double lat, double lng) async {
+    if (!AppConfig.isMapboxConfigured) {
+      return '${lat.toStringAsFixed(5)}, ${lng.toStringAsFixed(5)}';
+    }
     final token = AppConfig.mapboxPublicToken.trim();
-    if (token.isEmpty) return '${lat.toStringAsFixed(5)}, ${lng.toStringAsFixed(5)}';
     try {
       final uri = Uri.parse('https://api.mapbox.com/geocoding/v5/mapbox.places/$lng,$lat.json?language=ar&country=iq&limit=1&access_token=$token');
       final response = await http.get(uri).timeout(AppConfig.apiTimeout);

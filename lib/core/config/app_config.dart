@@ -31,6 +31,15 @@ class AppConfig {
 
   static bool get isBackendConfigured => normalizedDatabaseUrl.isNotEmpty;
 
+  /// مفتاح Mapbox العام الصالح يبدأ بـ pk. ولا يكون النص الافتراضي في الكود.
+  static bool get isMapboxConfigured {
+    final token = mapboxPublicToken.trim();
+    if (token.isEmpty) return false;
+    if (token == 'YOUR_MAPBOX_PUBLIC_TOKEN') return false;
+    if (token.startsWith('YOUR_')) return false;
+    return token.startsWith('pk.');
+  }
+
   /// تسعيرة التكسي الحالية: كل 3 كم = 1000 د.ع
   static const double taxiFareStepDistanceKm = 3;
   static const int taxiFareStepPriceIqd = 1000;

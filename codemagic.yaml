@@ -15,10 +15,14 @@ workflows:
     environment:
       flutter: stable
       xcode: latest
+      cocoapods: default
       ios_signing:
         distribution_type: app_store
         bundle_identifier: com.alghaith.app
       vars:
+        CM_FLUTTER_SCHEME: Runner
+        XCODE_SCHEME: Runner
+        XCODE_WORKSPACE: ios/Runner.xcworkspace
         DATABASE_BACKEND_BASE_URL: https://alghaith-app-production.up.railway.app
         PHONE_AUTH_BASE_URL: https://lively-wind-9d98.alghaithapp.workers.dev
         # أضِف في واجهة Codemagic → Environment variables (مُعلّم Secure):
@@ -32,11 +36,25 @@ workflows:
           include: true
 
     scripts:
+      # يجب توليد ملفات iOS قبل use-profiles حتى يُعثر Codemagic على Scheme Runner
       - name: Get Flutter packages
-        script: flutter pub get
+        script: |
+          set -e
+          flutter pub get
+          flutter precache --ios
+          flutter build ios --config-only
+
+      - name: Install CocoaPods dependencies
+        script: |
+          set -e
+          if [ -f ios/Podfile ]; then
+            cd ios && pod install
+          else
+            find . -name Podfile -not -path "*/.*/*" -execdir pod install \;
+          fi
 
       - name: Set up code signing on Xcode project
-        script: xcode-project use-profiles
+        script: xcode-project use-profiles --project ios/Runner.xcodeproj
 
       - name: Build iOS IPA
         script: |

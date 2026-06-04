@@ -92,10 +92,10 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
   }
 
   Future<String> _reverseGeocode(double lat, double lng) async {
-    final token = AppConfig.mapboxPublicToken.trim();
-    if (token.isEmpty) {
+    if (!AppConfig.isMapboxConfigured) {
       return '${lat.toStringAsFixed(5)}, ${lng.toStringAsFixed(5)}';
     }
+    final token = AppConfig.mapboxPublicToken.trim();
     try {
       final uri = Uri.parse(
         'https://api.mapbox.com/geocoding/v5/mapbox.places/'
@@ -161,7 +161,13 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
       ),
     );
     final target = Position(current.longitude, current.latitude);
-    setState(() => _center = target);
+    setState(() {
+      _center = target;
+      if (!AppConfig.isMapboxConfigured) {
+        _resolvedAddress =
+            '${target.lat.toDouble().toStringAsFixed(5)}, ${target.lng.toDouble().toStringAsFixed(5)}';
+      }
+    });
     await _map?.setCamera(
       CameraOptions(
         center: Point(coordinates: target),
@@ -186,16 +192,21 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
             Expanded(
               child: Stack(
                 children: [
-                  Positioned.fill(
-                    child: MapWidget(
-                      styleUri: 'mapbox://styles/mapbox/streets-v12',
-                      cameraOptions: CameraOptions(
-                        center: Point(coordinates: _center),
-                        zoom: 14.0,
+                  if (AppConfig.isMapboxConfigured)
+                    Positioned.fill(
+                      child: MapWidget(
+                        styleUri: 'mapbox://styles/mapbox/streets-v12',
+                        cameraOptions: CameraOptions(
+                          center: Point(coordinates: _center),
+                          zoom: 14.0,
+                        ),
+                        onMapCreated: _onMapCreated,
                       ),
-                      onMapCreated: _onMapCreated,
+                    )
+                  else
+                    const Positioned.fill(
+                      child: _MapUnavailableNotice(),
                     ),
-                  ),
                   Positioned(
                     right: 12,
                     bottom: 12,
@@ -260,6 +271,49 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _MapUnavailableNotice extends StatelessWidget {
+  const _MapUnavailableNotice();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: const Color(0xFFE8EEF0),
+      padding: const EdgeInsets.symmetric(horizontal: 24),
+      alignment: Alignment.center,
+      child: const Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.map_outlined, size: 52, color: Color(0xFF607D8B)),
+          SizedBox(height: 14),
+          Text(
+            'الخريطة غير متاحة',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontFamily: 'Cairo',
+              fontWeight: FontWeight.w900,
+              fontSize: 18,
+              color: Color(0xFF1A1A1A),
+            ),
+          ),
+          SizedBox(height: 8),
+          Text(
+            'مفتاح Mapbox (MAPBOX_PUBLIC_TOKEN) غير مضبوط في هذا البناء.\n'
+            'بدون المفتاح تظهر الإحداثيات فقط بدل الخريطة والعنوان.\n'
+            'استخدم زر «موقعي» ثم «تأكيد» مؤقتاً، أو أضف المفتاح عند التشغيل.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontFamily: 'Cairo',
+              fontSize: 13,
+              height: 1.5,
+              color: Color(0xFF5A6B6E),
+            ),
+          ),
+        ],
       ),
     );
   }

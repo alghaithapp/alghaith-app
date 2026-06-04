@@ -979,7 +979,7 @@ class _TaxiMapBackdropState extends State<_TaxiMapBackdrop> {
   MapboxMap? _mapboxMap;
   CircleAnnotationManager? _circleManager;
   PolylineAnnotationManager? _polylineManager;
-  bool get _hasMapboxToken => AppConfig.mapboxPublicToken.trim().isNotEmpty;
+  bool get _hasMapboxToken => AppConfig.isMapboxConfigured;
 
   Future<void> _onMapCreated(MapboxMap mapboxMap) async {
     _mapboxMap = mapboxMap;
