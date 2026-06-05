@@ -85,6 +85,47 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
           ),
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+              child: GestureDetector(
+                onTap: () {
+                  final cat = MarketplaceCatalog.find('bazar_ghaith');
+                  if (cat != null) {
+                    appProvider.setCategory(cat.id);
+                    Navigator.of(context).push(
+                      CupertinoPageRoute(
+                        builder: (context) =>
+                            CategoryItemsScreen(category: cat),
+                      ),
+                    );
+                  }
+                },
+                child: Container(
+                  width: double.infinity,
+                  height: 180,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(15),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.1),
+                        blurRadius: 10,
+                        offset: const Offset(0, 5),
+                      ),
+                    ],
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(15),
+                    child: Image.asset(
+                      'assets/images/bazar_ghaith_banner.png',
+                      fit: BoxFit.cover,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
           SliverPadding(
             padding: const EdgeInsets.fromLTRB(8, 0, 8, 100),
             sliver: SliverGrid(

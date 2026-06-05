@@ -194,6 +194,17 @@ class _CartScreenState extends State<CartScreen> {
   }
 
   Future<void> _recalculateDeliveryFee(AppProvider appProvider) async {
+    final isBazarCart = appProvider.cart.isNotEmpty &&
+        appProvider.cart.first.category == 'bazar_ghaith';
+
+    if (isBazarCart) {
+      setState(() {
+        _deliveryDistanceKm = null;
+        _deliveryFeeIqd = 1000;
+      });
+      return;
+    }
+
     final merchantAddress = _merchantAddress(appProvider.cart);
     final merchantLocation = _merchantLocation(appProvider.cart);
     final customerAddress = appProvider.customerAddress.trim();
@@ -499,8 +510,10 @@ class _CartScreenState extends State<CartScreen> {
                       )),
                       const SizedBox(height: 12),
                       _buildLocationSection(appProvider),
-                      const SizedBox(height: 24),
-                      _buildDeliveryOptions(),
+                      if (cart.isNotEmpty && cart.first.category != 'bazar_ghaith') ...[
+                        const SizedBox(height: 24),
+                        _buildDeliveryOptions(),
+                      ],
                       const SizedBox(height: 24),
                       _buildPromoSection(appProvider),
                       const SizedBox(height: 24),

@@ -1506,6 +1506,7 @@ async function listOfferCatalogProducts() {
 const MARKETPLACE_CATEGORY_DEFS = [
   { id: 'restaurant', serviceId: 'restaurant', productCategory: 'restaurant' },
   { id: 'product', serviceId: 'product', productCategory: 'product' },
+  { id: 'bazar_ghaith', serviceId: 'bazar_ghaith', productCategory: 'bazar_ghaith' },
   { id: 'tourism', serviceId: 'tourism', productCategory: 'tourism' },
   { id: 'beauty', serviceId: 'beauty', productCategory: 'beauty' },
   { id: 'used', serviceId: 'used', productCategory: 'used' },
@@ -1693,7 +1694,7 @@ async function listCatalogProducts(category = '', subCategoryId = '') {
         return false;
       }
       if (
-        ['tourism', 'beauty', 'used', 'offers', 'cars'].includes(categoryFilter) &&
+        ['tourism', 'beauty', 'used', 'offers', 'cars', 'bazar_ghaith'].includes(categoryFilter) &&
         !serviceIds.includes(categoryFilter) &&
         productService !== categoryFilter
       ) {

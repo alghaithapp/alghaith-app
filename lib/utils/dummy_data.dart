@@ -3,7 +3,9 @@ import '../core/catalog/marketplace_catalog.dart';
 
 class DummyData {
   static List<ServiceCategory> get categories =>
-      MarketplaceCatalog.homeCategories;
+      MarketplaceCatalog.categories
+          .map((entry) => entry.asServiceCategory)
+          .toList();
 
   static List<ServiceCategory> get shoppingSubCategories =>
       MarketplaceCatalog.shoppingSubCategories

@@ -91,6 +91,20 @@ class MarketplaceCatalog {
 
   static const List<MarketplaceCategoryDefinition> categories = [
     MarketplaceCategoryDefinition(
+      id: 'bazar_ghaith',
+      titleAr: 'بازار ومطاعم الغيث',
+      titleEn: 'Al-Ghaith Bazaar',
+      image: 'assets/images/bazar_ghaith_banner.png',
+      entryMode: CategoryEntryMode.directStores,
+      apiServiceId: 'bazar_ghaith',
+      apiProductCategory: 'bazar_ghaith',
+      hubTitleAr: 'بازار ومطاعم الغيث',
+      hubSubtitleAr: 'كل احتياجاتك في سلة واحدة وبكلفة توصيل 1000 دينار فقط',
+      storeTitleAr: 'بازار ومطاعم الغيث',
+      storeSubtitleAr: 'اختر منتجاتك من مختلف المتاجر والمطاعم المشمولة',
+      showCuisineFilters: true,
+    ),
+    MarketplaceCategoryDefinition(
       id: 'restaurant',
       titleAr: '\u0627\u0644\u0645\u0637\u0627\u0639\u0645',
       titleEn: 'Restaurants',
@@ -244,8 +258,10 @@ class MarketplaceCatalog {
     return null;
   }
 
-  static List<ServiceCategory> get homeCategories =>
-      categories.map((entry) => entry.asServiceCategory).toList();
+  static List<ServiceCategory> get homeCategories => categories
+      .where((entry) => entry.id != 'bazar_ghaith')
+      .map((entry) => entry.asServiceCategory)
+      .toList();
 
   /// أقسام التسوق — مصدر واحد للزبون والتاجر.
   static List<MarketplaceSubCategory> get shoppingSubCategories =>
@@ -341,6 +357,7 @@ class MarketplaceCatalog {
   static const Set<String> cartEnabledCategoryIds = {
     'restaurant',
     'product',
+    'bazar_ghaith',
   };
 
   static bool usesShoppingCart(String? categoryId) {

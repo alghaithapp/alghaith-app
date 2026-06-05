@@ -2491,11 +2491,23 @@ class AppProvider extends ChangeNotifier {
         !MarketplaceCatalog.usesShoppingCart(item.category)) {
       return false;
     }
+
+    final isBazarItem = item.category == 'bazar_ghaith';
+
     final merchantPhone = _trimmedOrNull(item.merchantPhone);
     if (_cart.isNotEmpty && merchantPhone != null) {
-      final existingMerchant = _trimmedOrNull(_cart.first.merchantPhone);
-      if (existingMerchant != null && existingMerchant != merchantPhone) {
-        return false;
+      final firstItem = _cart.first;
+      final existingMerchant = _trimmedOrNull(firstItem.merchantPhone);
+      final isBazarCart = firstItem.category == 'bazar_ghaith';
+
+      // إذا كان العنصر الحالي بازار، والسلة فيها بازار، نسمح بتعدد التجار
+      if (isBazarItem && isBazarCart) {
+        // مسموح
+      } else {
+        // النظام القديم: تاجر واحد فقط
+        if (existingMerchant != null && existingMerchant != merchantPhone) {
+          return false;
+        }
       }
     }
 
