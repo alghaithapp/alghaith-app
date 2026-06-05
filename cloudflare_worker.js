@@ -280,6 +280,24 @@ export default {
           );
         }
 
+        // --- التعديل لحساب مراجع آبل ---
+        const APPLE_TEST_PHONE = '964000000000'; // يمكنك تغيير الرقم
+        const APPLE_TEST_CODE = '123456';
+
+        if (normalizedPhone === APPLE_TEST_PHONE && code === APPLE_TEST_CODE) {
+          if (!env.SESSION_SECRET) {
+            return json({ success: false, message: 'SESSION_SECRET is not configured.' }, 500, corsHeaders);
+          }
+          const token = await createSessionToken(normalizedPhone, env.SESSION_SECRET);
+          return json({
+            success: true,
+            token,
+            phoneNumber: `+${normalizedPhone}`,
+            expiresInSeconds: 60 * 60 * 24 * 30,
+          }, 200, corsHeaders);
+        }
+        // -----------------------------
+
         const allowedByPhone = await checkRateLimit(
           env,
           `verify-code:phone:${normalizedPhone}`,

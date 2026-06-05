@@ -484,6 +484,20 @@ app.post('/auth/verify-code', authVerifyCodeLimiter, async (req, res) => {
       return res.status(400).json({ message: 'Phone number and code are required.' });
     }
 
+    // --- التعديل لحساب مراجع آبل ---
+    const APPLE_TEST_PHONE = '964000000000';
+    const APPLE_TEST_CODE = '123456';
+    if (phone === APPLE_TEST_PHONE && code === APPLE_TEST_CODE) {
+      const token = createSessionToken(phone);
+      return res.json({
+        success: true,
+        token,
+        phoneNumber: normalizePhoneForDisplay(phone),
+        expiresInSeconds: 60 * 60 * 24 * 30,
+      });
+    }
+    // -----------------------------
+
     const otpEntry = pendingOtps.get(phone);
     if (!otpEntry) {
       return res.status(400).json({ success: false, message: 'Verification code expired. Please resend it.' });
