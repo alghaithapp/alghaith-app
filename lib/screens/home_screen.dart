@@ -40,54 +40,7 @@ class _HomeScreenState extends State<HomeScreen> {
         slivers: [
           SliverToBoxAdapter(
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
-              child: GestureDetector(
-                onTap: () {
-                  Navigator.of(context).push(
-                    CupertinoPageRoute(
-                      builder: (_) => const CatalogSearchScreen(),
-                    ),
-                  );
-                },
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 12,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(14),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.05),
-                        blurRadius: 8,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                  child: const Row(
-                    children: [
-                      Icon(
-                        CupertinoIcons.search,
-                        color: CupertinoColors.systemGrey,
-                      ),
-                      SizedBox(width: 10),
-                      Text(
-                        'ابحث عن منتج أو متجر...',
-                        style: TextStyle(
-                          fontFamily: 'Cairo',
-                          color: CupertinoColors.systemGrey,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+              padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
               child: GestureDetector(
                 onTap: () {
                   final cat = MarketplaceCatalog.find('bazar_ghaith');
@@ -96,14 +49,14 @@ class _HomeScreenState extends State<HomeScreen> {
                     Navigator.of(context).push(
                       CupertinoPageRoute(
                         builder: (context) =>
-                            CategoryItemsScreen(category: cat),
+                            CategoryItemsScreen(category: cat.asServiceCategory),
                       ),
                     );
                   }
                 },
                 child: Container(
                   width: double.infinity,
-                  height: 180,
+                  height: 240, // تم تكبير الارتفاع لاستغلال مساحة البحث المحذوفة
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(15),
