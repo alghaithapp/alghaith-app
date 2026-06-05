@@ -90,7 +90,13 @@ class _CategoryHubScreenState extends State<CategoryHubScreen> {
                   ),
                   SliverPadding(
                     padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-                    sliver: SliverList(
+                    sliver: SliverGrid(
+                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: 2,
+                        crossAxisSpacing: 10,
+                        mainAxisSpacing: 10,
+                        childAspectRatio: 1,
+                      ),
                       delegate: SliverChildBuilderDelegate(
                         (context, index) {
                           final sub = subs[index];
@@ -140,15 +146,13 @@ class _SubCategoryCard extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        height: 150,
-        margin: const EdgeInsets.only(bottom: 14),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(15),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withValues(alpha: 0.05),
-              blurRadius: 10,
+              blurRadius: 8,
               offset: const Offset(0, 4),
             ),
           ],
@@ -157,12 +161,12 @@ class _SubCategoryCard extends StatelessWidget {
           fit: StackFit.expand,
           children: [
             ClipRRect(
-              borderRadius: BorderRadius.circular(20),
+              borderRadius: BorderRadius.circular(15),
               child: AppImage(
                 imageData: sub.image,
                 width: double.infinity,
                 height: double.infinity,
-                fit: BoxFit.cover,
+                fit: BoxFit.contain, // تغيير ليتوافق مع أسلوب الصفحة الرئيسية
               ),
             ),
             if (count > 0)
@@ -171,19 +175,19 @@ class _SubCategoryCard extends StatelessWidget {
                 left: 8,
                 child: Container(
                   padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 4,
+                    horizontal: 8,
+                    vertical: 2,
                   ),
                   decoration: BoxDecoration(
                     color: const Color(0xFFF5A01D),
-                    borderRadius: BorderRadius.circular(20),
+                    borderRadius: BorderRadius.circular(12),
                   ),
                   child: Text(
                     '$count',
                     style: const TextStyle(
                       fontFamily: 'Cairo',
                       fontWeight: FontWeight.bold,
-                      fontSize: 12,
+                      fontSize: 10,
                       color: Colors.white,
                     ),
                   ),
