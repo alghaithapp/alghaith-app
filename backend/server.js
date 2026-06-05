@@ -63,6 +63,13 @@ const otpTtlMs = Number.parseInt(process.env.OTP_TTL_MS || '300000', 10);
 const otpLength = Number.parseInt(process.env.OTP_LENGTH || '6', 10);
 const sessionSecret = String(process.env.SESSION_SECRET || '').trim();
 const mapboxAccessToken = String(process.env.MAPBOX_ACCESS_TOKEN || '').trim();
+const mapboxPublicToken = String(process.env.MAPBOX_PUBLIC_TOKEN || '').trim();
+
+function resolvePublicMapboxToken() {
+  if (mapboxPublicToken.startsWith('pk.')) return mapboxPublicToken;
+  if (mapboxAccessToken.startsWith('pk.')) return mapboxAccessToken;
+  return '';
+}
 const corsAllowedOrigins = String(process.env.CORS_ALLOWED_ORIGINS || '')
   .split(',')
   .map((value) => value.trim())
@@ -310,6 +317,16 @@ async function sendOtpViaOtpiq(phoneNumber, verificationCode, channel = 'sms') {
 
 app.get('/health', (_, res) => {
   res.json({ ok: true, version: '1.1.10' });
+});
+
+app.get('/maps/public-token', (_, res) => {
+  const token = resolvePublicMapboxToken();
+  if (!token) {
+    return res.status(503).json({
+      message: 'MAPBOX_PUBLIC_TOKEN is not configured on backend.',
+    });
+  }
+  return res.json({ publicToken: token });
 });
 
 async function geocodeAddressWithMapbox(addressText) {

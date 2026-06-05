@@ -1,4 +1,7 @@
+import 'dart:convert';
+
 import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
 
 /// إعدادات التطبيق — مصدر واحد للحقيقة (compile-time + defaults للإنتاج).
 class AppConfig {
@@ -19,6 +22,8 @@ class AppConfig {
     defaultValue: 'YOUR_MAPBOX_PUBLIC_TOKEN',
   );
 
+  static String? _resolvedMapboxToken;
+
   static const Duration apiTimeout = Duration(seconds: 20);
   static const Duration restoreTimeout = Duration(seconds: 18);
   static const Duration syncDebounce = Duration(seconds: 3);
@@ -31,13 +36,55 @@ class AppConfig {
 
   static bool get isBackendConfigured => normalizedDatabaseUrl.isNotEmpty;
 
-  /// مفتاح Mapbox العام الصالح يبدأ بـ pk. ولا يكون النص الافتراضي في الكود.
-  static bool get isMapboxConfigured {
-    final token = mapboxPublicToken.trim();
-    if (token.isEmpty) return false;
-    if (token == 'YOUR_MAPBOX_PUBLIC_TOKEN') return false;
-    if (token.startsWith('YOUR_')) return false;
-    return token.startsWith('pk.');
+  static bool _isValidMapboxPublicToken(String token) {
+    final value = token.trim();
+    if (value.isEmpty) return false;
+    if (value == 'YOUR_MAPBOX_PUBLIC_TOKEN') return false;
+    if (value.startsWith('YOUR_')) return false;
+    return value.startsWith('pk.');
+  }
+
+  /// مفتاح Mapbox الفعلي: من --dart-define أولاً، ثم من الخادم عند التشغيل.
+  static String get effectiveMapboxPublicToken {
+    if (_isValidMapboxPublicToken(mapboxPublicToken)) {
+      return mapboxPublicToken.trim();
+    }
+    final runtime = (_resolvedMapboxToken ?? '').trim();
+    if (_isValidMapboxPublicToken(runtime)) return runtime;
+    return mapboxPublicToken.trim();
+  }
+
+  /// هل الخرائط جاهزة (مفتاح compile-time أو مُحمّل من الخادم).
+  static bool get isMapboxConfigured =>
+      _isValidMapboxPublicToken(effectiveMapboxPublicToken);
+
+  /// يحمّل مفتاح pk. من الخادم إذا لم يُمرَّر عند البناء (مثل TestFlight بدون dart-define).
+  static Future<void> ensureMapboxToken() async {
+    if (_isValidMapboxPublicToken(mapboxPublicToken)) {
+      _resolvedMapboxToken = mapboxPublicToken.trim();
+      return;
+    }
+    if (_isValidMapboxPublicToken(_resolvedMapboxToken ?? '')) return;
+    if (!isBackendConfigured) return;
+
+    try {
+      final uri = Uri.parse('$normalizedDatabaseUrl/maps/public-token');
+      final response = await http.get(uri).timeout(apiTimeout);
+      if (response.statusCode < 200 || response.statusCode >= 300) return;
+
+      final payload = jsonDecode(response.body);
+      if (payload is! Map) return;
+
+      final token = (payload['publicToken'] ?? payload['token'] ?? '')
+          .toString()
+          .trim();
+      if (_isValidMapboxPublicToken(token)) {
+        _resolvedMapboxToken = token;
+        debugPrint('AppConfig: Mapbox public token loaded from backend.');
+      }
+    } catch (error) {
+      debugPrint('AppConfig: failed to fetch Mapbox public token: $error');
+    }
   }
 
   /// تسعيرة التكسي الحالية: كل 3 كم = 1000 د.ع

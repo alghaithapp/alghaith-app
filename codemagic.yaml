@@ -35,8 +35,8 @@ workflows:
         XCODE_WORKSPACE: ios/Runner.xcworkspace
         DATABASE_BACKEND_BASE_URL: https://alghaith-app-production.up.railway.app
         PHONE_AUTH_BASE_URL: https://lively-wind-9d98.alghaithapp.workers.dev
-        # أضِف في واجهة Codemagic → Environment variables (مُعلّم Secure):
-        # MAPBOX_PUBLIC_TOKEN = pk.eyJ...
+        # أضِف MAPBOX_PUBLIC_TOKEN (pk.eyJ...) في Codemagic (Secure) و/أو Railway.
+        # بدونها يُحمّل المفتاح من GET /maps/public-token على الخادم عند تشغيل التطبيق.
 
     triggering:
       events:

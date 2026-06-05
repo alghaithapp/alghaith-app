@@ -38,12 +38,13 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   try {
     AppConfig.validate(throwOnError: false);
+    await AppConfig.ensureMapboxToken();
     if (AppConfig.isMapboxConfigured) {
-      MapboxOptions.setAccessToken(AppConfig.mapboxPublicToken.trim());
+      MapboxOptions.setAccessToken(AppConfig.effectiveMapboxPublicToken);
       MapboxMapsOptions.setLanguage('ar');
     } else {
       debugPrint(
-        'Mapbox: MAPBOX_PUBLIC_TOKEN غير مضبوط — الخرائط ستُخفى حتى تمرير pk. عند التشغيل.',
+        'Mapbox: MAPBOX_PUBLIC_TOKEN غير مضبوط — أضف pk. في Codemagic أو MAPBOX_PUBLIC_TOKEN على الخادم.',
       );
     }
     await SupabaseService.initialize();

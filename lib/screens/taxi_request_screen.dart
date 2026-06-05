@@ -248,7 +248,7 @@ class _TaxiRequestScreenState extends State<TaxiRequestScreen> {
     required Position from,
     required Position to,
   }) async {
-    final token = AppConfig.mapboxPublicToken.trim();
+    final token = AppConfig.effectiveMapboxPublicToken;
     if (token.isEmpty) return [from, to];
     try {
       final uri = Uri.parse(
@@ -290,7 +290,7 @@ class _TaxiRequestScreenState extends State<TaxiRequestScreen> {
   Future<List<String>> _fetchAddressSuggestions(String query) async {
     final input = query.trim();
     if (input.length < 2) return const [];
-    final token = AppConfig.mapboxPublicToken.trim();
+    final token = AppConfig.effectiveMapboxPublicToken;
     if (token.isEmpty) return const [];
     try {
       final uri = Uri.parse(
@@ -315,7 +315,7 @@ class _TaxiRequestScreenState extends State<TaxiRequestScreen> {
   }
 
   Future<String?> _resolveAddressFromCoordinates(double lat, double lng) async {
-    final token = AppConfig.mapboxPublicToken.trim();
+    final token = AppConfig.effectiveMapboxPublicToken;
     if (token.isEmpty) return null;
     try {
       final uri = Uri.parse(

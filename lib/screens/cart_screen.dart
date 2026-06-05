@@ -13,6 +13,7 @@ import '../core/ui/app_bottom_nav_style.dart';
 import '../models/app_models.dart';
 import '../utils/extensions.dart';
 import '../widgets/app_image.dart';
+import '../widgets/location_picker_screen.dart';
 import 'catalog_search_screen.dart';
 
 const _brandRed = Color(0xFFF5A01D);
@@ -328,7 +329,7 @@ class _CartScreenState extends State<CartScreen> {
       String addressText =
           '${current.latitude.toStringAsFixed(5)}, ${current.longitude.toStringAsFixed(5)}';
       if (AppConfig.isMapboxConfigured) {
-        final token = AppConfig.mapboxPublicToken.trim();
+        final token = AppConfig.effectiveMapboxPublicToken;
         try {
           final uri = Uri.parse(
             'https://api.mapbox.com/geocoding/v5/mapbox.places/'
@@ -367,9 +368,10 @@ class _CartScreenState extends State<CartScreen> {
   }
 
   Future<void> _pickLocationFromMap(AppProvider appProvider) async {
-    final result = await Navigator.of(context).push<_PickedLocation>(
+    final result = await Navigator.of(context).push<PickedLocation>(
       CupertinoPageRoute(
-        builder: (_) => _CustomerMapPickerScreen(
+        builder: (_) => LocationPickerScreen(
+          title: 'تحديد موقع التوصيل',
           initialLatitude: appProvider.customerLatitude,
           initialLongitude: appProvider.customerLongitude,
         ),
@@ -1760,154 +1762,3 @@ class _GeoPoint {
   const _GeoPoint(this.latitude, this.longitude);
 }
 
-class _PickedLocation {
-  final String address;
-  final double latitude;
-  final double longitude;
-  const _PickedLocation({required this.address, required this.latitude, required this.longitude});
-}
-
-class _CustomerMapPickerScreen extends StatefulWidget {
-  final double? initialLatitude;
-  final double? initialLongitude;
-  const _CustomerMapPickerScreen({required this.initialLatitude, required this.initialLongitude});
-  @override
-  State<_CustomerMapPickerScreen> createState() => _CustomerMapPickerScreenState();
-}
-
-class _CustomerMapPickerScreenState extends State<_CustomerMapPickerScreen> {
-  static final Position _defaultCenter = Position(44.3661, 33.3152);
-  MapboxMap? _map;
-  CircleAnnotationManager? _circleManager;
-  Position _center = _defaultCenter;
-  bool _isResolving = false;
-  String _resolvedAddress = '';
-
-  @override
-  void initState() {
-    super.initState();
-    if (widget.initialLatitude != null && widget.initialLongitude != null) {
-      _center = Position(widget.initialLongitude!, widget.initialLatitude!);
-    }
-  }
-
-  Future<void> _onMapCreated(MapboxMap map) async {
-    _map = map;
-    try {
-      _circleManager = await map.annotations.createCircleAnnotationManager();
-      await _refreshCenterMarker();
-    } catch (_) {}
-  }
-
-  Future<void> _refreshCenterMarker() async {
-    final manager = _circleManager;
-    if (manager == null) return;
-    try {
-      await manager.deleteAll();
-      await manager.create(
-        CircleAnnotationOptions(
-          geometry: Point(coordinates: _center),
-          circleColor: _brandRed.value,
-          circleRadius: 8,
-          circleStrokeColor: Colors.white.value,
-          circleStrokeWidth: 2,
-        ),
-      );
-    } catch (_) {}
-  }
-
-  Future<void> _readCenterFromMap() async {
-    final map = _map;
-    if (map == null) return;
-    try {
-      final state = await map.getCameraState();
-      final center = state.center.coordinates;
-      setState(() {
-        _center = Position(center.lng, center.lat);
-      });
-      await _refreshCenterMarker();
-    } catch (_) {}
-  }
-
-  Future<String> _reverseGeocode(double lat, double lng) async {
-    if (!AppConfig.isMapboxConfigured) {
-      return '${lat.toStringAsFixed(5)}, ${lng.toStringAsFixed(5)}';
-    }
-    final token = AppConfig.mapboxPublicToken.trim();
-    try {
-      final uri = Uri.parse('https://api.mapbox.com/geocoding/v5/mapbox.places/$lng,$lat.json?language=ar&country=iq&limit=1&access_token=$token');
-      final response = await http.get(uri).timeout(AppConfig.apiTimeout);
-      if (response.statusCode >= 200 && response.statusCode < 300) {
-        final payload = jsonDecode(response.body);
-        if (payload is Map && payload['features'] is List) {
-          final features = payload['features'] as List;
-          if (features.isNotEmpty && features.first is Map) {
-            return (features.first['place_name']?.toString() ?? '').trim();
-          }
-        }
-      }
-    } catch (_) {}
-    return '${lat.toStringAsFixed(5)}, ${lng.toStringAsFixed(5)}';
-  }
-
-  Future<void> _confirmLocation() async {
-    setState(() => _isResolving = true);
-    await _readCenterFromMap();
-    final address = await _reverseGeocode(_center.lat.toDouble(), _center.lng.toDouble());
-    if (!mounted) return;
-    Navigator.of(context).pop(_PickedLocation(address: address, latitude: _center.lat.toDouble(), longitude: _center.lng.toDouble()));
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Directionality(
-      textDirection: TextDirection.rtl,
-      child: Scaffold(
-        appBar: AppBar(
-          title: const Text('تحديد موقع التوصيل', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
-          backgroundColor: Colors.white,
-          foregroundColor: Colors.black87,
-          elevation: 0,
-        ),
-        body: Stack(
-          children: [
-            MapWidget(
-              styleUri: 'mapbox://styles/mapbox/streets-v12',
-              cameraOptions: CameraOptions(center: Point(coordinates: _center), zoom: 14.0),
-              onMapCreated: _onMapCreated,
-            ),
-            Positioned(
-              bottom: 24,
-              left: 20,
-              right: 20,
-              child: Container(
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(24), boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 20)]),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Text('حرّك الخريطة لتحديد موقعك بدقة', style: TextStyle(fontFamily: 'Cairo', fontSize: 13, color: Colors.grey)),
-                    const SizedBox(height: 16),
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton(
-                        onPressed: _isResolving ? null : _confirmLocation,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: _brandRed,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                        ),
-                        child: _isResolving ? const CupertinoActivityIndicator(color: Colors.white) : const Text('تأكيد الموقع', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}

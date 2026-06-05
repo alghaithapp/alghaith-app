@@ -95,7 +95,7 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
     if (!AppConfig.isMapboxConfigured) {
       return '${lat.toStringAsFixed(5)}, ${lng.toStringAsFixed(5)}';
     }
-    final token = AppConfig.mapboxPublicToken.trim();
+    final token = AppConfig.effectiveMapboxPublicToken;
     try {
       final uri = Uri.parse(
         'https://api.mapbox.com/geocoding/v5/mapbox.places/'
@@ -302,9 +302,9 @@ class _MapUnavailableNotice extends StatelessWidget {
           ),
           SizedBox(height: 8),
           Text(
-            'مفتاح Mapbox (MAPBOX_PUBLIC_TOKEN) غير مضبوط في هذا البناء.\n'
-            'بدون المفتاح تظهر الإحداثيات فقط بدل الخريطة والعنوان.\n'
-            'استخدم زر «موقعي» ثم «تأكيد» مؤقتاً، أو أضف المفتاح عند التشغيل.',
+            'مفتاح Mapbox (pk.) غير مضبوط.\n'
+            'أضف MAPBOX_PUBLIC_TOKEN في Codemagic أو على خادم Railway.\n'
+            'يمكنك مؤقتاً استخدام زر «موقعي» ثم «تأكيد» للإحداثيات فقط.',
             textAlign: TextAlign.center,
             style: TextStyle(
               fontFamily: 'Cairo',
