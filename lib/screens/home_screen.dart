@@ -72,7 +72,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     borderRadius: BorderRadius.circular(15),
                     child: Image.asset(
                       'assets/images/bazar_ghaith_banner.png',
-                      fit: BoxFit.cover,
+                      fit: BoxFit.fill, // تم التغيير من cover إلى fill لمنع قص الجوانب
                     ),
                   ),
                 ),
