@@ -234,21 +234,6 @@ class MarketplaceCatalog {
       defaultSubBrowseMode: SubCategoryBrowseMode.stores,
       subCategories: _globalShoppingSubCategories,
     ),
-    MarketplaceCategoryDefinition(
-      id: 'used',
-      titleAr: 'المنتجات المستعملة',
-      titleEn: 'Used Products',
-      image: 'assets/images/cat_used.png',
-      entryMode: CategoryEntryMode.subCategoryHub,
-      apiServiceId: 'used',
-      apiProductCategory: 'used',
-      hubTitleAr: 'المنتجات المستعملة',
-      hubSubtitleAr: 'منتجات مستعملة بحالة جيدة',
-      storeTitleAr: 'مستعمل',
-      storeSubtitleAr: 'تصفح المنتجات المستعملة',
-      defaultSubBrowseMode: SubCategoryBrowseMode.catalog,
-      subCategories: _usedSubCategories,
-    ),
   ];
 
   static MarketplaceCategoryDefinition? find(String id) {
