@@ -852,14 +852,17 @@ class _ShoppingStoreMenuScreenState extends State<ShoppingStoreMenuScreen>
     super.dispose();
   }
 
-  Future<void> _animateAddToCart(BuildContext sourceContext) async {
+  void _animateAddToCart(BuildContext sourceContext) {
     final stackContext = _stackKey.currentContext;
     final cartContext = _cartIconKey.currentContext;
     if (stackContext == null || cartContext == null) return;
+    
     final stackBox = stackContext.findRenderObject() as RenderBox?;
     final sourceBox = sourceContext.findRenderObject() as RenderBox?;
     final cartBox = cartContext.findRenderObject() as RenderBox?;
+    
     if (stackBox == null || sourceBox == null || cartBox == null) return;
+    if (!stackBox.attached || !sourceBox.attached || !cartBox.attached) return;
 
     final sourceGlobal = sourceBox.localToGlobal(
       Offset(sourceBox.size.width / 2, sourceBox.size.height / 2),
@@ -868,12 +871,14 @@ class _ShoppingStoreMenuScreenState extends State<ShoppingStoreMenuScreen>
       Offset(cartBox.size.width / 2, cartBox.size.height / 2),
     );
 
-    setState(() {
-      _flyStart = stackBox.globalToLocal(sourceGlobal);
-      _flyEnd = stackBox.globalToLocal(cartGlobal);
-      _showFlyDot = true;
-    });
-    await _flyController.forward(from: 0);
+    if (mounted) {
+      setState(() {
+        _flyStart = stackBox.globalToLocal(sourceGlobal);
+        _flyEnd = stackBox.globalToLocal(cartGlobal);
+        _showFlyDot = true;
+      });
+      _flyController.forward(from: 0);
+    }
   }
 
   List<Map<String, dynamic>> _filterProducts(List<Map<String, dynamic>> rows) {
@@ -1021,10 +1026,10 @@ class _ShoppingStoreMenuScreenState extends State<ShoppingStoreMenuScreen>
                       whatsapp,
                       'مرحبًا، أريد الاستفسار عن ${item['name_ar']?.toString() ?? ''}',
                     ),
-                    onAdd: (buttonContext) async {
+                    onAdd: (buttonContext) {
                       final added = provider.addStoreProductToCart(
                         item,
-                        widget.profile,
+                        profile,
                       );
                       if (!added) {
                         if (!context.mounted) return;
@@ -1045,7 +1050,7 @@ class _ShoppingStoreMenuScreenState extends State<ShoppingStoreMenuScreen>
                         );
                         return;
                       }
-                      await _animateAddToCart(buttonContext);
+                      _animateAddToCart(buttonContext);
                     },
                   );
                 }),
