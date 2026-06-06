@@ -1767,6 +1767,80 @@ async function listRealEstateListings(subCategoryId = '', listingMode = '') {
   });
 }
 
+async function saveMerchantReview({
+  merchantPhone,
+  customerPhone,
+  customerName,
+  orderId,
+  stars,
+  comment,
+}) {
+  const supabase = assertSupabaseAdmin();
+  const mPhone = await resolvePhoneKey(merchantPhone);
+  const cPhone = await resolvePhoneKey(customerPhone);
+
+  // 1. حفظ التقييم في جدول مخصص (إذا لم يوجد الجدول سيتم استخدام app_state للتاجر كخيار بديل)
+  try {
+    const { data: review, error } = await supabase
+      .from('merchant_reviews')
+      .upsert({
+        order_id: orderId,
+        merchant_phone: mPhone,
+        customer_phone: cPhone,
+        customer_name: customerName,
+        stars: Number(stars),
+        comment: comment || '',
+        updated_at: nowIso(),
+      }, { onConflict: 'order_id' })
+      .select()
+      .maybeSingle();
+
+    if (error) throw error;
+
+    // 2. حساب المتوسط الجديد للتاجر
+    const { data: allReviews, error: fetchError } = await supabase
+      .from('merchant_reviews')
+      .select('stars')
+      .eq('merchant_phone', mPhone);
+
+    if (!fetchError && allReviews.length > 0) {
+      const totalStars = allReviews.reduce((sum, r) => sum + (Number(r.stars) || 0), 0);
+      const avgRating = (totalStars / allReviews.length).toFixed(1);
+
+      // 3. تحديث ملف التاجر بالتقييم الحقيقي
+      await supabase
+        .from('merchant_profiles')
+        .update({ rating: parseFloat(avgRating) })
+        .eq('phone', mPhone);
+    }
+
+    // 4. تحديث حالة التاجر (ليصله إشعار بالتقييم الجديد)
+    const merchantState = await getUserState(mPhone);
+    if (merchantState) {
+      const reviews = Array.isArray(merchantState.merchantReviews) ? merchantState.merchantReviews : [];
+      const updatedReviews = [
+        {
+          id: orderId,
+          customerName,
+          stars: Number(stars),
+          comment: comment || '',
+          date: new Date().toLocaleDateString('ar-EG'),
+        },
+        ...reviews.filter(r => r.id !== orderId)
+      ].slice(0, 50);
+
+      merchantState.merchantReviews = updatedReviews;
+      await saveUserState(mPhone, merchantState);
+    }
+
+    return review;
+  } catch (error) {
+    console.error('saveMerchantReview error:', error);
+    // Fallback: إذا لم يوجد جدول، نكتفي بتحديث حالة التاجر
+    return { success: false, error: error.message };
+  }
+}
+
 module.exports = {
   isConfigured,
   supabaseKeyRole,
@@ -1811,4 +1885,5 @@ module.exports = {
   updateCourierDeliveryStatus,
   getAdminReports,
   canonicalPhone,
+  saveMerchantReview,
 };

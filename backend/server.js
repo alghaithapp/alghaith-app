@@ -48,6 +48,7 @@ const {
   rejectDeliveryOrder,
   updateCourierDeliveryStatus,
   getAdminReports,
+  saveMerchantReview,
 } = require('./supabase_repo');
 const { validatePromoCode } = require('./promo_codes');
 
@@ -959,6 +960,27 @@ app.post('/db/validate-promo', async (req, res) => {
   } catch (error) {
     console.error('validate-promo error:', error);
     return res.status(500).json({ message: error?.message || 'Failed to validate promo code.' });
+  }
+});
+
+app.post('/db/merchant-review', async (req, res) => {
+  try {
+    const { merchantPhone, customerPhone, customerName, orderId, stars, comment } = req.body;
+    if (!merchantPhone || !customerPhone || !orderId || !stars) {
+      return res.status(400).json({ message: 'Missing required review fields.' });
+    }
+    const result = await saveMerchantReview({
+      merchantPhone,
+      customerPhone,
+      customerName,
+      orderId,
+      stars,
+      comment
+    });
+    return res.json(result);
+  } catch (error) {
+    console.error('merchant-review error:', error);
+    return res.status(500).json({ message: error?.message || 'Failed to save review.' });
   }
 });
 

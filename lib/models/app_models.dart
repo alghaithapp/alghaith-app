@@ -364,6 +364,7 @@ class ActiveOrder {
   final String? merchantReadAt;
   final String? merchantDecisionAt;
   final bool isPriceLocked;
+  final bool isRated;
 
   ActiveOrder({
     required this.id,
@@ -408,6 +409,7 @@ class ActiveOrder {
     this.merchantReadAt,
     this.merchantDecisionAt,
     this.isPriceLocked = false,
+    this.isRated = false,
   });
 
   Map<String, dynamic> toMap() {
@@ -454,6 +456,7 @@ class ActiveOrder {
       'merchantReadAt': merchantReadAt,
       'merchantDecisionAt': merchantDecisionAt,
       'isPriceLocked': isPriceLocked,
+      'isRated': isRated,
     };
   }
 
@@ -509,6 +512,7 @@ class ActiveOrder {
       merchantReadAt: map['merchantReadAt'] as String?,
       merchantDecisionAt: map['merchantDecisionAt'] as String?,
       isPriceLocked: (map['isPriceLocked'] as bool?) ?? false,
+      isRated: (map['isRated'] as bool?) ?? false,
     );
   }
 }

@@ -456,38 +456,16 @@ class _OrdersScreenState extends State<OrdersScreen> {
       itemCount: pastOrders.length,
       itemBuilder: (context, index) {
         final order = pastOrders[index];
-        return _buildHistoryItem(
-          appProvider.displayOrderNumber(order),
-          order.dateAr,
-          order.price.toPrice(),
-          order.statusKey == 'rejected' || order.statusKey == 'cancelled',
-          onReorder: () {
-            final ok = appProvider.reorderFromPreviousOrder(order);
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(
-                  ok
-                      ? 'تمت إضافة نفس الطلب إلى السلة.'
-                      : 'تعذر إعادة الطلب الآن (تحقق من المتجر أو وجود طلب نشط).',
-                ),
-              ),
-            );
-            if (ok) {
-              setState(() => _selectedSegment = 0);
-            }
-          },
-        );
+        return _buildHistoryItem(order);
       },
     );
   }
 
-  Widget _buildHistoryItem(
-    String id,
-    String date,
-    String price,
-    bool isRejected, {
-    required VoidCallback onReorder,
-  }) {
+  Widget _buildHistoryItem(ActiveOrder order) {
+    final appProvider = context.read<AppProvider>();
+    final isRejected = order.statusKey == 'rejected' || order.statusKey == 'cancelled';
+    final isCompleted = order.statusKey == 'completed';
+
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
@@ -502,38 +480,181 @@ class _OrdersScreenState extends State<OrdersScreen> {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(id,
+                  Text(appProvider.displayOrderNumber(order),
                       style: const TextStyle(
                           fontWeight: FontWeight.bold, fontSize: 14)),
-                  Text(date,
+                  Text(order.dateAr,
                       style: const TextStyle(
                           color: CupertinoColors.systemGrey, fontSize: 11)),
                 ],
               ),
-              Text("$price د.ع",
+              Text("${order.price.toPrice()} د.ع",
                   style: TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 14,
                       color: isRejected ? Colors.red : CupertinoColors.systemGreen)),
             ],
           ),
-          const SizedBox(height: 10),
-          AppBottomNavStyle.primaryActionButton(
-            onPressed: onReorder,
-            radius: 10,
-            padding: const EdgeInsets.symmetric(vertical: 8),
-            child: const Text(
-              'إعادة نفس الطلب',
-              style: TextStyle(
-                fontWeight: FontWeight.w700,
-                fontSize: 12,
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: AppBottomNavStyle.primaryActionButton(
+                  onPressed: () {
+                    final ok = appProvider.reorderFromPreviousOrder(order);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          ok
+                              ? 'تمت إضافة نفس الطلب إلى السلة.'
+                              : 'تعذر إعادة الطلب الآن (تحقق من المتجر أو وجود طلب نشط).',
+                        ),
+                      ),
+                    );
+                    if (ok) {
+                      setState(() => _selectedSegment = 0);
+                    }
+                  },
+                  radius: 10,
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  child: const Text(
+                    'إعادة الطلب',
+                    style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12),
+                  ),
+                ),
               ),
-            ),
+              if (isCompleted && !order.isRated) ...[
+                const SizedBox(width: 8),
+                Expanded(
+                  child: CupertinoButton(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    color: Colors.amber.shade700,
+                    borderRadius: BorderRadius.circular(10),
+                    onPressed: () => _showRatingDialog(order),
+                    child: const Text(
+                      'قيم التاجر',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w800,
+                        fontSize: 12,
+                        color: Colors.white,
+                        fontFamily: 'Cairo',
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+              if (order.isRated) ...[
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade100,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    alignment: Alignment.center,
+                    child: const Text(
+                      'تم التقييم ✓',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                        color: Colors.grey,
+                        fontFamily: 'Cairo',
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ],
           ),
         ],
       ),
     );
   }
+
+  void _showRatingDialog(ActiveOrder order) {
+    int selectedStars = 5;
+    final commentController = TextEditingController();
+    bool isSubmitting = false;
+
+    showCupertinoDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => CupertinoAlertDialog(
+          title: const Text('تقييم المتجر', style: TextStyle(fontFamily: 'Cairo')),
+          content: Column(
+            children: [
+              const SizedBox(height: 12),
+              Text(order.merchantStoreName ?? 'المتجر', style: const TextStyle(fontFamily: 'Cairo')),
+              const SizedBox(height: 16),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: List.generate(5, (index) {
+                  return GestureDetector(
+                    onTap: () => setDialogState(() => selectedStars = index + 1),
+                    child: Icon(
+                      index < selectedStars ? CupertinoIcons.star_fill : CupertinoIcons.star,
+                      color: index < selectedStars ? Colors.amber : Colors.grey.shade400,
+                      size: 28,
+                    ),
+                  );
+                }),
+              ),
+              const SizedBox(height: 16),
+              CupertinoTextField(
+                controller: commentController,
+                placeholder: 'اكتب رأيك هنا (اختياري)',
+                maxLines: 3,
+                style: const TextStyle(fontFamily: 'Cairo', fontSize: 13),
+              ),
+            ],
+          ),
+          actions: [
+            CupertinoDialogAction(
+              child: const Text('إلغاء', style: TextStyle(fontFamily: 'Cairo')),
+              onPressed: () => Navigator.pop(context),
+            ),
+            CupertinoDialogAction(
+              isDefaultAction: true,
+              onPressed: isSubmitting ? null : () async {
+                setDialogState(() => isSubmitting = true);
+                try {
+                  await context.read<AppProvider>().submitMerchantReview(
+                    orderId: order.id,
+                    stars: selectedStars,
+                    comment: commentController.text.trim(),
+                  );
+                  if (context.mounted) {
+                    Navigator.pop(context);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('شكراً لتقييمك!')),
+                    );
+                  }
+                } catch (e) {
+                  setDialogState(() => isSubmitting = false);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('خطأ: $e')),
+                  );
+                }
+              },
+              child: isSubmitting 
+                ? const CupertinoActivityIndicator() 
+                : const Text('إرسال', style: TextStyle(fontFamily: 'Cairo')),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHistoryItem_old(
+    String id,
+    String date,
+    String price,
+    bool isRejected, {
+    required VoidCallback onReorder,
+  }) {
+    // ...
 }
 
 class _TaxiRequestStatusBanner extends StatelessWidget {

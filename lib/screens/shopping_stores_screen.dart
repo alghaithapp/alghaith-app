@@ -352,7 +352,12 @@ class _PremiumRestaurantCard extends StatelessWidget {
     final profile = Map<String, dynamic>.from(data['profile'] as Map);
     final products = (data['products'] as List).cast<Map<String, dynamic>>();
     final isOpen = profile['is_open'] as bool? ?? true;
-    final rating = profile['rating']?.toDouble() ?? 4.8;
+    
+    // التقييم الحقيقي من قاعدة البيانات
+    final dbRating = profile['rating']?.toDouble();
+    final hasRating = dbRating != null && dbRating > 0;
+    final ratingLabel = hasRating ? dbRating.toStringAsFixed(1) : 'جديد';
+
     final primaryRed = const Color(0xFFF5A01D);
 
     return Container(
@@ -464,10 +469,12 @@ class _PremiumRestaurantCard extends StatelessWidget {
                         ),
                         child: Row(
                           children: [
-                            const Icon(CupertinoIcons.star_fill, color: Colors.amber, size: 12),
+                            Icon(CupertinoIcons.star_fill, 
+                                 color: hasRating ? Colors.amber : Colors.grey, 
+                                 size: 12),
                             const SizedBox(width: 4),
                             Text(
-                              rating.toString(),
+                              ratingLabel,
                               style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
                             ),
                           ],

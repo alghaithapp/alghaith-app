@@ -476,4 +476,22 @@ class DatabaseRepository {
       },
     );
   }
+
+  Future<void> submitMerchantReview({
+    required String merchantPhone,
+    required String customerPhone,
+    required String customerName,
+    required String orderId,
+    required int stars,
+    String? comment,
+  }) async {
+    await ApiClient.instance.post('/db/merchant-review', body: {
+      'merchantPhone': _phone(merchantPhone),
+      'customerPhone': _phone(customerPhone),
+      'customerName': customerName,
+      'orderId': orderId,
+      'stars': stars,
+      'comment': comment,
+    });
+  }
 }

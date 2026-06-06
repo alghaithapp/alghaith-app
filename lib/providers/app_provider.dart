@@ -3727,6 +3727,81 @@ class AppProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> submitMerchantReview({
+    required String orderId,
+    required int stars,
+    String? comment,
+  }) async {
+    final index = _orders.indexWhere((o) => o.id == orderId);
+    if (index == -1) return;
+    final order = _orders[index];
+    final merchantPhone = _trimmedOrNull(order.merchantPhone);
+    if (merchantPhone == null) return;
+
+    final customerPhone = _trimmedOrNull(_authPhone) ?? _trimmedOrNull(_customerPhone) ?? '';
+    if (customerPhone.isEmpty) return;
+
+    await SupabaseService.submitMerchantReview(
+      merchantPhone: merchantPhone,
+      customerPhone: customerPhone,
+      customerName: _customerName.isNotEmpty ? _customerName : 'زبون الغيث',
+      orderId: orderId,
+      stars: stars,
+      comment: comment,
+    );
+
+    // تحديث الحالة محلياً لتعليم الطلب كـ "تم التقييم"
+    final updated = ActiveOrder(
+      id: order.id,
+      orderNumber: order.orderNumber,
+      dateAr: order.dateAr,
+      dateEn: order.dateEn,
+      customerNameAr: order.customerNameAr,
+      customerNameEn: order.customerNameEn,
+      customerPhone: order.customerPhone,
+      addressAr: order.addressAr,
+      addressEn: order.addressEn,
+      noteAr: order.noteAr,
+      noteEn: order.noteEn,
+      paymentMethodAr: order.paymentMethodAr,
+      paymentMethodEn: order.paymentMethodEn,
+      statusKey: order.statusKey,
+      statusAr: order.statusAr,
+      statusEn: order.statusEn,
+      price: order.price,
+      itemsCount: order.itemsCount,
+      itemsNameAr: order.itemsNameAr,
+      itemsNameEn: order.itemsNameEn,
+      lineItems: order.lineItems,
+      image: order.image,
+      iconName: order.iconName,
+      deliveryStatusKey: order.deliveryStatusKey,
+      deliveryStatusAr: order.deliveryStatusAr,
+      deliveryStatusEn: order.deliveryStatusEn,
+      assignedCourierName: order.assignedCourierName,
+      isRestaurantOrder: order.isRestaurantOrder,
+      merchantPhone: order.merchantPhone,
+      merchantStoreName: order.merchantStoreName,
+      requiresDelivery: order.requiresDelivery,
+      codConfirmed: order.codConfirmed,
+      deliveredAt: order.deliveredAt,
+      estimatedArrivalMinutes: order.estimatedArrivalMinutes,
+      estimatedArrivalAt: order.estimatedArrivalAt,
+      courierPhone: order.courierPhone,
+      customerLatitude: order.customerLatitude,
+      customerLongitude: order.customerLongitude,
+      createdAt: order.createdAt,
+      merchantReadAt: order.merchantReadAt,
+      merchantDecisionAt: order.merchantDecisionAt,
+      isPriceLocked: order.isPriceLocked,
+      isRated: true,
+    );
+
+    _orders[index] = updated;
+    await _persistCustomerOrder(updated);
+    notifyListeners();
+  }
+
   List<TaxiRequest> get visibleTaxiRequests => List<TaxiRequest>.unmodifiable(
         _taxiRequests,
       );

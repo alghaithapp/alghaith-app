@@ -230,4 +230,21 @@ class SupabaseService {
 
   static Future<void> deleteMerchantProduct(String productId, {String? phone}) =>
       _db.deleteMerchantProduct(productId, phone: phone);
+
+  static Future<void> submitMerchantReview({
+    required String merchantPhone,
+    required String customerPhone,
+    required String customerName,
+    required String orderId,
+    required int stars,
+    String? comment,
+  }) =>
+      _db.submitMerchantReview(
+        merchantPhone: merchantPhone,
+        customerPhone: customerPhone,
+        customerName: customerName,
+        orderId: orderId,
+        stars: stars,
+        comment: comment,
+      );
 }
