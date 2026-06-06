@@ -943,6 +943,7 @@ class _ShoppingStoreMenuScreenState extends State<ShoppingStoreMenuScreen>
       body: SafeArea(
         child: Stack(
           key: _stackKey,
+          clipBehavior: Clip.none, // مهم جداً لمنع اختفاء النقطة عند وصولها للأعلى
           children: [
           ListView(
             padding: const EdgeInsets.all(16),
@@ -1056,14 +1057,17 @@ class _ShoppingStoreMenuScreenState extends State<ShoppingStoreMenuScreen>
                 animation: _flyController,
                 builder: (_, __) {
                   final t =
-                      Curves.easeInOutCubic.transform(_flyController.value);
+                      Curves.easeOutCubic.transform(_flyController.value); // مسار أنعم
                   final x = _flyStart.dx + ((_flyEnd.dx - _flyStart.dx) * t);
                   final yBase = _flyStart.dy + ((_flyEnd.dy - _flyStart.dy) * t);
-                  final arc = -70 * (1 - (2 * t - 1).abs());
-                  final scale = 1 - (t * 0.4);
+                  
+                  // معادلة القوس الحقيقي (Parabola)
+                  final arc = -180 * t * (1 - t); 
+                  
+                  final scale = 1.0 - (t * 0.3);
                   return Positioned(
-                    left: x - 10,
-                    top: yBase + arc - 10,
+                    left: x - 12,
+                    top: yBase + arc - 12,
                     child: Transform.scale(
                       scale: scale,
                       child: Container(
@@ -1389,16 +1393,21 @@ class _StoreCartNavButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scale = count > 0 && pulseTick.isOdd ? 1.12 : 1.0;
     return Material(
       color: Colors.transparent,
       child: InkWell(
         borderRadius: BorderRadius.circular(12),
         onTap: onTap,
-        child: AnimatedScale(
-          scale: scale,
-          duration: const Duration(milliseconds: 220),
-          curve: Curves.easeOutBack,
+        child: TweenAnimationBuilder<double>(
+          duration: const Duration(milliseconds: 300),
+          tween: Tween(begin: 1.0, end: pulseTick > 0 ? 1.2 : 1.0),
+          curve: Curves.elasticOut,
+          builder: (context, scale, child) {
+            return Transform.scale(
+              scale: scale > 1.2 ? 1.2 : scale,
+              child: child,
+            );
+          },
           child: SizedBox(
             width: 40,
             height: 40,
