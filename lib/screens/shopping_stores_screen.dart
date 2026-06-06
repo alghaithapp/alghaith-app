@@ -1029,7 +1029,7 @@ class _ShoppingStoreMenuScreenState extends State<ShoppingStoreMenuScreen>
                     onAdd: (buttonContext) {
                       final added = provider.addStoreProductToCart(
                         item,
-                        profile,
+                        widget.profile,
                       );
                       if (!added) {
                         if (!context.mounted) return;
@@ -1206,7 +1206,7 @@ class _ProductCard extends StatelessWidget {
   final Map<String, dynamic> item;
   final Map<String, dynamic> profile;
   final VoidCallback onWhatsApp;
-  final Future<void> Function(BuildContext buttonContext) onAdd;
+  final void Function(BuildContext buttonContext) onAdd;
 
   const _ProductCard({
     required this.item,

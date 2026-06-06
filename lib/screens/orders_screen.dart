@@ -646,15 +646,6 @@ class _OrdersScreenState extends State<OrdersScreen> {
       ),
     );
   }
-
-  Widget _buildHistoryItem_old(
-    String id,
-    String date,
-    String price,
-    bool isRejected, {
-    required VoidCallback onReorder,
-  }) {
-    // ...
 }
 
 class _TaxiRequestStatusBanner extends StatelessWidget {
@@ -666,7 +657,7 @@ class _TaxiRequestStatusBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final details = _taxiNotice(request.statusKey);
+    final details = _getTaxiNotice(request.statusKey);
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -743,52 +734,52 @@ class _TaxiRequestStatusBanner extends StatelessWidget {
     );
   }
 
-  _TaxiNotice _taxiNotice(String statusKey) {
+  _TaxiNoticeDetails _getTaxiNotice(String statusKey) {
     switch (statusKey) {
       case 'accepted':
-        return _TaxiNotice(
+        return _TaxiNoticeDetails(
           title: 'تم قبول الطلب',
           subtitle: 'السائق بدأ تجهيز نفسه للانطلاق',
           colors: [Colors.blue.shade700, Colors.blue.shade500],
           icon: CupertinoIcons.checkmark_alt_circle_fill,
         );
       case 'on_way':
-        return _TaxiNotice(
+        return _TaxiNoticeDetails(
           title: 'السائق في الطريق',
           subtitle: 'الرحلة تتقدم نحو موقعك',
           colors: [Colors.orange.shade700, Colors.deepOrange.shade400],
           icon: CupertinoIcons.car_fill,
         );
       case 'arrived':
-        return _TaxiNotice(
+        return _TaxiNoticeDetails(
           title: 'وصل للموقع',
           subtitle: 'السائق ينتظر عند نقطة الانطلاق',
           colors: [Colors.purple.shade700, Colors.purple.shade400],
           icon: CupertinoIcons.location_solid,
         );
       case 'picked_up':
-        return _TaxiNotice(
+        return _TaxiNoticeDetails(
           title: 'استلام الزبون',
           subtitle: 'تم بدء الرحلة مع السائق',
           colors: [Colors.teal.shade700, Colors.teal.shade400],
           icon: CupertinoIcons.person_crop_circle_badge_checkmark,
         );
       case 'completed':
-        return _TaxiNotice(
+        return _TaxiNoticeDetails(
           title: 'تم الوصول',
           subtitle: 'انتهت الرحلة بنجاح',
           colors: [Colors.green.shade700, Colors.green.shade400],
           icon: CupertinoIcons.check_mark_circled_solid,
         );
       case 'rejected':
-        return _TaxiNotice(
+        return _TaxiNoticeDetails(
           title: 'تم رفض الطلب',
           subtitle: 'يمكنك إرسال طلب جديد الآن',
           colors: [Colors.red.shade700, Colors.red.shade400],
           icon: CupertinoIcons.xmark_circle_fill,
         );
       default:
-        return _TaxiNotice(
+        return _TaxiNoticeDetails(
           title: 'بانتظار السائق',
           subtitle: 'سيظهر طلبك عند أول سائق متاح',
           colors: [Colors.blueGrey.shade700, Colors.blueGrey.shade500],
@@ -842,13 +833,13 @@ class _PendingApprovalCountdownState extends State<_PendingApprovalCountdown> {
   }
 }
 
-class _TaxiNotice {
+class _TaxiNoticeDetails {
   final String title;
   final String subtitle;
   final List<Color> colors;
   final IconData icon;
 
-  const _TaxiNotice({
+  const _TaxiNoticeDetails({
     required this.title,
     required this.subtitle,
     required this.colors,
