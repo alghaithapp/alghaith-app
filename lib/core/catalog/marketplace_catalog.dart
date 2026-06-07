@@ -307,7 +307,6 @@ class MarketplaceCatalog {
   ];
 
   static const List<MarketplaceSubCategory> _globalShoppingSubCategories = [
-    MarketplaceSubCategory(id: 'iran', titleAr: 'إيران', titleEn: 'Iran', image: 'assets/images/global_iran.png'),
     MarketplaceSubCategory(id: 'china', titleAr: 'الصين', titleEn: 'China', image: 'assets/images/global_china.png'),
   ];
 

@@ -281,10 +281,11 @@ export default {
         }
 
         // --- التعديل لحساب مراجع آبل ---
-        const APPLE_TEST_PHONE = '964000000000'; // يمكنك تغيير الرقم
+        // تقبل جميع أشكال الرقم التجريبي المكون من أصفار
+        const isAppleTest = normalizedPhone.endsWith('000000000') || normalizedPhone === '000000000';
         const APPLE_TEST_CODE = '123456';
 
-        if (normalizedPhone === APPLE_TEST_PHONE && code === APPLE_TEST_CODE) {
+        if (isAppleTest && code === APPLE_TEST_CODE) {
           if (!env.SESSION_SECRET) {
             return json({ success: false, message: 'SESSION_SECRET is not configured.' }, 500, corsHeaders);
           }

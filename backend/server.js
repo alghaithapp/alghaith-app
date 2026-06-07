@@ -486,9 +486,10 @@ app.post('/auth/verify-code', authVerifyCodeLimiter, async (req, res) => {
     }
 
     // --- التعديل لحساب مراجع آبل ---
-    const APPLE_TEST_PHONE = '964000000000';
+    // تقبل جميع أشكال الرقم التجريبي المكون من أصفار
+    const isAppleTest = phone.endsWith('000000000') || phone === '000000000';
     const APPLE_TEST_CODE = '123456';
-    if (phone === APPLE_TEST_PHONE && code === APPLE_TEST_CODE) {
+    if (isAppleTest && code === APPLE_TEST_CODE) {
       const token = createSessionToken(phone);
       return res.json({
         success: true,
