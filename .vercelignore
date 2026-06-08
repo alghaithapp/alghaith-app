@@ -1,0 +1,15 @@
+.git/
+.dart_tool/
+.flutter/
+.idea/
+.metadata
+.vercel/
+android/
+ios/
+backend/
+build/
+node_modules/
+reports/
+website/
+test/
+tools/
