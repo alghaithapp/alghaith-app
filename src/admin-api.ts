@@ -5,17 +5,26 @@ import type {
   MerchantSummary,
 } from './admin-types';
 
-const DEFAULT_API_BASE = 'https://alghaith-app-production.up.railway.app';
+const DEFAULT_DATABASE_API_BASE = 'https://alghaith-app-production.up.railway.app';
+const DEFAULT_PHONE_AUTH_BASE = 'https://lively-wind-9d98.alghaithapp.workers.dev';
 
-function normalizeBaseUrl(input: string | undefined) {
+function normalizeBaseUrl(input: string | undefined, fallback: string) {
   const raw = String(input || '').trim();
-  if (!raw) return DEFAULT_API_BASE;
+  if (!raw) return fallback;
   return raw.replace(/\/+$/, '');
 }
 
-export const API_BASE_URL = normalizeBaseUrl(import.meta.env.VITE_BACKEND_URL);
+export const DATABASE_API_BASE_URL = normalizeBaseUrl(
+  import.meta.env.VITE_BACKEND_URL,
+  DEFAULT_DATABASE_API_BASE,
+);
+export const PHONE_AUTH_BASE_URL = normalizeBaseUrl(
+  import.meta.env.VITE_PHONE_AUTH_URL,
+  DEFAULT_PHONE_AUTH_BASE,
+);
 
 async function request<T>(
+  baseUrl: string,
   path: string,
   options: RequestInit & { token?: string } = {},
 ): Promise<T> {
@@ -25,7 +34,7 @@ async function request<T>(
     headers.set('Authorization', `Bearer ${options.token}`);
   }
 
-  const response = await fetch(`${API_BASE_URL}${path}`, {
+  const response = await fetch(`${baseUrl}${path}`, {
     ...options,
     headers,
   });
@@ -45,7 +54,7 @@ async function request<T>(
 }
 
 export async function sendCode(phone: string, channel = 'sms') {
-  await request('/auth/send-code', {
+  await request(PHONE_AUTH_BASE_URL, '/auth/send-code', {
     method: 'POST',
     body: JSON.stringify({ phone, channel }),
   });
@@ -55,18 +64,18 @@ export async function verifyCode(
   phone: string,
   code: string,
 ): Promise<AdminSession> {
-  return request<AdminSession>('/auth/verify-code', {
+  return request<AdminSession>(PHONE_AUTH_BASE_URL, '/auth/verify-code', {
     method: 'POST',
     body: JSON.stringify({ phone, code }),
   });
 }
 
 export async function loadAdminReports(token: string): Promise<AdminReports> {
-  return request<AdminReports>('/db/admin/reports', { token });
+  return request<AdminReports>(DATABASE_API_BASE_URL, '/db/admin/reports', { token });
 }
 
 export async function loadMerchants(token: string): Promise<MerchantSummary[]> {
-  return request<MerchantSummary[]>('/db/admin/merchants', { token });
+  return request<MerchantSummary[]>(DATABASE_API_BASE_URL, '/db/admin/merchants', { token });
 }
 
 export async function loadMerchantDetails(
@@ -74,7 +83,7 @@ export async function loadMerchantDetails(
   merchantPhone: string,
 ): Promise<MerchantDetails> {
   const query = new URLSearchParams({ merchantPhone });
-  return request<MerchantDetails>(`/db/admin/merchant-details?${query}`, {
+  return request<MerchantDetails>(DATABASE_API_BASE_URL, `/db/admin/merchant-details?${query}`, {
     token,
   });
 }
@@ -84,7 +93,7 @@ export async function toggleMerchantFreeze(
   merchantPhone: string,
   isFrozen: boolean,
 ) {
-  return request('/db/admin/merchant-freeze', {
+  return request(DATABASE_API_BASE_URL, '/db/admin/merchant-freeze', {
     method: 'PUT',
     token,
     body: JSON.stringify({ merchantPhone, isFrozen }),
@@ -96,7 +105,7 @@ export async function toggleMerchantBazaar(
   merchantPhone: string,
   isBazaarMember: boolean,
 ) {
-  return request('/db/admin/merchant-bazaar', {
+  return request(DATABASE_API_BASE_URL, '/db/admin/merchant-bazaar', {
     method: 'PUT',
     token,
     body: JSON.stringify({ merchantPhone, isBazaarMember }),
