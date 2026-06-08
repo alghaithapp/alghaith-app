@@ -1,7 +1,7 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": null,
-  "installCommand": "git clone --depth 1 https://github.com/flutter/flutter.git .flutter && ./.flutter/bin/flutter config --enable-web && ./.flutter/bin/flutter pub get",
-  "buildCommand": "./.flutter/bin/flutter build web --release",
+  "installCommand": "curl -L https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_3.44.0-stable.tar.xz -o flutter.tar.xz && tar -xf flutter.tar.xz && ./flutter/bin/flutter config --enable-web && ./flutter/bin/flutter pub get",
+  "buildCommand": "./flutter/bin/flutter build web --release",
   "outputDirectory": "build/web"
 }
