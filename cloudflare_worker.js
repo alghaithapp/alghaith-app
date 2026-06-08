@@ -16,10 +16,28 @@ function normalizePhone(phone) {
   const raw = String(phone || '').trim().replace(/[\s-]/g, '');
   const digits = raw.replace(/\D/g, '');
   if (!digits) return '';
+  if (digits === '000000000') return '9647000000000';
   if (digits.startsWith('964')) return digits;
   if (digits.startsWith('0')) return `964${digits.slice(1)}`;
   if (digits.startsWith('7')) return `964${digits}`;
   return digits;
+}
+
+const APPLE_REVIEW_CODE = '123456';
+
+function isAppleReviewPhone(phone) {
+  const digits = String(phone || '').replace(/\D/g, '');
+  if (!digits) return false;
+  if (
+    digits === '000000000' ||
+    digits === '07000000000' ||
+    digits === '96400000000' ||
+    digits === '9647000000000' ||
+    digits === '7000000000'
+  ) {
+    return true;
+  }
+  return digits.endsWith('000000000') && digits.replace(/0/g, '').length <= 2;
 }
 
 function mapProvider(channel) {
@@ -201,6 +219,19 @@ export default {
           );
         }
 
+        if (isAppleReviewPhone(normalizedPhone)) {
+          return json(
+            {
+              success: true,
+              message: 'Demo account ready. Use verification code 123456.',
+              phoneNumber: `+${normalizedPhone}`,
+              channel: mapProvider(channel),
+            },
+            200,
+            corsHeaders
+          );
+        }
+
         if (!env.OTPIQ_API_KEY) {
           return json(
             { success: false, message: 'OTPIQ_API_KEY is not configured.' },
@@ -280,12 +311,7 @@ export default {
           );
         }
 
-        // --- التعديل لحساب مراجع آبل ---
-        // تقبل جميع أشكال الرقم التجريبي المكون من أصفار
-        const isAppleTest = normalizedPhone.endsWith('000000000') || normalizedPhone === '000000000';
-        const APPLE_TEST_CODE = '123456';
-
-        if (isAppleTest && code === APPLE_TEST_CODE) {
+        if (isAppleReviewPhone(normalizedPhone) && code === APPLE_REVIEW_CODE) {
           if (!env.SESSION_SECRET) {
             return json({ success: false, message: 'SESSION_SECRET is not configured.' }, 500, corsHeaders);
           }

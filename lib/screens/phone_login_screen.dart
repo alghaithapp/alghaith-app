@@ -8,6 +8,7 @@ import 'package:provider/provider.dart';
 import '../core/theme/app_colors.dart';
 import '../providers/app_provider.dart';
 import '../services/phone_auth_api.dart';
+import '../utils/apple_review_auth.dart';
 import '../utils/helpers.dart';
 import '../widgets/app_logo.dart';
 import '../widgets/whatsapp_icon.dart';
@@ -68,21 +69,12 @@ class _PhoneLoginScreenState extends State<PhoneLoginScreen> {
   }
 
   bool _isPhoneValid(String phone) {
-    final digitsOnly = phone.replaceAll(RegExp(r'\D'), '');
+    if (AppleReviewAuth.isDemoPhone(phone)) return true;
+    final digitsOnly = AppleReviewAuth.digitsOnly(phone);
     return digitsOnly.length == 11;
   }
 
-  String _toE164(String phone) {
-    final digits = phone.trim().replaceAll(RegExp(r'\D'), '');
-    if (digits.startsWith('0') && digits.length == 11) {
-      return '+964${digits.substring(1)}';
-    }
-    if (digits.length == 10) {
-      return '+964$digits';
-    }
-    if (digits.startsWith('964')) return '+$digits';
-    return '+964$digits';
-  }
+  String _toE164(String phone) => AppleReviewAuth.toE164(phone);
 
   void _showSnack(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
@@ -116,7 +108,7 @@ class _PhoneLoginScreenState extends State<PhoneLoginScreen> {
   }
 
   Future<void> _sendCode() async {
-    final phone = _phoneController.text.trim();
+    final phone = AppleReviewAuth.canonicalizeInput(_phoneController.text);
     if (!_isPhoneValid(phone)) {
       _showSnack('أدخل رقم هاتف من 11 رقم');
       return;
@@ -153,7 +145,7 @@ class _PhoneLoginScreenState extends State<PhoneLoginScreen> {
   }
 
   Future<void> _verifyCode() async {
-    final phone = _phoneController.text.trim();
+    final phone = AppleReviewAuth.canonicalizeInput(_phoneController.text);
     final code = _codeController.text.trim();
     if (!_otpSent) {
       _showSnack('أرسل رمز التحقق أولاً');

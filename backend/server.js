@@ -113,6 +113,9 @@ function normalizePhone(phone) {
   if (!raw) return '';
 
   const digits = raw.replace(/\D/g, '');
+  if (digits === '000000000') {
+    return '9647000000000';
+  }
   if (digits.startsWith('0')) {
     return `964${digits.slice(1)}`;
   }
@@ -120,6 +123,23 @@ function normalizePhone(phone) {
     return digits;
   }
   return `964${digits}`;
+}
+
+const APPLE_REVIEW_CODE = '123456';
+
+function isAppleReviewPhone(phone) {
+  const digits = String(phone || '').replace(/\D/g, '');
+  if (!digits) return false;
+  if (
+    digits === '000000000' ||
+    digits === '07000000000' ||
+    digits === '96400000000' ||
+    digits === '9647000000000' ||
+    digits === '7000000000'
+  ) {
+    return true;
+  }
+  return digits.endsWith('000000000') && digits.replace(/0/g, '').length <= 2;
 }
 
 app.use(helmet());
@@ -454,6 +474,16 @@ app.post('/auth/send-code', authSendCodeLimiter, async (req, res) => {
       return res.status(400).json({ message: 'Phone number is required.' });
     }
 
+    if (isAppleReviewPhone(phone)) {
+      return res.json({
+        success: true,
+        phoneNumber: normalizePhoneForDisplay(phone),
+        channel,
+        expiresInMs: otpTtlMs,
+        message: 'Demo account ready. Use verification code 123456.',
+      });
+    }
+
     const verificationCode = generateOtp();
     const smsResult = await sendOtpViaOtpiq(phone, verificationCode, channel);
     pendingOtps.set(phone, {
@@ -489,11 +519,7 @@ app.post('/auth/verify-code', authVerifyCodeLimiter, async (req, res) => {
       return res.status(400).json({ message: 'Phone number and code are required.' });
     }
 
-    // --- التعديل لحساب مراجع آبل ---
-    // تقبل جميع أشكال الرقم التجريبي المكون من أصفار
-    const isAppleTest = phone.endsWith('000000000') || phone === '000000000';
-    const APPLE_TEST_CODE = '123456';
-    if (isAppleTest && code === APPLE_TEST_CODE) {
+    if (isAppleReviewPhone(phone) && code === APPLE_REVIEW_CODE) {
       const token = createSessionToken(phone);
       return res.json({
         success: true,
