@@ -1,6 +1,5 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../models/app_models.dart';
@@ -94,12 +93,16 @@ class _RestaurantMenuScreenState extends State<RestaurantMenuScreen>
       merchantLongitude: _toDouble(
         profile['longitude'] ?? profile['lng'] ?? profile['merchant_longitude'],
       ),
-      merchantOpenTime: MerchantProfileFields.timeFromMap(profile, isOpen: true),
+      merchantOpenTime:
+          MerchantProfileFields.timeFromMap(profile, isOpen: true),
       merchantCloseTime:
           MerchantProfileFields.timeFromMap(profile, isOpen: false),
       merchantIsOpen: profile['is_open'] is bool
           ? profile['is_open'] as bool
           : (profile['is_open']?.toString().toLowerCase() == 'true'),
+      merchantIsFrozen: profile['is_frozen'] is bool
+          ? profile['is_frozen'] as bool
+          : (profile['is_frozen']?.toString().toLowerCase() == 'true'),
       avgPriceLabelAr: '',
       avgPriceLabelEn: '',
       actionLabelAr: 'عرض المنيو',
@@ -162,9 +165,7 @@ class _RestaurantMenuScreenState extends State<RestaurantMenuScreen>
     final storeName = _restaurant.nameAr.trim();
     return provider.cart.every((item) {
       final itemPhone = item.merchantPhone?.replaceAll(RegExp(r'\D'), '') ?? '';
-      if (storePhone != null &&
-          storePhone.isNotEmpty &&
-          itemPhone.isNotEmpty) {
+      if (storePhone != null && storePhone.isNotEmpty && itemPhone.isNotEmpty) {
         return itemPhone == storePhone;
       }
       final itemStore = item.merchantStoreName?.trim() ?? '';
@@ -211,7 +212,8 @@ class _RestaurantMenuScreenState extends State<RestaurantMenuScreen>
             onPressed: () => Navigator.of(dialogContext).pop(true),
             child: const Text(
               'إفراغ السلة',
-              style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w800),
+              style:
+                  TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w800),
             ),
           ),
         ],
@@ -224,6 +226,18 @@ class _RestaurantMenuScreenState extends State<RestaurantMenuScreen>
 
   Future<void> _handleAddItem(ListItem item, BuildContext buttonContext) async {
     final provider = context.read<AppProvider>();
+    if (item.merchantIsFrozen == true) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'هذا الحساب مجمّد حالياً ولا يستقبل أي طلبات جديدة.',
+            style: TextStyle(fontFamily: 'Cairo'),
+          ),
+        ),
+      );
+      return;
+    }
     final current = _countInCart(provider, item.id);
     if (current > 0) {
       provider.incrementCartItem(item.id);
@@ -455,8 +469,7 @@ class _RestaurantMenuScreenState extends State<RestaurantMenuScreen>
                         quantity: _countInCart(provider, item.id),
                         onAdd: (ctx) => _handleAddItem(item, ctx),
                         onDecrement: () => _handleDecrement(item),
-                        onFavorite: () =>
-                            provider.toggleFavoriteItem(item),
+                        onFavorite: () => provider.toggleFavoriteItem(item),
                       );
                     },
                   ),
@@ -478,8 +491,7 @@ class _RestaurantMenuScreenState extends State<RestaurantMenuScreen>
                   icon: isRestaurantFavorite
                       ? Icons.favorite_rounded
                       : Icons.favorite_border_rounded,
-                  iconColor:
-                      isRestaurantFavorite ? _brandRed : Colors.black87,
+                  iconColor: isRestaurantFavorite ? _brandRed : Colors.black87,
                   onTap: () => provider.toggleFavoriteItem(restaurant),
                 ),
                 const SizedBox(width: 8),
@@ -812,9 +824,8 @@ class _MostOrderedCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final image = item.imageBase64?.isNotEmpty == true
-        ? item.imageBase64
-        : item.image;
+    final image =
+        item.imageBase64?.isNotEmpty == true ? item.imageBase64 : item.image;
 
     return GestureDetector(
       onTap: onTap,
@@ -897,9 +908,8 @@ class _MenuItemCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final provider = context.watch<AppProvider>();
     final isFavorite = provider.isFavoriteId(item.id);
-    final image = item.imageBase64?.isNotEmpty == true
-        ? item.imageBase64
-        : item.image;
+    final image =
+        item.imageBase64?.isNotEmpty == true ? item.imageBase64 : item.image;
 
     return Container(
       decoration: BoxDecoration(

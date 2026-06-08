@@ -30,7 +30,8 @@ class SupabaseService {
   static Future<Map<String, dynamic>?> loadMerchantProfile(String phone) =>
       _db.loadMerchantProfile(phone);
 
-  static Future<List<Map<String, dynamic>>> loadMerchantProducts(String phone) =>
+  static Future<List<Map<String, dynamic>>> loadMerchantProducts(
+          String phone) =>
       _db.loadMerchantProducts(phone);
 
   static Future<Map<String, dynamic>?> loadUserState(String phone) =>
@@ -228,7 +229,8 @@ class SupabaseService {
   static Future<void> saveCustomerOrder(String phone, ActiveOrder order) =>
       _db.saveCustomerOrder(phone, order);
 
-  static Future<void> deleteMerchantProduct(String productId, {String? phone}) =>
+  static Future<void> deleteMerchantProduct(String productId,
+          {String? phone}) =>
       _db.deleteMerchantProduct(productId, phone: phone);
 
   static Future<void> submitMerchantReview({
@@ -246,5 +248,26 @@ class SupabaseService {
         orderId: orderId,
         stars: stars,
         comment: comment,
+      );
+
+  static Future<List<Map<String, dynamic>>> loadAllMerchants() =>
+      _db.loadAllMerchants();
+
+  static Future<void> toggleMerchantBazaarStatus({
+    required String merchantPhone,
+    required bool isBazaarMember,
+  }) =>
+      _db.toggleMerchantBazaarStatus(
+        merchantPhone: merchantPhone,
+        isBazaarMember: isBazaarMember,
+      );
+
+  static Future<void> toggleMerchantFreezeStatus({
+    required String merchantPhone,
+    required bool isFrozen,
+  }) =>
+      _db.toggleMerchantFreezeStatus(
+        merchantPhone: merchantPhone,
+        isFrozen: isFrozen,
       );
 }

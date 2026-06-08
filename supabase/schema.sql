@@ -35,6 +35,7 @@ create table if not exists public.merchant_profiles (
   delivery_areas text,
   delivery_fee integer not null default 0,
   is_open boolean not null default true,
+  is_frozen boolean not null default false,
   rating numeric(3,2) not null default 4.80,
   cover_image_url text,
   logo_image_url text,

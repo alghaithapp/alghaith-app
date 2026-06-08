@@ -22,6 +22,7 @@ class ListItem {
   final double? rating;
   final String category;
   final String? subCategory;
+
   /// قسم داخل متجر التاجر (مكسرات، حلويات، …) — ليس قسم التسوق العام.
   final String? sectionId;
   final String categoryLabelAr;
@@ -48,6 +49,7 @@ class ListItem {
   final String? merchantOpenTime;
   final String? merchantCloseTime;
   final bool? merchantIsOpen;
+  final bool? merchantIsFrozen;
 
   ListItem({
     required this.id,
@@ -84,6 +86,7 @@ class ListItem {
     this.merchantOpenTime,
     this.merchantCloseTime,
     this.merchantIsOpen,
+    this.merchantIsFrozen,
   });
 
   ListItem copyWith({
@@ -121,6 +124,7 @@ class ListItem {
     String? merchantOpenTime,
     String? merchantCloseTime,
     bool? merchantIsOpen,
+    bool? merchantIsFrozen,
   }) {
     return ListItem(
       id: id ?? this.id,
@@ -157,6 +161,7 @@ class ListItem {
       merchantOpenTime: merchantOpenTime ?? this.merchantOpenTime,
       merchantCloseTime: merchantCloseTime ?? this.merchantCloseTime,
       merchantIsOpen: merchantIsOpen ?? this.merchantIsOpen,
+      merchantIsFrozen: merchantIsFrozen ?? this.merchantIsFrozen,
     );
   }
 
@@ -196,6 +201,7 @@ class ListItem {
       'merchantOpenTime': merchantOpenTime,
       'merchantCloseTime': merchantCloseTime,
       'merchantIsOpen': merchantIsOpen,
+      'merchantIsFrozen': merchantIsFrozen,
     };
   }
 
@@ -237,6 +243,7 @@ class ListItem {
       merchantOpenTime: map['merchantOpenTime'] as String?,
       merchantCloseTime: map['merchantCloseTime'] as String?,
       merchantIsOpen: map['merchantIsOpen'] as bool?,
+      merchantIsFrozen: map['merchantIsFrozen'] as bool?,
     );
   }
 }
@@ -295,6 +302,7 @@ class CartItem {
   final String? merchantOpenTime;
   final String? merchantCloseTime;
   final bool? merchantIsOpen;
+  final bool? merchantIsFrozen;
   final String? optionAr;
   final String? optionEn;
 
@@ -316,6 +324,7 @@ class CartItem {
     this.merchantOpenTime,
     this.merchantCloseTime,
     this.merchantIsOpen,
+    this.merchantIsFrozen,
     this.optionAr,
     this.optionEn,
   });
@@ -503,7 +512,8 @@ class ActiveOrder {
       requiresDelivery: (map['requiresDelivery'] as bool?) ?? true,
       codConfirmed: (map['codConfirmed'] as bool?) ?? false,
       deliveredAt: map['deliveredAt'] as String?,
-      estimatedArrivalMinutes: (map['estimatedArrivalMinutes'] as num?)?.toInt(),
+      estimatedArrivalMinutes:
+          (map['estimatedArrivalMinutes'] as num?)?.toInt(),
       estimatedArrivalAt: map['estimatedArrivalAt'] as String?,
       courierPhone: map['courierPhone'] as String?,
       customerLatitude: (map['customerLatitude'] as num?)?.toDouble(),

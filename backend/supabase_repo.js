@@ -122,6 +122,10 @@ function profileServiceIds(profile) {
   return primary ? [primary] : [];
 }
 
+function isMerchantFrozen(profile) {
+  return profile?.is_frozen === true;
+}
+
 /** أقسام التسوق العالمي فقط — لا تُخلط مع التسوق المحلي. */
 const GLOBAL_SHOPPING_SUB_CATEGORY_IDS = new Set(['iran', 'china']);
 
@@ -140,15 +144,30 @@ function productMatchesStoreListing({
   if (row.is_available === false) return false;
 
   const productService = String(row.category || row.service_id || '').trim();
-  if (productService !== String(productCategory || '').trim()) return false;
+  const requestedCategory = String(productCategory || '').trim();
+  const channel = String(marketplaceCategory || '').trim();
+  const isBazaarChannel = channel === 'bazar_ghaith';
+
+  if (isBazaarChannel) {
+    if (!['product', 'restaurant'].includes(productService)) return false;
+  } else if (productService !== requestedCategory) {
+    return false;
+  }
 
   const sub = String(row.sub_category || '').trim();
   const target = String(subCategoryId || '').trim();
-  const channel = String(marketplaceCategory || '').trim();
 
   if (channel === 'global_shopping') {
     if (!GLOBAL_SHOPPING_SUB_CATEGORY_IDS.has(sub)) return false;
     if (target && sub !== target) return false;
+    return true;
+  }
+
+  if (isBazaarChannel) {
+    if (productService == 'product' && GLOBAL_SHOPPING_SUB_CATEGORY_IDS.has(sub)) {
+      return false;
+    }
+    if (target) return sub === target;
     return true;
   }
 
@@ -170,6 +189,10 @@ function buildProfileByPhoneMap(profiles) {
     }
   }
   return map;
+}
+
+function canMerchantPublishInBazaar(profile) {
+  return profile?.is_bazaar_member === true;
 }
 
 function findProfileForPhone(map, phone) {
@@ -771,6 +794,16 @@ async function saveCustomerOrder(phone, data = {}) {
     ? await resolvePhoneKey(rawMerchantPhone)
     : null;
 
+  if (merchantPhone) {
+    const merchantProfile = await getMerchantProfile(merchantPhone);
+    if (!merchantProfile) {
+      throw new Error('Merchant not found.');
+    }
+    if (isMerchantFrozen(merchantProfile)) {
+      throw new Error('MERCHANT_FROZEN');
+    }
+  }
+
   const rawCourierPhone =
     String(
       data.courier_phone ??
@@ -1114,7 +1147,9 @@ async function getAdminReports(phone) {
     totalSales,
     codCollected,
     totalMerchants: merchants.length,
-    openMerchants: merchants.filter((row) => row.is_open !== false).length,
+    openMerchants: merchants.filter(
+      (row) => row.is_open !== false && !isMerchantFrozen(row)
+    ).length,
     totalProducts: products.length,
     totalUsers: users.length,
     recentOrders,
@@ -1232,6 +1267,10 @@ async function getMerchantProducts(phone) {
 async function saveMerchantProduct(phone, data = {}) {
   const phoneKey = await resolvePhoneKey(phone);
   const appUser = await ensureAppUser(phoneKey, data);
+  const merchantProfile = await getMerchantProfile(phoneKey);
+  if (!merchantProfile) {
+    throw new Error('Merchant profile not found.');
+  }
   const payload = {
     id:
       data.id && String(data.id).trim().length > 0
@@ -1247,6 +1286,12 @@ async function saveMerchantProduct(phone, data = {}) {
     payload.service_id = String(
       data.service_id ?? data.serviceId ?? data.category ?? 'restaurant'
     ).trim() || 'restaurant';
+  }
+  const targetCategory = String(
+    data.category ?? data.service_id ?? data.serviceId ?? payload.service_id ?? ''
+  ).trim();
+  if (targetCategory === 'bazar_ghaith' && !canMerchantPublishInBazaar(merchantProfile)) {
+    throw new Error('BAZAAR_APPROVAL_REQUIRED');
   }
   assignIfDefined(payload, 'name_ar', data.name_ar ?? data.nameAr ?? '');
   assignIfDefined(payload, 'name_en', data.name_en ?? data.nameEn ?? '');
@@ -1343,6 +1388,7 @@ async function listProfessionalProfiles(professionId = '') {
   const profiles = await selectMany('merchant_profiles');
   const target = String(professionId || '').trim();
   return profiles.filter((row) => {
+    if (isMerchantFrozen(row)) return false;
     const serviceIds = normalizeArray(row.service_ids);
     const hasProfessionals = serviceIds
       .map((item) => String(item))
@@ -1368,8 +1414,16 @@ async function listMerchantStoresByService({
   for (const profile of profiles) {
     const isOpen = profile.is_open !== false;
     if (!isOpen) continue;
-
-    if (!profileHasService(profile, normalizedServiceId)) continue;
+    if (isMerchantFrozen(profile)) continue;
+    if (normalizedServiceId === 'bazar_ghaith') {
+      if (!canMerchantPublishInBazaar(profile)) continue;
+      const services = profileServiceIds(profile);
+      const servesBazaarListings =
+        services.includes('restaurant') || services.includes('product');
+      if (!servesBazaarListings) continue;
+    } else if (!profileHasService(profile, normalizedServiceId)) {
+      continue;
+    }
 
     const phoneVariants = getPhoneVariants(profile.phone);
     const products = await selectMany(
@@ -1654,7 +1708,9 @@ async function listRestaurantStores(subCategoryId = '') {
 
 async function listCatalogProducts(category = '', subCategoryId = '') {
   const profiles = await selectMany('merchant_profiles');
-  const openProfiles = profiles.filter((row) => row.is_open !== false);
+  const openProfiles = profiles.filter(
+    (row) => row.is_open !== false && !isMerchantFrozen(row)
+  );
   const profileByPhone = buildProfileByPhoneMap(openProfiles);
 
   const categoryFilter = String(category || '').trim();
@@ -1671,12 +1727,21 @@ async function listCatalogProducts(category = '', subCategoryId = '') {
       const productService = String(
         row.category || row.service_id || ''
       ).trim();
-      if (categoryFilter && productService !== categoryFilter) {
+      if (
+        categoryFilter &&
+        categoryFilter !== 'bazar_ghaith' &&
+        productService !== categoryFilter
+      ) {
         return false;
       }
       const phone = String(row.phone || '').trim();
       const profile = findProfileForPhone(profileByPhone, phone);
       if (!profile) return false;
+
+      if (categoryFilter === 'bazar_ghaith') {
+        if (!canMerchantPublishInBazaar(profile)) return false;
+        if (!['product', 'restaurant'].includes(productService)) return false;
+      }
 
       const serviceIds = profileServiceIds(profile);
       if (
@@ -1721,6 +1786,7 @@ async function listCatalogProducts(category = '', subCategoryId = '') {
         merchant_close_time: profile?.close_time ?? null,
         merchant_is_open:
           profile?.is_open === undefined ? true : Boolean(profile?.is_open),
+        merchant_is_frozen: profile?.is_frozen === true,
       };
     });
 }
@@ -1758,13 +1824,15 @@ async function listRealEstateListings(subCategoryId = '', listingMode = '') {
     profilesByPhone.set(phone, await selectSingle('merchant_profiles', 'phone', phone));
   }
 
-  return filteredProducts.map((product) => {
-    const phone = String(product.phone || '').trim();
-    return {
-      product,
-      merchant: profilesByPhone.get(phone) || null,
-    };
-  });
+  return filteredProducts
+    .map((product) => {
+      const phone = String(product.phone || '').trim();
+      return {
+        product,
+        merchant: profilesByPhone.get(phone) || null,
+      };
+    })
+    .filter(({ merchant }) => merchant && merchant.is_open !== false && !isMerchantFrozen(merchant));
 }
 
 async function saveMerchantReview({
@@ -1841,6 +1909,75 @@ async function saveMerchantReview({
   }
 }
 
+async function getAllMerchants(adminPhone) {
+  await assertAdminAccess(adminPhone);
+  
+  const merchants = await selectMany('merchant_profiles', [], { column: 'store_name', ascending: true });
+  const userPhones = merchants.map((m) => m.phone).filter(Boolean);
+  
+  // Get app_users for these merchants
+  const users = userPhones.length > 0
+    ? await selectMany('app_users', [{ method: 'in', column: 'phone', value: userPhones }])
+    : [];
+  
+  const userByPhone = {};
+  for (const u of users) {
+    userByPhone[u.phone] = u;
+  }
+  
+  return merchants.map((m) => ({
+    phone: m.phone,
+    storeName: m.store_name || '',
+    description: (m.description || '').slice(0, 80),
+    primaryServiceId: m.primary_service_id || '',
+    isOpen: m.is_open !== false,
+    isFrozen: isMerchantFrozen(m),
+    rating: Number(m.rating || 0),
+    isBazaarMember: m.is_bazaar_member === true,
+    createdAt: m.created_at,
+    fullName: userByPhone[m.phone]?.full_name || '',
+    role: userByPhone[m.phone]?.role || '',
+  }));
+}
+
+async function toggleBazaarMemberStatus(adminPhone, merchantPhone, isBazaarMember) {
+  await assertAdminAccess(adminPhone);
+  
+  const supabase = assertSupabaseAdmin();
+  const variants = getPhoneVariants(merchantPhone);
+  
+  const { data, error } = await supabase
+    .from('merchant_profiles')
+    .update({ is_bazaar_member: Boolean(isBazaarMember), updated_at: nowIso() })
+    .in('phone', variants)
+    .select();
+  
+  if (error) throw new Error(error.message);
+  if (!Array.isArray(data) || data.length === 0) {
+    throw new Error('Merchant not found.');
+  }
+  return { success: true, merchant: data[0] };
+}
+
+async function toggleMerchantFreezeStatus(adminPhone, merchantPhone, isFrozen) {
+  await assertAdminAccess(adminPhone);
+
+  const supabase = assertSupabaseAdmin();
+  const variants = getPhoneVariants(merchantPhone);
+
+  const { data, error } = await supabase
+    .from('merchant_profiles')
+    .update({ is_frozen: Boolean(isFrozen), updated_at: nowIso() })
+    .in('phone', variants)
+    .select();
+
+  if (error) throw new Error(error.message);
+  if (!Array.isArray(data) || data.length === 0) {
+    throw new Error('Merchant not found.');
+  }
+  return { success: true, merchant: data[0] };
+}
+
 module.exports = {
   isConfigured,
   supabaseKeyRole,
@@ -1886,4 +2023,7 @@ module.exports = {
   getAdminReports,
   canonicalPhone,
   saveMerchantReview,
+  getAllMerchants,
+  toggleBazaarMemberStatus,
+  toggleMerchantFreezeStatus,
 };

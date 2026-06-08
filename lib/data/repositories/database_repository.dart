@@ -494,4 +494,33 @@ class DatabaseRepository {
       'comment': comment,
     });
   }
+
+  Future<List<Map<String, dynamic>>> loadAllMerchants() async {
+    final result = await ApiClient.instance.get('/db/admin/merchants');
+    if (result is! List) return const [];
+    return result
+        .whereType<Map>()
+        .map((item) => Map<String, dynamic>.from(item))
+        .toList();
+  }
+
+  Future<void> toggleMerchantBazaarStatus({
+    required String merchantPhone,
+    required bool isBazaarMember,
+  }) async {
+    await ApiClient.instance.put('/db/admin/merchant-bazaar', body: {
+      'merchantPhone': _phone(merchantPhone),
+      'isBazaarMember': isBazaarMember,
+    });
+  }
+
+  Future<void> toggleMerchantFreezeStatus({
+    required String merchantPhone,
+    required bool isFrozen,
+  }) async {
+    await ApiClient.instance.put('/db/admin/merchant-freeze', body: {
+      'merchantPhone': _phone(merchantPhone),
+      'isFrozen': isFrozen,
+    });
+  }
 }

@@ -26,7 +26,8 @@ alter table if exists public.merchant_profiles
   add column if not exists work_sample_images_base64 jsonb not null default '[]'::jsonb,
   add column if not exists professional_info jsonb not null default '{}'::jsonb,
   add column if not exists professional_category_id text,
-  add column if not exists active_service_id text;
+  add column if not exists active_service_id text,
+  add column if not exists is_frozen boolean not null default false;
 
 alter table if exists public.customer_profiles
   add column if not exists customer_phone text;
@@ -160,11 +161,23 @@ alter table if exists public.customer_favorites
   add column if not exists phone text,
   add column if not exists updated_at timestamptz not null default now();
 
-update public.customer_favorites fav
-set phone = users.phone
-from public.app_users users
-where fav.user_id = users.id
-  and (fav.phone is null or fav.phone = '');
+do $$
+begin
+  if exists (
+    select 1
+    from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'customer_favorites'
+      and column_name = 'user_id'
+  ) then
+    update public.customer_favorites fav
+    set phone = users.phone
+    from public.app_users users
+    where fav.user_id = users.id
+      and (fav.phone is null or fav.phone = '');
+  end if;
+end
+$$;
 
 create unique index if not exists idx_customer_favorites_phone_product_id
   on public.customer_favorites (phone, product_id)
@@ -205,11 +218,23 @@ update public.customer_addresses
 set address_text = coalesce(nullif(address_text, ''), address)
 where address_text is null or address_text = '';
 
-update public.customer_addresses addr
-set phone = users.phone
-from public.app_users users
-where addr.user_id = users.id
-  and (addr.phone is null or addr.phone = '');
+do $$
+begin
+  if exists (
+    select 1
+    from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'customer_addresses'
+      and column_name = 'user_id'
+  ) then
+    update public.customer_addresses addr
+    set phone = users.phone
+    from public.app_users users
+    where addr.user_id = users.id
+      and (addr.phone is null or addr.phone = '');
+  end if;
+end
+$$;
 
 alter table if exists public.customer_addresses
   alter column address_text set not null;

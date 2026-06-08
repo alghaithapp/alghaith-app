@@ -49,6 +49,9 @@ const {
   updateCourierDeliveryStatus,
   getAdminReports,
   saveMerchantReview,
+  getAllMerchants,
+  toggleBazaarMemberStatus,
+  toggleMerchantFreezeStatus,
 } = require('./supabase_repo');
 const { validatePromoCode } = require('./promo_codes');
 
@@ -747,7 +750,9 @@ app.put('/db/customer-order', async (req, res) => {
     return res.json(row);
   } catch (error) {
     console.error('save customer-order error:', error);
-    return res.status(500).json({ message: error?.message || 'Failed to save customer order.' });
+    const message = error?.message || 'Failed to save customer order.';
+    const status = message === 'MERCHANT_FROZEN' ? 409 : 500;
+    return res.status(status).json({ message });
   }
 });
 
@@ -843,7 +848,9 @@ app.put('/db/merchant-product', async (req, res) => {
     return res.json(row);
   } catch (error) {
     console.error('save merchant-product error:', error);
-    return res.status(500).json({ message: error?.message || 'Failed to save merchant product.' });
+    const message = error?.message || 'Failed to save merchant product.';
+    const status = message === 'BAZAAR_APPROVAL_REQUIRED' ? 409 : 500;
+    return res.status(status).json({ message });
   }
 });
 
@@ -1128,6 +1135,58 @@ app.get('/db/real-estate-listings', async (req, res) => {
   } catch (error) {
     console.error('list real-estate-listings error:', error);
     return res.status(500).json({ message: error?.message || 'Failed to load real estate listings.' });
+  }
+});
+
+app.get('/db/admin/merchants', async (req, res) => {
+  try {
+    const phone = requireAuthorizedPhone(req, res, { allowMissing: true });
+    if (!phone) return;
+    const merchants = await getAllMerchants(phone);
+    return res.json(merchants);
+  } catch (error) {
+    console.error('admin merchants error:', error);
+    const message = error?.message || 'Failed to load merchants.';
+    const status = message.includes('Admin access') ? 403 : 500;
+    return res.status(status).json({ message });
+  }
+});
+
+app.put('/db/admin/merchant-bazaar', async (req, res) => {
+  try {
+    const phone = requireAuthorizedPhone(req, res, { allowMissing: true });
+    if (!phone) return;
+    const merchantPhone = String(req.body?.merchantPhone || '').trim();
+    const isBazaarMember = req.body?.isBazaarMember === true;
+    if (!merchantPhone) {
+      return res.status(400).json({ message: 'merchantPhone is required.' });
+    }
+    const result = await toggleBazaarMemberStatus(phone, merchantPhone, isBazaarMember);
+    return res.json(result);
+  } catch (error) {
+    console.error('toggle bazaar error:', error);
+    const message = error?.message || 'Failed to toggle bazaar status.';
+    const status = message.includes('Admin access') ? 403 : 500;
+    return res.status(status).json({ message });
+  }
+});
+
+app.put('/db/admin/merchant-freeze', async (req, res) => {
+  try {
+    const phone = requireAuthorizedPhone(req, res, { allowMissing: true });
+    if (!phone) return;
+    const merchantPhone = String(req.body?.merchantPhone || '').trim();
+    const isFrozen = req.body?.isFrozen === true;
+    if (!merchantPhone) {
+      return res.status(400).json({ message: 'merchantPhone is required.' });
+    }
+    const result = await toggleMerchantFreezeStatus(phone, merchantPhone, isFrozen);
+    return res.json(result);
+  } catch (error) {
+    console.error('toggle freeze error:', error);
+    const message = error?.message || 'Failed to toggle freeze status.';
+    const status = message.includes('Admin access') ? 403 : 500;
+    return res.status(status).json({ message });
   }
 });
 
