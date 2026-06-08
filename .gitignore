@@ -21,3 +21,6 @@ coverage/
 *.log
 .env*
 !.env.example
+
+.vercel
+.env*

@@ -695,7 +695,15 @@ class AppProvider extends ChangeNotifier {
         _appUserRecord = appUser;
         _customerName =
             _trimmedOrNull(appUser['full_name']?.toString()) ?? _customerName;
-        _userRole = _trimmedOrNull(appUser['role']?.toString()) ?? _userRole;
+
+        final remoteRole = _trimmedOrNull(appUser['role']?.toString());
+        if (remoteRole == 'admin') {
+          _userRole = 'customer';
+          _hasAdminAccess = true;
+        } else {
+          _userRole = remoteRole ?? _userRole;
+        }
+
         _accountType = _trimmedOrNull(
               appUser['account_type']?.toString() ??
                   appUser['accountType']?.toString(),
@@ -906,9 +914,21 @@ class AppProvider extends ChangeNotifier {
   }
 
   void _inferRoleFromRestoredData() {
-    if (_userRole != null && _userRole!.trim().isNotEmpty) return;
+    if (_userRole != null && _userRole!.trim().isNotEmpty) {
+      if (_userRole == 'admin') {
+        _userRole = 'customer';
+        _hasAdminAccess = true;
+      }
+      return;
+    }
 
     final storedRole = _trimmedOrNull(_appUserRecord?['role']?.toString());
+    if (storedRole == 'admin') {
+      _userRole = 'customer';
+      _hasAdminAccess = true;
+      return;
+    }
+
     if (storedRole != null && isRoleAllowedForAccount(storedRole)) {
       _userRole = storedRole;
       return;

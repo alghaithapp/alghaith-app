@@ -220,19 +220,19 @@ class MarketplaceCatalog {
       storeSubtitleAr: 'منتجات مخفّضة من المتاجر',
     ),
     MarketplaceCategoryDefinition(
-      id: 'global_shopping',
-      titleAr: 'التسوق العالمي',
-      titleEn: 'Global Shopping',
-      image: 'assets/images/cat_global.png',
+      id: 'used',
+      titleAr: 'المنتجات المستعملة',
+      titleEn: 'Used Products',
+      image: 'assets/images/cat_used.png',
       entryMode: CategoryEntryMode.subCategoryHub,
-      apiServiceId: 'product',
-      apiProductCategory: 'product',
-      hubTitleAr: 'التسوق العالمي',
-      hubSubtitleAr: 'متاجر حسب الدولة',
-      storeTitleAr: 'التسوق العالمي',
-      storeSubtitleAr: 'اختر المتجر المناسب',
-      defaultSubBrowseMode: SubCategoryBrowseMode.stores,
-      subCategories: _globalShoppingSubCategories,
+      apiServiceId: 'used',
+      apiProductCategory: 'used',
+      hubTitleAr: 'المنتجات المستعملة',
+      hubSubtitleAr: 'منتجات مستعملة بحالة جيدة',
+      storeTitleAr: 'مستعمل',
+      storeSubtitleAr: 'تصفح المنتجات المستعملة',
+      defaultSubBrowseMode: SubCategoryBrowseMode.catalog,
+      subCategories: _usedSubCategories,
     ),
   ];
 
@@ -244,6 +244,12 @@ class MarketplaceCatalog {
   }
 
   static List<ServiceCategory> get homeCategories => categories
+      .where((entry) => entry.id != 'bazar_ghaith')
+      .map((entry) => entry.asServiceCategory)
+      .toList();
+
+  /// الأقسام المتاحة للتجار للتسجيل فيها (باستثناء الأقسام الإدارية أو الخاصة).
+  static List<ServiceCategory> get merchantAvailableCategories => categories
       .where((entry) => entry.id != 'bazar_ghaith')
       .map((entry) => entry.asServiceCategory)
       .toList();

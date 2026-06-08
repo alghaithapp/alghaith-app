@@ -1912,7 +1912,10 @@ async function saveMerchantReview({
 async function getAllMerchants(adminPhone) {
   await assertAdminAccess(adminPhone);
   
-  const merchants = await selectMany('merchant_profiles', [], { column: 'store_name', ascending: true });
+  const [merchants, orders] = await Promise.all([
+    selectMany('merchant_profiles', [], { column: 'store_name', ascending: true }),
+    selectMany('customer_orders', [], { column: 'updated_at', ascending: false }),
+  ]);
   const userPhones = merchants.map((m) => m.phone).filter(Boolean);
   
   // Get app_users for these merchants
@@ -1924,8 +1927,61 @@ async function getAllMerchants(adminPhone) {
   for (const u of users) {
     userByPhone[u.phone] = u;
   }
+
+  const orderStatsByMerchant = new Map();
+  for (const row of orders) {
+    const meta = readOrderMeta(row);
+    const merchantPhone = meta.merchantPhone;
+    if (!merchantPhone) continue;
+
+    let bucket = null;
+    for (const variant of getPhoneVariants(merchantPhone)) {
+      bucket = orderStatsByMerchant.get(variant);
+      if (bucket) break;
+    }
+
+    if (!bucket) {
+      bucket = {
+        totalOrders: 0,
+        completedOrders: 0,
+        pendingOrders: 0,
+        deliveringOrders: 0,
+        totalRevenue: 0,
+        lastOrderAt: null,
+      };
+      for (const variant of getPhoneVariants(merchantPhone)) {
+        orderStatsByMerchant.set(variant, bucket);
+      }
+    }
+
+    const price = Number(meta.payload.price || 0);
+    bucket.totalOrders += 1;
+    if (!bucket.lastOrderAt || String(row.updated_at || '') > String(bucket.lastOrderAt || '')) {
+      bucket.lastOrderAt = row.updated_at || null;
+    }
+
+    if (meta.statusKey === 'completed') {
+      bucket.completedOrders += 1;
+      bucket.totalRevenue += price;
+    } else if (
+      meta.statusKey === 'delivering' ||
+      ['accepted', 'picked_up', 'on_way', 'waiting'].includes(meta.deliveryStatusKey)
+    ) {
+      bucket.deliveringOrders += 1;
+    } else {
+      bucket.pendingOrders += 1;
+    }
+  }
   
   return merchants.map((m) => ({
+    ...(orderStatsByMerchant.get(m.phone) || {
+      totalOrders: 0,
+      completedOrders: 0,
+      pendingOrders: 0,
+      deliveringOrders: 0,
+      totalRevenue: 0,
+      lastOrderAt: null,
+    }),
     phone: m.phone,
     storeName: m.store_name || '',
     description: (m.description || '').slice(0, 80),
@@ -1938,6 +1994,117 @@ async function getAllMerchants(adminPhone) {
     fullName: userByPhone[m.phone]?.full_name || '',
     role: userByPhone[m.phone]?.role || '',
   }));
+}
+
+async function getAdminMerchantDetails(adminPhone, merchantPhone) {
+  await assertAdminAccess(adminPhone);
+
+  const profile = await getMerchantProfile(merchantPhone);
+  if (!profile) {
+    throw new Error('Merchant not found.');
+  }
+
+  const [orders, products, appUser] = await Promise.all([
+    getMerchantIncomingOrders(profile.phone),
+    getMerchantProducts(profile.phone),
+    getAppUser(profile.phone),
+  ]);
+
+  let totalRevenue = 0;
+  let completedOrders = 0;
+  let pendingOrders = 0;
+  let deliveringOrders = 0;
+  let cancelledOrders = 0;
+  let codCollected = 0;
+
+  const mappedOrders = orders.map((row) => {
+    const meta = readOrderMeta(row);
+    const price = Number(meta.payload.price || 0);
+
+    if (meta.statusKey === 'completed') {
+      completedOrders += 1;
+      totalRevenue += price;
+      if (meta.payload.codConfirmed) {
+        codCollected += price;
+      }
+    } else if (
+      meta.statusKey === 'delivering' ||
+      ['accepted', 'picked_up', 'on_way', 'waiting'].includes(meta.deliveryStatusKey)
+    ) {
+      deliveringOrders += 1;
+    } else if (
+      meta.statusKey === 'cancelled' ||
+      meta.statusKey === 'rejected' ||
+      meta.statusKey === 'failed'
+    ) {
+      cancelledOrders += 1;
+    } else {
+      pendingOrders += 1;
+    }
+
+    return {
+      id: meta.id,
+      orderNumber: meta.payload.orderNumber || meta.id,
+      statusKey: meta.statusKey,
+      statusAr: meta.payload.statusAr || '',
+      statusEn: meta.payload.statusEn || '',
+      deliveryStatusKey: meta.deliveryStatusKey,
+      deliveryStatusAr: meta.payload.deliveryStatusAr || '',
+      deliveryStatusEn: meta.payload.deliveryStatusEn || '',
+      price,
+      customerName: meta.payload.customerNameAr || meta.payload.customerNameEn || '',
+      customerPhone: meta.customerPhone,
+      itemCount: Array.isArray(meta.payload.items)
+        ? meta.payload.items.length
+        : Number(meta.payload.itemsCount || 0),
+      updatedAt: row.updated_at || row.created_at || null,
+      createdAt: row.created_at || null,
+    };
+  });
+
+  const totalOrders = orders.length;
+  const averageOrderValue = completedOrders > 0 ? Math.round(totalRevenue / completedOrders) : 0;
+
+  return {
+    merchant: {
+      phone: profile.phone,
+      storeName: profile.store_name || '',
+      description: profile.description || '',
+      primaryServiceId: profile.primary_service_id || '',
+      serviceIds: profileServiceIds(profile),
+      isOpen: profile.is_open !== false,
+      isFrozen: isMerchantFrozen(profile),
+      isBazaarMember: profile.is_bazaar_member === true,
+      rating: Number(profile.rating || 0),
+      address: profile.address || '',
+      deliveryFee: Number(profile.delivery_fee || 0),
+      createdAt: profile.created_at || null,
+      updatedAt: profile.updated_at || null,
+      fullName: appUser?.full_name || '',
+      role: appUser?.role || '',
+    },
+    stats: {
+      totalOrders,
+      completedOrders,
+      pendingOrders,
+      deliveringOrders,
+      cancelledOrders,
+      totalRevenue,
+      codCollected,
+      averageOrderValue,
+      totalProducts: products.length,
+    },
+    recentOrders: mappedOrders.slice(0, 20),
+    products: products.slice(0, 12).map((product) => ({
+      id: String(product.id || ''),
+      name: product.name || '',
+      category: product.category || '',
+      subCategory: product.sub_category || '',
+      price: Number(product.price || 0),
+      isAvailable: product.is_available !== false,
+      createdAt: product.created_at || null,
+    })),
+  };
 }
 
 async function toggleBazaarMemberStatus(adminPhone, merchantPhone, isBazaarMember) {
@@ -2024,6 +2191,7 @@ module.exports = {
   canonicalPhone,
   saveMerchantReview,
   getAllMerchants,
+  getAdminMerchantDetails,
   toggleBazaarMemberStatus,
   toggleMerchantFreezeStatus,
 };

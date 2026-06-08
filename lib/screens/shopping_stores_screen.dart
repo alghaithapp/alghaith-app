@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../core/theme/app_colors.dart';
 import '../models/app_models.dart';
 import '../providers/app_provider.dart';
 import '../services/supabase_service.dart';
@@ -1079,11 +1080,11 @@ class _ShoppingStoreMenuScreenState extends State<ShoppingStoreMenuScreen>
                         width: 20,
                         height: 20,
                         decoration: BoxDecoration(
-                          color: const Color(0xFFF5A01D),
+                          color: AppColors.accent,
                           shape: BoxShape.circle,
                           boxShadow: [
                             BoxShadow(
-                              color: const Color(0xFFF5A01D).withValues(alpha: 0.4),
+                              color: AppColors.accent.withValues(alpha: 0.4),
                               blurRadius: 10,
                             ),
                           ],
@@ -1404,12 +1405,13 @@ class _StoreCartNavButton extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         onTap: onTap,
         child: TweenAnimationBuilder<double>(
+          key: ValueKey(pulseTick),
           duration: const Duration(milliseconds: 300),
-          tween: Tween(begin: 1.0, end: pulseTick > 0 ? 1.2 : 1.0),
-          curve: Curves.elasticOut,
+          tween: Tween(begin: pulseTick > 0 ? 1.2 : 1.0, end: 1.0),
+          curve: Curves.easeOutBack,
           builder: (context, scale, child) {
             return Transform.scale(
-              scale: scale > 1.2 ? 1.2 : scale,
+              scale: scale,
               child: child,
             );
           },
@@ -1423,7 +1425,7 @@ class _StoreCartNavButton extends StatelessWidget {
                   child: Icon(
                     CupertinoIcons.cart_fill,
                     size: 24,
-                    color: Color(0xFFF5A01D),
+                    color: AppColors.accent,
                   ),
                 ),
                 if (count > 0)

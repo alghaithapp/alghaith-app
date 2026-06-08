@@ -2,6 +2,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../core/theme/app_colors.dart';
 import '../models/app_models.dart';
 import '../providers/app_provider.dart';
 import '../utils/extensions.dart';
@@ -121,6 +122,7 @@ class _SubCategoryItemsScreenState extends State<SubCategoryItemsScreen>
       child: SafeArea(
         child: Stack(
           key: _stackKey,
+          clipBehavior: Clip.none,
           children: [
             Column(
               children: [
@@ -362,11 +364,11 @@ class _SubCategoryItemsScreenState extends State<SubCategoryItemsScreen>
                           width: 20,
                           height: 20,
                           decoration: BoxDecoration(
-                            color: Colors.deepOrange,
+                            color: AppColors.accent,
                             shape: BoxShape.circle,
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.deepOrange.withValues(alpha: 0.4),
+                                color: AppColors.accent.withValues(alpha: 0.4),
                                 blurRadius: 10,
                               ),
                             ],
@@ -398,13 +400,19 @@ class _CartNavButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scale = count > 0 && pulseTick.isOdd ? 1.12 : 1.0;
     return GestureDetector(
       onTap: onTap,
-      child: AnimatedScale(
-        scale: scale,
-        duration: const Duration(milliseconds: 220),
+      child: TweenAnimationBuilder<double>(
+        key: ValueKey(pulseTick),
+        duration: const Duration(milliseconds: 300),
+        tween: Tween(begin: pulseTick > 0 ? 1.2 : 1.0, end: 1.0),
         curve: Curves.easeOutBack,
+        builder: (context, scale, child) {
+          return Transform.scale(
+            scale: scale,
+            child: child,
+          );
+        },
         child: SizedBox(
           width: 34,
           height: 34,

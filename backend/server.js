@@ -50,6 +50,7 @@ const {
   getAdminReports,
   saveMerchantReview,
   getAllMerchants,
+  getAdminMerchantDetails,
   toggleBazaarMemberStatus,
   toggleMerchantFreezeStatus,
 } = require('./supabase_repo');
@@ -1148,6 +1149,30 @@ app.get('/db/admin/merchants', async (req, res) => {
     console.error('admin merchants error:', error);
     const message = error?.message || 'Failed to load merchants.';
     const status = message.includes('Admin access') ? 403 : 500;
+    return res.status(status).json({ message });
+  }
+});
+
+app.get('/db/admin/merchant-details', async (req, res) => {
+  try {
+    const phone = requireAuthorizedPhone(req, res, { allowMissing: true });
+    if (!phone) return;
+    const merchantPhone = String(parseQueryValue(req.query.merchantPhone) || '').trim();
+    if (!merchantPhone) {
+      return res.status(400).json({ message: 'merchantPhone is required.' });
+    }
+    const details = await getAdminMerchantDetails(phone, merchantPhone);
+    return res.json(details);
+  } catch (error) {
+    console.error('admin merchant-details error:', error);
+    const message = error?.message || 'Failed to load merchant details.';
+    const status = message.includes('Admin access')
+      ? 403
+      : message.includes('required')
+        ? 400
+        : message.includes('not found')
+          ? 404
+          : 500;
     return res.status(status).json({ message });
   }
 });

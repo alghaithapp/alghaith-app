@@ -1,4 +1,3 @@
 #!/bin/sh
-set -eu
-
-./flutter/bin/flutter build web --release
+# Flutter web build disabled
+echo "Build skipped"

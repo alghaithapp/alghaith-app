@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/catalog/marketplace_catalog.dart';
 import '../../core/theme/app_colors.dart';
 import '../../providers/app_provider.dart';
 import '../../services/image_storage_service.dart';
@@ -13,7 +14,6 @@ import '../../utils/dummy_data.dart';
 import '../../utils/helpers.dart';
 import '../../utils/merchant_profile_fields.dart';
 import '../../utils/merchant_service_labels.dart';
-import '../../services/image_storage_service.dart';
 import '../../widgets/app_image.dart';
 import '../../widgets/location_picker_screen.dart';
 import '../../widgets/merchant/merchant_image_upload_slot.dart';
@@ -436,7 +436,7 @@ class _MerchantSetupScreenState extends State<MerchantSetupScreen> {
                     Wrap(
                       spacing: 10,
                       runSpacing: 10,
-                      children: DummyData.categories.map((cat) {
+                      children: MarketplaceCatalog.merchantAvailableCategories.map((cat) {
                         final selected = _selectedServiceIds.contains(cat.id);
                         return GestureDetector(
                           onTap: () => setState(() {

@@ -1,12 +1,7 @@
 // ─── CONFIG ────────────────────────────
-const APK_URL = 'app-release.apk';
 const WHATSAPP_URL = 'https://wa.me/9647744009992';
 
-// ─── DOWNLOAD & WHATSAPP LINKS ──────────
-document.querySelectorAll('a[download]').forEach((link) => {
-  link.setAttribute('href', APK_URL);
-});
-
+// ─── WHATSAPP LINKS ──────────────────────
 document.querySelectorAll('a[href^="https://wa.me/"]').forEach((link) => {
   link.setAttribute('href', WHATSAPP_URL);
 });

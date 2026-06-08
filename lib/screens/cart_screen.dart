@@ -800,7 +800,6 @@ class _CartScreenState extends State<CartScreen> {
             Expanded(
               child: _DeliveryOptionCard(
                 title: 'توصيل عادي',
-                time: '30 - 45 دقيقة',
                 selected: _deliveryOption == 1,
                 onTap: () => setState(() => _deliveryOption = 1),
               ),
@@ -809,7 +808,6 @@ class _CartScreenState extends State<CartScreen> {
             Expanded(
               child: _DeliveryOptionCard(
                 title: 'توصيل سريع',
-                time: '15 - 20 دقيقة',
                 selected: _deliveryOption == 2,
                 onTap: () => setState(() => _deliveryOption = 2),
               ),
@@ -1427,13 +1425,13 @@ class _QtyBtn extends StatelessWidget {
 
 class _DeliveryOptionCard extends StatelessWidget {
   final String title;
-  final String time;
+  final String? time;
   final bool selected;
   final VoidCallback onTap;
 
   const _DeliveryOptionCard({
     required this.title,
-    required this.time,
+    this.time,
     required this.selected,
     required this.onTap,
   });
@@ -1502,17 +1500,19 @@ class _DeliveryOptionCard extends StatelessWidget {
                 ),
               ],
             ),
-            const SizedBox(height: 6),
-            Text(
-              time,
-              style: TextStyle(
-                fontFamily: 'Cairo',
-                fontSize: 12,
-                color: selected
-                    ? _brandRed.withValues(alpha: 0.75)
-                    : Colors.grey.shade600,
+            if (time != null && time!.isNotEmpty) ...[
+              const SizedBox(height: 6),
+              Text(
+                time!,
+                style: TextStyle(
+                  fontFamily: 'Cairo',
+                  fontSize: 12,
+                  color: selected
+                      ? _brandRed.withValues(alpha: 0.75)
+                      : Colors.grey.shade600,
+                ),
               ),
-            ),
+            ],
           ],
         ),
       ),

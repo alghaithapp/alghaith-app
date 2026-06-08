@@ -174,6 +174,18 @@ class _ReportsTab extends StatelessWidget {
           SizedBox(
             width: double.infinity,
             child: CupertinoButton(
+              color: Colors.blue.shade700,
+              onPressed: () => provider.setUserRole('customer'),
+              child: const Text(
+                'التبديل إلى حساب الزبون',
+                style: TextStyle(fontFamily: 'Cairo'),
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: CupertinoButton(
               color: Colors.black87,
               onPressed: provider.resetAll,
               child: const Text(
