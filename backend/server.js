@@ -4,7 +4,9 @@ const crypto = require('crypto');
 const cors = require('cors');
 const express = require('express');
 const helmet = require('helmet');
-const rateLimit = require('express-rate-limit');
+const rateLimitLib = require('express-rate-limit');
+const rateLimit = rateLimitLib.default || rateLimitLib;
+const ipKeyGenerator = rateLimitLib.ipKeyGenerator || ((ip) => ip);
 const {
   isConfigured: isSupabaseConfigured,
   supabaseKeyRole,
@@ -58,6 +60,8 @@ const { validatePromoCode } = require('./promo_codes');
 
 const app = express();
 const port = process.env.PORT || 3000;
+// Railway/most managed platforms sit behind a reverse proxy.
+app.set('trust proxy', 1);
 
 const otpiqApiKey = process.env.OTPIQ_API_KEY;
 const otpiqBaseUrl = (process.env.OTPIQ_BASE_URL || 'https://api.otpiq.com').replace(/\/$/, '');
@@ -65,7 +69,11 @@ const otpiqSmsProvider = process.env.OTPIQ_SMS_PROVIDER || 'sms';
 const otpiqWhatsappProvider = process.env.OTPIQ_WHATSAPP_PROVIDER || 'whatsapp-telegram-sms';
 const otpiqTelegramProvider = process.env.OTPIQ_TELEGRAM_PROVIDER || 'whatsapp-telegram-sms';
 const otpTtlMs = Number.parseInt(process.env.OTP_TTL_MS || '300000', 10);
-const otpLength = Number.parseInt(process.env.OTP_LENGTH || '6', 10);
+const parsedOtpLength = Number.parseInt(process.env.OTP_LENGTH || '6', 10);
+const otpLength =
+  Number.isInteger(parsedOtpLength) && parsedOtpLength >= 4 && parsedOtpLength <= 8
+    ? parsedOtpLength
+    : 6;
 const sessionSecret = String(process.env.SESSION_SECRET || '').trim();
 const mapboxAccessToken = String(process.env.MAPBOX_ACCESS_TOKEN || '').trim();
 const mapboxPublicToken = String(process.env.MAPBOX_PUBLIC_TOKEN || '').trim();
@@ -177,7 +185,8 @@ const authSendCodeLimiter = rateLimit({
   legacyHeaders: false,
   keyGenerator(req) {
     const phone = normalizePhone(req.body?.phone);
-    return phone ? `send:${phone}:${req.ip}` : req.ip;
+    const ipKey = ipKeyGenerator(req.ip || '');
+    return phone ? `send:${phone}:${ipKey}` : ipKey;
   },
   message: { message: 'Too many OTP requests. Try again later.' },
 });
@@ -189,7 +198,8 @@ const authVerifyCodeLimiter = rateLimit({
   legacyHeaders: false,
   keyGenerator(req) {
     const phone = normalizePhone(req.body?.phone);
-    return phone ? `verify:${phone}:${req.ip}` : req.ip;
+    const ipKey = ipKeyGenerator(req.ip || '');
+    return phone ? `verify:${phone}:${ipKey}` : ipKey;
   },
   message: { message: 'Too many verification attempts. Try again later.' },
 });
@@ -282,7 +292,7 @@ function normalizePhoneForDisplay(phone) {
 function generateOtp() {
   const upperBound = 10 ** otpLength;
   const lowerBound = 10 ** (otpLength - 1);
-  return String(Math.floor(lowerBound + Math.random() * (upperBound - lowerBound)));
+  return String(crypto.randomInt(lowerBound, upperBound));
 }
 
 function cleanupExpiredOtps() {
