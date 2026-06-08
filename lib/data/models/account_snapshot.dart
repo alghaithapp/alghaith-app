@@ -6,6 +6,7 @@ import '../../models/merchant_models.dart';
 class AccountSnapshot {
   const AccountSnapshot({
     this.userRole,
+    this.hasAdminAccess = false,
     this.accountType,
     this.customerName = '',
     this.customerPhone = '',
@@ -32,6 +33,7 @@ class AccountSnapshot {
   });
 
   final String? userRole;
+  final bool hasAdminAccess;
   final String? accountType;
   final String customerName;
   final String customerPhone;
@@ -59,6 +61,7 @@ class AccountSnapshot {
   Map<String, dynamic> toJson() {
     return {
       'userRole': userRole,
+      'adminAccess': hasAdminAccess,
       'accountType': accountType,
       'customerName': customerName,
       'customerPhone': customerPhone,
@@ -88,6 +91,7 @@ class AccountSnapshot {
   factory AccountSnapshot.fromJson(Map<String, dynamic> json) {
     return AccountSnapshot(
       userRole: json['userRole']?.toString(),
+      hasAdminAccess: json['adminAccess'] as bool? ?? false,
       accountType: json['accountType']?.toString(),
       customerName: json['customerName']?.toString() ?? '',
       customerPhone: json['customerPhone']?.toString() ?? '',

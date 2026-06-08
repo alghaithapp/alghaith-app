@@ -503,6 +503,7 @@ class AppProvider extends ChangeNotifier {
   AccountSnapshot _buildLocalBackupSnapshot() {
     return AccountSnapshot(
       userRole: _userRole,
+      hasAdminAccess: _hasAdminAccess,
       accountType: _accountType,
       customerName: _customerName,
       customerPhone: _customerPhone,
@@ -531,6 +532,7 @@ class AppProvider extends ChangeNotifier {
 
   void _applyLocalBackupSnapshot(Map<String, dynamic> snapshot) {
     _userRole = _trimmedOrNull(snapshot['userRole']?.toString()) ?? _userRole;
+    _hasAdminAccess = snapshot['adminAccess'] as bool? ?? _hasAdminAccess;
     _accountType =
         _trimmedOrNull(snapshot['accountType']?.toString()) ?? _accountType;
     _customerName =
@@ -1373,6 +1375,7 @@ class AppProvider extends ChangeNotifier {
   /// تحويل الحالة الحالية إلى JSON للحفظ (فقط للإعدادات غير الحساسة)
   Map<String, dynamic> _buildRemoteState() {
     return {
+      'adminAccess': _hasAdminAccess,
       'darkMode': _darkMode,
       'inAppAlertsEnabled': _inAppAlertsEnabled,
       'driverType': _driverType,
@@ -1480,7 +1483,7 @@ class AppProvider extends ChangeNotifier {
           state['accountType']?.toString() ?? state['account_type']?.toString(),
         ) ??
         _accountType;
-    _hasAdminAccess = state['adminAccess'] == true;
+    _hasAdminAccess = state['adminAccess'] as bool? ?? _hasAdminAccess;
     _customerPhone =
         _trimmedOrNull(state['customerPhone']?.toString()) ?? _customerPhone;
     _customerLatitude =
