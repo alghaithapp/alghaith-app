@@ -477,6 +477,11 @@ class _MerchantCard extends StatelessWidget {
                   label: _serviceLabel(serviceId),
                   color: Colors.blue,
                 ),
+              _InfoBadge(
+                label:
+                    '${merchant['totalProducts'] ?? 0} منتج منشور',
+                color: Colors.deepPurple,
+              ),
             ],
           ),
           const SizedBox(height: 10),

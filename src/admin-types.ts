@@ -57,6 +57,8 @@ export interface MerchantSummary {
   deliveringOrders: number;
   totalRevenue: number;
   lastOrderAt: string | null;
+  totalProducts: number;
+  availableProducts: number;
 }
 
 export interface MerchantDetails {

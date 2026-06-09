@@ -490,7 +490,7 @@ function App() {
                       <p>
                         {view === 'approvals'
                           ? 'الموافقة هنا تفتح للتاجر قسم بازار ومطاعم الغيث لأول مرة فقط.'
-                          : 'استعراض الحالة، الأرباح، وعدد الطلبات لكل تاجر.'}
+                          : 'استعراض الحالة، الأرباح، الطلبات، وعدد المنتجات المنشورة لكل تاجر.'}
                       </p>
                     </div>
                     <span className="panel-chip">
@@ -532,6 +532,15 @@ function App() {
                             </div>
 
                             <div className="merchant-stats-inline">
+                              <MiniStat
+                                label="المنتجات"
+                                value={merchant.totalProducts ?? 0}
+                                hint={
+                                  merchant.availableProducts !== merchant.totalProducts
+                                    ? `${merchant.availableProducts ?? 0} متاح`
+                                    : undefined
+                                }
+                              />
                               <MiniStat label="الطلبات" value={merchant.totalOrders} />
                               <MiniStat
                                 label="المكتمل"
@@ -808,11 +817,20 @@ function MetricCard({
   );
 }
 
-function MiniStat({ label, value }: { label: string; value: string | number }) {
+function MiniStat({
+  label,
+  value,
+  hint,
+}: {
+  label: string;
+  value: string | number;
+  hint?: string;
+}) {
   return (
     <div className="mini-stat">
       <span>{label}</span>
       <strong>{value}</strong>
+      {hint ? <em>{hint}</em> : null}
     </div>
   );
 }

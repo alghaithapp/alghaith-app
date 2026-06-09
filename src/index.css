@@ -334,6 +334,14 @@ button {
   color: #0f172a;
 }
 
+.mini-stat em {
+  display: block;
+  margin-top: 4px;
+  font-size: 0.75rem;
+  font-style: normal;
+  color: #94a3b8;
+}
+
 .metric-card span {
   color: #64748b;
   font-size: 0.9rem;

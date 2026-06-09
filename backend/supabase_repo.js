@@ -2039,9 +2039,10 @@ async function saveMerchantReview({
 async function getAllMerchants(adminPhone) {
   await assertAdminAccess(adminPhone);
   
-  const [merchants, orders] = await Promise.all([
+  const [merchants, orders, products] = await Promise.all([
     selectMany('merchant_profiles', [], { column: 'store_name', ascending: true }),
     selectMany('customer_orders', [], { column: 'updated_at', ascending: false }),
+    selectMany('merchant_products', [], { column: 'created_at', ascending: false }),
   ]);
   const userPhones = merchants.map((m) => m.phone).filter(Boolean);
   
@@ -2099,6 +2100,33 @@ async function getAllMerchants(adminPhone) {
       bucket.pendingOrders += 1;
     }
   }
+
+  const productStatsByMerchant = new Map();
+  for (const row of products) {
+    const merchantPhone = String(row.phone || '').trim();
+    if (!merchantPhone) continue;
+
+    let bucket = null;
+    for (const variant of getPhoneVariants(merchantPhone)) {
+      bucket = productStatsByMerchant.get(variant);
+      if (bucket) break;
+    }
+
+    if (!bucket) {
+      bucket = {
+        totalProducts: 0,
+        availableProducts: 0,
+      };
+      for (const variant of getPhoneVariants(merchantPhone)) {
+        productStatsByMerchant.set(variant, bucket);
+      }
+    }
+
+    bucket.totalProducts += 1;
+    if (row.is_available !== false) {
+      bucket.availableProducts += 1;
+    }
+  }
   
   return merchants.map((m) => ({
     ...(orderStatsByMerchant.get(m.phone) || {
@@ -2108,6 +2136,10 @@ async function getAllMerchants(adminPhone) {
       deliveringOrders: 0,
       totalRevenue: 0,
       lastOrderAt: null,
+    }),
+    ...(productStatsByMerchant.get(m.phone) || {
+      totalProducts: 0,
+      availableProducts: 0,
     }),
     phone: m.phone,
     storeName: m.store_name || '',
