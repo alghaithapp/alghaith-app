@@ -255,14 +255,31 @@ class _MerchantManagementTabState extends State<_MerchantManagementTab> {
                   merchant: merchant,
                   isBusy: _busyMerchantPhone == phone,
                   busyAction: _busyAction,
-                  onToggleBazaar: () => _handleMerchantAction(
-                    merchantPhone: phone,
-                    action: 'bazaar',
-                    operation: () => provider.toggleMerchantBazaarMember(
-                      phone,
-                      !(merchant['isBazaarMember'] == true),
-                    ),
-                  ),
+                  onToggleBazaar: () {
+                    final enabling = merchant['isBazaarMember'] != true;
+                    return _handleMerchantAction(
+                      merchantPhone: phone,
+                      action: 'bazaar',
+                      operation: () => provider.toggleMerchantBazaarMember(
+                        phone,
+                        enabling,
+                      ),
+                      successMessage: enabling
+                          ? (result) {
+                              final sync = result is Map
+                                  ? result['bazaarProductSync']
+                                  : null;
+                              if (sync is Map) {
+                                final total = sync['totalEligible'] ?? 0;
+                                return 'تم تفعيل البازار. $total منتج يظهر '
+                                    'في قسم التاجر وفي بازار ومطاعم الغيث.';
+                              }
+                              return 'تم تفعيل البازار. منتجات التاجر تظهر '
+                                  'في قسمه وفي البازار معاً.';
+                            }
+                          : null,
+                    );
+                  },
                   onToggleFreeze: () => _handleMerchantAction(
                     merchantPhone: phone,
                     action: 'freeze',
@@ -280,7 +297,8 @@ class _MerchantManagementTabState extends State<_MerchantManagementTab> {
   Future<void> _handleMerchantAction({
     required String merchantPhone,
     required String action,
-    required Future<void> Function() operation,
+    required Future<dynamic> Function() operation,
+    String Function(dynamic result)? successMessage,
   }) async {
     if (_busyMerchantPhone != null || merchantPhone.isEmpty) return;
     setState(() {
@@ -288,7 +306,19 @@ class _MerchantManagementTabState extends State<_MerchantManagementTab> {
       _busyAction = action;
     });
     try {
-      await operation();
+      final result = await operation();
+      if (!mounted) return;
+      final message = successMessage?.call(result);
+      if (message != null && message.isNotEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              message,
+              style: const TextStyle(fontFamily: 'Cairo'),
+            ),
+          ),
+        );
+      }
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(

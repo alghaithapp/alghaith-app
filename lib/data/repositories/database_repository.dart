@@ -504,14 +504,18 @@ class DatabaseRepository {
         .toList();
   }
 
-  Future<void> toggleMerchantBazaarStatus({
+  Future<Map<String, dynamic>> toggleMerchantBazaarStatus({
     required String merchantPhone,
     required bool isBazaarMember,
   }) async {
-    await ApiClient.instance.put('/db/admin/merchant-bazaar', body: {
+    final result = await ApiClient.instance.put('/db/admin/merchant-bazaar', body: {
       'merchantPhone': _phone(merchantPhone),
       'isBazaarMember': isBazaarMember,
     });
+    if (result is Map) {
+      return Map<String, dynamic>.from(result);
+    }
+    return const {};
   }
 
   Future<void> toggleMerchantFreezeStatus({

@@ -253,7 +253,7 @@ class SupabaseService {
   static Future<List<Map<String, dynamic>>> loadAllMerchants() =>
       _db.loadAllMerchants();
 
-  static Future<void> toggleMerchantBazaarStatus({
+  static Future<Map<String, dynamic>> toggleMerchantBazaarStatus({
     required String merchantPhone,
     required bool isBazaarMember,
   }) =>

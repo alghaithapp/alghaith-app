@@ -4008,12 +4008,12 @@ class AppProvider extends ChangeNotifier {
     }
   }
 
-  Future<void> toggleMerchantBazaarMember(
+  Future<Map<String, dynamic>> toggleMerchantBazaarMember(
       String merchantPhone, bool isBazaarMember) async {
     final phone = _trimmedOrNull(_authPhone) ?? _trimmedOrNull(_customerPhone);
-    if (phone == null || !SupabaseService.isConfigured) return;
+    if (phone == null || !SupabaseService.isConfigured) return const {};
     try {
-      await SupabaseService.toggleMerchantBazaarStatus(
+      final result = await SupabaseService.toggleMerchantBazaarStatus(
         merchantPhone: merchantPhone,
         isBazaarMember: isBazaarMember,
       );
@@ -4025,6 +4025,7 @@ class AppProvider extends ChangeNotifier {
         _allMerchants[index]['isBazaarMember'] = isBazaarMember;
       }
       notifyListeners();
+      return result;
     } catch (error) {
       debugPrint('ADMIN_TOGGLE_BAZAAR_ERROR: $error');
       rethrow;

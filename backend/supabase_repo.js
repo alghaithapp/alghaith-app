@@ -195,6 +195,137 @@ function canMerchantPublishInBazaar(profile) {
   return profile?.is_bazaar_member === true;
 }
 
+function merchantQualifiesForServiceListing(profile, serviceId) {
+  const normalizedServiceId = String(serviceId || '').trim();
+  if (normalizedServiceId === 'bazar_ghaith') {
+    if (!canMerchantPublishInBazaar(profile)) return false;
+    const services = profileServiceIds(profile);
+    return services.includes('restaurant') || services.includes('product');
+  }
+  return profileHasService(profile, normalizedServiceId);
+}
+
+function isBazaarEligibleProductCategory(value) {
+  const category = String(value || '').trim();
+  return category === 'product' || category === 'restaurant';
+}
+
+function mapStateItemToProductPayload(item = {}) {
+  const category = String(
+    item.category ?? item.service_id ?? item.serviceId ?? ''
+  ).trim();
+  const id = String(item.id || '').trim();
+  if (!id || !isBazaarEligibleProductCategory(category)) {
+    return null;
+  }
+
+  const isAvailable =
+    item.isAvailable !== false && item.is_available !== false;
+
+  return {
+    id,
+    category,
+    service_id: category,
+    name_ar: item.nameAr ?? item.name_ar ?? '',
+    name_en: item.nameEn ?? item.name_en ?? '',
+    description_ar: item.descriptionAr ?? item.description_ar ?? '',
+    description_en: item.descriptionEn ?? item.description_en ?? '',
+    price: Number.parseInt(item.price, 10) || 0,
+    rating: Number(item.rating ?? 4.8),
+    sub_category: item.subCategory ?? item.sub_category ?? '',
+    section_id: item.sectionId ?? item.section_id ?? '',
+    category_label_ar: item.categoryLabelAr ?? item.category_label_ar ?? '',
+    category_label_en: item.categoryLabelEn ?? item.category_label_en ?? '',
+    image: item.image ?? item.imageUrl ?? '',
+    image_base64: item.imageBase64 ?? item.image_base64 ?? '',
+    is_favorite: Boolean(item.isFavorite ?? item.is_favorite ?? false),
+    avg_price_label_ar: item.avgPriceLabelAr ?? item.avg_price_label_ar ?? '',
+    avg_price_label_en: item.avgPriceLabelEn ?? item.avg_price_label_en ?? '',
+    action_label_ar: item.actionLabelAr ?? item.action_label_ar ?? '',
+    action_label_en: item.actionLabelEn ?? item.action_label_en ?? '',
+    address: item.address ?? '',
+    prep_minutes: item.prepMinutes ?? item.prep_minutes ?? null,
+    is_available: isAvailable,
+  };
+}
+
+/**
+ * عند تفعيل البازار: تأكد أن كل منتجات التاجر المنشورة مسبقاً
+ * (في merchant_products أو app_state) جاهزة للظهور في بازار ومطاعم الغيث.
+ */
+async function syncMerchantProductsForBazaar(merchantPhone) {
+  const phoneKey = await resolvePhoneKey(merchantPhone);
+  const profile = await getMerchantProfile(phoneKey);
+  if (!profile || !canMerchantPublishInBazaar(profile)) {
+    return { synced: 0, totalEligible: 0 };
+  }
+
+  const services = profileServiceIds(profile);
+  if (!services.includes('restaurant') && !services.includes('product')) {
+    return { synced: 0, totalEligible: 0 };
+  }
+
+  const existingProducts = await getMerchantProducts(phoneKey);
+  const knownIds = new Set(
+    existingProducts.map((row) => String(row.id || '').trim()).filter(Boolean)
+  );
+
+  let synced = 0;
+
+  for (const row of existingProducts) {
+    const category = String(row.category || row.service_id || '').trim();
+    if (!isBazaarEligibleProductCategory(category)) continue;
+    const sub = String(row.sub_category || '').trim();
+    if (category === 'product' && GLOBAL_SHOPPING_SUB_CATEGORY_IDS.has(sub)) {
+      continue;
+    }
+
+    const needsNormalization =
+      row.category !== category || row.service_id !== category;
+    if (!needsNormalization) continue;
+
+    await saveMerchantProduct(phoneKey, {
+      ...row,
+      category,
+      service_id: category,
+    });
+    synced += 1;
+  }
+
+  const state = await getUserState(phoneKey);
+  const stateItems = Array.isArray(state?.items) ? state.items : [];
+  for (const item of stateItems) {
+    const payload = mapStateItemToProductPayload(item);
+    if (!payload || knownIds.has(payload.id)) continue;
+
+    const sub = String(payload.sub_category || '').trim();
+    if (
+      payload.category === 'product' &&
+      GLOBAL_SHOPPING_SUB_CATEGORY_IDS.has(sub)
+    ) {
+      continue;
+    }
+
+    await saveMerchantProduct(phoneKey, payload);
+    knownIds.add(payload.id);
+    synced += 1;
+  }
+
+  const refreshed = await getMerchantProducts(phoneKey);
+  const totalEligible = refreshed.filter((row) => {
+    const category = String(row.category || row.service_id || '').trim();
+    if (!isBazaarEligibleProductCategory(category)) return false;
+    if (row.is_available === false) return false;
+    const sub = String(row.sub_category || '').trim();
+    if (category === 'product' && GLOBAL_SHOPPING_SUB_CATEGORY_IDS.has(sub)) {
+      return false;
+    }
+    return true;
+  }).length;
+
+  return { synced, totalEligible };
+}
+
 function findProfileForPhone(map, phone) {
   for (const variant of getPhoneVariants(phone)) {
     const profile = map.get(variant);
@@ -1415,13 +1546,7 @@ async function listMerchantStoresByService({
     const isOpen = profile.is_open !== false;
     if (!isOpen) continue;
     if (isMerchantFrozen(profile)) continue;
-    if (normalizedServiceId === 'bazar_ghaith') {
-      if (!canMerchantPublishInBazaar(profile)) continue;
-      const services = profileServiceIds(profile);
-      const servesBazaarListings =
-        services.includes('restaurant') || services.includes('product');
-      if (!servesBazaarListings) continue;
-    } else if (!profileHasService(profile, normalizedServiceId)) {
+    if (!merchantQualifiesForServiceListing(profile, normalizedServiceId)) {
       continue;
     }
 
@@ -1597,7 +1722,9 @@ async function getMarketplaceStats() {
       const phone = String(row.phone || '').trim();
       const profile = findProfileForPhone(profileByPhone, phone);
       if (!profile) return false;
-      if (!profileHasService(profile, def.serviceId)) return false;
+      if (!merchantQualifiesForServiceListing(profile, def.serviceId)) {
+        return false;
+      }
       return productMatchesStoreListing({
         row,
         productCategory: def.productCategory,
@@ -1759,7 +1886,7 @@ async function listCatalogProducts(category = '', subCategoryId = '') {
         return false;
       }
       if (
-        ['tourism', 'beauty', 'used', 'offers', 'cars', 'bazar_ghaith'].includes(categoryFilter) &&
+        ['tourism', 'beauty', 'used', 'offers', 'cars'].includes(categoryFilter) &&
         !serviceIds.includes(categoryFilter) &&
         productService !== categoryFilter
       ) {
@@ -2123,7 +2250,12 @@ async function toggleBazaarMemberStatus(adminPhone, merchantPhone, isBazaarMembe
   if (!Array.isArray(data) || data.length === 0) {
     throw new Error('Merchant not found.');
   }
-  return { success: true, merchant: data[0] };
+
+  const result = { success: true, merchant: data[0] };
+  if (Boolean(isBazaarMember)) {
+    result.bazaarProductSync = await syncMerchantProductsForBazaar(merchantPhone);
+  }
+  return result;
 }
 
 async function toggleMerchantFreezeStatus(adminPhone, merchantPhone, isFrozen) {
@@ -2194,4 +2326,5 @@ module.exports = {
   getAdminMerchantDetails,
   toggleBazaarMemberStatus,
   toggleMerchantFreezeStatus,
+  syncMerchantProductsForBazaar,
 };

@@ -282,12 +282,22 @@ function App() {
             : `تم تجميد ${merchant.storeName || merchant.phone}.`,
         );
       } else {
-        await toggleMerchantBazaar(token, merchant.phone, !merchant.isBazaarMember);
-        setSuccessMessage(
-          merchant.isBazaarMember
-            ? `تم سحب موافقة بازار من ${merchant.storeName || merchant.phone}.`
-            : `تمت الموافقة على ${merchant.storeName || merchant.phone} داخل بازار ومطاعم الغيث.`,
+        const enabling = merchant.isBazaarMember !== true;
+        const result = await toggleMerchantBazaar(
+          token,
+          merchant.phone,
+          enabling,
         );
+        if (enabling) {
+          const total = result.bazaarProductSync?.totalEligible ?? 0;
+          setSuccessMessage(
+            `تمت الموافقة على ${merchant.storeName || merchant.phone} داخل بازار ومطاعم الغيث. ${total} منتج يظهر الآن في قسمه وفي البازار معاً.`,
+          );
+        } else {
+          setSuccessMessage(
+            `تم سحب موافقة بازار من ${merchant.storeName || merchant.phone}.`,
+          );
+        }
       }
 
       await refreshCoreData(token, merchant.phone);

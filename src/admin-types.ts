@@ -29,6 +29,16 @@ export interface AdminRecentOrder {
   updatedAt: string | null;
 }
 
+export interface BazaarProductSyncResult {
+  synced: number;
+  totalEligible: number;
+}
+
+export interface ToggleBazaarResponse {
+  success: boolean;
+  bazaarProductSync?: BazaarProductSyncResult;
+}
+
 export interface MerchantSummary {
   phone: string;
   storeName: string;

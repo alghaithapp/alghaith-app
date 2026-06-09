@@ -228,6 +228,12 @@ class _MerchantProductsScreenState extends State<MerchantProductsScreen> {
               available: available,
               unavailable: unavailable,
             ),
+            if (serviceId == 'product' || serviceId == 'restaurant') ...[
+              const SizedBox(height: 14),
+              provider.isBazaarApproved
+                  ? const _BazaarApprovedBanner()
+                  : const _BazaarVisibilityBanner(),
+            ],
             const SizedBox(height: 14),
             _SearchField(
               controller: _searchController,
@@ -1179,6 +1185,82 @@ class _EmptyProductsCard extends StatelessWidget {
               fontSize: 15,
               fontWeight: FontWeight.w700,
               color: Color(0xFF8E8E93),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _BazaarApprovedBanner extends StatelessWidget {
+  const _BazaarApprovedBanner();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF0FDF4),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFF86EFAC)),
+      ),
+      child: const Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.check_circle_rounded, color: Color(0xFF16A34A), size: 22),
+          SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              'عضوية البازار مفعّلة. منتجاتك المنشورة في قسمك '
+              '(منتجات أو مطاعم) تظهر للزبائن في قسمك وفي '
+              '«بازار ومطاعم الغيث» معاً — دون إعادة نشر.',
+              style: TextStyle(
+                fontFamily: 'Cairo',
+                fontSize: 13,
+                height: 1.5,
+                color: Color(0xFF166534),
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _BazaarVisibilityBanner extends StatelessWidget {
+  const _BazaarVisibilityBanner();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF7ED),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFFDBA74)),
+      ),
+      child: const Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.info_outline_rounded, color: Color(0xFFEA580C), size: 22),
+          SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              'انشر في قسمك (منتجات أو مطاعم) كأي تاجر. عند موافقة '
+              'الإدارة على عضوية البازار ستظهر منتجاتك تلقائياً في '
+              'قسمك وفي «بازار ومطاعم الغيث» — دون إعادة نشر.',
+              style: TextStyle(
+                fontFamily: 'Cairo',
+                fontSize: 13,
+                height: 1.5,
+                color: Color(0xFF9A3412),
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ),
         ],

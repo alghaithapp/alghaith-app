@@ -3,6 +3,7 @@ import type {
   AdminSession,
   MerchantDetails,
   MerchantSummary,
+  ToggleBazaarResponse,
 } from './admin-types';
 
 const DEFAULT_DATABASE_API_BASE = 'https://alghaith-app-production.up.railway.app';
@@ -105,9 +106,13 @@ export async function toggleMerchantBazaar(
   merchantPhone: string,
   isBazaarMember: boolean,
 ) {
-  return request(DATABASE_API_BASE_URL, '/db/admin/merchant-bazaar', {
-    method: 'PUT',
-    token,
-    body: JSON.stringify({ merchantPhone, isBazaarMember }),
-  });
+  return request<ToggleBazaarResponse>(
+    DATABASE_API_BASE_URL,
+    '/db/admin/merchant-bazaar',
+    {
+      method: 'PUT',
+      token,
+      body: JSON.stringify({ merchantPhone, isBazaarMember }),
+    },
+  );
 }

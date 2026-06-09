@@ -81,6 +81,32 @@ class _ShoppingStoresScreenState extends State<ShoppingStoresScreen> {
     });
   }
 
+  bool get _isBazaarChannel =>
+      widget.serviceId == 'bazar_ghaith' ||
+      widget.marketplaceCategory == 'bazar_ghaith';
+
+  bool _isRestaurantStore(Map profile) {
+    final primary = profile['primary_service_id']?.toString() ?? '';
+    final services = profile['service_ids'];
+    if (services is List) {
+      return services.map((e) => e.toString()).contains('restaurant');
+    }
+    return primary == 'restaurant';
+  }
+
+  bool _storeMatchesCuisineFilter(Map profile) {
+    if (!widget.showCuisineFilters || _selectedFilter == 'الكل') {
+      return true;
+    }
+    // في البازار: متاجر المنتجات تبقى ظاهرة دائماً،
+    // وفلتر المطبخ يطبّق على المطاعم فقط.
+    if (_isBazaarChannel && !_isRestaurantStore(profile)) {
+      return true;
+    }
+    final resCat = profile['restaurantCategory']?.toString() ?? '';
+    return resCat == _selectedFilter;
+  }
+
   bool _storeHasVisibleProducts(Map<String, dynamic> store) {
     final products = store['products'];
     if (products is! List || products.isEmpty) return false;
@@ -278,18 +304,24 @@ class _ShoppingStoresScreenState extends State<ShoppingStoresScreen> {
                       final p = s['profile'] as Map;
                       final name = p['store_name']?.toString().toLowerCase() ?? '';
                       final desc = p['description']?.toString().toLowerCase() ?? '';
-                      final resCat = p['restaurantCategory']?.toString() ?? '';
-                      
-                      final matchesQuery = name.contains(query) || desc.contains(query);
-                      final matchesFilter = !widget.showCuisineFilters ||
-                          _selectedFilter == 'الكل' ||
-                          resCat == _selectedFilter;
+
+                      final matchesQuery =
+                          name.contains(query) || desc.contains(query);
+                      final matchesFilter = _storeMatchesCuisineFilter(p);
 
                       return matchesQuery && matchesFilter;
                     }).toList();
 
                     if (filtered.isEmpty) {
-                      return const SliverFillRemaining(child: _NoResultsState());
+                      return SliverFillRemaining(
+                        child: _NoResultsState(
+                          isBazaar: _isBazaarChannel,
+                          hasStores: stores.isNotEmpty,
+                          hasSearch: query.isNotEmpty,
+                          hasCuisineFilter:
+                              widget.showCuisineFilters && _selectedFilter != 'الكل',
+                        ),
+                      );
                     }
 
                     return SliverPadding(
@@ -799,18 +831,51 @@ class _ErrorState extends StatelessWidget {
 }
 
 class _NoResultsState extends StatelessWidget {
-  const _NoResultsState();
+  final bool isBazaar;
+  final bool hasStores;
+  final bool hasSearch;
+  final bool hasCuisineFilter;
+
+  const _NoResultsState({
+    this.isBazaar = false,
+    this.hasStores = false,
+    this.hasSearch = false,
+    this.hasCuisineFilter = false,
+  });
 
   @override
   Widget build(BuildContext context) {
+    String message;
+    if (hasSearch || hasCuisineFilter) {
+      message = 'لا توجد نتائج مطابقة لبحثك أو الفلتر الحالي';
+    } else if (isBazaar) {
+      message = hasStores
+          ? 'لا توجد متاجر مطابقة للفلتر الحالي'
+          : 'لا توجد متاجر معتمدة في بازار ومطاعم الغيث حالياً.\n'
+              'يظهر المتجر للزبائن بعد موافقة الإدارة على عضوية البازار.';
+    } else {
+      message = 'لا توجد متاجر متاحة حالياً';
+    }
+
     return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(CupertinoIcons.search, size: 60, color: Colors.grey.shade300),
-          const SizedBox(height: 16),
-          Text('لا توجد نتائج مطابقة لبحثك', style: TextStyle(fontFamily: 'Cairo', color: Colors.grey.shade600)),
-        ],
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 28),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(CupertinoIcons.search, size: 60, color: Colors.grey.shade300),
+            const SizedBox(height: 16),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontFamily: 'Cairo',
+                color: Colors.grey.shade600,
+                height: 1.5,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
