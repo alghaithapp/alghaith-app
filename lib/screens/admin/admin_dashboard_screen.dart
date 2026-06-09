@@ -257,7 +257,7 @@ class _MerchantManagementTabState extends State<_MerchantManagementTab> {
                   busyAction: _busyAction,
                   onToggleBazaar: () {
                     final enabling = merchant['isBazaarMember'] != true;
-                    return _handleMerchantAction(
+                    _handleMerchantAction(
                       merchantPhone: phone,
                       action: 'bazaar',
                       operation: () => provider.toggleMerchantBazaarMember(
@@ -280,14 +280,16 @@ class _MerchantManagementTabState extends State<_MerchantManagementTab> {
                           : null,
                     );
                   },
-                  onToggleFreeze: () => _handleMerchantAction(
-                    merchantPhone: phone,
-                    action: 'freeze',
-                    operation: () => provider.toggleMerchantFrozen(
-                      phone,
-                      !(merchant['isFrozen'] == true),
-                    ),
-                  ),
+                  onToggleFreeze: () {
+                    _handleMerchantAction(
+                      merchantPhone: phone,
+                      action: 'freeze',
+                      operation: () => provider.toggleMerchantFrozen(
+                        phone,
+                        !(merchant['isFrozen'] == true),
+                      ),
+                    );
+                  },
                 );
               },
             ),
