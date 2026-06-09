@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../../models/app_models.dart';
 import '../../providers/app_provider.dart';
 import '../../utils/extensions.dart';
+import '../../utils/guest_gate.dart';
 import '../../widgets/app_image.dart';
 
 class CatalogSearchScreen extends StatefulWidget {
@@ -76,7 +77,16 @@ class _CatalogSearchScreenState extends State<CatalogSearchScreen> {
                       itemBuilder: (context, index) {
                         return _CatalogResultCard(
                           item: results[index],
-                          onAdd: () => provider.addToCart(results[index]),
+                          onAdd: () {
+                            if (!GuestGate.requireAccount(
+                              context,
+                              message:
+                                  'سجّل دخولك لإضافة المنتجات إلى السلة والتسوق.',
+                            )) {
+                              return;
+                            }
+                            provider.addToCart(results[index]);
+                          },
                           onToggleFavorite: () =>
                               provider.toggleFavoriteItem(results[index]),
                         );

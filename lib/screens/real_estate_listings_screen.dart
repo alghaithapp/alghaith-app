@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../services/supabase_service.dart';
 import '../utils/dummy_data.dart';
 import '../utils/extensions.dart';
+import '../utils/guest_gate.dart';
 import '../utils/helpers.dart';
 import '../widgets/app_image.dart';
 
@@ -293,10 +294,18 @@ class _PropertyCard extends StatelessWidget {
                     FilledButton.icon(
                       onPressed: phone == null || phone.isEmpty
                           ? null
-                          : () => AppHelpers.launchWhatsApp(
+                          : () {
+                              if (!GuestGate.requireAccount(
+                                context,
+                                message: 'سجّل دخولك للتواصل مع المعلن.',
+                              )) {
+                                return;
+                              }
+                              AppHelpers.launchWhatsApp(
                                 phone,
                                 'مرحبًا، أريد الاستفسار عن العقار ${product['name_ar'] ?? ''}',
-                              ),
+                              );
+                            },
                       icon: const Icon(Icons.chat_outlined),
                       label: const Text(
                         'تواصل',

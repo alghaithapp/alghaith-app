@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../models/app_models.dart';
 import '../providers/app_provider.dart';
 import '../utils/extensions.dart';
+import '../utils/guest_gate.dart';
 import '../utils/helpers.dart';
 import '../utils/merchant_profile_fields.dart';
 import '../core/theme/app_colors.dart';
@@ -225,6 +226,12 @@ class _RestaurantMenuScreenState extends State<RestaurantMenuScreen>
   }
 
   Future<void> _handleAddItem(ListItem item, BuildContext buttonContext) async {
+    if (!GuestGate.requireAccount(
+      context,
+      message: 'سجّل دخولك لإضافة المنتجات إلى السلة والتسوق.',
+    )) {
+      return;
+    }
     final provider = context.read<AppProvider>();
     if (item.merchantIsFrozen == true) {
       if (!mounted) return;
@@ -315,11 +322,23 @@ class _RestaurantMenuScreenState extends State<RestaurantMenuScreen>
                           : 'العنوان غير متوفر',
                       hours: _workingHoursLabel,
                       onCall: () {
+                        if (!GuestGate.requireAccount(
+                          context,
+                          message: 'سجّل دخولك للتواصل مع المتجر.',
+                        )) {
+                          return;
+                        }
                         final phone = restaurant.merchantPhone?.trim();
                         if (phone == null || phone.isEmpty) return;
                         AppHelpers.makePhoneCall(phone);
                       },
                       onWhatsApp: () {
+                        if (!GuestGate.requireAccount(
+                          context,
+                          message: 'سجّل دخولك للتواصل مع المتجر.',
+                        )) {
+                          return;
+                        }
                         final phone = _whatsappNumber;
                         if (phone == null || phone.isEmpty) return;
                         AppHelpers.launchWhatsApp(

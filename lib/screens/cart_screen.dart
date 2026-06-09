@@ -12,6 +12,7 @@ import '../core/navigation/customer_navigation.dart';
 import '../core/ui/app_bottom_nav_style.dart';
 import '../models/app_models.dart';
 import '../utils/extensions.dart';
+import '../utils/guest_gate.dart';
 import '../widgets/app_image.dart';
 import '../widgets/location_picker_screen.dart';
 import 'catalog_search_screen.dart';
@@ -402,6 +403,12 @@ class _CartScreenState extends State<CartScreen> {
 
   Future<void> _handleCheckout(AppProvider appProvider) async {
     if (_isCheckingOut || appProvider.cart.isEmpty) return;
+    if (!GuestGate.requireAccount(
+      context,
+      message: 'سجّل دخولك لإتمام الشراء ومتابعة طلبك.',
+    )) {
+      return;
+    }
     if (appProvider.customerLatitude == null || appProvider.customerLongitude == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(

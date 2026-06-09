@@ -143,20 +143,6 @@ class RoleSelectionScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: 14),
                   ],
-                  if (!locked || appProvider.isDriverAccount) ...[
-                    FadeInUp(
-                      delay: const Duration(milliseconds: 300),
-                      child: _RoleCard(
-                        title: 'سائق تكسي',
-                        subtitle:
-                            'نقل الركاب بسيارة — حساب مستقل لا يتحول لزبون أو مندوب',
-                        icon: Icons.local_taxi_rounded,
-                        accentColor: const Color(0xFF2196F3),
-                        onTap: () => _pickRole(context, appProvider, 'driver'),
-                      ),
-                    ),
-                    const SizedBox(height: 14),
-                  ],
                   if (!locked ||
                       appProvider.isDeliveryAccount ||
                       appProvider.isMarketplaceAccount) ...[

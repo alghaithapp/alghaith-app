@@ -7,6 +7,7 @@ import '../models/app_models.dart';
 import '../providers/app_provider.dart';
 import '../services/supabase_service.dart';
 import '../utils/extensions.dart';
+import '../utils/guest_gate.dart';
 import '../utils/helpers.dart';
 import '../services/image_storage_service.dart';
 import '../utils/merchant_product_sections.dart';
@@ -251,7 +252,12 @@ class _ShoppingStoresScreenState extends State<ShoppingStoresScreen> {
                     }
 
                     if (snapshot.hasError) {
-                      return SliverFillRemaining(child: _ErrorState(onRetry: _reloadStores));
+                      return SliverFillRemaining(
+                        child: _ErrorState(
+                          label: headerTitle,
+                          onRetry: _reloadStores,
+                        ),
+                      );
                     }
 
                     var stores = (snapshot.data ?? [])
@@ -761,7 +767,8 @@ class _GuestModeBanner extends StatelessWidget {
 
 class _ErrorState extends StatelessWidget {
   final VoidCallback onRetry;
-  const _ErrorState({required this.onRetry});
+  final String label;
+  const _ErrorState({required this.onRetry, this.label = 'المحتوى'});
 
   @override
   Widget build(BuildContext context) {
@@ -771,7 +778,19 @@ class _ErrorState extends StatelessWidget {
         children: [
           const Icon(Icons.error_outline, size: 60, color: Colors.red),
           const SizedBox(height: 16),
-          const Text('تعذر تحميل المطاعم حالياً', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
+          Text(
+            'تعذر تحميل $label حالياً',
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+                fontFamily: 'Cairo', fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            'قد يحتاج الخادم لحظات للاستيقاظ، حاول مجددًا.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+                fontFamily: 'Cairo', fontSize: 12, color: Colors.grey),
+          ),
           TextButton(onPressed: onRetry, child: const Text('إعادة المحاولة')),
         ],
       ),
@@ -1023,11 +1042,25 @@ class _ShoppingStoreMenuScreenState extends State<ShoppingStoreMenuScreen>
                   return _ProductCard(
                     item: item,
                     profile: widget.profile,
-                    onWhatsApp: () => AppHelpers.launchWhatsApp(
-                      whatsapp,
-                      'مرحبًا، أريد الاستفسار عن ${item['name_ar']?.toString() ?? ''}',
-                    ),
+                    onWhatsApp: () {
+                      if (!GuestGate.requireAccount(
+                        context,
+                        message: 'سجّل دخولك للتواصل مع المتجر.',
+                      )) {
+                        return;
+                      }
+                      AppHelpers.launchWhatsApp(
+                        whatsapp,
+                        'مرحبًا، أريد الاستفسار عن ${item['name_ar']?.toString() ?? ''}',
+                      );
+                    },
                     onAdd: (buttonContext) {
+                      if (!GuestGate.requireAccount(
+                        context,
+                        message: 'سجّل دخولك لإضافة المنتجات إلى السلة والتسوق.',
+                      )) {
+                        return;
+                      }
                       final added = provider.addStoreProductToCart(
                         item,
                         widget.profile,
@@ -1161,10 +1194,18 @@ class _StoreHeader extends StatelessWidget {
             children: [
               Expanded(
                 child: OutlinedButton.icon(
-                  onPressed: () => AppHelpers.launchWhatsApp(
-                    whatsapp,
-                    'مرحبًا، أريد الاستفسار عن المحل.',
-                  ),
+                  onPressed: () {
+                    if (!GuestGate.requireAccount(
+                      context,
+                      message: 'سجّل دخولك للتواصل مع المتجر.',
+                    )) {
+                      return;
+                    }
+                    AppHelpers.launchWhatsApp(
+                      whatsapp,
+                      'مرحبًا، أريد الاستفسار عن المحل.',
+                    );
+                  },
                   icon: const Icon(Icons.chat_rounded),
                   label: const Text('واتساب'),
                   style: OutlinedButton.styleFrom(
@@ -1180,9 +1221,17 @@ class _StoreHeader extends StatelessWidget {
               const SizedBox(width: 10),
               Expanded(
                 child: ElevatedButton.icon(
-                  onPressed: () => AppHelpers.makePhoneCall(
-                    phone.isNotEmpty ? phone : whatsapp,
-                  ),
+                  onPressed: () {
+                    if (!GuestGate.requireAccount(
+                      context,
+                      message: 'سجّل دخولك للتواصل مع المتجر.',
+                    )) {
+                      return;
+                    }
+                    AppHelpers.makePhoneCall(
+                      phone.isNotEmpty ? phone : whatsapp,
+                    );
+                  },
                   icon: const Icon(Icons.call_rounded),
                   label: const Text('اتصال'),
                   style: ElevatedButton.styleFrom(

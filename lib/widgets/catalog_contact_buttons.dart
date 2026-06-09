@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../models/app_models.dart';
+import '../utils/guest_gate.dart';
 import '../utils/helpers.dart';
 
 /// أزرار تواصل مباشر لإعلانات الكتالوج (واتساب + اتصال).
@@ -44,7 +45,15 @@ class CatalogContactButtons extends StatelessWidget {
           child: OutlinedButton.icon(
             onPressed: phone == null
                 ? () => _showNoPhoneSnackBar(context)
-                : () => AppHelpers.launchWhatsApp(phone, message),
+                : () {
+                    if (!GuestGate.requireAccount(
+                      context,
+                      message: 'سجّل دخولك للتواصل مع التاجر.',
+                    )) {
+                      return;
+                    }
+                    AppHelpers.launchWhatsApp(phone, message);
+                  },
             icon: const Icon(Icons.chat_outlined, size: 18),
             label: const Text(
               'واتساب',
@@ -65,7 +74,15 @@ class CatalogContactButtons extends StatelessWidget {
           child: FilledButton.icon(
             onPressed: phone == null
                 ? () => _showNoPhoneSnackBar(context)
-                : () => AppHelpers.makePhoneCall(phone),
+                : () {
+                    if (!GuestGate.requireAccount(
+                      context,
+                      message: 'سجّل دخولك للتواصل مع التاجر.',
+                    )) {
+                      return;
+                    }
+                    AppHelpers.makePhoneCall(phone);
+                  },
             icon: const Icon(Icons.call_outlined, size: 18),
             label: const Text(
               'اتصال',

@@ -151,6 +151,10 @@ class _PhoneLoginScreenState extends State<PhoneLoginScreen> {
       _showSnack('أرسل رمز التحقق أولاً');
       return;
     }
+    if (code.length != 6 || !RegExp(r'^\d{6}$').hasMatch(code)) {
+      _showSnack('أدخل رمز التحقق المكوّن من 6 أرقام');
+      return;
+    }
 
     try {
       setState(() => _isSubmitting = true);
@@ -309,6 +313,7 @@ class _LoginCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final media = MediaQuery.of(context);
+    final isCodeValid = RegExp(r'^\d{6}$').hasMatch(codeController.text.trim());
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -387,7 +392,7 @@ class _LoginCard extends StatelessWidget {
                       const SizedBox(height: 10),
                       _ActionButton(
                         text: 'تحقق والدخول',
-                        onPressed: isSubmitting ? null : onVerifyCode,
+                        onPressed: isSubmitting || !isCodeValid ? null : onVerifyCode,
                         showLoading: isSubmitting,
                       ),
                     ],

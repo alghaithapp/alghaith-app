@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../models/app_models.dart';
 import '../services/supabase_service.dart';
+import '../utils/guest_gate.dart';
 import '../utils/helpers.dart';
 import '../widgets/app_image.dart';
 
@@ -366,10 +367,18 @@ class _ProfessionalCard extends StatelessWidget {
                 child: FilledButton.icon(
                   onPressed: whatsapp.trim().isEmpty
                       ? null
-                      : () => AppHelpers.launchWhatsApp(
+                      : () {
+                          if (!GuestGate.requireAccount(
+                            context,
+                            message: 'سجّل دخولك للتواصل مع مزوّد الخدمة.',
+                          )) {
+                            return;
+                          }
+                          AppHelpers.launchWhatsApp(
                             whatsapp,
                             'مرحبًا، أريد الاستفسار عن الخدمة',
-                          ),
+                          );
+                        },
                   icon: const Icon(Icons.chat_outlined),
                   label: const Text(
                     'واتساب',
@@ -380,7 +389,15 @@ class _ProfessionalCard extends StatelessWidget {
               const SizedBox(width: 8),
               if (phone.trim().isNotEmpty)
                 OutlinedButton.icon(
-                  onPressed: () => AppHelpers.makePhoneCall(phone),
+                  onPressed: () {
+                    if (!GuestGate.requireAccount(
+                      context,
+                      message: 'سجّل دخولك للتواصل مع مزوّد الخدمة.',
+                    )) {
+                      return;
+                    }
+                    AppHelpers.makePhoneCall(phone);
+                  },
                   icon: const Icon(Icons.call_outlined),
                   label: const Text(
                     'اتصال',

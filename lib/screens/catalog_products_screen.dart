@@ -7,6 +7,7 @@ import '../models/app_models.dart';
 import '../providers/app_provider.dart';
 import '../services/supabase_service.dart';
 import '../utils/extensions.dart';
+import '../utils/guest_gate.dart';
 import '../widgets/app_image.dart';
 import '../widgets/catalog_contact_buttons.dart';
 import 'cart_screen.dart';
@@ -172,7 +173,16 @@ class _CatalogProductsScreenState extends State<CatalogProductsScreen> {
                       return _CatalogProductCard(
                         item: item,
                         contactOnly: _contactOnly,
-                        onAdd: () => provider.addToCart(item),
+                        onAdd: () {
+                          if (!GuestGate.requireAccount(
+                            context,
+                            message:
+                                'سجّل دخولك لإضافة المنتجات إلى السلة والتسوق.',
+                          )) {
+                            return;
+                          }
+                          provider.addToCart(item);
+                        },
                         onToggleFavorite: () =>
                             provider.toggleFavoriteItem(item),
                       );

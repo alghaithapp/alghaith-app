@@ -24,7 +24,8 @@ class AppConfig {
 
   static String? _resolvedMapboxToken;
 
-  static const Duration apiTimeout = Duration(seconds: 20);
+  // مهلة أطول لتحمّل بدء تشغيل خادم Railway البارد (cold start) عند أول طلب.
+  static const Duration apiTimeout = Duration(seconds: 45);
   static const Duration restoreTimeout = Duration(seconds: 18);
   static const Duration syncDebounce = Duration(seconds: 3);
 

@@ -478,6 +478,13 @@ class AppProvider extends ChangeNotifier {
       _isRestoring = false;
       _isHydrating = false;
       _isReady = true;
+      // أول فتح للتطبيق أو عدم وجود جلسة محفوظة: ندخل المستخدم كزائر للتصفح
+      // مباشرة دون إجباره على تسجيل الدخول. التسوق والشراء والتواصل تتطلب
+      // تسجيل الدخول لاحقاً عبر بوابة الزائر (GuestGate).
+      if (!hasPhoneSession && !_isGuestMode) {
+        _isGuestMode = true;
+        _userRole = 'customer';
+      }
       notifyListeners();
     }
   }

@@ -6,6 +6,7 @@ import '../core/theme/app_colors.dart';
 import '../models/app_models.dart';
 import '../providers/app_provider.dart';
 import '../utils/extensions.dart';
+import '../utils/guest_gate.dart';
 import '../widgets/app_image.dart';
 import 'cart_screen.dart';
 
@@ -280,6 +281,14 @@ class _SubCategoryItemsScreenState extends State<SubCategoryItemsScreen>
                                                   borderRadius:
                                                       BorderRadius.circular(12),
                                                   onPressed: () async {
+                                                    if (!GuestGate
+                                                        .requireAccount(
+                                                      context,
+                                                      message:
+                                                          'سجّل دخولك لإضافة المنتجات إلى السلة والتسوق.',
+                                                    )) {
+                                                      return;
+                                                    }
                                                     final added =
                                                         appProvider.addToCart(item);
                                                     if (!added) {

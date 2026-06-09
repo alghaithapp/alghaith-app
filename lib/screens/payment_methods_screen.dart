@@ -39,7 +39,7 @@ class PaymentMethodsScreen extends StatelessWidget {
                 borderRadius: BorderRadius.circular(18),
               ),
               child: Text(
-                'حاليًا طريقة الدفع الوحيدة المتاحة هي الدفع عند الاستلام. سيتم تفعيل Super Key و Zain Cash لاحقًا.',
+                'طريقة الدفع المتاحة هي الدفع نقدًا عند الاستلام.',
                 style: const TextStyle(height: 1.5, fontFamily: 'Cairo'),
               ),
             ),

@@ -63,32 +63,45 @@ class ApiClient {
       headers['Authorization'] = 'Bearer $token';
     }
 
+    // طلبات GET آمنة لإعادة المحاولة. نعيد المحاولة عند أخطاء الشبكة/المهلة
+    // لتجاوز بدء تشغيل خادم Railway البارد (cold start) عند أول فتح للتطبيق.
+    final maxAttempts = method == 'GET' ? 3 : 1;
+
     late http.Response response;
-    try {
-      switch (method) {
-        case 'GET':
-          response = await http
-              .get(uri, headers: headers)
-              .timeout(AppConfig.apiTimeout);
-        case 'PUT':
-          response = await http
-              .put(uri, headers: headers, body: jsonEncode(body))
-              .timeout(AppConfig.apiTimeout);
-        case 'POST':
-          response = await http
-              .post(uri, headers: headers, body: jsonEncode(body))
-              .timeout(AppConfig.apiTimeout);
-        case 'DELETE':
-          response = await http
-              .delete(uri, headers: headers)
-              .timeout(AppConfig.apiTimeout);
-        default:
-          throw ApiException('Unsupported method: $method');
+    var attempt = 0;
+    while (true) {
+      attempt++;
+      try {
+        switch (method) {
+          case 'GET':
+            response = await http
+                .get(uri, headers: headers)
+                .timeout(AppConfig.apiTimeout);
+          case 'PUT':
+            response = await http
+                .put(uri, headers: headers, body: jsonEncode(body))
+                .timeout(AppConfig.apiTimeout);
+          case 'POST':
+            response = await http
+                .post(uri, headers: headers, body: jsonEncode(body))
+                .timeout(AppConfig.apiTimeout);
+          case 'DELETE':
+            response = await http
+                .delete(uri, headers: headers)
+                .timeout(AppConfig.apiTimeout);
+          default:
+            throw ApiException('Unsupported method: $method');
+        }
+        break;
+      } catch (error) {
+        if (error is ApiException) rethrow;
+        debugPrint('ApiClient network error (attempt $attempt): $error');
+        if (attempt >= maxAttempts) {
+          throw ApiException('Network error. Check your connection.');
+        }
+        // مهلة تصاعدية بسيطة قبل إعادة المحاولة (1ث، 2ث).
+        await Future<void>.delayed(Duration(seconds: attempt));
       }
-    } catch (error) {
-      if (error is ApiException) rethrow;
-      debugPrint('ApiClient network error: $error');
-      throw ApiException('Network error. Check your connection.');
     }
 
     if (response.statusCode >= 200 && response.statusCode < 300) {
