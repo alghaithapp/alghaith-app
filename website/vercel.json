@@ -1,7 +1,21 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": null,
-  "buildCommand": null,
+  "installCommand": "cd .. && npm install",
+  "buildCommand": "cd .. && npm run build && cp -r dist/admin ./admin",
   "outputDirectory": ".",
-  "devCommand": null
+  "rewrites": [
+    {
+      "source": "/admin/assets/:path*",
+      "destination": "/admin/assets/:path*"
+    },
+    {
+      "source": "/admin/:path*",
+      "destination": "/admin/index.html"
+    },
+    {
+      "source": "/admin",
+      "destination": "/admin/index.html"
+    }
+  ]
 }
