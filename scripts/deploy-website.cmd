@@ -9,9 +9,15 @@ if errorlevel 1 (
   exit /b 1
 )
 
-echo [2/4] Copying admin into website\admin ...
+echo [2/4] Copying fresh admin build into website\admin ...
 if exist "website\admin" rmdir /s /q "website\admin"
 xcopy "dist\admin" "website\admin\" /E /I /Y /Q >nul
+if not exist "website\admin\index.html" (
+  echo Missing website\admin\index.html after copy.
+  exit /b 1
+)
+for %%F in ("website\admin\assets\index-*.js") do set ADMIN_JS=%%~nxF
+echo Admin bundle: !ADMIN_JS!
 if not exist "website\admin\index.html" (
   echo Missing website\admin\index.html
   exit /b 1

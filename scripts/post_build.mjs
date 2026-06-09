@@ -16,6 +16,8 @@ function copyRecursiveSync(src, dest) {
       fs.mkdirSync(dest, { recursive: true });
     }
     fs.readdirSync(src).forEach((childItemName) => {
+      // dist/admin is produced by Vite; do not overwrite it with stale website/admin.
+      if (childItemName === 'admin') return;
       copyRecursiveSync(path.join(src, childItemName), path.join(dest, childItemName));
     });
   } else {
