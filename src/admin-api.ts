@@ -101,6 +101,21 @@ export async function toggleMerchantFreeze(
   });
 }
 
+export async function syncMerchantBazaarProducts(
+  token: string,
+  merchantPhone: string,
+) {
+  return request<{ success: boolean; synced: number; totalEligible: number }>(
+    DATABASE_API_BASE_URL,
+    '/db/admin/merchant-bazaar-sync',
+    {
+      method: 'POST',
+      token,
+      body: JSON.stringify({ merchantPhone }),
+    },
+  );
+}
+
 export async function toggleMerchantBazaar(
   token: string,
   merchantPhone: string,

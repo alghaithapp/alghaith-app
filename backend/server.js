@@ -55,6 +55,7 @@ const {
   getAdminMerchantDetails,
   toggleBazaarMemberStatus,
   toggleMerchantFreezeStatus,
+  syncMerchantProductsForBazaar,
 } = require('./supabase_repo');
 const { validatePromoCode } = require('./promo_codes');
 
@@ -1227,6 +1228,24 @@ app.put('/db/admin/merchant-bazaar', async (req, res) => {
   } catch (error) {
     console.error('toggle bazaar error:', error);
     const message = error?.message || 'Failed to toggle bazaar status.';
+    const status = message.includes('Admin access') ? 403 : 500;
+    return res.status(status).json({ message });
+  }
+});
+
+app.post('/db/admin/merchant-bazaar-sync', async (req, res) => {
+  try {
+    const phone = requireAuthorizedPhone(req, res, { allowMissing: true });
+    if (!phone) return;
+    const merchantPhone = String(req.body?.merchantPhone || '').trim();
+    if (!merchantPhone) {
+      return res.status(400).json({ message: 'merchantPhone is required.' });
+    }
+    const result = await syncMerchantProductsForBazaar(merchantPhone);
+    return res.json({ success: true, ...result });
+  } catch (error) {
+    console.error('sync bazaar products error:', error);
+    const message = error?.message || 'Failed to sync bazaar products.';
     const status = message.includes('Admin access') ? 403 : 500;
     return res.status(status).json({ message });
   }

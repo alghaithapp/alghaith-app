@@ -59,6 +59,9 @@ export interface MerchantSummary {
   lastOrderAt: string | null;
   totalProducts: number;
   availableProducts: number;
+  visibleToCustomers: boolean;
+  visibleProductCount: number;
+  visibilityNotes: string[];
 }
 
 export interface MerchantDetails {

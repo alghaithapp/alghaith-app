@@ -20,6 +20,7 @@ import {
   loadMerchantDetails,
   loadMerchants,
   sendCode,
+  syncMerchantBazaarProducts,
   toggleMerchantBazaar,
   toggleMerchantFreeze,
   verifyCode,
@@ -264,6 +265,29 @@ function App() {
     setBootError('');
   }
 
+  async function handleBazaarSync(merchant: MerchantSummary) {
+    if (!token) return;
+    const actionKey = `sync:${merchant.phone}`;
+    setActiveActionKey(actionKey);
+    setActionError('');
+    setSuccessMessage('');
+    try {
+      const result = await syncMerchantBazaarProducts(token, merchant.phone);
+      setSuccessMessage(
+        `تمت مزامنة ${merchant.storeName || merchant.phone}. ${result.totalEligible} منتج جاهز للظهور في البازار.`,
+      );
+      await refreshCoreData(token, merchant.phone);
+      const details = await loadMerchantDetails(token, merchant.phone);
+      setMerchantDetails(details);
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'تعذر مزامنة ظهور البازار.';
+      setActionError(message);
+    } finally {
+      setActiveActionKey('');
+    }
+  }
+
   async function handleMerchantAction(
     merchant: MerchantSummary,
     kind: 'freeze' | 'bazaar',
@@ -502,6 +526,7 @@ function App() {
                     {(view === 'approvals' ? approvalQueue : filteredMerchants).map((merchant) => {
                       const freezeLoading = activeActionKey === `freeze:${merchant.phone}`;
                       const bazaarLoading = activeActionKey === `bazaar:${merchant.phone}`;
+                      const syncLoading = activeActionKey === `sync:${merchant.phone}`;
                       const selected = selectedMerchantPhone === merchant.phone;
                       return (
                         <article
@@ -515,11 +540,24 @@ function App() {
                                 <h4>{merchant.storeName || 'متجر بدون اسم'}</h4>
                                 {merchant.isFrozen ? (
                                   <span className="status-badge danger">مجمّد</span>
+                                ) : !merchant.isOpen ? (
+                                  <span className="status-badge danger">المتجر مغلق</span>
                                 ) : merchant.isBazaarMember ? (
                                   <span className="status-badge success">مفعل في البازار</span>
                                 ) : (
                                   <span className="status-badge muted">بانتظار/خارج البازار</span>
                                 )}
+                                {merchant.isBazaarMember ? (
+                                  merchant.visibleToCustomers ? (
+                                    <span className="status-badge success">
+                                      ظاهر للزبائن ({merchant.visibleProductCount})
+                                    </span>
+                                  ) : (
+                                    <span className="status-badge danger">
+                                      غير ظاهر للزبائن
+                                    </span>
+                                  )
+                                ) : null}
                               </div>
                               <p className="merchant-meta">
                                 {merchant.fullName || 'بدون اسم مالك'} ·{' '}
@@ -529,6 +567,14 @@ function App() {
                               <p className="merchant-description">
                                 {merchant.description || 'لا يوجد وصف محفوظ.'}
                               </p>
+                              {merchant.isBazaarMember &&
+                              !merchant.visibleToCustomers &&
+                              merchant.visibilityNotes?.length ? (
+                                <p className="merchant-visibility-note">
+                                  سبب عدم الظهور:{' '}
+                                  {merchant.visibilityNotes.join(' · ')}
+                                </p>
+                              ) : null}
                             </div>
 
                             <div className="merchant-stats-inline">
@@ -601,6 +647,25 @@ function App() {
                                 لا ينطبق على هذا القسم
                               </span>
                             )}
+
+                            {merchant.isBazaarMember &&
+                            !merchant.visibleToCustomers ? (
+                              <button
+                                className="soft-button success"
+                                disabled={syncLoading}
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  handleBazaarSync(merchant).catch(() => undefined);
+                                }}
+                              >
+                                {syncLoading ? (
+                                  <LoaderCircle className="spin" size={16} />
+                                ) : (
+                                  <Package2 size={16} />
+                                )}
+                                <span>إصلاح الظهور في البازار</span>
+                              </button>
+                            ) : null}
                           </div>
                         </article>
                       );

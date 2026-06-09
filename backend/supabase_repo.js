@@ -137,13 +137,14 @@ function profileHasService(profile, serviceId) {
 
 function productMatchesStoreListing({
   row,
+  profile = null,
   productCategory,
   subCategoryId = '',
   marketplaceCategory = '',
 }) {
   if (row.is_available === false) return false;
 
-  const productService = String(row.category || row.service_id || '').trim();
+  const productService = resolveListingProductService(row, profile);
   const requestedCategory = String(productCategory || '').trim();
   const channel = String(marketplaceCategory || '').trim();
   const isBazaarChannel = channel === 'bazar_ghaith';
@@ -210,6 +211,48 @@ function isBazaarEligibleProductCategory(value) {
   return category === 'product' || category === 'restaurant';
 }
 
+function resolveListingProductService(row, profile) {
+  const raw = String(row.category || row.service_id || '').trim();
+  if (isBazaarEligibleProductCategory(raw)) return raw;
+  if (!profile) return raw;
+  const services = profileServiceIds(profile);
+  if (services.includes('product')) return 'product';
+  if (services.includes('restaurant')) return 'restaurant';
+  return raw;
+}
+
+function evaluateBazaarCustomerVisibility(profile, products = []) {
+  const notes = [];
+  if (profile.is_open === false) notes.push('المتجر مغلق');
+  if (isMerchantFrozen(profile)) notes.push('الحساب مجمّد');
+  if (!canMerchantPublishInBazaar(profile)) notes.push('غير مصرّح في البازار');
+  const services = profileServiceIds(profile);
+  if (!services.includes('product') && !services.includes('restaurant')) {
+    notes.push('التاجر ليس في قسم منتجات أو مطاعم');
+  }
+
+  const visibleProducts = products.filter((row) =>
+    productMatchesStoreListing({
+      row,
+      profile,
+      productCategory: 'bazar_ghaith',
+      marketplaceCategory: 'bazar_ghaith',
+    })
+  );
+
+  if (products.length === 0) {
+    notes.push('لا توجد منتجات منشورة');
+  } else if (visibleProducts.length === 0) {
+    notes.push('لا يوجد منتج صالح للعرض (القسم أو التوفر)');
+  }
+
+  return {
+    visibleToCustomers: notes.length === 0 && visibleProducts.length > 0,
+    visibleProductCount: visibleProducts.length,
+    visibilityNotes: notes,
+  };
+}
+
 function mapStateItemToProductPayload(item = {}) {
   const category = String(
     item.category ?? item.service_id ?? item.serviceId ?? ''
@@ -273,15 +316,23 @@ async function syncMerchantProductsForBazaar(merchantPhone) {
   let synced = 0;
 
   for (const row of existingProducts) {
-    const category = String(row.category || row.service_id || '').trim();
-    if (!isBazaarEligibleProductCategory(category)) continue;
+    let category = String(row.category || row.service_id || '').trim();
+    if (!isBazaarEligibleProductCategory(category)) {
+      if (services.includes('product')) category = 'product';
+      else if (services.includes('restaurant')) category = 'restaurant';
+      else continue;
+    }
     const sub = String(row.sub_category || '').trim();
     if (category === 'product' && GLOBAL_SHOPPING_SUB_CATEGORY_IDS.has(sub)) {
       continue;
     }
 
     const needsNormalization =
-      row.category !== category || row.service_id !== category;
+      row.category !== category ||
+      row.service_id !== category ||
+      !isBazaarEligibleProductCategory(
+        String(row.category || row.service_id || '').trim()
+      );
     if (!needsNormalization) continue;
 
     await saveMerchantProduct(phoneKey, {
@@ -1560,6 +1611,7 @@ async function listMerchantStoresByService({
     const filteredProducts = products.filter((row) =>
       productMatchesStoreListing({
         row,
+        profile,
         productCategory,
         subCategoryId,
         marketplaceCategory: channel || normalizedServiceId,
@@ -1727,6 +1779,7 @@ async function getMarketplaceStats() {
       }
       return productMatchesStoreListing({
         row,
+        profile,
         productCategory: def.productCategory,
         subCategoryId: '',
         marketplaceCategory: def.id,
@@ -1867,7 +1920,8 @@ async function listCatalogProducts(category = '', subCategoryId = '') {
 
       if (categoryFilter === 'bazar_ghaith') {
         if (!canMerchantPublishInBazaar(profile)) return false;
-        if (!['product', 'restaurant'].includes(productService)) return false;
+        const listingService = resolveListingProductService(row, profile);
+        if (!['product', 'restaurant'].includes(listingService)) return false;
       }
 
       const serviceIds = profileServiceIds(profile);
@@ -2116,6 +2170,7 @@ async function getAllMerchants(adminPhone) {
       bucket = {
         totalProducts: 0,
         availableProducts: 0,
+        rows: [],
       };
       for (const variant of getPhoneVariants(merchantPhone)) {
         productStatsByMerchant.set(variant, bucket);
@@ -2123,12 +2178,24 @@ async function getAllMerchants(adminPhone) {
     }
 
     bucket.totalProducts += 1;
+    bucket.rows.push(row);
     if (row.is_available !== false) {
       bucket.availableProducts += 1;
     }
   }
   
-  return merchants.map((m) => ({
+  return merchants.map((m) => {
+    const productBucket = productStatsByMerchant.get(m.phone) || {
+      totalProducts: 0,
+      availableProducts: 0,
+      rows: [],
+    };
+    const bazaarVisibility = evaluateBazaarCustomerVisibility(
+      m,
+      productBucket.rows
+    );
+
+    return {
     ...(orderStatsByMerchant.get(m.phone) || {
       totalOrders: 0,
       completedOrders: 0,
@@ -2137,10 +2204,11 @@ async function getAllMerchants(adminPhone) {
       totalRevenue: 0,
       lastOrderAt: null,
     }),
-    ...(productStatsByMerchant.get(m.phone) || {
-      totalProducts: 0,
-      availableProducts: 0,
-    }),
+    totalProducts: productBucket.totalProducts,
+    availableProducts: productBucket.availableProducts,
+    visibleToCustomers: bazaarVisibility.visibleToCustomers,
+    visibleProductCount: bazaarVisibility.visibleProductCount,
+    visibilityNotes: bazaarVisibility.visibilityNotes,
     phone: m.phone,
     storeName: m.store_name || '',
     description: (m.description || '').slice(0, 80),
@@ -2152,7 +2220,8 @@ async function getAllMerchants(adminPhone) {
     createdAt: m.created_at,
     fullName: userByPhone[m.phone]?.full_name || '',
     role: userByPhone[m.phone]?.role || '',
-  }));
+  };
+  });
 }
 
 async function getAdminMerchantDetails(adminPhone, merchantPhone) {
