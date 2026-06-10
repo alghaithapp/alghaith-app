@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../models/app_models.dart';
 import '../utils/dummy_data.dart';
 import '../widgets/app_image.dart';
+import '../widgets/service_navigation_buttons.dart';
 import 'real_estate_type_hub_screen.dart';
 
 /// المستوى الأول: شراء — بيع — إيجار.
@@ -16,15 +17,7 @@ class RealEstateDealHubScreen extends StatelessWidget {
 
     return CupertinoPageScaffold(
       backgroundColor: const Color(0xFFF2F2F7),
-      navigationBar: const CupertinoNavigationBar(
-        middle: Text(
-          'العقارات',
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            fontFamily: 'Cairo',
-          ),
-        ),
-      ),
+      navigationBar: const ServiceNavigationBar(title: 'العقارات'),
       child: SafeArea(
         child: CustomScrollView(
           physics: const BouncingScrollPhysics(),

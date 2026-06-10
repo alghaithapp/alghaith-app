@@ -7,6 +7,7 @@ import '../../providers/app_provider.dart';
 import '../../utils/extensions.dart';
 import '../../utils/guest_gate.dart';
 import '../../widgets/app_image.dart';
+import '../../widgets/service_navigation_buttons.dart';
 
 class CatalogSearchScreen extends StatefulWidget {
   const CatalogSearchScreen({super.key});
@@ -40,13 +41,7 @@ class _CatalogSearchScreenState extends State<CatalogSearchScreen> {
 
     return CupertinoPageScaffold(
       backgroundColor: const Color(0xFFF2F2F7),
-      navigationBar: CupertinoNavigationBar(
-        middle: Text(
-          'بحث المنتجات',
-          style:
-              const TextStyle(fontWeight: FontWeight.bold, fontFamily: 'Cairo'),
-        ),
-      ),
+      navigationBar: const ServiceNavigationBar(title: 'بحث المنتجات'),
       child: SafeArea(
         child: Column(
           children: [

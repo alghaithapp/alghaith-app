@@ -7,6 +7,7 @@ import '../providers/app_provider.dart';
 import '../services/supabase_service.dart';
 import '../utils/extensions.dart';
 import '../widgets/app_image.dart';
+import '../widgets/service_navigation_buttons.dart';
 import '../widgets/catalog_contact_buttons.dart';
 
 class OffersCatalogScreen extends StatefulWidget {
@@ -82,19 +83,9 @@ class _OffersCatalogScreenState extends State<OffersCatalogScreen> {
 
     return CupertinoPageScaffold(
       backgroundColor: const Color(0xFFF2F2F7),
-      navigationBar: CupertinoNavigationBar(
-        middle: const Text(
-          'العروض والخصومات',
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            fontFamily: 'Cairo',
-          ),
-        ),
-        trailing: CupertinoButton(
-          padding: EdgeInsets.zero,
-          onPressed: _reload,
-          child: const Icon(CupertinoIcons.refresh_thick, size: 22),
-        ),
+      navigationBar: ServiceNavigationBar(
+        title: 'العروض والخصومات',
+        onRefresh: _reload,
       ),
       child: SafeArea(
         child: Column(

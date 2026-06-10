@@ -8,6 +8,7 @@ import '../providers/app_provider.dart';
 import '../utils/extensions.dart';
 import '../utils/guest_gate.dart';
 import '../widgets/app_image.dart';
+import '../widgets/service_navigation_buttons.dart';
 import 'cart_screen.dart';
 
 class SubCategoryItemsScreen extends StatefulWidget {
@@ -100,15 +101,8 @@ class _SubCategoryItemsScreenState extends State<SubCategoryItemsScreen>
 
     return CupertinoPageScaffold(
       backgroundColor: const Color(0xFFF2F2F7),
-      navigationBar: CupertinoNavigationBar(
-        middle: Text(
-          widget.subCategory.titleAr,
-          style: const TextStyle(
-            fontWeight: FontWeight.bold,
-            fontFamily: 'Cairo',
-          ),
-        ),
-        previousPageTitle: 'الرجوع',
+      navigationBar: ServiceNavigationBar(
+        title: widget.subCategory.titleAr,
         trailing: _CartNavButton(
           key: _cartIconKey,
           count: appProvider.cartCount,

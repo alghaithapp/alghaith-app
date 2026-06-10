@@ -10,6 +10,7 @@ import '../utils/extensions.dart';
 import '../utils/guest_gate.dart';
 import '../widgets/app_image.dart';
 import '../widgets/catalog_contact_buttons.dart';
+import '../widgets/service_navigation_buttons.dart';
 import 'cart_screen.dart';
 
 class CatalogProductsScreen extends StatefulWidget {
@@ -87,23 +88,14 @@ class _CatalogProductsScreenState extends State<CatalogProductsScreen> {
 
     return CupertinoPageScaffold(
       backgroundColor: const Color(0xFFF2F2F7),
-      navigationBar: CupertinoNavigationBar(
-        middle: Text(
-          widget.titleAr,
-          style: const TextStyle(
-            fontWeight: FontWeight.bold,
-            fontFamily: 'Cairo',
-          ),
-        ),
+      navigationBar: ServiceNavigationBar(
+        title: widget.titleAr,
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            CupertinoButton(
-              padding: EdgeInsets.zero,
-              onPressed: _reload,
-              child: const Icon(CupertinoIcons.refresh_thick, size: 22),
-            ),
-            if (!_contactOnly)
+            ServiceRefreshButton(onPressed: _reload),
+            if (!_contactOnly) ...[
+              const SizedBox(width: 8),
               CupertinoButton(
                 padding: EdgeInsets.zero,
                 onPressed: () => Navigator.of(context).push(
@@ -111,6 +103,7 @@ class _CatalogProductsScreenState extends State<CatalogProductsScreen> {
                 ),
                 child: const Icon(CupertinoIcons.cart, size: 22),
               ),
+            ],
           ],
         ),
       ),

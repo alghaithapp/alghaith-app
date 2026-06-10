@@ -270,4 +270,23 @@ class SupabaseService {
         merchantPhone: merchantPhone,
         isFrozen: isFrozen,
       );
+
+  static Future<void> saveDeviceToken({
+    required String phone,
+    required String token,
+    required String platform,
+  }) =>
+      _db.saveDeviceToken(
+        phone: phone,
+        token: token,
+        platform: platform,
+      );
+
+  static Future<void> deleteDeviceToken({
+    required String phone,
+    required String token,
+  }) =>
+      _db.deleteDeviceToken(phone: phone, token: token);
+
+  static Future<void> deleteAccount(String phone) => _db.deleteAccount(phone);
 }

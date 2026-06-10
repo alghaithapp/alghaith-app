@@ -6,6 +6,7 @@ import '../core/catalog/marketplace_catalog.dart';
 import '../core/catalog/marketplace_router.dart';
 import '../providers/app_provider.dart';
 import '../widgets/app_image.dart';
+import '../widgets/service_navigation_buttons.dart';
 
 class CategoryHubScreen extends StatefulWidget {
   final MarketplaceCategoryDefinition category;
@@ -32,22 +33,11 @@ class _CategoryHubScreenState extends State<CategoryHubScreen> {
     final subs = widget.category.id == 'product'
         ? MarketplaceCatalog.shoppingSubCategories
         : widget.category.subCategories;
-
     return CupertinoPageScaffold(
       backgroundColor: const Color(0xFFF2F2F7),
-      navigationBar: CupertinoNavigationBar(
-        middle: Text(
-          widget.category.hubTitleAr,
-          style: const TextStyle(
-            fontWeight: FontWeight.bold,
-            fontFamily: 'Cairo',
-          ),
-        ),
-        trailing: CupertinoButton(
-          padding: EdgeInsets.zero,
-          onPressed: () => provider.refreshMarketplaceStats(force: true),
-          child: const Icon(CupertinoIcons.refresh_thick, size: 22),
-        ),
+      navigationBar: ServiceNavigationBar(
+        title: widget.category.hubTitleAr,
+        onRefresh: () => provider.refreshMarketplaceStats(force: true),
       ),
       child: SafeArea(
         child: subs.isEmpty

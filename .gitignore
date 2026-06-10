@@ -21,6 +21,8 @@ coverage/
 *.log
 .env*
 !.env.example
+android/app/google-services.json
+ios/Runner/GoogleService-Info.plist
 
 .vercel
 .env*

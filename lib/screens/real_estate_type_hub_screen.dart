@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../models/app_models.dart';
 import '../utils/dummy_data.dart';
 import '../widgets/app_image.dart';
+import '../widgets/service_navigation_buttons.dart';
 import 'real_estate_form_screen.dart';
 import 'real_estate_listings_screen.dart';
 
@@ -62,15 +63,7 @@ class RealEstateTypeHubScreen extends StatelessWidget {
 
     return CupertinoPageScaffold(
       backgroundColor: const Color(0xFFF2F2F7),
-      navigationBar: CupertinoNavigationBar(
-        middle: Text(
-          dealTitleAr,
-          style: const TextStyle(
-            fontWeight: FontWeight.bold,
-            fontFamily: 'Cairo',
-          ),
-        ),
-      ),
+      navigationBar: ServiceNavigationBar(title: dealTitleAr),
       child: SafeArea(
         child: CustomScrollView(
           physics: const BouncingScrollPhysics(),

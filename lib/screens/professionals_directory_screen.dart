@@ -6,6 +6,7 @@ import '../services/supabase_service.dart';
 import '../utils/guest_gate.dart';
 import '../utils/helpers.dart';
 import '../widgets/app_image.dart';
+import '../widgets/service_navigation_buttons.dart';
 
 class ProfessionalsDirectoryScreen extends StatefulWidget {
   final ServiceCategory profession;
@@ -106,15 +107,13 @@ class _ProfessionalsDirectoryScreenState
 
     return CupertinoPageScaffold(
       backgroundColor: const Color(0xFFF2F2F7),
-      navigationBar: CupertinoNavigationBar(
-        middle: Text(
-          widget.profession.titleAr,
-          style: const TextStyle(
-            fontWeight: FontWeight.bold,
-            fontFamily: 'Cairo',
-          ),
-        ),
-        previousPageTitle: 'الرجوع',
+      navigationBar: ServiceNavigationBar(
+        title: widget.profession.titleAr,
+        onRefresh: () {
+          setState(() {
+            _futureProfiles = _loadProfiles();
+          });
+        },
       ),
       child: SafeArea(
         child: Column(

@@ -24,6 +24,7 @@ class _HomeScreenState extends State<HomeScreen> {
       final provider = context.read<AppProvider>();
       if (provider.isCustomer) {
         provider.refreshCustomerCatalog();
+        provider.refreshMarketplaceStats(force: true);
       }
     });
   }

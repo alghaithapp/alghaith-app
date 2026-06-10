@@ -56,8 +56,11 @@ const {
   toggleBazaarMemberStatus,
   toggleMerchantFreezeStatus,
   syncMerchantProductsForBazaar,
+  saveDeviceToken,
+  deleteDeviceToken,
 } = require('./supabase_repo');
 const { validatePromoCode } = require('./promo_codes');
+const { isPushConfigured } = require('./push_notifications');
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -104,6 +107,12 @@ if (!sessionSecret) {
 if (!mapboxAccessToken) {
   console.warn(
     'Missing MAPBOX_ACCESS_TOKEN. Road-distance route API will use fallback behavior in the app.'
+  );
+}
+
+if (!isPushConfigured()) {
+  console.warn(
+    'Missing FIREBASE_SERVICE_ACCOUNT_JSON. Push notifications are disabled until you add the Firebase service account JSON to Railway env.'
   );
 }
 
@@ -352,7 +361,11 @@ async function sendOtpViaOtpiq(phoneNumber, verificationCode, channel = 'sms') {
 }
 
 app.get('/health', (_, res) => {
-  res.json({ ok: true, version: '1.1.10' });
+  res.json({
+    ok: true,
+    version: '1.1.10',
+    pushConfigured: isPushConfigured(),
+  });
 });
 
 app.get('/maps/public-token', (_, res) => {
@@ -665,6 +678,34 @@ app.delete('/db/app-user', async (req, res) => {
   } catch (error) {
     console.error('delete app-user error:', error);
     return res.status(500).json({ message: error?.message || 'Failed to delete app user.' });
+  }
+});
+
+app.put('/db/device-token', async (req, res) => {
+  try {
+    const phone = requireAuthorizedPhone(req, res);
+    if (!phone) return;
+    const row = await saveDeviceToken(phone, req.body || {});
+    return res.json(row);
+  } catch (error) {
+    console.error('save device-token error:', error);
+    return res.status(500).json({ message: error?.message || 'Failed to save device token.' });
+  }
+});
+
+app.delete('/db/device-token', async (req, res) => {
+  try {
+    const phone = requireAuthorizedPhone(req, res);
+    if (!phone) return;
+    const token = String(req.body?.token || req.query?.token || '').trim();
+    if (!token) {
+      return res.status(400).json({ message: 'Device token is required.' });
+    }
+    await deleteDeviceToken(phone, token);
+    return res.json({ success: true });
+  } catch (error) {
+    console.error('delete device-token error:', error);
+    return res.status(500).json({ message: error?.message || 'Failed to delete device token.' });
   }
 });
 

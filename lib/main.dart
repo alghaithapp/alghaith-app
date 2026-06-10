@@ -26,6 +26,7 @@ import 'screens/customer_setup_screen.dart';
 import 'screens/merchant/merchant_setup_screen.dart';
 import 'screens/merchant/merchant_shell.dart';
 import 'screens/admin/admin_dashboard_screen.dart';
+import 'core/notifications/push_notification_service.dart';
 import 'services/supabase_service.dart';
 import 'widgets/app_logo.dart';
 import 'utils/role_switch_notifications.dart';
@@ -48,6 +49,7 @@ Future<void> main() async {
       );
     }
     await SupabaseService.initialize();
+    await PushNotificationService.instance.initialize();
     await configureAppSystemUi();
   } catch (e) {
     debugPrint('Bootstrap error: $e');

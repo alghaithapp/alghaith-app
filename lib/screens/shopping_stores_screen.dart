@@ -13,6 +13,8 @@ import '../services/image_storage_service.dart';
 import '../utils/merchant_product_sections.dart';
 import '../utils/merchant_profile_fields.dart';
 import '../widgets/app_image.dart';
+import '../widgets/product_image_preview.dart';
+import '../widgets/service_navigation_buttons.dart';
 import 'cart_screen.dart';
 import 'restaurant_menu_screen.dart';
 
@@ -162,41 +164,34 @@ class _ShoppingStoresScreenState extends State<ShoppingStoresScreen> {
                     child: Column(
                       children: [
                         Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            _IconButton(
-                              icon: CupertinoIcons.refresh_thick, 
-                              onTap: _reloadStores,
-                              color: primaryRed,
-                            ),
-                            Column(
-                              children: [
-                                Text(
-                                  headerTitle,
-                                  style: TextStyle(
-                                    fontFamily: 'Cairo',
-                                    fontSize: 24,
-                                    fontWeight: FontWeight.w900,
-                                    color: Color(0xFF1A1A1A),
+                            const ServiceBackButton(),
+                            Expanded(
+                              child: Column(
+                                children: [
+                                  Text(
+                                    headerTitle,
+                                    textAlign: TextAlign.center,
+                                    style: const TextStyle(
+                                      fontFamily: 'Cairo',
+                                      fontSize: 24,
+                                      fontWeight: FontWeight.w900,
+                                      color: Color(0xFF1A1A1A),
+                                    ),
                                   ),
-                                ),
-                                Text(
-                                  headerSubtitle,
-                                  style: TextStyle(
-                                    fontFamily: 'Cairo',
-                                    fontSize: 13,
-                                    color: Colors.grey.shade600,
+                                  Text(
+                                    headerSubtitle,
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(
+                                      fontFamily: 'Cairo',
+                                      fontSize: 13,
+                                      color: Colors.grey.shade600,
+                                    ),
                                   ),
-                                ),
-                              ],
+                                ],
+                              ),
                             ),
-                            _IconButton(
-                              icon: CupertinoIcons.house_fill, 
-                              onTap: () {
-                                Navigator.of(context).popUntil((route) => route.isFirst);
-                              },
-                              color: Colors.black87,
-                            ),
+                            ServiceRefreshButton(onPressed: _reloadStores),
                           ],
                         ),
                         const SizedBox(height: 20),
@@ -719,41 +714,6 @@ class _SearchBar extends StatelessWidget {
   }
 }
 
-class _IconButton extends StatelessWidget {
-  final IconData icon;
-  final VoidCallback onTap;
-  final Color color;
-
-  const _IconButton({
-    required this.icon,
-    required this.onTap,
-    this.color = Colors.black87,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(10),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          shape: BoxShape.circle,
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.05),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
-            ),
-          ],
-          border: Border.all(color: Colors.grey.shade100),
-        ),
-        child: Icon(icon, size: 20, color: color),
-      ),
-    );
-  }
-}
-
 class _GuestModeBanner extends StatelessWidget {
   final VoidCallback onLogin;
 
@@ -1009,6 +969,8 @@ class _ShoppingStoreMenuScreenState extends State<ShoppingStoreMenuScreen>
       appBar: AppBar(
         backgroundColor: Colors.white,
         surfaceTintColor: Colors.white,
+        leadingWidth: 56,
+        leading: const Center(child: ServiceBackButton()),
         title: Text(
           widget.profile['store_name']?.toString() ?? 'المحل',
           style:
@@ -1343,122 +1305,118 @@ class _ProductCard extends StatelessWidget {
           : item['image']?.toString(),
     );
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: const Color(0x0F000000)),
-      ),
-      child: Row(
-        children: [
-          ClipRRect(
-            borderRadius:
-                const BorderRadius.horizontal(right: Radius.circular(22)),
-            child: SizedBox(
-              width: 110,
-              height: 120,
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  image,
-                  Positioned(
-                    top: 8,
-                    left: 8,
-                    child: GestureDetector(
-                      onTap: () => provider.toggleFavoriteStoreProduct(
-                        item,
-                        profile,
-                      ),
-                      child: Container(
-                        padding: const EdgeInsets.all(6),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.92),
-                          shape: BoxShape.circle,
-                        ),
-                        child: Icon(
-                          isFavorite
-                              ? CupertinoIcons.heart_fill
-                              : CupertinoIcons.heart,
-                          size: 18,
-                          color: isFavorite ? Colors.red : Colors.grey,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
+    final imageSource = imageBase64 != null && imageBase64.isNotEmpty
+        ? imageBase64
+        : item['image']?.toString();
+
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        Container(
+          margin: const EdgeInsets.only(bottom: 12),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(22),
+            border: Border.all(color: const Color(0x0F000000)),
           ),
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.all(14),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    item['name_ar']?.toString() ?? '',
-                    style: const TextStyle(
-                      fontFamily: 'Cairo',
-                      fontWeight: FontWeight.w900,
-                      fontSize: 15,
+          child: Row(
+            children: [
+              ClipRRect(
+                borderRadius:
+                    const BorderRadius.horizontal(right: Radius.circular(22)),
+                child: SizedBox(
+                  width: 110,
+                  height: 120,
+                  child: GestureDetector(
+                    onTap: () => showProductImagePreview(
+                      context,
+                      imageData: imageSource,
+                      title: item['name_ar']?.toString(),
                     ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                    child: image,
                   ),
-                  const SizedBox(height: 6),
-                  Text(
-                    item['description_ar']?.toString() ?? '',
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontFamily: 'Cairo',
-                      color: Colors.grey,
-                      fontSize: 12,
-                      height: 1.35,
-                    ),
-                  ),
-                  const Spacer(),
-                  Row(
+                ),
+              ),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.all(14),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        '${price.toPrice()} د.ع',
+                        item['name_ar']?.toString() ?? '',
                         style: const TextStyle(
-                          color: Color(0xFFF5A01D),
-                          fontWeight: FontWeight.w900,
                           fontFamily: 'Cairo',
+                          fontWeight: FontWeight.w900,
+                          fontSize: 15,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        item['description_ar']?.toString() ?? '',
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontFamily: 'Cairo',
+                          color: Colors.grey,
+                          fontSize: 12,
+                          height: 1.35,
                         ),
                       ),
                       const Spacer(),
-                      Builder(
-                        builder: (buttonContext) => CupertinoButton(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 14,
-                            vertical: 7,
-                          ),
-                          minSize: 0,
-                          color: const Color(0xFFF5A01D),
-                          borderRadius: BorderRadius.circular(12),
-                          onPressed: () => onAdd(buttonContext),
-                          child: const Text(
-                            'أضف للسلة',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w800,
+                      Row(
+                        children: [
+                          Text(
+                            '${price.toPrice()} د.ع',
+                            style: const TextStyle(
+                              color: Color(0xFFF5A01D),
+                              fontWeight: FontWeight.w900,
                               fontFamily: 'Cairo',
                             ),
                           ),
-                        ),
+                          const Spacer(),
+                          Builder(
+                            builder: (buttonContext) => CupertinoButton(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 14,
+                                vertical: 7,
+                              ),
+                              minSize: 0,
+                              color: const Color(0xFFF5A01D),
+                              borderRadius: BorderRadius.circular(12),
+                              onPressed: () => onAdd(buttonContext),
+                              child: const Text(
+                                'أضف للسلة',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w800,
+                                  fontFamily: 'Cairo',
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),
-                ],
+                ),
               ),
-            ),
+            ],
           ),
-        ],
-      ),
+        ),
+        Positioned(
+          top: 8,
+          left: 8,
+          child: ProductFavoriteCornerButton(
+            isFavorite: isFavorite,
+            onTap: () => provider.toggleFavoriteStoreProduct(item, profile),
+            activeColor: const Color(0xFFF5A01D),
+          ),
+        ),
+      ],
     );
   }
 }

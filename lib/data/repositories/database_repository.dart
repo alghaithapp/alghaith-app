@@ -527,4 +527,36 @@ class DatabaseRepository {
       'isFrozen': isFrozen,
     });
   }
+
+  Future<void> saveDeviceToken({
+    required String phone,
+    required String token,
+    required String platform,
+  }) async {
+    await ApiClient.instance.put('/db/device-token', body: {
+      'phone': _phone(phone),
+      'token': token,
+      'platform': platform,
+    });
+  }
+
+  Future<void> deleteDeviceToken({
+    required String phone,
+    required String token,
+  }) async {
+    await ApiClient.instance.delete(
+      '/db/device-token',
+      queryParameters: {
+        'phone': _phone(phone),
+        'token': token,
+      },
+    );
+  }
+
+  Future<void> deleteAccount(String phone) async {
+    await ApiClient.instance.delete(
+      '/db/app-user',
+      queryParameters: {'phone': _phone(phone)},
+    );
+  }
 }

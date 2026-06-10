@@ -10,6 +10,8 @@ import '../utils/helpers.dart';
 import '../utils/merchant_profile_fields.dart';
 import '../core/theme/app_colors.dart';
 import '../widgets/app_image.dart';
+import '../widgets/product_image_preview.dart';
+import '../widgets/service_navigation_buttons.dart';
 import 'cart_screen.dart';
 
 const _brandRed = AppColors.accent;
@@ -501,9 +503,8 @@ class _RestaurantMenuScreenState extends State<RestaurantMenuScreen>
             right: 12,
             child: Row(
               children: [
-                _CircleNavButton(
-                  icon: Icons.arrow_back_ios_new_rounded,
-                  onTap: () => Navigator.of(context).maybePop(),
+                ServiceBackButton(
+                  onPressed: () => Navigator.of(context).maybePop(),
                 ),
                 const Spacer(),
                 _CircleNavButton(
@@ -930,65 +931,55 @@ class _MenuItemCard extends StatelessWidget {
     final image =
         item.imageBase64?.isNotEmpty == true ? item.imageBase64 : item.image;
 
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.06),
-            blurRadius: 20,
-            offset: const Offset(0, 8),
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(24),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.06),
+                blurRadius: 20,
+                offset: const Offset(0, 8),
+              ),
+            ],
           ),
-        ],
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          ClipRRect(
-            borderRadius:
-                const BorderRadius.horizontal(right: Radius.circular(24)),
-            child: SizedBox(
-              width: 118,
-              height: 132,
-              child: AppImage(imageData: image),
-            ),
-          ),
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(8, 16, 16, 16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          item.nameAr,
-                          style: const TextStyle(
-                            fontFamily: 'Cairo',
-                            fontWeight: FontWeight.w900,
-                            fontSize: 16,
-                            color: Color(0xFF1A1A1A),
-                          ),
-                        ),
-                      ),
-                      GestureDetector(
-                        onTap: onFavorite,
-                        child: AnimatedSwitcher(
-                          duration: const Duration(milliseconds: 220),
-                          child: Icon(
-                            isFavorite
-                                ? Icons.favorite_rounded
-                                : Icons.favorite_border_rounded,
-                            key: ValueKey(isFavorite),
-                            color: isFavorite ? _brandRed : Colors.grey,
-                            size: 22,
-                          ),
-                        ),
-                      ),
-                    ],
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              ClipRRect(
+                borderRadius:
+                    const BorderRadius.horizontal(right: Radius.circular(24)),
+                child: SizedBox(
+                  width: 118,
+                  height: 132,
+                  child: GestureDetector(
+                    onTap: () => showProductImagePreview(
+                      context,
+                      imageData: image,
+                      title: item.nameAr,
+                    ),
+                    child: AppImage(imageData: image),
                   ),
+                ),
+              ),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(8, 16, 16, 16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        item.nameAr,
+                        style: const TextStyle(
+                          fontFamily: 'Cairo',
+                          fontWeight: FontWeight.w900,
+                          fontSize: 16,
+                          color: Color(0xFF1A1A1A),
+                        ),
+                      ),
                   const SizedBox(height: 8),
                   Text(
                     item.descriptionAr.trim().isNotEmpty
@@ -1041,12 +1032,23 @@ class _MenuItemCard extends StatelessWidget {
                       ),
                     ],
                   ),
-                ],
+                    ],
+                  ),
+                ),
               ),
-            ),
+            ],
           ),
-        ],
-      ),
+        ),
+        Positioned(
+          top: 10,
+          left: 10,
+          child: ProductFavoriteCornerButton(
+            isFavorite: isFavorite,
+            onTap: onFavorite,
+            activeColor: _brandRed,
+          ),
+        ),
+      ],
     );
   }
 }

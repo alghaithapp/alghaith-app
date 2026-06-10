@@ -7,6 +7,7 @@ import '../utils/extensions.dart';
 import '../utils/guest_gate.dart';
 import '../utils/helpers.dart';
 import '../widgets/app_image.dart';
+import '../widgets/service_navigation_buttons.dart';
 
 class RealEstateListingsScreen extends StatefulWidget {
   final String? subCategoryId;
@@ -54,6 +55,8 @@ class _RealEstateListingsScreenState extends State<RealEstateListingsScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFFF5F6FA),
       appBar: AppBar(
+        leadingWidth: 56,
+        leading: const Center(child: ServiceBackButton()),
         title: Text(
           widget.titleAr?.trim().isNotEmpty == true
               ? widget.titleAr!.trim()

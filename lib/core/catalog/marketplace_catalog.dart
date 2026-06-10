@@ -243,8 +243,15 @@ class MarketplaceCatalog {
     return null;
   }
 
+  /// الأقسام الظاهرة للزبون في الصفحة الرئيسية (شبكة الأقسام).
+  /// البازار يُعرض عبر البانر العلوي وليس ضمن هذه القائمة.
+  static const Set<String> customerHomeCategoryIds = {
+    'restaurant',
+    'product',
+  };
+
   static List<ServiceCategory> get homeCategories => categories
-      .where((entry) => entry.id != 'bazar_ghaith')
+      .where((entry) => customerHomeCategoryIds.contains(entry.id))
       .map((entry) => entry.asServiceCategory)
       .toList();
 

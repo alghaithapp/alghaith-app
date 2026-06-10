@@ -1,29 +1,86 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:url_launcher/url_launcher.dart';
+import 'package:provider/provider.dart';
 
-class AccountDeletionScreen extends StatelessWidget {
-  static const String deletionRequestUrl =
-      'https://www.alghaithst.com/account-deletion.html';
+import '../providers/app_provider.dart';
 
+class AccountDeletionScreen extends StatefulWidget {
   const AccountDeletionScreen({super.key});
 
-  Future<void> _openDeletionForm(BuildContext context) async {
-    final uri = Uri.parse(deletionRequestUrl);
-    final launched = await launchUrl(
-      uri,
-      mode: LaunchMode.externalApplication,
-    );
-    if (!context.mounted) return;
-    if (!launched) {
+  @override
+  State<AccountDeletionScreen> createState() => _AccountDeletionScreenState();
+}
+
+class _AccountDeletionScreenState extends State<AccountDeletionScreen> {
+  bool _confirmed = false;
+  bool _isDeleting = false;
+
+  Future<void> _deleteAccount() async {
+    if (_isDeleting) return;
+    setState(() => _isDeleting = true);
+
+    try {
+      await context.read<AppProvider>().deleteAccountPermanently();
+      if (!mounted) return;
+      Navigator.of(context).popUntil((route) => route.isFirst);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
-            'تعذر فتح صفحة طلب حذف الحساب. تحقق من الاتصال وحاول مجدداً.',
+            'تم حذف حسابك نهائياً.',
             style: TextStyle(fontFamily: 'Cairo'),
           ),
         ),
       );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'تعذر حذف الحساب: $error',
+            style: const TextStyle(fontFamily: 'Cairo'),
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isDeleting = false);
+      }
+    }
+  }
+
+  Future<void> _confirmDeletion() async {
+    final accepted = await showCupertinoDialog<bool>(
+      context: context,
+      builder: (context) => CupertinoAlertDialog(
+        title: const Text(
+          'تأكيد حذف الحساب',
+          style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold),
+        ),
+        content: const Padding(
+          padding: EdgeInsets.only(top: 8),
+          child: Text(
+            'سيتم حذف حسابك وبياناتك المرتبطة به نهائياً ولا يمكن التراجع عن هذا الإجراء.',
+            style: TextStyle(fontFamily: 'Cairo', fontSize: 14),
+          ),
+        ),
+        actions: [
+          CupertinoDialogAction(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('إلغاء', style: TextStyle(fontFamily: 'Cairo')),
+          ),
+          CupertinoDialogAction(
+            isDestructiveAction: true,
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text(
+              'حذف نهائي',
+              style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (accepted == true) {
+      await _deleteAccount();
     }
   }
 
@@ -74,7 +131,7 @@ class AccountDeletionScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 18),
                   const Text(
-                    'طلب حذف الحساب',
+                    'حذف الحساب نهائياً',
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontFamily: 'Cairo',
@@ -84,7 +141,7 @@ class AccountDeletionScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 10),
                   const Text(
-                    'إذا رغبت في حذف حسابك نهائياً، يمكنك تقديم الطلب عبر النموذج الرسمي على موقع الغيث.',
+                    'يمكنك حذف حسابك مباشرة من التطبيق دون الحاجة للتواصل عبر البريد أو الرسائل.',
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontFamily: 'Cairo',
@@ -110,7 +167,7 @@ class AccountDeletionScreen extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'قبل المتابعة',
+                    'ماذا سيُحذف؟',
                     style: TextStyle(
                       fontFamily: 'Cairo',
                       fontWeight: FontWeight.w800,
@@ -120,14 +177,44 @@ class AccountDeletionScreen extends StatelessWidget {
                   ),
                   SizedBox(height: 8),
                   Text(
-                    '• سيتم مراجعة طلبك من فريق الدعم.\n'
-                    '• قد يستغرق التنفيذ عدة أيام عمل.\n'
-                    '• تأكد من إدخال نفس رقم الهاتف المسجل في التطبيق.',
+                    '• بيانات الحساب وملفك الشخصي\n'
+                    '• العناوين والمفضلة والإعدادات\n'
+                    '• بيانات النشاط التجاري إن وُجدت\n'
+                    '• سجل الطلبات المرتبط بحسابك',
                     style: TextStyle(
                       fontFamily: 'Cairo',
                       fontSize: 13,
                       height: 1.7,
                       color: Color(0xFF7F1D1D),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Row(
+                children: [
+                  CupertinoSwitch(
+                    value: _confirmed,
+                    activeTrackColor: CupertinoColors.systemRed,
+                    onChanged: _isDeleting
+                        ? null
+                        : (value) => setState(() => _confirmed = value),
+                  ),
+                  const Expanded(
+                    child: Text(
+                      'أفهم أن الحذف نهائي ولا يمكن استعادة البيانات',
+                      style: TextStyle(
+                        fontFamily: 'Cairo',
+                        fontSize: 13,
+                        height: 1.5,
+                      ),
                     ),
                   ),
                 ],
@@ -140,32 +227,17 @@ class AccountDeletionScreen extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(vertical: 16),
                 color: CupertinoColors.systemRed,
                 borderRadius: BorderRadius.circular(18),
-                onPressed: () => _openDeletionForm(context),
-                child: const Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(CupertinoIcons.arrow_up_right_square, size: 20),
-                    SizedBox(width: 8),
-                    Text(
-                      'فتح نموذج طلب حذف الحساب',
-                      style: TextStyle(
-                        fontFamily: 'Cairo',
-                        fontWeight: FontWeight.w800,
-                        fontSize: 15,
+                onPressed: !_confirmed || _isDeleting ? null : _confirmDeletion,
+                child: _isDeleting
+                    ? const CupertinoActivityIndicator(color: Colors.white)
+                    : const Text(
+                        'حذف حسابي الآن',
+                        style: TextStyle(
+                          fontFamily: 'Cairo',
+                          fontWeight: FontWeight.w800,
+                          fontSize: 15,
+                        ),
                       ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              deletionRequestUrl,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontFamily: 'Cairo',
-                fontSize: 11,
-                color: Colors.grey.shade600,
               ),
             ),
           ],

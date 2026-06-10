@@ -595,7 +595,31 @@ async function saveAppUser(phone, data = {}) {
 }
 
 async function deleteAppUser(phone) {
-  return deleteRow('app_users', 'phone', phone);
+  const phoneKey = await resolvePhoneKey(phone);
+  const supabase = assertSupabaseAdmin();
+
+  const phoneVariants = getPhoneVariants(phoneKey);
+  if (phoneVariants.length > 0) {
+    const { error: tokenError } = await supabase
+      .from('device_tokens')
+      .delete()
+      .in('phone', phoneVariants);
+    if (tokenError && !/does not exist/i.test(tokenError.message || '')) {
+      throw new Error(tokenError.message);
+    }
+
+    for (const tableColumn of ['merchant_phone', 'customer_phone']) {
+      const { error: reviewError } = await supabase
+        .from('merchant_reviews')
+        .delete()
+        .in(tableColumn, phoneVariants);
+      if (reviewError && !/does not exist/i.test(reviewError.message || '')) {
+        console.warn(`deleteAppUser reviews cleanup (${tableColumn}):`, reviewError.message);
+      }
+    }
+  }
+
+  return deleteRow('app_users', 'phone', phoneKey);
 }
 
 async function getCustomerProfile(phone) {
@@ -965,6 +989,9 @@ async function saveCustomerOrder(phone, data = {}) {
     throw new Error('Order id is required.');
   }
 
+  const existingRow = await selectSingle('customer_orders', 'id', orderId);
+  const previousMeta = existingRow ? readOrderMeta(existingRow) : null;
+
   const rawMerchantPhone =
     String(
       data.merchant_phone ??
@@ -1020,7 +1047,21 @@ async function saveCustomerOrder(phone, data = {}) {
     payload.courier_phone = courierPhone;
   }
 
-  return saveRow('customer_orders', payload, 'id');
+  const savedRow = await saveRow('customer_orders', payload, 'id');
+  const nextMeta = readOrderMeta(savedRow);
+
+  try {
+    const { onOrderSaved } = require('./push_events');
+    await onOrderSaved({
+      previousMeta,
+      nextMeta,
+      isNew: !existingRow,
+    });
+  } catch (error) {
+    console.error('push onOrderSaved error:', error?.message || error);
+  }
+
+  return savedRow;
 }
 
 function readOrderMeta(row) {
@@ -1415,6 +1456,93 @@ async function updateIncomingOrderStatus(merchantPhone, orderId, updates = {}) {
     order: nextOrder,
     merchant_phone: linkedMerchant,
   });
+}
+
+async function saveDeviceToken(phone, data = {}) {
+  const phoneKey = await resolvePhoneKey(phone);
+  await ensureAppUser(phoneKey);
+  const token = String(data.token ?? '').trim();
+  if (!token) {
+    throw new Error('Device token is required.');
+  }
+  const platform = String(data.platform ?? 'unknown').trim() || 'unknown';
+  const supabase = assertSupabaseAdmin();
+  const existing = await supabase
+    .from('device_tokens')
+    .select('id')
+    .eq('phone', phoneKey)
+    .eq('token', token)
+    .maybeSingle();
+  if (existing.error) {
+    throw new Error(existing.error.message);
+  }
+
+  const payload = {
+    phone: phoneKey,
+    token,
+    platform,
+    updated_at: nowIso(),
+  };
+
+  if (existing.data?.id) {
+    const { data: updated, error } = await supabase
+      .from('device_tokens')
+      .update(payload)
+      .eq('id', existing.data.id)
+      .select();
+    if (error) throw new Error(error.message);
+    return Array.isArray(updated) ? updated[0] || null : updated || null;
+  }
+
+  const { data: inserted, error } = await supabase
+    .from('device_tokens')
+    .insert(payload)
+    .select();
+  if (error) throw new Error(error.message);
+  return Array.isArray(inserted) ? inserted[0] || null : inserted || null;
+}
+
+async function deleteDeviceToken(phone, token) {
+  const phoneKey = await resolvePhoneKey(phone);
+  const normalizedToken = String(token || '').trim();
+  if (!normalizedToken) {
+    throw new Error('Device token is required.');
+  }
+  const supabase = assertSupabaseAdmin();
+  const { error } = await supabase
+    .from('device_tokens')
+    .delete()
+    .eq('phone', phoneKey)
+    .eq('token', normalizedToken);
+  if (error) throw new Error(error.message);
+  return { success: true };
+}
+
+async function deleteAllDeviceTokens(phone) {
+  const phoneKey = await resolvePhoneKey(phone);
+  const supabase = assertSupabaseAdmin();
+  const { error } = await supabase.from('device_tokens').delete().eq('phone', phoneKey);
+  if (error) throw new Error(error.message);
+  return { success: true };
+}
+
+async function getDeviceTokensForPhone(phone) {
+  const variants = getPhoneVariants(phone);
+  if (variants.length === 0) return [];
+  return selectMany(
+    'device_tokens',
+    [{ method: 'in', column: 'phone', value: variants }],
+    { column: 'updated_at', ascending: false }
+  );
+}
+
+async function removeDeviceTokens(tokens = []) {
+  const normalized = [...new Set(tokens.map((item) => String(item || '').trim()).filter(Boolean))];
+  if (!normalized.length) return { success: true };
+  const supabase = assertSupabaseAdmin();
+  const { error } = await supabase.from('device_tokens').delete().in('token', normalized);
+  if (error) throw new Error(error.message);
+  return { success: true };
 }
 
 async function getUserState(phone) {
@@ -2428,4 +2556,9 @@ module.exports = {
   toggleBazaarMemberStatus,
   toggleMerchantFreezeStatus,
   syncMerchantProductsForBazaar,
+  saveDeviceToken,
+  deleteDeviceToken,
+  deleteAllDeviceTokens,
+  getDeviceTokensForPhone,
+  removeDeviceTokens,
 };

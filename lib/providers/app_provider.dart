@@ -6,6 +6,7 @@ import '../core/catalog/marketplace_catalog.dart';
 import '../core/catalog/marketplace_stats.dart';
 import '../core/checkout/cart_promo.dart';
 import '../core/notifications/notification_hub.dart';
+import '../core/notifications/push_notification_service.dart';
 import '../core/config/app_config.dart';
 import '../core/utils/phone_utils.dart';
 import '../data/models/account_snapshot.dart';
@@ -484,6 +485,9 @@ class AppProvider extends ChangeNotifier {
       if (!hasPhoneSession && !_isGuestMode) {
         _isGuestMode = true;
         _userRole = 'customer';
+      }
+      if (hasPhoneSession && _authPhone != null && _authPhone!.isNotEmpty) {
+        unawaited(PushNotificationService.instance.bindToUser(_authPhone!));
       }
       notifyListeners();
     }
@@ -1717,6 +1721,7 @@ class AppProvider extends ChangeNotifier {
       if (!_isRestoring && !_isLoggingIn) {
         _notificationHub.onLoginSuccess();
       }
+      unawaited(PushNotificationService.instance.bindToUser(normalized));
     }
   }
 
@@ -3775,6 +3780,16 @@ class AppProvider extends ChangeNotifier {
     }
   }
 
+  Future<void> deleteAccountPermanently() async {
+    final phone = _trimmedOrNull(_authPhone);
+    if (phone == null || phone.isEmpty) {
+      throw Exception('لا يوجد حساب مسجل حالياً.');
+    }
+    await PushNotificationService.instance.unbindFromUser(phone: phone);
+    await SupabaseService.deleteAccount(phone);
+    resetAll();
+  }
+
   void resetAll() {
     _isRestoring = false;
     _isGuestMode = false;
@@ -3810,6 +3825,7 @@ class AppProvider extends ChangeNotifier {
     _customerAvatarBase64 = null;
     _favoriteItemIds.clear();
 
+    unawaited(PushNotificationService.instance.unbindFromUser(phone: previousPhone));
     unawaited(
       AccountRepository.instance.clearSession(phone: previousPhone).then((_) {
         debugPrint('LOGOUT: Local session cleared.');

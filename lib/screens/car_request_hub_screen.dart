@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../models/app_models.dart';
 import '../utils/dummy_data.dart';
 import '../widgets/app_image.dart';
+import '../widgets/service_navigation_buttons.dart';
 import 'catalog_products_screen.dart';
 
 /// أنواع المركبات داخل «طلب سيارة» — الصورة تحمل الاسم في التصميم.
@@ -16,15 +17,7 @@ class CarRequestHubScreen extends StatelessWidget {
 
     return CupertinoPageScaffold(
       backgroundColor: const Color(0xFFF2F2F7),
-      navigationBar: const CupertinoNavigationBar(
-        middle: Text(
-          'طلب سيارة',
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            fontFamily: 'Cairo',
-          ),
-        ),
-      ),
+      navigationBar: const ServiceNavigationBar(title: 'طلب سيارة'),
       child: SafeArea(
         child: CustomScrollView(
           physics: const BouncingScrollPhysics(),
