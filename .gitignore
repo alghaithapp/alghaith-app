@@ -23,6 +23,7 @@ coverage/
 !.env.example
 android/app/google-services.json
 ios/Runner/GoogleService-Info.plist
+.codemagic-*-base64.txt
 
 .vercel
 .env*
