@@ -37,7 +37,6 @@ class ServiceNavIconButton extends StatelessWidget {
             icon,
             size: 19,
             color: iconColor ?? AppColors.textPrimary,
-            matchTextDirection: true,
           );
 
     final button = Material(
@@ -79,8 +78,11 @@ class ServiceBackButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isRtl = Directionality.of(context) == TextDirection.rtl;
     return ServiceNavIconButton(
-      icon: Icons.arrow_back_ios_new_rounded,
+      icon: isRtl
+          ? Icons.arrow_forward_ios_rounded
+          : Icons.arrow_back_ios_new_rounded,
       tooltip: 'رجوع',
       onPressed: onPressed ?? () => Navigator.of(context).maybePop(),
     );
