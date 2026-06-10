@@ -24,6 +24,9 @@ workflows:
       flutter: stable
       xcode: latest
       cocoapods: default
+      groups:
+        # أضف المجموعة في Codemagic → Environment variables → Group: firebase_credentials
+        - firebase_credentials
       ios_signing:
         distribution_type: app_store
         bundle_identifier: com.alghaith.app
@@ -57,18 +60,21 @@ workflows:
           test -f ios/Runner.xcodeproj/xcshareddata/xcschemes/Runner.xcscheme
           echo "Runner scheme files OK"
 
-      # ملفات Firebase غير موجودة على Git (للأمان). ارفعها في Codemagic → Secure files.
-      - name: Verify Firebase config files
+      # ملفات Firebase: متغيرات سرية base64 في مجموعة firebase_credentials
+      - name: Set up Firebase config files
         script: |
           set -e
-          if [ ! -f ios/Runner/GoogleService-Info.plist ]; then
-            echo "Missing ios/Runner/GoogleService-Info.plist"
-            echo "Upload it in Codemagic → Environment variables → Secure files"
-            echo "Target path: ios/Runner/GoogleService-Info.plist"
-            exit 1
+          if [ -n "$IOS_GOOGLE_SERVICE_INFO_PLIST" ]; then
+            echo "$IOS_GOOGLE_SERVICE_INFO_PLIST" | base64 --decode > ios/Runner/GoogleService-Info.plist
+            echo "Wrote ios/Runner/GoogleService-Info.plist"
           fi
-          if [ ! -f android/app/google-services.json ]; then
-            echo "Warning: android/app/google-services.json not found (OK for iOS-only build)"
+          if [ -n "$ANDROID_GOOGLE_SERVICES_JSON" ]; then
+            echo "$ANDROID_GOOGLE_SERVICES_JSON" | base64 --decode > android/app/google-services.json
+            echo "Wrote android/app/google-services.json"
+          fi
+          if [ ! -f ios/Runner/GoogleService-Info.plist ]; then
+            echo "Missing IOS_GOOGLE_SERVICE_INFO_PLIST in group firebase_credentials"
+            exit 1
           fi
           echo "Firebase iOS config OK"
 
