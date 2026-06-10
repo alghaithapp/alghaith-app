@@ -57,6 +57,21 @@ workflows:
           test -f ios/Runner.xcodeproj/xcshareddata/xcschemes/Runner.xcscheme
           echo "Runner scheme files OK"
 
+      # ملفات Firebase غير موجودة على Git (للأمان). ارفعها في Codemagic → Secure files.
+      - name: Verify Firebase config files
+        script: |
+          set -e
+          if [ ! -f ios/Runner/GoogleService-Info.plist ]; then
+            echo "Missing ios/Runner/GoogleService-Info.plist"
+            echo "Upload it in Codemagic → Environment variables → Secure files"
+            echo "Target path: ios/Runner/GoogleService-Info.plist"
+            exit 1
+          fi
+          if [ ! -f android/app/google-services.json ]; then
+            echo "Warning: android/app/google-services.json not found (OK for iOS-only build)"
+          fi
+          echo "Firebase iOS config OK"
+
       - name: Get Flutter packages
         script: |
           set -e
