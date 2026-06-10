@@ -2,10 +2,7 @@ import 'package:firebase_core/firebase_core.dart' show FirebaseOptions;
 import 'package:flutter/foundation.dart'
     show defaultTargetPlatform, kIsWeb, TargetPlatform;
 
-/// Firebase options for الغيث.
-///
-/// Run `flutterfire configure` after creating a Firebase project, or replace the
-/// placeholder values below manually from Firebase Console.
+/// Firebase options — مُولَّدة من google-services.json و GoogleService-Info.plist
 class DefaultFirebaseOptions {
   static const String _placeholder = 'REPLACE_ME';
 
@@ -35,19 +32,19 @@ class DefaultFirebaseOptions {
   }
 
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: _placeholder,
-    appId: _placeholder,
-    messagingSenderId: _placeholder,
-    projectId: _placeholder,
-    storageBucket: '$_placeholder.appspot.com',
+    apiKey: 'AIzaSyD343P0c3e8yTFfbapgDYKjwjnrSsf7DE8',
+    appId: '1:1058536503582:android:1dc4319eda01ddd6def10f',
+    messagingSenderId: '1058536503582',
+    projectId: 'algaithapp',
+    storageBucket: 'algaithapp.firebasestorage.app',
   );
 
   static const FirebaseOptions ios = FirebaseOptions(
-    apiKey: _placeholder,
-    appId: _placeholder,
-    messagingSenderId: _placeholder,
-    projectId: _placeholder,
-    storageBucket: '$_placeholder.appspot.com',
+    apiKey: 'AIzaSyBADwgcdPVuQDdbFvpOh7UWo6kt7ie0Jeg',
+    appId: '1:1058536503582:ios:7115ca6956a8f276def10f',
+    messagingSenderId: '1058536503582',
+    projectId: 'algaithapp',
+    storageBucket: 'algaithapp.firebasestorage.app',
     iosBundleId: 'com.alghaith.app',
   );
 }
