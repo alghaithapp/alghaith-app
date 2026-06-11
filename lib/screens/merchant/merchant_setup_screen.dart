@@ -1,9 +1,7 @@
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/catalog/marketplace_catalog.dart';
@@ -15,6 +13,7 @@ import '../../utils/helpers.dart';
 import '../../utils/merchant_profile_fields.dart';
 import '../../utils/merchant_service_labels.dart';
 import '../../widgets/app_image.dart';
+import '../../widgets/app_logo.dart';
 import '../../widgets/location_picker_screen.dart';
 import '../../widgets/merchant/merchant_image_upload_slot.dart';
 import '../../widgets/merchant/merchant_working_hours_picker.dart';
@@ -36,7 +35,7 @@ class _MerchantSetupScreenState extends State<MerchantSetupScreen> {
   String _closeTime = '';
   final TextEditingController _deliveryFeeController = TextEditingController();
 
-  final List<String> _selectedServiceIds = ['restaurant'];
+  final List<String> _selectedServiceIds = []; // تبدأ فارغة ليقوم التاجر بالاختيار أولاً
   String? _coverImageBase64;
   String? _logoImageBase64;
   String? _profileImageBase64;
@@ -46,7 +45,8 @@ class _MerchantSetupScreenState extends State<MerchantSetupScreen> {
   double? _storeLatitude;
   double? _storeLongitude;
 
-  String get _primaryServiceId => _selectedServiceIds.first;
+  String get _primaryServiceId =>
+      _selectedServiceIds.isEmpty ? 'product' : _selectedServiceIds.first;
 
   String _resolveWhatsAppNumber() {
     final whatsapp = _whatsappController.text.trim();
@@ -69,9 +69,36 @@ class _MerchantSetupScreenState extends State<MerchantSetupScreen> {
       _selectedServiceIds.contains('professionals');
 
   bool get _isRestaurantSetup => _primaryServiceId == 'restaurant';
-  bool get _requiresStoreLocation =>
-      _selectedServiceIds.contains('restaurant') ||
-      _selectedServiceIds.contains('product');
+
+  bool _isLocationRequiredFor(String serviceId) {
+    return const {
+      'restaurant',
+      'product',
+      'beauty',
+      'professionals',
+      'real_estate',
+      'offers'
+    }.contains(serviceId);
+  }
+
+  bool get _requiresStoreLocation => _isLocationRequiredFor(_primaryServiceId);
+
+  String _locationTitleFor(String serviceId) {
+    switch (serviceId) {
+      case 'bazar_ghaith':
+        return 'لوكيشن متجرك في بازار الغيث';
+      case 'restaurant':
+        return 'لوكيشن المطعم على الخريطة';
+      case 'product':
+        return 'لوكيشن المتجر على الخريطة';
+      case 'offers':
+      case 'professionals':
+      case 'tourism':
+        return 'موقعك الحالي على الخريطة';
+      default:
+        return 'تحديد موقعك على الخريطة';
+    }
+  }
 
   bool get _showsStoreBrandingImages =>
       _selectedServiceIds.contains('restaurant') ||
@@ -204,519 +231,539 @@ class _MerchantSetupScreenState extends State<MerchantSetupScreen> {
         ),
       ),
       child: SafeArea(
-        child: CustomScrollView(
-          slivers: [
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-                child: Container(
-                  padding: const EdgeInsets.all(18),
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [
-                        AppColors.accentDark,
-                        AppColors.accent
-                      ],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                    borderRadius: BorderRadius.circular(28),
-                    boxShadow: [
-                      BoxShadow(
-                        color: AppColors.accent.withValues(alpha: 0.18),
-                        blurRadius: 24,
-                        offset: const Offset(0, 12),
-                      ),
-                    ],
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 64,
-                        height: 64,
+        child: _selectedServiceIds.isEmpty
+            ? _buildInitialActivitySelection()
+            : CustomScrollView(
+                slivers: [
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                      child: Container(
+                        padding: const EdgeInsets.all(18),
                         decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.18),
-                          borderRadius: BorderRadius.circular(18),
-                        ),
-                        child: const Icon(Icons.storefront,
-                            color: Colors.white, size: 34),
-                      ),
-                      const SizedBox(width: 14),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              labels.dashboardGreetingAr,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 18,
-                                fontWeight: FontWeight.w800,
-                                fontFamily: 'Cairo',
-                              ),
+                          gradient: const LinearGradient(
+                            colors: [Color(0xFF004D4D), Color(0xFF007A7A)],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
+                          borderRadius: BorderRadius.circular(28),
+                          boxShadow: [
+                            BoxShadow(
+                              color: const Color(0xFF007A7A).withValues(alpha: 0.18),
+                              blurRadius: 24,
+                              offset: const Offset(0, 12),
                             ),
-                            const SizedBox(height: 6),
-                            Text(
-                              labels.dashboardIntroAr,
-                              style: const TextStyle(
-                                color: Colors.white70,
-                                height: 1.35,
-                                fontSize: 12,
-                                fontFamily: 'Cairo',
+                          ],
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 64,
+                              height: 64,
+                              decoration: BoxDecoration(
+                                color: Colors.white.withValues(alpha: 0.18),
+                                borderRadius: BorderRadius.circular(18),
+                              ),
+                              child: const Icon(Icons.storefront,
+                                  color: Colors.white, size: 34),
+                            ),
+                            const SizedBox(width: 14),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    labels.dashboardGreetingAr,
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.w800,
+                                      fontFamily: 'Cairo',
+                                    ),
+                                  ),
+                                  const SizedBox(height: 6),
+                                  Text(
+                                    labels.dashboardIntroAr,
+                                    style: const TextStyle(
+                                      color: Colors.white70,
+                                      height: 1.35,
+                                      fontSize: 12,
+                                      fontFamily: 'Cairo',
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
                           ],
                         ),
                       ),
-                    ],
+                    ),
                   ),
-                ),
-              ),
-            ),
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _sectionTitle('معلومات ${labels.storeLabelAr}'),
-                    const SizedBox(height: 12),
-                    _buildField(
-                        _isProfessionalSetup
-                            ? 'اسم صاحب المهنة'
-                            : 'اسم ${labels.storeLabelAr}',
-                        _nameController),
-                    const SizedBox(height: 14),
-                    _buildField(
-                        _isProfessionalSetup
-                            ? 'وصف المهنة'
-                            : 'وصف ${labels.storeLabelAr}',
-                        _descController,
-                        maxLines: 3),
-                    const SizedBox(height: 14),
-                    _buildField(
-                      'رقم الهاتف (يجب أن يكون رقم واتساب)',
-                      _phoneController,
-                      keyboardType: TextInputType.phone,
-                    ),
-                    const SizedBox(height: 14),
-                    _buildField(
-                      'رقم واتساب (اختياري)',
-                      _whatsappController,
-                      hintText:
-                          'اتركه فارغاً لاستخدام نفس رقم الهاتف أعلاه',
-                      keyboardType: TextInputType.phone,
-                    ),
-                    const SizedBox(height: 14),
-                    if (_isProfessionalSetup) ...[
-                      _sectionTitle('تخصص المهنة'),
-                      const SizedBox(height: 10),
-                      DropdownButtonFormField<String>(
-                        value: DummyData.professionalsSubCategories.any(
-                                (category) =>
-                                    category.id ==
-                                    _selectedProfessionalCategoryId)
-                            ? _selectedProfessionalCategoryId
-                            : null,
-                        items: DummyData.professionalsSubCategories
-                            .map((profession) {
-                          return DropdownMenuItem<String>(
-                            value: profession.id,
-                            child: Text(
-                              profession.titleAr,
-                              style: const TextStyle(fontFamily: 'Cairo'),
-                            ),
-                          );
-                        }).toList(),
-                        onChanged: (value) {
-                          setState(
-                              () => _selectedProfessionalCategoryId = value);
-                        },
-                        decoration: InputDecoration(
-                          filled: true,
-                          fillColor: const Color(0xFFF7F8FC),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(14),
-                            borderSide: BorderSide.none,
-                          ),
-                        ),
-                        validator: (value) {
-                          if (_isProfessionalSetup &&
-                              (value == null || value.isEmpty)) {
-                            return 'اختر تخصص المهنة';
-                          }
-                          return null;
-                        },
-                      ),
-                      const SizedBox(height: 14),
-                    ],
-                    _buildField(
-                        'العنوان', _addressController),
-                    const SizedBox(height: 12),
-                    _buildLocationCard(),
-                    const SizedBox(height: 20),
-                    _sectionTitle(
-                      _showsStoreBrandingImages
-                          ? 'صورة ${brandLabels.storeLabelAr} وشعاره'
-                          : (_isProfessionalSetup
-                              ? 'الصورة الشخصية والأعمال'
-                              : 'الصور والهوية'),
-                    ),
-                    const SizedBox(height: 12),
-                    if (_showsStoreBrandingImages) ...[
-                      MerchantImageUploadSlot(
-                        title: brandLabels.coverLabelAr,
-                        imageRef: _coverImageBase64,
-                        icon: Icons.storefront_rounded,
-                        onTap: _pickCoverImage,
-                      ),
-                      const SizedBox(height: 12),
-                      MerchantImageUploadSlot(
-                        title: brandLabels.logoLabelAr,
-                        imageRef: _logoImageBase64,
-                        icon: Icons.badge_rounded,
-                        onTap: _pickLogoImage,
-                      ),
-                      if (_isRestaurantSetup) ...[
-                        const SizedBox(height: 20),
-                        _sectionTitle('تصنيف المطعم'),
-                        const SizedBox(height: 6),
-                        const Text(
-                          'حدد التخصص الأساسي لمطعمك ليظهر في الفلتر الصحيح للزبائن.',
-                          style: TextStyle(
-                            color: Colors.grey,
-                            fontSize: 12,
-                            fontFamily: 'Cairo',
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: _ChoiceChip(
-                                label: 'مشويات',
-                                selected:
-                                    _selectedRestaurantCategory == 'مشويات',
-                                onTap: () => setState(
-                                  () => _selectedRestaurantCategory = 'مشويات',
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: _ChoiceChip(
-                                label: 'وجبات سريعة',
-                                selected: _selectedRestaurantCategory ==
-                                    'وجبات سريعة',
-                                onTap: () => setState(
-                                  () => _selectedRestaurantCategory =
-                                      'وجبات سريعة',
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ] else if (_isProfessionalSetup) ...[
-                      MerchantImageUploadSlot(
-                        title: 'الصورة الشخصية',
-                        imageRef: _profileImageBase64,
-                        icon: Icons.person_rounded,
-                        onTap: _pickProfileImage,
-                      ),
-                      const SizedBox(height: 12),
-                      _SampleImagesRow(
-                        title:
-                            'صور نماذج الأعمال',
-                        imagesBase64: _workSampleImagesBase64,
-                        onAddTap: _pickWorkSamples,
-                      ),
-                    ],
-                    const SizedBox(height: 20),
-                    _sectionTitle(
-                        'الخدمات المشمولة'),
-                    const SizedBox(height: 6),
-                    Text(
-                      'يمكنك اختيار أكثر من خدمة من نفس الحساب، ثم التبديل بينها لاحقًا من داخل حسابك.',
-                      style: const TextStyle(
-                        color: Colors.grey,
-                        fontSize: 12,
-                        height: 1.5,
-                        fontFamily: 'Cairo',
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    Wrap(
-                      spacing: 10,
-                      runSpacing: 10,
-                      children: MarketplaceCatalog.merchantAvailableCategories.map((cat) {
-                        final selected = _selectedServiceIds.contains(cat.id);
-                        return GestureDetector(
-                          onTap: () => setState(() {
-                            if (selected) {
-                              // إلغاء التحديد — لكن يجب الإبقاء على خدمة واحدة على الأقل
-                              if (_selectedServiceIds.length == 1) return;
-                              _selectedServiceIds.remove(cat.id);
-                            } else {
-                              // إضافة وجعلها الخدمة الأساسية
-                              _selectedServiceIds.remove(cat.id);
-                              _selectedServiceIds.insert(0, cat.id);
-                            }
-                          }),
-                          child: AnimatedContainer(
-                            duration: const Duration(milliseconds: 220),
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 12,
-                            ),
-                            decoration: BoxDecoration(
-                              color: selected ? AppColors.accent : Colors.white,
-                              borderRadius: BorderRadius.circular(999),
-                              border: Border.all(
-                                color: selected
-                                    ? AppColors.accent
-                                    : Colors.grey.shade300,
-                              ),
-                            ),
-                            child: Text(
-                              cat.titleAr,
-                              style: TextStyle(
-                                color: selected ? Colors.white : Colors.black87,
-                                fontWeight: FontWeight.w700,
-                                fontFamily: 'Cairo',
-                              ),
-                            ),
-                          ),
-                        );
-                      }).toList(),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'اضغط على أي خدمة لتجعلها الخدمة الأساسية أثناء تعبئة البيانات.',
-                      style: const TextStyle(
-                        color: Colors.grey,
-                        fontSize: 12,
-                        height: 1.4,
-                        fontFamily: 'Cairo',
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    _sectionTitle(
-                        hideFee
-                            ? 'أوقات وإعدادات ${labels.storeLabelAr}'
-                            : 'أوقات ورسوم ${labels.storeLabelAr}'),
-                    const SizedBox(height: 12),
-                    MerchantWorkingHoursPicker(
-                      openTime: _openTime,
-                      closeTime: _closeTime,
-                      onOpenTimeChanged: (value) =>
-                          setState(() => _openTime = value),
-                      onCloseTimeChanged: (value) =>
-                          setState(() => _closeTime = value),
-                    ),
-                    const SizedBox(height: 14),
-                    if (!hideFee) ...[
-                      _buildField(
-                        'رسوم ${labels.storeLabelAr}',
-                        _deliveryFeeController,
-                        keyboardType: TextInputType.number,
-                      ),
-                    ] else ...[
-                      Container(
-                        padding: const EdgeInsets.all(14),
-                        decoration: BoxDecoration(
-                          color: AppColors.accent.withValues(alpha: 0.08),
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        child: Text(
-                          'لا توجد رسوم مباشرة على الزبون. التواصل والتفاهم يتم بين الطرفين فقط.',
-                          style: const TextStyle(
-                            fontFamily: 'Cairo',
-                            height: 1.4,
-                            fontSize: 13,
-                          ),
-                        ),
-                      ),
-                    ],
-                    const SizedBox(height: 28),
-                    Container(
+                  SliverToBoxAdapter(
+                    child: Padding(
                       padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(24),
-                        border: Border.all(color: Colors.grey.shade200),
-                      ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
+                          _sectionTitle('معلومات ${labels.storeLabelAr}'),
+                          const SizedBox(height: 12),
+                          _buildField(
+                              _isProfessionalSetup
+                                  ? 'اسم صاحب المهنة'
+                                  : 'اسم ${labels.storeLabelAr}',
+                              _nameController),
+                          const SizedBox(height: 14),
+                          _buildField(
+                              _isProfessionalSetup
+                                  ? 'وصف المهنة'
+                                  : 'وصف ${labels.storeLabelAr}',
+                              _descController,
+                              maxLines: 3),
+                          const SizedBox(height: 14),
+                          _buildField(
+                            'رقم الهاتف (يجب أن يكون رقم واتساب)',
+                            _phoneController,
+                            keyboardType: TextInputType.phone,
+                          ),
+                          const SizedBox(height: 14),
+                          _buildField(
+                            'رقم واتساب (اختياري)',
+                            _whatsappController,
+                            hintText:
+                                'اتركه فارغاً لاستخدام نفس رقم الهاتف أعلاه',
+                            keyboardType: TextInputType.phone,
+                          ),
+                          const SizedBox(height: 14),
+                          if (_isProfessionalSetup) ...[
+                            _sectionTitle('تخصص المهنة'),
+                            const SizedBox(height: 10),
+                            DropdownButtonFormField<String>(
+                              value: DummyData.professionalsSubCategories.any(
+                                      (category) =>
+                                          category.id ==
+                                          _selectedProfessionalCategoryId)
+                                  ? _selectedProfessionalCategoryId
+                                  : null,
+                              items: DummyData.professionalsSubCategories
+                                  .map((profession) {
+                                return DropdownMenuItem<String>(
+                                  value: profession.id,
+                                  child: Text(
+                                    profession.titleAr,
+                                    style: const TextStyle(fontFamily: 'Cairo'),
+                                  ),
+                                );
+                              }).toList(),
+                              onChanged: (value) {
+                                setState(() =>
+                                    _selectedProfessionalCategoryId = value);
+                              },
+                              decoration: InputDecoration(
+                                filled: true,
+                                fillColor: const Color(0xFFF7F8FC),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(14),
+                                  borderSide: BorderSide.none,
+                                ),
+                              ),
+                              validator: (value) {
+                                if (_isProfessionalSetup &&
+                                    (value == null || value.isEmpty)) {
+                                  return 'اختر تخصص المهنة';
+                                }
+                                return null;
+                              },
+                            ),
+                            const SizedBox(height: 14),
+                          ],
+                          _buildField('العنوان', _addressController),
+                          const SizedBox(height: 12),
+                          _buildLocationCard(),
+                          const SizedBox(height: 20),
+                          _sectionTitle(
+                            _showsStoreBrandingImages
+                                ? 'صورة ${brandLabels.storeLabelAr} وشعاره'
+                                : (_isProfessionalSetup
+                                    ? 'الصورة الشخصية والأعمال'
+                                    : 'الصور والهوية'),
+                          ),
+                          const SizedBox(height: 12),
+                          if (_showsStoreBrandingImages) ...[
+                            MerchantImageUploadSlot(
+                              title: brandLabels.coverLabelAr,
+                              imageRef: _coverImageBase64,
+                              icon: Icons.storefront_rounded,
+                              onTap: _pickCoverImage,
+                            ),
+                            const SizedBox(height: 12),
+                            MerchantImageUploadSlot(
+                              title: brandLabels.logoLabelAr,
+                              imageRef: _logoImageBase64,
+                              icon: Icons.badge_rounded,
+                              onTap: _pickLogoImage,
+                            ),
+                            if (_isRestaurantSetup) ...[
+                              const SizedBox(height: 20),
+                              _sectionTitle('تصنيف المطعم'),
+                              const SizedBox(height: 6),
+                              const Text(
+                                'حدد التخصص الأساسي لمطعمك ليظهر في الفلتر الصحيح للزبائن.',
+                                style: TextStyle(
+                                  color: Colors.grey,
+                                  fontSize: 12,
+                                  fontFamily: 'Cairo',
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: _ChoiceChip(
+                                      label: 'مشويات',
+                                      selected: _selectedRestaurantCategory ==
+                                          'مشويات',
+                                      onTap: () => setState(
+                                        () => _selectedRestaurantCategory =
+                                            'مشويات',
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: _ChoiceChip(
+                                      label: 'وجبات سريعة',
+                                      selected: _selectedRestaurantCategory ==
+                                          'وجبات سريعة',
+                                      onTap: () => setState(
+                                        () => _selectedRestaurantCategory =
+                                            'وجبات سريعة',
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ] else if (_isProfessionalSetup) ...[
+                            MerchantImageUploadSlot(
+                              title: 'الصورة الشخصية',
+                              imageRef: _profileImageBase64,
+                              icon: Icons.person_rounded,
+                              onTap: _pickProfileImage,
+                            ),
+                            const SizedBox(height: 12),
+                            _SampleImagesRow(
+                              title: 'صور نماذج الأعمال',
+                              imagesBase64: _workSampleImagesBase64,
+                              onAddTap: _pickWorkSamples,
+                            ),
+                          ],
+                          const SizedBox(height: 20),
+                          _sectionTitle('الخدمات المشمولة'),
+                          const SizedBox(height: 6),
                           Text(
-                            'ملاحظات',
+                            'يمكنك اختيار أكثر من خدمة من نفس الحساب، ثم التبديل بينها لاحقًا من داخل حسابك.',
                             style: const TextStyle(
-                              fontWeight: FontWeight.w800,
-                              fontSize: 16,
+                              color: Colors.grey,
+                              fontSize: 12,
+                              height: 1.5,
                               fontFamily: 'Cairo',
                             ),
                           ),
+                          const SizedBox(height: 12),
+                          Wrap(
+                            spacing: 10,
+                            runSpacing: 10,
+                            children: MarketplaceCatalog
+                                .merchantAvailableCategories
+                                .map((cat) {
+                              final selected =
+                                  _selectedServiceIds.contains(cat.id);
+                              return GestureDetector(
+                                onTap: () => setState(() {
+                                  if (selected) {
+                                    // إلغاء التحديد — لكن يجب الإبقاء على خدمة واحدة على الأقل
+                                    if (_selectedServiceIds.length == 1) return;
+                                    _selectedServiceIds.remove(cat.id);
+                                  } else {
+                                    // إضافة وجعلها الخدمة الأساسية
+                                    _selectedServiceIds.remove(cat.id);
+                                    _selectedServiceIds.insert(0, cat.id);
+                                  }
+                                }),
+                                child: AnimatedContainer(
+                                  duration: const Duration(milliseconds: 220),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 16,
+                                    vertical: 12,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: selected
+                                        ? const Color(0xFF007A7A)
+                                        : Colors.white,
+                                    borderRadius: BorderRadius.circular(999),
+                                    border: Border.all(
+                                      color: selected
+                                          ? const Color(0xFF007A7A)
+                                          : Colors.grey.shade300,
+                                    ),
+                                  ),
+                                  child: Text(
+                                    cat.titleAr,
+                                    style: TextStyle(
+                                      color: selected
+                                          ? Colors.white
+                                          : Colors.black87,
+                                      fontWeight: FontWeight.w700,
+                                      fontFamily: 'Cairo',
+                                    ),
+                                  ),
+                                ),
+                              );
+                            }).toList(),
+                          ),
                           const SizedBox(height: 8),
                           Text(
-                            'بعد الحفظ سيتم تفعيل الحساب وفتح لوحة التحكم ببياناتك أنت فقط.',
+                            'اضغط على أي خدمة لتجعلها الخدمة الأساسية أثناء تعبئة البيانات.',
                             style: const TextStyle(
                               color: Colors.grey,
-                              height: 1.45,
-                              fontSize: 13,
+                              fontSize: 12,
+                              height: 1.4,
                               fontFamily: 'Cairo',
+                            ),
+                          ),
+                          const SizedBox(height: 20),
+                          _sectionTitle(hideFee
+                              ? 'أوقات وإعدادات ${labels.storeLabelAr}'
+                              : 'أوقات ورسوم ${labels.storeLabelAr}'),
+                          const SizedBox(height: 12),
+                          MerchantWorkingHoursPicker(
+                            openTime: _openTime,
+                            closeTime: _closeTime,
+                            onOpenTimeChanged: (value) =>
+                                setState(() => _openTime = value),
+                            onCloseTimeChanged: (value) =>
+                                setState(() => _closeTime = value),
+                          ),
+                          const SizedBox(height: 14),
+                          if (!hideFee) ...[
+                            _buildField(
+                              'رسوم ${labels.storeLabelAr}',
+                              _deliveryFeeController,
+                              keyboardType: TextInputType.number,
+                            ),
+                          ] else ...[
+                            Container(
+                              padding: const EdgeInsets.all(14),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF007A7A)
+                                    .withValues(alpha: 0.08),
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              child: Text(
+                                'لا توجد رسوم مباشرة على الزبون. التواصل والتفاهم يتم بين الطرفين فقط.',
+                                style: const TextStyle(
+                                  fontFamily: 'Cairo',
+                                  height: 1.4,
+                                  fontSize: 13,
+                                ),
+                              ),
+                            ),
+                          ],
+                          const SizedBox(height: 28),
+                          Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(24),
+                              border: Border.all(color: Colors.grey.shade200),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'ملاحظات',
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w800,
+                                    fontSize: 16,
+                                    fontFamily: 'Cairo',
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  'بعد الحفظ سيتم تفعيل الحساب وفتح لوحة التحكم ببياناتك أنت فقط.',
+                                  style: const TextStyle(
+                                    color: Colors.grey,
+                                    height: 1.45,
+                                    fontSize: 13,
+                                    fontFamily: 'Cairo',
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 24),
+                          SizedBox(
+                            width: double.infinity,
+                            child: CupertinoButton(
+                              padding: const EdgeInsets.symmetric(vertical: 16),
+                              color: const Color(0xFF007A7A),
+                              borderRadius: BorderRadius.circular(18),
+                              onPressed: () async {
+                                final name = _nameController.text.trim();
+                                if (name.isEmpty) {
+                                  _showMessage('يرجى إدخال الاسم أولاً');
+                                  return;
+                                }
+
+                                if (_showsStoreBrandingImages) {
+                                  if (!ImageStorageService
+                                          .isMerchantUploadedImage(
+                                              _coverImageBase64) ||
+                                      !ImageStorageService
+                                          .isMerchantUploadedImage(
+                                              _logoImageBase64)) {
+                                    _showMessage(
+                                      'يرجى رفع ${brandLabels.coverLabelAr} و${brandLabels.logoLabelAr}',
+                                    );
+                                    return;
+                                  }
+                                }
+                                if (_isRestaurantSetup) {
+                                  if (_selectedRestaurantCategory == null) {
+                                    _showMessage(
+                                        'يرجى اختيار تصنيف المطعم (مشويات أو وجبات سريعة)');
+                                    return;
+                                  }
+                                }
+
+                                if (_isProfessionalSetup) {
+                                  final address =
+                                      _addressController.text.trim();
+                                  final phone = _phoneController.text.trim();
+                                  final openTime = _openTime.trim();
+                                  final closeTime = _closeTime.trim();
+                                  final professionId =
+                                      _selectedProfessionalCategoryId;
+                                  if (address.isEmpty ||
+                                      phone.isEmpty ||
+                                      openTime.isEmpty ||
+                                      closeTime.isEmpty ||
+                                      professionId == null ||
+                                      professionId.isEmpty) {
+                                    _showMessage(
+                                        'يرجى إكمال بيانات صاحب المهنة');
+                                    return;
+                                  }
+                                }
+                                if (_requiresStoreLocation &&
+                                    (_storeLatitude == null ||
+                                        _storeLongitude == null)) {
+                                  _showMessage(
+                                      'حدد ${_locationTitleFor(_primaryServiceId)} أولاً');
+                                  return;
+                                }
+                                if (_openTime.trim().isEmpty ||
+                                    _closeTime.trim().isEmpty) {
+                                  _showMessage(
+                                      'يرجى تحديد وقت الافتتاح ووقت الإغلاق');
+                                  return;
+                                }
+
+                                try {
+                                  await appProvider.setMerchantStore({
+                                    'name': name,
+                                    'description': _descController.text.trim(),
+                                    'category': _primaryServiceId,
+                                    'serviceIds':
+                                        List<String>.from(_selectedServiceIds),
+                                    'activeServiceId': _primaryServiceId,
+                                    'image': '',
+                                    'coverImageBase64': _coverImageBase64,
+                                    'logoImageBase64': _logoImageBase64,
+                                    'restaurantCategory':
+                                        _selectedRestaurantCategory,
+                                    'profileImageBase64': _isRestaurantSetup
+                                        ? _logoImageBase64
+                                        : _profileImageBase64,
+                                    'phone': _phoneController.text.trim(),
+                                    'whatsapp': _resolveWhatsAppNumber(),
+                                    'address': _addressController.text.trim(),
+                                    'latitude': _storeLatitude,
+                                    'longitude': _storeLongitude,
+                                    'openTime': _openTime.trim(),
+                                    'closeTime': _closeTime.trim(),
+                                    'deliveryFee': hideFee
+                                        ? 0
+                                        : int.tryParse(_deliveryFeeController
+                                                .text
+                                                .trim()) ??
+                                            0,
+                                    'isOpen': true,
+                                    'rating': 0,
+                                    if (!_isRestaurantSetup)
+                                      'workSampleImagesBase64':
+                                          List<String>.from(
+                                              _workSampleImagesBase64),
+                                    'professionalInfo': _isProfessionalSetup
+                                        ? {
+                                            'name': _nameController.text.trim(),
+                                            'address': _addressController.text
+                                                .trim(),
+                                            'latitude': _storeLatitude,
+                                            'longitude': _storeLongitude,
+                                            'phone':
+                                                _phoneController.text.trim(),
+                                            'whatsapp':
+                                                _resolveWhatsAppNumber(),
+                                            'openTime': _openTime.trim(),
+                                            'closeTime': _closeTime.trim(),
+                                            'profileImageBase64':
+                                                _profileImageBase64,
+                                            'workSampleImagesBase64':
+                                                List<String>.from(
+                                                    _workSampleImagesBase64),
+                                            'professionId':
+                                                _selectedProfessionalCategoryId,
+                                            'professionNameAr':
+                                                _selectedProfessionalCategoryNameAr,
+                                            'professionNameEn':
+                                                _selectedProfessionalCategoryId ==
+                                                        null
+                                                    ? null
+                                                    : DummyData
+                                                        .professionalsSubCategories
+                                                        .firstWhere(
+                                                          (item) =>
+                                                              item.id ==
+                                                              _selectedProfessionalCategoryId,
+                                                        )
+                                                        .titleEn,
+                                          }
+                                        : null,
+                                    'professionalCategoryId':
+                                        _selectedProfessionalCategoryId,
+                                  });
+                                  await appProvider.activateMerchantRole();
+                                } catch (error) {
+                                  _showMessage(
+                                      'تعذر حفظ بيانات التاجر: $error');
+                                }
+                              },
+                              child: Text(
+                                'حفظ وتفعيل ${labels.storeLabelAr}',
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w800,
+                                  fontFamily: 'Cairo',
+                                ),
+                              ),
                             ),
                           ),
                         ],
                       ),
                     ),
-                    const SizedBox(height: 24),
-                    SizedBox(
-                      width: double.infinity,
-                      child: CupertinoButton(
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        color: AppColors.accent,
-                        borderRadius: BorderRadius.circular(18),
-                        onPressed: () async {
-                          final name = _nameController.text.trim();
-                          if (name.isEmpty) {
-                            _showMessage('يرجى إدخال الاسم أولاً');
-                            return;
-                          }
-
-                          if (_showsStoreBrandingImages) {
-                            if (!ImageStorageService
-                                    .isMerchantUploadedImage(_coverImageBase64) ||
-                                !ImageStorageService
-                                    .isMerchantUploadedImage(_logoImageBase64)) {
-                              _showMessage(
-                                'يرجى رفع ${brandLabels.coverLabelAr} و${brandLabels.logoLabelAr}',
-                              );
-                              return;
-                            }
-                          }
-                          if (_isRestaurantSetup) {
-                            if (_selectedRestaurantCategory == null) {
-                              _showMessage('يرجى اختيار تصنيف المطعم (مشويات أو وجبات سريعة)');
-                              return;
-                            }
-                          }
-
-                          if (_isProfessionalSetup) {
-                            final address = _addressController.text.trim();
-                            final phone = _phoneController.text.trim();
-                            final openTime = _openTime.trim();
-                            final closeTime = _closeTime.trim();
-                            final professionId =
-                                _selectedProfessionalCategoryId;
-                            if (address.isEmpty ||
-                                phone.isEmpty ||
-                                openTime.isEmpty ||
-                                closeTime.isEmpty ||
-                                professionId == null ||
-                                professionId.isEmpty) {
-                              _showMessage('يرجى إكمال بيانات صاحب المهنة');
-                              return;
-                            }
-                          }
-                          if (_requiresStoreLocation &&
-                              (_storeLatitude == null ||
-                                  _storeLongitude == null)) {
-                            _showMessage('حدد موقع ${labels.storeLabelAr} على الخريطة أولاً');
-                            return;
-                          }
-                          if (_openTime.trim().isEmpty ||
-                              _closeTime.trim().isEmpty) {
-                            _showMessage(
-                                'يرجى تحديد وقت الافتتاح ووقت الإغلاق');
-                            return;
-                          }
-
-                          try {
-                            await appProvider.setMerchantStore({
-                            'name': name,
-                            'description': _descController.text.trim(),
-                            'category': _primaryServiceId,
-                            'serviceIds':
-                                List<String>.from(_selectedServiceIds),
-                            'activeServiceId': _primaryServiceId,
-                            'image': '',
-                            'coverImageBase64': _coverImageBase64,
-                            'logoImageBase64': _logoImageBase64,
-                            'restaurantCategory': _selectedRestaurantCategory,
-                            'profileImageBase64': _isRestaurantSetup
-                                ? _logoImageBase64
-                                : _profileImageBase64,
-                            'phone': _phoneController.text.trim(),
-                            'whatsapp': _resolveWhatsAppNumber(),
-                            'address': _addressController.text.trim(),
-                            'latitude': _storeLatitude,
-                            'longitude': _storeLongitude,
-                            'openTime': _openTime.trim(),
-                            'closeTime': _closeTime.trim(),
-                            'deliveryFee': hideFee
-                                ? 0
-                                : int.tryParse(
-                                        _deliveryFeeController.text.trim()) ??
-                                    0,
-                            'isOpen': true,
-                            'rating': 0,
-                            if (!_isRestaurantSetup)
-                              'workSampleImagesBase64':
-                                  List<String>.from(_workSampleImagesBase64),
-                            'professionalInfo': _isProfessionalSetup
-                                ? {
-                                    'name': _nameController.text.trim(),
-                                    'address': _addressController.text.trim(),
-                                    'latitude': _storeLatitude,
-                                    'longitude': _storeLongitude,
-                                    'phone': _phoneController.text.trim(),
-                                    'whatsapp': _resolveWhatsAppNumber(),
-                                    'openTime': _openTime.trim(),
-                                    'closeTime': _closeTime.trim(),
-                                    'profileImageBase64': _profileImageBase64,
-                                    'workSampleImagesBase64': List<String>.from(
-                                        _workSampleImagesBase64),
-                                    'professionId':
-                                        _selectedProfessionalCategoryId,
-                                    'professionNameAr':
-                                        _selectedProfessionalCategoryNameAr,
-                                    'professionNameEn':
-                                        _selectedProfessionalCategoryId == null
-                                            ? null
-                                            : DummyData
-                                                .professionalsSubCategories
-                                                .firstWhere(
-                                                  (item) =>
-                                                      item.id ==
-                                                      _selectedProfessionalCategoryId,
-                                                )
-                                                .titleEn,
-                                  }
-                                : null,
-                            'professionalCategoryId':
-                                _selectedProfessionalCategoryId,
-                          });
-                          await appProvider.activateMerchantRole();
-                          } catch (error) {
-                            _showMessage('تعذر حفظ بيانات التاجر: $error');
-                          }
-                        },
-                        child: Text(
-                          'حفظ وتفعيل ${labels.storeLabelAr}',
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w800,
-                            fontFamily: 'Cairo',
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
+                  ),
+                ],
               ),
-            ),
-          ],
-        ),
       ),
     );
   }
@@ -757,14 +804,14 @@ class _MerchantSetupScreenState extends State<MerchantSetupScreen> {
   Future<void> _pickWorkSamples() async {
     final picked = await AppHelpers.pickMultiImage(context);
     if (picked.isEmpty) return;
-    
+
     final provider = context.read<AppProvider>();
     final images = <String>[];
     for (final image in picked) {
       final base64 = await provider.uploadImage(File(image.path));
       if (base64 != null) images.add(base64);
     }
-    
+
     if (images.isNotEmpty) {
       setState(() {
         _workSampleImagesBase64
@@ -778,7 +825,7 @@ class _MerchantSetupScreenState extends State<MerchantSetupScreen> {
     final picked = await Navigator.of(context).push<PickedLocation>(
       CupertinoPageRoute(
         builder: (_) => LocationPickerScreen(
-          title: 'تحديد موقع المتجر',
+          title: 'تحديد موقع التاجر',
           initialLatitude: _storeLatitude,
           initialLongitude: _storeLongitude,
         ),
@@ -792,8 +839,167 @@ class _MerchantSetupScreenState extends State<MerchantSetupScreen> {
     });
   }
 
+  Widget _buildInitialActivitySelection() {
+    return Column(
+      children: [
+        const SizedBox(height: 40),
+        const AppLogo(size: 80),
+        const SizedBox(height: 24),
+        const Text(
+          'مرحباً بك في أسرة الغيث',
+          style: TextStyle(
+            fontSize: 22,
+            fontWeight: FontWeight.w900,
+            fontFamily: 'Cairo',
+            color: Color(0xFF1A1A1A),
+          ),
+        ),
+        const SizedBox(height: 8),
+        const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 40),
+          child: Text(
+            'يرجى اختيار نوع نشاطك التجاري الأساسي للبدء في إعداد ملفك الشخصي.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 14,
+              color: Colors.grey,
+              fontFamily: 'Cairo',
+              height: 1.5,
+            ),
+          ),
+        ),
+        const SizedBox(height: 32),
+        Expanded(
+          child: ListView.separated(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+            itemCount: MarketplaceCatalog.categories.length,
+            separatorBuilder: (_, __) => const SizedBox(height: 12),
+            itemBuilder: (context, index) {
+              final cat = MarketplaceCatalog.categories[index];
+              return GestureDetector(
+                onTap: () {
+                  setState(() {
+                    _selectedServiceIds.clear(); // السماح باختيار خدمة واحدة فقط
+                    _selectedServiceIds.add(cat.id);
+                  });
+                },
+                child: Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: Colors.grey.shade200),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.03),
+                        blurRadius: 10,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            width: 50,
+                            height: 50,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF007A7A).withValues(alpha: 0.1),
+                              shape: BoxShape.circle,
+                            ),
+                            child: Icon(
+                              _categoryIcon(cat.id),
+                              color: const Color(0xFF007A7A),
+                              size: 26,
+                            ),
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: Text(
+                              cat.titleAr,
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w800,
+                                fontFamily: 'Cairo',
+                              ),
+                            ),
+                          ),
+                          const Icon(
+                            CupertinoIcons.chevron_left,
+                            color: Colors.grey,
+                            size: 18,
+                          ),
+                        ],
+                      ),
+                      if (cat.id == 'bazar_ghaith') ...[
+                        const SizedBox(height: 12),
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: Colors.orange.withValues(alpha: 0.08),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: const Row(
+                            children: [
+                              Icon(Icons.info_outline_rounded,
+                                  color: Color(0xFFF5A01D), size: 18),
+                              SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  'تنبيه: يلزم حصولك على موافقة الإدارة لتتمكن من النشر في قسم بازار ومطاعم الغيث.',
+                                  style: TextStyle(
+                                    fontFamily: 'Cairo',
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w700,
+                                    color: Color(0xFFF5A01D),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+        const SizedBox(height: 20),
+      ],
+    );
+  }
+
+  IconData _categoryIcon(String id) {
+    switch (id) {
+      case 'bazar_ghaith':
+        return Icons.auto_awesome_rounded;
+      case 'restaurant':
+        return Icons.restaurant_rounded;
+      case 'product':
+        return Icons.shopping_bag_rounded;
+      case 'beauty':
+        return Icons.spa_rounded;
+      case 'professionals':
+        return Icons.engineering_rounded;
+      case 'real_estate':
+        return Icons.home_work_rounded;
+      case 'offers':
+        return Icons.local_offer_rounded;
+      case 'tourism':
+        return Icons.travel_explore_rounded;
+      case 'cars':
+        return Icons.directions_car_rounded;
+      default:
+        return Icons.category_rounded;
+    }
+  }
+
   Widget _buildLocationCard() {
     final hasLocation = _storeLatitude != null && _storeLongitude != null;
+    final title = _locationTitleFor(_primaryServiceId);
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(14),
@@ -805,9 +1011,9 @@ class _MerchantSetupScreenState extends State<MerchantSetupScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'لوكيشن المطعم على الخريطة',
-            style: TextStyle(
+          Text(
+            title,
+            style: const TextStyle(
               fontFamily: 'Cairo',
               fontWeight: FontWeight.w800,
             ),
@@ -820,7 +1026,7 @@ class _MerchantSetupScreenState extends State<MerchantSetupScreen> {
               longitude: _storeLongitude,
             ).isNotEmpty
                 ? 'العنوان: ${MerchantProfileFields.locationSummary(address: _addressController.text.trim(), latitude: _storeLatitude, longitude: _storeLongitude)}'
-                : 'يرجى تحديد موقع المتجر على الخريطة وكتابة العنوان النصي.',
+                : 'يرجى تحديد الموقع على الخريطة وكتابة العنوان النصي.',
             style: const TextStyle(
               fontFamily: 'Cairo',
               color: Colors.black87,
@@ -831,11 +1037,11 @@ class _MerchantSetupScreenState extends State<MerchantSetupScreen> {
           const SizedBox(height: 10),
           CupertinoButton(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            color: AppColors.accent,
+            color: const Color(0xFFF5A01D),
             borderRadius: BorderRadius.circular(12),
             onPressed: _pickStoreLocation,
             child: Text(
-              hasLocation ? 'تعديل موقع المتجر' : 'تحديد موقع المتجر',
+              hasLocation ? 'تعديل الموقع' : 'تحديد الموقع على الخريطة',
               style: const TextStyle(
                 fontFamily: 'Cairo',
                 color: Colors.white,
@@ -925,14 +1131,19 @@ class _ChoiceChip extends StatelessWidget {
         duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.symmetric(vertical: 14),
         decoration: BoxDecoration(
-          color: selected ? AppColors.accent : Colors.white,
+          color: selected ? const Color(0xFFF5A01D) : Colors.white,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: selected ? AppColors.accent : Colors.grey.shade300,
+            color: selected ? const Color(0xFFF5A01D) : Colors.grey.shade300,
             width: 1.5,
           ),
           boxShadow: selected
-              ? [BoxShadow(color: AppColors.accent.withValues(alpha: 0.2), blurRadius: 8, offset: const Offset(0, 4))]
+              ? [
+                  BoxShadow(
+                      color: const Color(0xFFF5A01D).withValues(alpha: 0.2),
+                      blurRadius: 8,
+                      offset: const Offset(0, 4))
+                ]
               : null,
         ),
         alignment: Alignment.center,
@@ -994,7 +1205,7 @@ class _SampleImagesRow extends StatelessWidget {
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Icon(Icons.add_photo_alternate_rounded,
-                            color: AppColors.accent, size: 30),
+                            color: const Color(0xFFF5A01D), size: 30),
                         SizedBox(height: 6),
                         Text(
                           'إضافة',
