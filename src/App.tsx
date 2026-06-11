@@ -9,12 +9,14 @@ import {
   LoaderCircle,
   Lock,
   LogOut,
+  Menu,
   Package2,
   Search,
   Shield,
   ShoppingBag,
   Store,
   Users,
+  X,
   XCircle,
 } from 'lucide-react';
 
@@ -24,9 +26,11 @@ import {
   loadMerchantDetails,
   loadMerchants,
   rejectCourierApplication,
+  rejectMerchantApplication,
   sendCode,
   syncMerchantBazaarProducts,
   toggleCourierApproval,
+  toggleMerchantApproval,
   toggleMerchantBazaar,
   toggleMerchantFreeze,
   verifyCode,
@@ -36,13 +40,44 @@ import type {
   CourierRejectionReasonKey,
   CourierSummary,
   MerchantDetails,
+  MerchantRejectionReasonKey,
   MerchantSummary,
 } from './admin-types';
-import { COURIER_REJECTION_REASONS } from './admin-types';
+import { COURIER_REJECTION_REASONS, MERCHANT_REJECTION_REASONS } from './admin-types';
 
 const SESSION_STORAGE_KEY = 'alghaith-admin-session-v1';
 
 type AdminView = 'dashboard' | 'merchants' | 'approvals' | 'couriers';
+
+const VIEW_META: Record<
+  AdminView,
+  { eyebrow: string; title: string; subtitle: string; showSearch: boolean }
+> = {
+  dashboard: {
+    eyebrow: 'لوحة التحكم',
+    title: 'ملخص المنصة',
+    subtitle: 'نظرة عامة على الطلبات والتجار والمهام المعلقة.',
+    showSearch: false,
+  },
+  merchants: {
+    eyebrow: 'إدارة التجار',
+    title: 'قائمة التجار',
+    subtitle: 'استعراض الحالة، الأرباح، الطلبات، وإجراءات التجميد والبازار.',
+    showSearch: true,
+  },
+  approvals: {
+    eyebrow: 'موافقات البازار',
+    title: 'طلبات النشر في بازار الغيث',
+    subtitle: 'الموافقة تفتح للتاجر قسم بازار ومطاعم الغيث لأول مرة فقط.',
+    showSearch: true,
+  },
+  couriers: {
+    eyebrow: 'مندوبو التوصيل',
+    title: 'إدارة مندوبي التوصيل',
+    subtitle: 'راجع بيانات المندوب ووافق على تفعيل حسابه قبل استقبال الطلبات.',
+    showSearch: true,
+  },
+};
 
 interface StoredSession {
   token: string;
@@ -125,6 +160,11 @@ function App() {
   const [rejectTarget, setRejectTarget] = useState<CourierSummary | null>(null);
   const [rejectReasonKey, setRejectReasonKey] =
     useState<CourierRejectionReasonKey>('name');
+  const [rejectMerchantTarget, setRejectMerchantTarget] =
+    useState<MerchantSummary | null>(null);
+  const [rejectMerchantReasonKey, setRejectMerchantReasonKey] =
+    useState<MerchantRejectionReasonKey>('storeName');
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   useEffect(() => {
     const stored = readStoredSession();
@@ -235,6 +275,15 @@ function App() {
     [couriers],
   );
 
+  const pendingMerchantQueue = useMemo(
+    () =>
+      merchants.filter(
+        (merchant) =>
+          !merchant.isApproved && merchant.approvalStatus === 'pending',
+      ),
+    [merchants],
+  );
+
   const filteredCouriers = useMemo(() => {
     const query = search.trim().toLowerCase();
     if (!query) return couriers;
@@ -290,6 +339,12 @@ function App() {
     }
   }
 
+  function switchView(nextView: AdminView) {
+    setView(nextView);
+    setSearch('');
+    setSidebarOpen(false);
+  }
+
   function handleLogout() {
     window.localStorage.removeItem(SESSION_STORAGE_KEY);
     setToken(null);
@@ -324,6 +379,56 @@ function App() {
     } catch (error) {
       const message =
         error instanceof Error ? error.message : 'تعذر مزامنة ظهور البازار.';
+      setActionError(message);
+    } finally {
+      setActiveActionKey('');
+    }
+  }
+
+  async function handleMerchantApproval(merchant: MerchantSummary) {
+    if (!token) return;
+    const enabling = merchant.isApproved !== true;
+    const actionKey = `merchant-approval:${merchant.phone}`;
+    setActiveActionKey(actionKey);
+    setActionError('');
+    setSuccessMessage('');
+    try {
+      await toggleMerchantApproval(token, merchant.phone, enabling);
+      setSuccessMessage(
+        enabling
+          ? `تم تفعيل حساب التاجر ${merchant.storeName || merchant.phone}.`
+          : `تم إلغاء تفعيل حساب التاجر ${merchant.storeName || merchant.phone}.`,
+      );
+      await refreshCoreData(token, merchant.phone);
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'تعذر تحديث حالة التاجر.';
+      setActionError(message);
+    } finally {
+      setActiveActionKey('');
+    }
+  }
+
+  async function handleMerchantRejection() {
+    if (!token || !rejectMerchantTarget) return;
+    const actionKey = `reject-merchant:${rejectMerchantTarget.phone}`;
+    setActiveActionKey(actionKey);
+    setActionError('');
+    setSuccessMessage('');
+    try {
+      await rejectMerchantApplication(
+        token,
+        rejectMerchantTarget.phone,
+        rejectMerchantReasonKey,
+      );
+      setSuccessMessage(
+        `تم رفض طلب ${rejectMerchantTarget.storeName || rejectMerchantTarget.phone} وإرسال إشعار للتاجر.`,
+      );
+      setRejectMerchantTarget(null);
+      await refreshCoreData(token);
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'تعذر رفض طلب التاجر.';
       setActionError(message);
     } finally {
       setActiveActionKey('');
@@ -424,19 +529,22 @@ function App() {
     }
   }
 
+  const viewMeta = VIEW_META[view];
+  const frozenMerchants = merchants.filter((merchant) => merchant.isFrozen).length;
+
   if (!token) {
     return (
-      <main className="admin-shell">
+      <main className="auth-shell">
         <section className="auth-card">
           <div className="brand-badge">
             <Shield size={30} />
           </div>
           <div className="auth-copy">
-            <p className="eyebrow">AL GHAITH ADMIN</p>
-            <h1>لوحة إدارة بازار ومطاعم الغيث</h1>
+            <p className="eyebrow">الغيث · إدارة</p>
+            <h1>لوحة إدارة المنصة</h1>
             <p>
-              دخول آمن برقم الهاتف لعرض الإحصائيات الكاملة، تجميد التجار، الموافقة
-              على مندوبي التوصيل، والموافقة على النشر داخل قسم بازار ومطاعم الغيث.
+              دخول آمن برقم الهاتف لإدارة التجار، مندوبي التوصيل، موافقات بازار
+              الغيث، ومتابعة إحصائيات المنصة.
             </p>
           </div>
 
@@ -488,48 +596,59 @@ function App() {
 
   return (
     <main className="admin-shell">
+      <div
+        className={sidebarOpen ? 'sidebar-overlay open' : 'sidebar-overlay'}
+        onClick={() => setSidebarOpen(false)}
+        role="presentation"
+      />
       <section className="dashboard-layout">
-        <aside className="sidebar">
+        <aside className={sidebarOpen ? 'sidebar open' : 'sidebar'}>
           <div className="sidebar-header">
             <div className="brand-badge small">
               <Shield size={22} />
             </div>
             <div>
-              <p className="eyebrow">SUPER ADMIN</p>
-              <h2>بازار الغيث</h2>
+              <p className="eyebrow">الغيث</p>
+              <h2>لوحة الإدارة</h2>
             </div>
           </div>
 
           <div className="admin-identity">
-            <span>أنت داخل كـ</span>
+            <span>مسجّل الدخول</span>
             <strong dir="ltr">{phoneNumber}</strong>
           </div>
 
           <nav className="sidebar-nav">
             <button
               className={view === 'dashboard' ? 'nav-item active' : 'nav-item'}
-              onClick={() => setView('dashboard')}
+              onClick={() => switchView('dashboard')}
             >
               <BarChart3 size={18} />
               <span>الملخص العام</span>
             </button>
             <button
               className={view === 'merchants' ? 'nav-item active' : 'nav-item'}
-              onClick={() => setView('merchants')}
+              onClick={() => switchView('merchants')}
             >
               <Store size={18} />
               <span>إدارة التجار</span>
+              {pendingMerchantQueue.length > 0 ? (
+                <span className="nav-badge">{pendingMerchantQueue.length}</span>
+              ) : null}
             </button>
             <button
               className={view === 'approvals' ? 'nav-item active' : 'nav-item'}
-              onClick={() => setView('approvals')}
+              onClick={() => switchView('approvals')}
             >
               <BadgeCheck size={18} />
               <span>موافقات البازار</span>
+              {approvalQueue.length > 0 ? (
+                <span className="nav-badge">{approvalQueue.length}</span>
+              ) : null}
             </button>
             <button
               className={view === 'couriers' ? 'nav-item active' : 'nav-item'}
-              onClick={() => setView('couriers')}
+              onClick={() => switchView('couriers')}
             >
               <Bike size={18} />
               <span>مندوبو التوصيل</span>
@@ -546,29 +665,48 @@ function App() {
         </aside>
 
         <section className="content">
-          <header className="topbar">
-            <div>
-              <p className="eyebrow">لوحة إدارة احترافية</p>
-              <h1>إحصائيات، موافقات، وإدارة تجار من مكان واحد</h1>
-            </div>
+          <div className="content-top">
+            <button
+              className="mobile-menu-button"
+              type="button"
+              aria-label="فتح القائمة"
+              onClick={() => setSidebarOpen(true)}
+            >
+              <Menu size={20} />
+            </button>
+            <header className="topbar">
+              <div>
+                <p className="eyebrow">{viewMeta.eyebrow}</p>
+                <h1>{viewMeta.title}</h1>
+                <p>{viewMeta.subtitle}</p>
+              </div>
 
-            <div className="topbar-search">
-              <Search size={18} />
-              <input
-                placeholder={
-                  view === 'couriers'
-                    ? 'ابحث عن مندوب أو رقم هاتف'
-                    : 'ابحث عن تاجر أو رقم هاتف'
-                }
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-              />
-            </div>
-          </header>
+              {viewMeta.showSearch ? (
+                <div className="topbar-search">
+                  <Search size={18} />
+                  <input
+                    placeholder={
+                      view === 'couriers'
+                        ? 'ابحث عن مندوب أو رقم هاتف'
+                        : 'ابحث عن تاجر أو رقم هاتف'
+                    }
+                    value={search}
+                    onChange={(event) => setSearch(event.target.value)}
+                  />
+                </div>
+              ) : null}
+            </header>
+          </div>
 
-          {bootError ? <div className="message error">{bootError}</div> : null}
-          {actionError ? <div className="message error">{actionError}</div> : null}
-          {successMessage ? <div className="message success">{successMessage}</div> : null}
+          {bootError || actionError || successMessage ? (
+            <div className="alert-stack">
+              {bootError ? <div className="message error">{bootError}</div> : null}
+              {actionError ? <div className="message error">{actionError}</div> : null}
+              {successMessage ? (
+                <div className="message success">{successMessage}</div>
+              ) : null}
+            </div>
+          ) : null}
 
           {isLoadingData ? (
             <div className="loading-state">
@@ -577,50 +715,112 @@ function App() {
             </div>
           ) : (
             <>
-              <section className="metrics-grid">
-                <MetricCard
-                  icon={<ShoppingBag size={18} />}
-                  title="إجمالي الطلبات"
-                  value={String(reports?.totalOrders || 0)}
-                  hint={`${reports?.completedOrders || 0} مكتمل`}
-                />
-                <MetricCard
-                  icon={<Store size={18} />}
-                  title="التجار النشطون"
-                  value={String(reports?.openMerchants || 0)}
-                  hint={`${reports?.totalMerchants || 0} إجمالي`}
-                />
-                <MetricCard
-                  icon={<Users size={18} />}
-                  title="إجمالي المستخدمين"
-                  value={String(reports?.totalUsers || 0)}
-                  hint={`${reports?.totalProducts || 0} منتج`}
-                />
-                <MetricCard
-                  icon={<BarChart3 size={18} />}
-                  title="إجمالي المبيعات"
-                  value={`${formatMoney(reports?.totalSales || 0)} د.ع`}
-                  hint={`${formatMoney(reports?.codCollected || 0)} COD`}
-                />
-              </section>
+              {view === 'dashboard' ? (
+                <>
+                  <section className="metrics-grid">
+                    <MetricCard
+                      icon={<ShoppingBag size={18} />}
+                      title="إجمالي الطلبات"
+                      value={String(reports?.totalOrders || 0)}
+                      hint={`${reports?.completedOrders || 0} مكتمل`}
+                    />
+                    <MetricCard
+                      icon={<Store size={18} />}
+                      title="التجار النشطون"
+                      value={String(reports?.openMerchants || 0)}
+                      hint={`${reports?.totalMerchants || 0} إجمالي`}
+                    />
+                    <MetricCard
+                      icon={<Users size={18} />}
+                      title="إجمالي المستخدمين"
+                      value={String(reports?.totalUsers || 0)}
+                      hint={`${reports?.totalProducts || 0} منتج`}
+                    />
+                    <MetricCard
+                      icon={<BarChart3 size={18} />}
+                      title="إجمالي المبيعات"
+                      value={`${formatMoney(reports?.totalSales || 0)} د.ع`}
+                      hint={`${formatMoney(reports?.codCollected || 0)} COD`}
+                    />
+                  </section>
 
-              <section className={view === 'couriers' ? 'main-grid couriers-only' : 'main-grid'}>
+                  <section className="quick-actions-grid">
+                    <article className="quick-action-card">
+                      <p>موافقات بازار معلقة</p>
+                      <strong>{approvalQueue.length}</strong>
+                      <button
+                        className="soft-button"
+                        type="button"
+                        onClick={() => switchView('approvals')}
+                      >
+                        <BadgeCheck size={16} />
+                        <span>مراجعة الطلبات</span>
+                      </button>
+                    </article>
+                    <article className="quick-action-card">
+                      <p>مندوبون بانتظار الموافقة</p>
+                      <strong>{pendingCourierQueue.length}</strong>
+                      <button
+                        className="soft-button"
+                        type="button"
+                        onClick={() => switchView('couriers')}
+                      >
+                        <Bike size={16} />
+                        <span>مراجعة المندوبين</span>
+                      </button>
+                    </article>
+                    <article className="quick-action-card">
+                      <p>تجار بانتظار الموافقة</p>
+                      <strong>{pendingMerchantQueue.length}</strong>
+                      <button
+                        className="soft-button"
+                        type="button"
+                        onClick={() => switchView('merchants')}
+                      >
+                        <Store size={16} />
+                        <span>مراجعة التجار</span>
+                      </button>
+                    </article>
+                    <article className="quick-action-card">
+                      <p>تجار مجمّدون</p>
+                      <strong>{frozenMerchants}</strong>
+                      <button
+                        className="soft-button"
+                        type="button"
+                        onClick={() => switchView('merchants')}
+                      >
+                        <Store size={16} />
+                        <span>إدارة التجار</span>
+                      </button>
+                    </article>
+                  </section>
+                </>
+              ) : null}
+
+              {view === 'dashboard' ? null : (
+              <section
+                className={
+                  view === 'couriers' || view === 'approvals'
+                    ? 'main-grid couriers-only'
+                    : 'main-grid'
+                }
+              >
                 <div className="panel wide">
                   <div className="panel-header">
                     <div>
                       <h3>
                         {view === 'couriers'
-                          ? 'مندوبو التوصيل'
+                          ? 'جميع المندوبين'
                           : view === 'approvals'
-                            ? 'طلبات الموافقة داخل بازار ومطاعم الغيث'
-                            : 'قائمة التجار'}
+                            ? 'قائمة الانتظار'
+                            : 'جميع التجار'}
                       </h3>
                       <p>
                         {view === 'couriers'
-                          ? 'راجع بيانات المندوب ووافق على تفعيل حسابه قبل أن يستقبل طلبات التوصيل.'
+                          ? 'اضغط على الإجراء المناسب لكل مندوب.'
                           : view === 'approvals'
-                            ? 'الموافقة هنا تفتح للتاجر قسم بازار ومطاعم الغيث لأول مرة فقط.'
-                            : 'استعراض الحالة، الأرباح، الطلبات، وعدد المنتجات المنشورة لكل تاجر.'}
+                            ? 'تجار مطاعم ومتاجر بانتظار الموافقة على البازار.'
+                            : 'اختر تاجراً لعرض تفاصيله في اللوحة الجانبية.'}
                       </p>
                     </div>
                     <span className="panel-chip">
@@ -782,6 +982,12 @@ function App() {
                       const freezeLoading = activeActionKey === `freeze:${merchant.phone}`;
                       const bazaarLoading = activeActionKey === `bazaar:${merchant.phone}`;
                       const syncLoading = activeActionKey === `sync:${merchant.phone}`;
+                      const approvalLoading =
+                        activeActionKey === `merchant-approval:${merchant.phone}`;
+                      const rejectLoading =
+                        activeActionKey === `reject-merchant:${merchant.phone}`;
+                      const isRejected = merchant.approvalStatus === 'rejected';
+                      const isPending = !merchant.isApproved && !isRejected;
                       const selected = selectedMerchantPhone === merchant.phone;
                       return (
                         <article
@@ -793,6 +999,15 @@ function App() {
                             <div>
                               <div className="merchant-title-row">
                                 <h4>{merchant.storeName || 'متجر بدون اسم'}</h4>
+                                {merchant.isApproved ? (
+                                  <span className="status-badge success">مفعّل</span>
+                                ) : isRejected ? (
+                                  <span className="status-badge danger">مرفوض</span>
+                                ) : (
+                                  <span className="status-badge warning">
+                                    بانتظار الموافقة
+                                  </span>
+                                )}
                                 {merchant.isFrozen ? (
                                   <span className="status-badge danger">مجمّد</span>
                                 ) : !merchant.isOpen ? (
@@ -822,6 +1037,11 @@ function App() {
                               <p className="merchant-description">
                                 {merchant.description || 'لا يوجد وصف محفوظ.'}
                               </p>
+                              {isRejected && merchant.rejectionMessageAr ? (
+                                <p className="courier-rejection-note">
+                                  سبب الرفض: {merchant.rejectionMessageAr}
+                                </p>
+                              ) : null}
                               {merchant.isBazaarMember &&
                               !merchant.visibleToCustomers &&
                               merchant.visibilityNotes?.length ? (
@@ -855,6 +1075,49 @@ function App() {
                           </div>
 
                           <div className="merchant-actions">
+                            <button
+                              className={
+                                merchant.isApproved
+                                  ? 'soft-button danger'
+                                  : 'soft-button success'
+                              }
+                              disabled={approvalLoading || rejectLoading}
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                handleMerchantApproval(merchant).catch(() => undefined);
+                              }}
+                            >
+                              {approvalLoading ? (
+                                <LoaderCircle className="spin" size={16} />
+                              ) : (
+                                <BadgeCheck size={16} />
+                              )}
+                              <span>
+                                {merchant.isApproved
+                                  ? 'إلغاء تفعيل الحساب'
+                                  : 'موافقة وتفعيل'}
+                              </span>
+                            </button>
+
+                            {isPending || isRejected ? (
+                              <button
+                                className="soft-button danger"
+                                disabled={approvalLoading || rejectLoading}
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  setRejectMerchantReasonKey('storeName');
+                                  setRejectMerchantTarget(merchant);
+                                }}
+                              >
+                                {rejectLoading ? (
+                                  <LoaderCircle className="spin" size={16} />
+                                ) : (
+                                  <XCircle size={16} />
+                                )}
+                                <span>رفض الطلب</span>
+                              </button>
+                            ) : null}
+
                             <button
                               className={merchant.isFrozen ? 'soft-button' : 'soft-button danger'}
                               disabled={freezeLoading}
@@ -961,7 +1224,7 @@ function App() {
                     <>
                       <div className="detail-hero">
                         <div>
-                          <p className="eyebrow">MERCHANT SNAPSHOT</p>
+                          <p className="eyebrow">ملخص التاجر</p>
                           <h3>{merchantDetails.merchant.storeName || 'متجر بدون اسم'}</h3>
                           <p className="merchant-meta">
                             {merchantDetails.merchant.fullName || 'بدون اسم مالك'} ·{' '}
@@ -1073,7 +1336,9 @@ function App() {
                 </div>
                 )}
               </section>
+              )}
 
+              {view === 'dashboard' ? (
               <section className="panel recent-orders-panel">
                 <div className="panel-header">
                   <div>
@@ -1109,14 +1374,98 @@ function App() {
                   </table>
                 </div>
               </section>
+              ) : null}
             </>
           )}
         </section>
       </section>
 
+      {rejectMerchantTarget ? (
+        <div
+          className="modal-backdrop"
+          role="presentation"
+          onClick={() => setRejectMerchantTarget(null)}
+        >
+          <div
+            className="modal-card"
+            role="dialog"
+            aria-modal="true"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="panel-header">
+              <div>
+                <h3>رفض طلب التاجر</h3>
+                <p>
+                  اختر سبب الرفض. سيصل إشعار للتاجر{' '}
+                  {rejectMerchantTarget.storeName || rejectMerchantTarget.phone}{' '}
+                  ليقوم بتعديل بياناته وإعادة الإرسال.
+                </p>
+              </div>
+            </div>
+
+            <div className="reject-reason-list">
+              {MERCHANT_REJECTION_REASONS.map((reason) => (
+                <label
+                  key={reason.key}
+                  className={
+                    rejectMerchantReasonKey === reason.key
+                      ? 'reject-reason-option active'
+                      : 'reject-reason-option'
+                  }
+                >
+                  <input
+                    type="radio"
+                    name="merchant-reject-reason"
+                    checked={rejectMerchantReasonKey === reason.key}
+                    onChange={() => setRejectMerchantReasonKey(reason.key)}
+                  />
+                  <span>{reason.label}</span>
+                </label>
+              ))}
+            </div>
+
+            <div className="modal-actions">
+              <button
+                className="ghost-button"
+                type="button"
+                onClick={() => setRejectMerchantTarget(null)}
+              >
+                إلغاء
+              </button>
+              <button
+                className="soft-button danger"
+                type="button"
+                disabled={
+                  activeActionKey === `reject-merchant:${rejectMerchantTarget.phone}`
+                }
+                onClick={() => {
+                  handleMerchantRejection().catch(() => undefined);
+                }}
+              >
+                {activeActionKey === `reject-merchant:${rejectMerchantTarget.phone}` ? (
+                  <LoaderCircle className="spin" size={16} />
+                ) : (
+                  <XCircle size={16} />
+                )}
+                <span>تأكيد الرفض وإرسال الإشعار</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       {rejectTarget ? (
-        <div className="modal-backdrop" role="presentation">
-          <div className="modal-card" role="dialog" aria-modal="true">
+        <div
+          className="modal-backdrop"
+          role="presentation"
+          onClick={() => setRejectTarget(null)}
+        >
+          <div
+            className="modal-card"
+            role="dialog"
+            aria-modal="true"
+            onClick={(event) => event.stopPropagation()}
+          >
             <div className="panel-header">
               <div>
                 <h3>رفض طلب المندوب</h3>

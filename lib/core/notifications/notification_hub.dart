@@ -561,12 +561,51 @@ class NotificationHub {
 
   void onMerchantProfileActivated() {
     _notify(
-      title: 'متجرك جاهز',
-      body: 'تم تفعيل حساب التاجر',
+      title: 'تم تفعيل حساب التاجر',
+      body: 'وافقت الإدارة على طلبك. يمكنك الآن إدارة متجرك واستقبال الطلبات.',
       audience: 'merchant',
       category: NotificationCategory.account,
       priority: NotificationPriority.urgent,
-      eventKey: 'merchant:activated',
+      eventKey: 'merchant:account:approved',
+    );
+  }
+
+  void onMerchantRejected(String message) {
+    final body = message.trim().isNotEmpty
+        ? message.trim()
+        : 'يرجى تعديل بيانات متجرك وإعادة إرسال الطلب.';
+    _notify(
+      title: 'طلب التاجر يحتاج تعديلاً',
+      body: body,
+      audience: 'merchant',
+      category: NotificationCategory.account,
+      priority: NotificationPriority.urgent,
+      eventKey: 'merchant:account:rejected',
+    );
+  }
+
+  void onCourierApproved() {
+    _notify(
+      title: 'تم تفعيل حساب المندوب',
+      body: 'وافقت الإدارة على طلبك. يمكنك الآن استقبال طلبات التوصيل.',
+      audience: 'delivery',
+      category: NotificationCategory.account,
+      priority: NotificationPriority.urgent,
+      eventKey: 'courier:account:approved',
+    );
+  }
+
+  void onCourierRejected(String message) {
+    final body = message.trim().isNotEmpty
+        ? message.trim()
+        : 'يرجى تعديل بياناتك وإعادة إرسال الطلب.';
+    _notify(
+      title: 'طلب المندوب يحتاج تعديلاً',
+      body: body,
+      audience: 'delivery',
+      category: NotificationCategory.account,
+      priority: NotificationPriority.urgent,
+      eventKey: 'courier:account:rejected',
     );
   }
 

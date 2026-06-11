@@ -7,10 +7,12 @@ import '../app_logo.dart';
 
 class AccountPageHeader extends StatelessWidget {
   final int notificationCount;
+  final String title;
 
   const AccountPageHeader({
     super.key,
     required this.notificationCount,
+    this.title = 'حسابي',
   });
 
   @override
@@ -20,11 +22,11 @@ class AccountPageHeader extends StatelessWidget {
       child: Row(
         children: [
           const AppLogo(size: 32),
-          const Expanded(
+          Expanded(
             child: Text(
-              'حسابي',
+              title,
               textAlign: TextAlign.center,
-              style: TextStyle(
+              style: const TextStyle(
                 fontFamily: 'Cairo',
                 fontSize: 28,
                 fontWeight: FontWeight.w900,

@@ -118,6 +118,30 @@ export async function loadMerchantDetails(
   });
 }
 
+export async function toggleMerchantApproval(
+  token: string,
+  merchantPhone: string,
+  isApproved: boolean,
+) {
+  return request(DATABASE_API_BASE_URL, '/db/admin/merchant-approval', {
+    token,
+    method: 'PUT',
+    body: { merchantPhone, isApproved },
+  });
+}
+
+export async function rejectMerchantApplication(
+  token: string,
+  merchantPhone: string,
+  reasonKey: string,
+) {
+  return request(DATABASE_API_BASE_URL, '/db/admin/merchant-rejection', {
+    token,
+    method: 'PUT',
+    body: { merchantPhone, reasonKey },
+  });
+}
+
 export async function toggleMerchantFreeze(
   token: string,
   merchantPhone: string,

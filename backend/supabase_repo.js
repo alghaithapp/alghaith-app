@@ -2048,21 +2048,48 @@ async function deleteMerchantProduct(id, phone) {
   if (error) throw new Error(error.message);
 }
 
+function enrichProfessionalProfileRow(row) {
+  const info = normalizeObject(row.professional_info);
+  const contactPhone = String(info.phone || row.whatsapp || row.phone || '').trim();
+  const contactWhatsapp = String(
+    row.whatsapp || info.whatsapp || info.phone || row.phone || ''
+  ).trim();
+  const address = String(row.address || info.address || '').trim();
+  const openTime = String(row.open_time || info.openTime || '').trim();
+  const closeTime = String(row.close_time || info.closeTime || '').trim();
+  return {
+    ...row,
+    phone: contactPhone || String(row.phone || '').trim(),
+    whatsapp: contactWhatsapp,
+    address: address || row.address,
+    open_time: openTime || row.open_time,
+    close_time: closeTime || row.close_time,
+    profile_image_base64:
+      row.profile_image_base64 ||
+      row.profile_image_url ||
+      info.profileImageBase64 ||
+      '',
+  };
+}
+
 async function listProfessionalProfiles(professionId = '') {
   const profiles = await selectMany('merchant_profiles');
   const target = String(professionId || '').trim();
-  return profiles.filter((row) => {
-    if (isMerchantFrozen(row)) return false;
-    if (!isMerchantApproved(row)) return false;
-    const serviceIds = normalizeArray(row.service_ids);
-    const hasProfessionals = serviceIds
-      .map((item) => String(item))
-      .includes('professionals');
-    if (!hasProfessionals) return false;
-    if (!target) return true;
-    const categoryId = String(row.professional_category_id || '').trim();
-    return categoryId === target;
-  });
+  return profiles
+    .filter((row) => {
+      if (isMerchantFrozen(row)) return false;
+      if (!isMerchantApproved(row)) return false;
+      if (row.is_open === false) return false;
+      const serviceIds = normalizeArray(row.service_ids);
+      const hasProfessionals = serviceIds
+        .map((item) => String(item))
+        .includes('professionals');
+      if (!hasProfessionals) return false;
+      if (!target) return true;
+      const categoryId = String(row.professional_category_id || '').trim();
+      return categoryId === target;
+    })
+    .map((row) => enrichProfessionalProfileRow(row));
 }
 
 async function listMerchantStoresByService({

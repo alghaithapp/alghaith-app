@@ -10,6 +10,7 @@ import 'package:provider/provider.dart';
 import '../../models/app_models.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/ui/app_bottom_nav_style.dart';
+import '../../core/ui/account_ui.dart';
 import '../../providers/app_provider.dart';
 import '../../utils/courier_profile_fields.dart';
 import 'delivery_earnings_screen.dart';
@@ -19,6 +20,7 @@ import '../../utils/extensions.dart';
 import '../../utils/helpers.dart';
 import '../../utils/role_notification_poller.dart';
 import '../../widgets/app_image.dart';
+import '../../widgets/account/account_page_header.dart';
 import '../../utils/role_switch_notifications.dart';
 import '../../screens/notifications_screen.dart';
 import '../../widgets/safe_bottom_bar.dart';
@@ -483,209 +485,411 @@ class DeliveryAccountScreen extends StatelessWidget {
     final profile = appProvider.courierProfile ?? const {};
     final isAvailable = appProvider.isCourierAvailable;
 
-    return CupertinoPageScaffold(
+    return Scaffold(
       backgroundColor: const Color(0xFFF2F2F7),
-      navigationBar: CupertinoNavigationBar(
-        middle: Text(
-          'حساب المندوب',
-          style:
-              const TextStyle(fontWeight: FontWeight.bold, fontFamily: 'Cairo'),
-        ),
-        border: null,
-      ),
-      child: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.all(16),
+      body: SafeArea(
+        child: Column(
           children: [
-            _TopCard(
-              title: appProvider.deliveryCourierName,
-              subtitle: 'توصيل طلبات المطاعم والتسوق — دراجة / موتور',
-              icon: Icons.motorcycle,
+            AccountPageHeader(
+              notificationCount: appProvider.unreadNotificationCount,
+              title: 'حساب المندوب',
             ),
-            const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              decoration: BoxDecoration(
-                color: isAvailable
-                    ? Colors.green.withValues(alpha: 0.12)
-                    : Colors.red.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(999),
-              ),
-              child: Text(
-                isAvailable ? 'متاح لاستلام الطلبات' : 'غير متاح حالياً',
-                style: TextStyle(
-                  color: isAvailable ? Colors.green : Colors.red,
-                  fontWeight: FontWeight.w800,
-                  fontFamily: 'Cairo',
-                  fontSize: 12,
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            SwitchListTile(
-              value: isAvailable,
-              onChanged: appProvider.setCourierAvailability,
-              activeThumbColor: const Color(0xFF007A7A),
-              tileColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-              ),
-              title: Text(
-                'التوفر',
-                style: const TextStyle(
-                  fontFamily: 'Cairo',
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-              subtitle: Text(
-                isAvailable
-                    ? 'تستقبل طلبات التوصيل الآن'
-                    : 'مؤقتًا لا تستقبل طلبات جديدة',
-                style: const TextStyle(fontFamily: 'Cairo'),
-              ),
-            ),
-            const SizedBox(height: 12),
-            ListTile(
-              tileColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-              ),
-              leading: const Icon(Icons.notifications_outlined,
-                  color: Color(0xFF007A7A)),
-              title: const Text(
-                'الإشعارات',
-                style: TextStyle(
-                  fontFamily: 'Cairo',
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-              trailing: appProvider.unreadNotificationCount > 0
-                  ? CircleAvatar(
-                      radius: 12,
-                      backgroundColor: const Color(0xFFF5A01D),
-                      child: Text(
-                        '${appProvider.unreadNotificationCount}',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 10,
-                          fontWeight: FontWeight.w800,
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(18),
+                    decoration: AccountUi.cardDecoration(radius: 22),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 70,
+                          height: 70,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.12),
+                                blurRadius: 14,
+                                offset: const Offset(0, 6),
+                              ),
+                            ],
+                          ),
+                          child: ClipOval(
+                            child: CourierProfileFields.profileImage(profile).isNotEmpty
+                                ? AppImage(
+                                    imageData: CourierProfileFields.profileImage(profile),
+                                    fit: BoxFit.cover,
+                                  )
+                                : Icon(Icons.motorcycle,
+                                    size: 38, color: Colors.orange.shade700),
+                          ),
+                        ),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                appProvider.deliveryCourierName,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontFamily: 'Cairo',
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w900,
+                                  color: Color(0xFF1A1A1A),
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                'توصيل طلبات المطاعم والتسوق',
+                                style: const TextStyle(
+                                  fontFamily: 'Cairo',
+                                  fontSize: 13,
+                                  color: Color(0xFF6B7280),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        _EditProfileButton(
+                          onTap: () {
+                            Navigator.of(context).push(
+                              CupertinoPageRoute(
+                                builder: (_) => const DeliverySetupScreen(),
+                              ),
+                            );
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Container(
+                    decoration: AccountUi.cardDecoration(radius: 22),
+                    clipBehavior: Clip.antiAlias,
+                    child: Column(
+                      children: [
+                        SwitchListTile(
+                          value: isAvailable,
+                          onChanged: appProvider.setCourierAvailability,
+                          activeThumbColor: Colors.white,
+                          activeTrackColor: Colors.green,
+                          inactiveTrackColor: Colors.red.shade100,
+                          tileColor: Colors.white,
+                          title: Text(
+                            'حالة التوفر',
+                            style: const TextStyle(
+                              fontFamily: 'Cairo',
+                              fontWeight: FontWeight.w900,
+                              fontSize: 15,
+                            ),
+                          ),
+                          subtitle: Text(
+                            isAvailable
+                                ? 'متاح لاستلام الطلبات الآن'
+                                : 'غير متاح لاستلام طلبات جديدة',
+                            style: const TextStyle(
+                                fontFamily: 'Cairo', fontSize: 12),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  const _SectionTitle(title: 'النشاط والإحصائيات'),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _StatCard(
+                          label: 'الجديدة',
+                          value: '${appProvider.deliveryIncomingOrders.length}',
+                          color: AppColors.accent,
                         ),
                       ),
-                    )
-                  : null,
-              onTap: () => Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => const NotificationsScreen(),
-                ),
-              ),
-            ),
-            const SizedBox(height: 12),
-            _InfoTile(
-              label: 'الاسم الثلاثي',
-              value: CourierProfileFields.name(profile).isNotEmpty
-                  ? CourierProfileFields.name(profile)
-                  : appProvider.deliveryCourierName,
-            ),
-            _InfoTile(
-              label: 'الهاتف',
-              value: appProvider.courierPhone,
-            ),
-            _InfoTile(
-              label: 'عنوان السكن',
-              value: CourierProfileFields.homeAddress(profile).isNotEmpty
-                  ? CourierProfileFields.homeAddress(profile)
-                  : '—',
-            ),
-            if (CourierProfileFields.vehicleImage(profile).isNotEmpty) ...[
-              const SizedBox(height: 8),
-              const Text(
-                'صورة الدراجة',
-                style: TextStyle(
-                  fontFamily: 'Cairo',
-                  fontWeight: FontWeight.w800,
-                  fontSize: 13,
-                ),
-              ),
-              const SizedBox(height: 8),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(14),
-                child: AppImage(
-                  imageData: CourierProfileFields.vehicleImage(profile),
-                  height: 140,
-                  width: double.infinity,
-                  fit: BoxFit.cover,
-                ),
-              ),
-            ],
-            _InfoTile(
-              label: 'الطلبات الجديدة',
-              value: '${appProvider.deliveryIncomingOrders.length}',
-            ),
-            _InfoTile(
-              label: 'الطلبات النشطة',
-              value: '${appProvider.deliveryActiveOrders.length}',
-            ),
-            _InfoTile(
-              label: 'الطلبات المكتملة',
-              value: '${appProvider.deliveryCompletedOrders.length}',
-            ),
-            const SizedBox(height: 12),
-            CupertinoButton.filled(
-              color: const Color(0xFF007A7A),
-              onPressed: () {
-                Navigator.of(context).push(
-                  CupertinoPageRoute(
-                    builder: (_) => const DeliverySetupScreen(),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: _StatCard(
+                          label: 'النشطة',
+                          value: '${appProvider.deliveryActiveOrders.length}',
+                          color: Colors.blue,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: _StatCard(
+                          label: 'المكتملة',
+                          value: '${appProvider.deliveryCompletedOrders.length}',
+                          color: Colors.green,
+                        ),
+                      ),
+                    ],
                   ),
-                );
-              },
-              child: Text(
-                'تعديل الملف',
-                style: const TextStyle(fontFamily: 'Cairo'),
-              ),
-            ),
-            const SizedBox(height: 10),
-            CupertinoButton.filled(
-              color: AppColors.primary,
-              onPressed: () => switchAccountRoleWithLoading(
-                context,
-                appProvider,
-                'customer',
-                loadingMessage:
-                    'يرجى الانتظار... جارٍ التحويل إلى حساب الزبون',
-                errorMessage: 'تعذر الانتقال إلى حساب الزبون حالياً.',
-              ),
-              child: Text(
-                'الانتقال إلى حساب الزبون',
-                style: const TextStyle(fontFamily: 'Cairo'),
-              ),
-            ),
-            const SizedBox(height: 10),
-            CupertinoButton.filled(
-              color: AppColors.accent,
-              onPressed: () => switchAccountRoleWithLoading(
-                context,
-                appProvider,
-                'merchant',
-                loadingMessage:
-                    'يرجى الانتظار... جارٍ التحويل إلى حساب التاجر',
-                errorMessage: 'تعذر الانتقال إلى حساب التاجر حالياً.',
-              ),
-              child: Text(
-                'الانتقال إلى حساب التاجر',
-                style: const TextStyle(fontFamily: 'Cairo'),
-              ),
-            ),
-            const SizedBox(height: 10),
-            CupertinoButton(
-              color: Colors.black87,
-              onPressed: () => appProvider.resetAll(),
-              child: Text(
-                'تسجيل الخروج',
-                style: const TextStyle(fontFamily: 'Cairo'),
+                  const SizedBox(height: 16),
+                  _NavigationCard(
+                    icon: Icons.payments_rounded,
+                    iconColor: const Color(0xFF007A7A),
+                    title: 'شاشة الأرباح',
+                    subtitle: 'عرض تفاصيل الأرباح اليومية والأسبوعية',
+                    onTap: () {
+                      Navigator.of(context).push(
+                        CupertinoPageRoute(
+                          builder: (_) => const DeliveryEarningsScreen(),
+                        ),
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 14),
+                  _NavigationCard(
+                    icon: CupertinoIcons.person_fill,
+                    iconColor: AppColors.primary,
+                    title: 'التحويل إلى حساب الزبون',
+                    subtitle: 'استخدم التطبيق كزبون لطلب المنتجات',
+                    onTap: () => switchAccountRoleWithLoading(
+                      context,
+                      appProvider,
+                      'customer',
+                      loadingMessage:
+                          'يرجى الانتظار... جارٍ التحويل إلى حساب الزبون',
+                      errorMessage: 'تعذر الانتقال إلى حساب الزبون حالياً.',
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  _NavigationCard(
+                    icon: Icons.storefront_rounded,
+                    iconColor: AppColors.accent,
+                    title: 'التحويل إلى حساب التاجر',
+                    subtitle: 'إدارة متجرك ومنتجاتك الخاصة',
+                    onTap: () => switchAccountRoleWithLoading(
+                      context,
+                      appProvider,
+                      'merchant',
+                      loadingMessage:
+                          'يرجى الانتظار... جارٍ التحويل إلى حساب التاجر',
+                      errorMessage: 'تعذر الانتقال إلى حساب التاجر حالياً.',
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  _LogoutCard(onTap: () => appProvider.resetAll()),
+                ],
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _StatCard extends StatelessWidget {
+  final String label;
+  final String value;
+  final Color color;
+
+  const _StatCard({
+    required this.label,
+    required this.value,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 16),
+      decoration: AccountUi.cardDecoration(radius: 20),
+      child: Column(
+        children: [
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.w900,
+              color: color,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            label,
+            style: const TextStyle(
+              fontSize: 11,
+              color: Color(0xFF6B7280),
+              fontFamily: 'Cairo',
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _EditProfileButton extends StatelessWidget {
+  final VoidCallback onTap;
+
+  const _EditProfileButton({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: Ink(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            gradient: AccountUi.brandGradient,
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: const Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(CupertinoIcons.pencil, color: Colors.white, size: 14),
+              const SizedBox(width: 4),
+              const Text(
+                'تعديل',
+                style: TextStyle(
+                  fontFamily: 'Cairo',
+                  fontSize: 13,
+                  fontWeight: FontWeight.w800,
+                  color: Colors.white,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _NavigationCard extends StatelessWidget {
+  final IconData icon;
+  final Color iconColor;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+
+  const _NavigationCard({
+    required this.icon,
+    required this.iconColor,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(22),
+        child: Ink(
+          padding: const EdgeInsets.all(16),
+          decoration: AccountUi.cardDecoration(radius: 22),
+          child: Row(
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: iconColor.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(icon, color: iconColor, size: 21),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        fontFamily: 'Cairo',
+                        fontSize: 15,
+                        fontWeight: FontWeight.w900,
+                        color: Color(0xFF1A1A1A),
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      subtitle,
+                      style: const TextStyle(
+                        fontFamily: 'Cairo',
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                        color: Color(0xFF6B7280),
+                        height: 1.4,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(
+                CupertinoIcons.chevron_left,
+                size: 16,
+                color: Colors.grey.shade300,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _LogoutCard extends StatelessWidget {
+  final VoidCallback onTap;
+
+  const _LogoutCard({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(22),
+        child: Ink(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: CupertinoColors.systemRed.withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(22),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: CupertinoColors.systemRed.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(
+                  CupertinoIcons.power,
+                  color: CupertinoColors.systemRed,
+                  size: 21,
+                ),
+              ),
+              const SizedBox(width: 14),
+              const Expanded(
+                child: Text(
+                  'تسجيل الخروج',
+                  style: TextStyle(
+                    fontFamily: 'Cairo',
+                    fontSize: 15,
+                    fontWeight: FontWeight.w800,
+                    color: CupertinoColors.systemRed,
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

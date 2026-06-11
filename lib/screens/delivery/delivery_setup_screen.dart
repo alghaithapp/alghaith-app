@@ -24,6 +24,7 @@ class _DeliverySetupScreenState extends State<DeliverySetupScreen> {
   late final TextEditingController _nameController;
   late final TextEditingController _phoneController;
   late final TextEditingController _homeAddressController;
+  String? _profileImageRef;
   String? _vehicleImageRef;
   bool _isUploadingImage = false;
   bool _isSaving = false;
@@ -43,6 +44,9 @@ class _DeliverySetupScreenState extends State<DeliverySetupScreen> {
     _homeAddressController = TextEditingController(
       text: CourierProfileFields.homeAddress(profile),
     );
+    _profileImageRef = CourierProfileFields.profileImage(profile).isNotEmpty
+        ? CourierProfileFields.profileImage(profile)
+        : null;
     _vehicleImageRef = CourierProfileFields.vehicleImage(profile).isNotEmpty
         ? CourierProfileFields.vehicleImage(profile)
         : null;
@@ -74,6 +78,25 @@ class _DeliverySetupScreenState extends State<DeliverySetupScreen> {
     }
   }
 
+  Future<void> _pickProfileImage() async {
+    final picked = await AppHelpers.pickImage(context);
+    if (picked == null || !mounted) return;
+
+    setState(() => _isUploadingImage = true);
+    try {
+      final url =
+          await context.read<AppProvider>().uploadImage(File(picked.path));
+      if (!mounted) return;
+      if (url == null || url.trim().isEmpty) {
+        _showMessage('تعذر رفع الصورة الشخصية، حاول مرة أخرى');
+        return;
+      }
+      setState(() => _profileImageRef = url.trim());
+    } finally {
+      if (mounted) setState(() => _isUploadingImage = false);
+    }
+  }
+
   void _showMessage(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -86,6 +109,7 @@ class _DeliverySetupScreenState extends State<DeliverySetupScreen> {
     final name = _nameController.text.trim();
     final phone = PhoneUtils.digitsOnly(_phoneController.text);
     final homeAddress = _homeAddressController.text.trim();
+    final profileImage = _profileImageRef?.trim() ?? '';
     final vehicleImage = _vehicleImageRef?.trim() ?? '';
 
     if (!CourierProfileFields.isTripleName(name)) {
@@ -100,6 +124,10 @@ class _DeliverySetupScreenState extends State<DeliverySetupScreen> {
       _showMessage('أدخل عنوان السكن');
       return;
     }
+    if (profileImage.isEmpty) {
+      _showMessage('أضف صورتك الشخصية');
+      return;
+    }
     if (vehicleImage.isEmpty) {
       _showMessage('أضف صورة للدراجة');
       return;
@@ -111,6 +139,7 @@ class _DeliverySetupScreenState extends State<DeliverySetupScreen> {
         'name': name,
         'phone': phone,
         'homeAddress': homeAddress,
+        'profileImage': profileImage,
         'vehicleImage': vehicleImage,
         'available': provider.courierProfile?['available'] as bool? ?? true,
       });
@@ -136,6 +165,17 @@ class _DeliverySetupScreenState extends State<DeliverySetupScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7FB),
       appBar: AppBar(
+        leading: IconButton(
+          tooltip: 'رجوع',
+          icon: const Icon(Icons.arrow_back_ios_new_rounded),
+          onPressed: () {
+            if (Navigator.of(context).canPop()) {
+              Navigator.of(context).pop();
+              return;
+            }
+            provider.setUserRole('customer');
+          },
+        ),
         title: Text(
           isEditing ? 'تعديل ملف المندوب' : 'تسجيل مندوب توصيل',
           style:
@@ -174,7 +214,7 @@ class _DeliverySetupScreenState extends State<DeliverySetupScreen> {
                       ),
                       SizedBox(height: 4),
                       Text(
-                        'الاسم الثلاثي، الهاتف، عنوان السكن، وصورة الدراجة مطلوبة للتفعيل.',
+                        'الاسم الثلاثي، الهاتف، عنوان السكن، وصورة الدراجة والصورة الشخصية مطلوبة للتفعيل.',
                         style: TextStyle(
                           color: Colors.white70,
                           fontSize: 12,
@@ -208,26 +248,94 @@ class _DeliverySetupScreenState extends State<DeliverySetupScreen> {
             maxLines: 2,
           ),
           const SizedBox(height: 4),
-          MerchantImageUploadSlot(
-            title: 'صورة الدراجة',
-            subtitle: 'صورة واضحة للدراجة المستخدمة في التوصيل',
-            imageRef: _vehicleImageRef,
-            icon: Icons.motorcycle_rounded,
-            onTap: _isUploadingImage ? () {} : _pickVehicleImage,
+          Row(
+            children: [
+              Expanded(
+                child: MerchantImageUploadSlot(
+                  title: 'الصورة الشخصية',
+                  subtitle: 'صورة واضحة للوجه',
+                  imageRef: _profileImageRef,
+                  icon: CupertinoIcons.person_crop_circle_fill,
+                  onTap: _isUploadingImage ? () {} : _pickProfileImage,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: MerchantImageUploadSlot(
+                  title: 'صورة الدراجة',
+                  subtitle: 'صورة الدراجة المستخدمة',
+                  imageRef: _vehicleImageRef,
+                  icon: Icons.motorcycle_rounded,
+                  onTap: _isUploadingImage ? () {} : _pickVehicleImage,
+                ),
+              ),
+            ],
           ),
           if (_isUploadingImage) ...[
             const SizedBox(height: 8),
             const Center(child: CupertinoActivityIndicator()),
           ],
-          if (_vehicleImageRef != null && _vehicleImageRef!.isNotEmpty) ...[
+          if ((_profileImageRef != null && _profileImageRef!.isNotEmpty) ||
+              (_vehicleImageRef != null && _vehicleImageRef!.isNotEmpty)) ...[
             const SizedBox(height: 10),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(16),
-              child: AppImage(
-                imageData: _vehicleImageRef,
-                height: 160,
-                width: double.infinity,
-                fit: BoxFit.cover,
+            Row(
+              children: [
+                if (_profileImageRef != null && _profileImageRef!.isNotEmpty)
+                  Expanded(
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(16),
+                      child: AppImage(
+                        imageData: _profileImageRef,
+                        height: 140,
+                        width: double.infinity,
+                        fit: BoxFit.cover,
+                      ),
+                    ),
+                  ),
+                if (_profileImageRef != null &&
+                    _profileImageRef!.isNotEmpty &&
+                    _vehicleImageRef != null &&
+                    _vehicleImageRef!.isNotEmpty)
+                  const SizedBox(width: 10),
+                if (_vehicleImageRef != null && _vehicleImageRef!.isNotEmpty)
+                  Expanded(
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(16),
+                      child: AppImage(
+                        imageData: _vehicleImageRef,
+                        height: 140,
+                        width: double.infinity,
+                        fit: BoxFit.cover,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ],
+          if (!isEditing) ...[
+            const SizedBox(height: 8),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: _isSaving || _isUploadingImage
+                    ? null
+                    : () => provider.setUserRole('customer'),
+                icon: const Icon(Icons.arrow_back_rounded, size: 18),
+                label: const Text(
+                  'رجوع بدون إكمال',
+                  style: TextStyle(
+                    fontFamily: 'Cairo',
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: const Color(0xFF145B66),
+                  side: const BorderSide(color: Color(0xFF145B66)),
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(18),
+                  ),
+                ),
               ),
             ),
           ],

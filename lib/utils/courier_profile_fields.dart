@@ -20,6 +20,11 @@ class CourierProfileFields {
     return raw?.toString().trim() ?? '';
   }
 
+  static String profileImage(Map<String, dynamic>? profile) {
+    final raw = profile?['profileImage'] ?? profile?['avatar'];
+    return raw?.toString().trim() ?? '';
+  }
+
   static bool isTripleName(String name) {
     final parts =
         name.trim().split(RegExp(r'\s+')).where((part) => part.isNotEmpty);
@@ -30,7 +35,8 @@ class CourierProfileFields {
     return name(profile).isNotEmpty &&
         phone(profile).isNotEmpty &&
         homeAddress(profile).isNotEmpty &&
-        vehicleImage(profile).isNotEmpty;
+        vehicleImage(profile).isNotEmpty &&
+        profileImage(profile).isNotEmpty;
   }
 
   static bool isApproved(Map<String, dynamic>? profile) =>

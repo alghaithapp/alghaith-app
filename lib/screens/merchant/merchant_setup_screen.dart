@@ -68,6 +68,11 @@ class _MerchantSetupScreenState extends State<MerchantSetupScreen> {
   bool get _isProfessionalSetup =>
       _selectedServiceIds.contains('professionals');
 
+  bool get _awaitingProfessionPick =>
+      _isProfessionalSetup &&
+      (_selectedProfessionalCategoryId == null ||
+          _selectedProfessionalCategoryId!.isEmpty);
+
   bool get _isRestaurantSetup => _primaryServiceId == 'restaurant';
 
   bool _isLocationRequiredFor(String serviceId) {
@@ -147,6 +152,17 @@ class _MerchantSetupScreenState extends State<MerchantSetupScreen> {
           ImageStorageService.merchantUploadedImageRef(
             provider.merchantProfileImageBase64,
           );
+      if (_selectedServiceIds.isEmpty) {
+        final existingServices = provider.merchantServiceIds;
+        if (existingServices.isNotEmpty) {
+          _selectedServiceIds.addAll(existingServices);
+        } else {
+          final category = provider.merchantStore?['category']?.toString();
+          if (category != null && category.isNotEmpty) {
+            _selectedServiceIds.add(category);
+          }
+        }
+      }
       _selectedProfessionalCategoryId ??=
           provider.merchantProfessionalCategoryId;
       _selectedRestaurantCategory ??=
@@ -181,6 +197,39 @@ class _MerchantSetupScreenState extends State<MerchantSetupScreen> {
     );
   }
 
+  void _handleBack(AppProvider appProvider) {
+    if (_awaitingProfessionPick) {
+      setState(() {
+        _selectedServiceIds.clear();
+        _selectedProfessionalCategoryId = null;
+      });
+      return;
+    }
+    if (_isProfessionalSetup && _selectedProfessionalCategoryId != null) {
+      setState(() => _selectedProfessionalCategoryId = null);
+      return;
+    }
+    if (_selectedServiceIds.isNotEmpty) {
+      setState(() {
+        _selectedServiceIds.clear();
+        _selectedProfessionalCategoryId = null;
+      });
+      return;
+    }
+    if (Navigator.of(context).canPop()) {
+      Navigator.of(context).pop();
+      return;
+    }
+    appProvider.setUserRole('customer');
+  }
+
+  String _navigationTitle(merchantServiceLabels labels) {
+    if (_selectedServiceIds.isEmpty) return labels.accountTitleAr;
+    if (_awaitingProfessionPick) return 'اختر تخصصك المهني';
+    if (_isProfessionalSetup) return 'إعداد ملف المهنة';
+    return labels.accountTitleAr;
+  }
+
   @override
   Widget build(BuildContext context) {
     final appProvider = Provider.of<AppProvider>(context);
@@ -197,13 +246,7 @@ class _MerchantSetupScreenState extends State<MerchantSetupScreen> {
         leading: CupertinoButton(
           padding: EdgeInsets.zero,
           minSize: 0,
-          onPressed: () {
-            if (Navigator.of(context).canPop()) {
-              Navigator.of(context).pop();
-              return;
-            }
-            appProvider.setUserRole('customer');
-          },
+          onPressed: () => _handleBack(appProvider),
           child: const Row(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -225,7 +268,7 @@ class _MerchantSetupScreenState extends State<MerchantSetupScreen> {
           ),
         ),
         middle: Text(
-          labels.accountTitleAr,
+          _navigationTitle(labels),
           style:
               const TextStyle(fontWeight: FontWeight.w700, fontFamily: 'Cairo'),
         ),
@@ -233,7 +276,9 @@ class _MerchantSetupScreenState extends State<MerchantSetupScreen> {
       child: SafeArea(
         child: _selectedServiceIds.isEmpty
             ? _buildInitialActivitySelection()
-            : CustomScrollView(
+            : _awaitingProfessionPick
+                ? _buildProfessionPicker()
+                : CustomScrollView(
                 slivers: [
                   SliverToBoxAdapter(
                     child: Padding(
@@ -335,50 +380,98 @@ class _MerchantSetupScreenState extends State<MerchantSetupScreen> {
                           ),
                           const SizedBox(height: 14),
                           if (_isProfessionalSetup) ...[
-                            _sectionTitle('تخصص المهنة'),
+                            _sectionTitle('تخصصك المهني'),
                             const SizedBox(height: 10),
-                            DropdownButtonFormField<String>(
-                              value: DummyData.professionalsSubCategories.any(
-                                      (category) =>
-                                          category.id ==
-                                          _selectedProfessionalCategoryId)
-                                  ? _selectedProfessionalCategoryId
-                                  : null,
-                              items: DummyData.professionalsSubCategories
-                                  .map((profession) {
-                                return DropdownMenuItem<String>(
-                                  value: profession.id,
-                                  child: Text(
-                                    profession.titleAr,
-                                    style: const TextStyle(fontFamily: 'Cairo'),
-                                  ),
-                                );
-                              }).toList(),
-                              onChanged: (value) {
-                                setState(() =>
-                                    _selectedProfessionalCategoryId = value);
-                              },
-                              decoration: InputDecoration(
-                                filled: true,
-                                fillColor: const Color(0xFFF7F8FC),
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(14),
-                                  borderSide: BorderSide.none,
+                            Container(
+                              padding: const EdgeInsets.all(14),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFF7F8FC),
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(
+                                  color: const Color(0xFF007A7A)
+                                      .withValues(alpha: 0.2),
                                 ),
                               ),
-                              validator: (value) {
-                                if (_isProfessionalSetup &&
-                                    (value == null || value.isEmpty)) {
-                                  return 'اختر تخصص المهنة';
-                                }
-                                return null;
-                              },
+                              child: Row(
+                                children: [
+                                  ClipRRect(
+                                    borderRadius: BorderRadius.circular(12),
+                                    child: AppImage(
+                                      imageData: DummyData
+                                          .professionalsSubCategories
+                                          .firstWhere(
+                                            (item) =>
+                                                item.id ==
+                                                _selectedProfessionalCategoryId,
+                                            orElse: () => DummyData
+                                                .professionalsSubCategories
+                                                .first,
+                                          )
+                                          .image,
+                                      width: 52,
+                                      height: 52,
+                                      fit: BoxFit.cover,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Text(
+                                      _selectedProfessionalCategoryNameAr ??
+                                          'تخصص غير محدد',
+                                      style: const TextStyle(
+                                        fontFamily: 'Cairo',
+                                        fontWeight: FontWeight.w800,
+                                        fontSize: 15,
+                                      ),
+                                    ),
+                                  ),
+                                  CupertinoButton(
+                                    padding: EdgeInsets.zero,
+                                    minSize: 0,
+                                    onPressed: () => setState(
+                                      () => _selectedProfessionalCategoryId =
+                                          null,
+                                    ),
+                                    child: const Text(
+                                      'تغيير',
+                                      style: TextStyle(
+                                        fontFamily: 'Cairo',
+                                        fontSize: 13,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
                             const SizedBox(height: 14),
                           ],
-                          _buildField('العنوان', _addressController),
-                          const SizedBox(height: 12),
-                          _buildLocationCard(),
+                          if (_isProfessionalSetup) ...[
+                            _sectionTitle('العنوان والموقع'),
+                            const SizedBox(height: 6),
+                            const Text(
+                              'أدخل عنوانك وحدده على الخريطة — مطلوب لظهور ملفك للزبائن.',
+                              style: TextStyle(
+                                color: Colors.grey,
+                                fontSize: 12,
+                                height: 1.5,
+                                fontFamily: 'Cairo',
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            _buildField(
+                              'العنوان (مطلوب)',
+                              _addressController,
+                              maxLines: 2,
+                              hintText:
+                                  'مثال: بغداد، الكرادة، شارع ...',
+                            ),
+                            const SizedBox(height: 12),
+                            _buildLocationCard(required: true),
+                          ] else ...[
+                            _buildField('العنوان', _addressController),
+                            const SizedBox(height: 12),
+                            _buildLocationCard(),
+                          ],
                           const SizedBox(height: 20),
                           _sectionTitle(
                             _showsStoreBrandingImages
@@ -445,7 +538,7 @@ class _MerchantSetupScreenState extends State<MerchantSetupScreen> {
                             ],
                           ] else if (_isProfessionalSetup) ...[
                             MerchantImageUploadSlot(
-                              title: 'الصورة الشخصية',
+                              title: 'الصورة الشخصية (مطلوبة)',
                               imageRef: _profileImageBase64,
                               icon: Icons.person_rounded,
                               onTap: _pickProfileImage,
@@ -457,80 +550,82 @@ class _MerchantSetupScreenState extends State<MerchantSetupScreen> {
                               onAddTap: _pickWorkSamples,
                             ),
                           ],
-                          const SizedBox(height: 20),
-                          _sectionTitle('الخدمات المشمولة'),
-                          const SizedBox(height: 6),
-                          Text(
-                            'يمكنك اختيار أكثر من خدمة من نفس الحساب، ثم التبديل بينها لاحقًا من داخل حسابك.',
-                            style: const TextStyle(
-                              color: Colors.grey,
-                              fontSize: 12,
-                              height: 1.5,
-                              fontFamily: 'Cairo',
+                          if (!_isProfessionalSetup) ...[
+                            const SizedBox(height: 20),
+                            _sectionTitle('الخدمات المشمولة'),
+                            const SizedBox(height: 6),
+                            Text(
+                              'يمكنك اختيار أكثر من خدمة من نفس الحساب، ثم التبديل بينها لاحقًا من داخل حسابك.',
+                              style: const TextStyle(
+                                color: Colors.grey,
+                                fontSize: 12,
+                                height: 1.5,
+                                fontFamily: 'Cairo',
+                              ),
                             ),
-                          ),
-                          const SizedBox(height: 12),
-                          Wrap(
-                            spacing: 10,
-                            runSpacing: 10,
-                            children: MarketplaceCatalog
-                                .merchantAvailableCategories
-                                .map((cat) {
-                              final selected =
-                                  _selectedServiceIds.contains(cat.id);
-                              return GestureDetector(
-                                onTap: () => setState(() {
-                                  if (selected) {
-                                    // إلغاء التحديد — لكن يجب الإبقاء على خدمة واحدة على الأقل
-                                    if (_selectedServiceIds.length == 1) return;
-                                    _selectedServiceIds.remove(cat.id);
-                                  } else {
-                                    // إضافة وجعلها الخدمة الأساسية
-                                    _selectedServiceIds.remove(cat.id);
-                                    _selectedServiceIds.insert(0, cat.id);
-                                  }
-                                }),
-                                child: AnimatedContainer(
-                                  duration: const Duration(milliseconds: 220),
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 16,
-                                    vertical: 12,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: selected
-                                        ? const Color(0xFF007A7A)
-                                        : Colors.white,
-                                    borderRadius: BorderRadius.circular(999),
-                                    border: Border.all(
+                            const SizedBox(height: 12),
+                            Wrap(
+                              spacing: 10,
+                              runSpacing: 10,
+                              children: MarketplaceCatalog
+                                  .merchantAvailableCategories
+                                  .map((cat) {
+                                final selected =
+                                    _selectedServiceIds.contains(cat.id);
+                                return GestureDetector(
+                                  onTap: () => setState(() {
+                                    if (selected) {
+                                      if (_selectedServiceIds.length == 1) {
+                                        return;
+                                      }
+                                      _selectedServiceIds.remove(cat.id);
+                                    } else {
+                                      _selectedServiceIds.remove(cat.id);
+                                      _selectedServiceIds.insert(0, cat.id);
+                                    }
+                                  }),
+                                  child: AnimatedContainer(
+                                    duration: const Duration(milliseconds: 220),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 16,
+                                      vertical: 12,
+                                    ),
+                                    decoration: BoxDecoration(
                                       color: selected
                                           ? const Color(0xFF007A7A)
-                                          : Colors.grey.shade300,
+                                          : Colors.white,
+                                      borderRadius: BorderRadius.circular(999),
+                                      border: Border.all(
+                                        color: selected
+                                            ? const Color(0xFF007A7A)
+                                            : Colors.grey.shade300,
+                                      ),
+                                    ),
+                                    child: Text(
+                                      cat.titleAr,
+                                      style: TextStyle(
+                                        color: selected
+                                            ? Colors.white
+                                            : Colors.black87,
+                                        fontWeight: FontWeight.w700,
+                                        fontFamily: 'Cairo',
+                                      ),
                                     ),
                                   ),
-                                  child: Text(
-                                    cat.titleAr,
-                                    style: TextStyle(
-                                      color: selected
-                                          ? Colors.white
-                                          : Colors.black87,
-                                      fontWeight: FontWeight.w700,
-                                      fontFamily: 'Cairo',
-                                    ),
-                                  ),
-                                ),
-                              );
-                            }).toList(),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            'اضغط على أي خدمة لتجعلها الخدمة الأساسية أثناء تعبئة البيانات.',
-                            style: const TextStyle(
-                              color: Colors.grey,
-                              fontSize: 12,
-                              height: 1.4,
-                              fontFamily: 'Cairo',
+                                );
+                              }).toList(),
                             ),
-                          ),
+                            const SizedBox(height: 8),
+                            Text(
+                              'اضغط على أي خدمة لتجعلها الخدمة الأساسية أثناء تعبئة البيانات.',
+                              style: const TextStyle(
+                                color: Colors.grey,
+                                fontSize: 12,
+                                height: 1.4,
+                                fontFamily: 'Cairo',
+                              ),
+                            ),
+                          ],
                           const SizedBox(height: 20),
                           _sectionTitle(hideFee
                               ? 'أوقات وإعدادات ${labels.storeLabelAr}'
@@ -644,18 +739,39 @@ class _MerchantSetupScreenState extends State<MerchantSetupScreen> {
                                   final closeTime = _closeTime.trim();
                                   final professionId =
                                       _selectedProfessionalCategoryId;
-                                  if (address.isEmpty ||
-                                      phone.isEmpty ||
-                                      openTime.isEmpty ||
-                                      closeTime.isEmpty ||
-                                      professionId == null ||
+                                  if (professionId == null ||
                                       professionId.isEmpty) {
+                                    _showMessage('يرجى اختيار تخصص المهنة');
+                                    return;
+                                  }
+                                  if (address.isEmpty) {
+                                    _showMessage('يرجى إدخال عنوانك');
+                                    return;
+                                  }
+                                  if (_storeLatitude == null ||
+                                      _storeLongitude == null) {
                                     _showMessage(
-                                        'يرجى إكمال بيانات صاحب المهنة');
+                                        'يرجى تحديد موقعك على الخريطة');
+                                    return;
+                                  }
+                                  if (phone.isEmpty) {
+                                    _showMessage('يرجى إدخال رقم الهاتف');
+                                    return;
+                                  }
+                                  if (openTime.isEmpty || closeTime.isEmpty) {
+                                    _showMessage(
+                                        'يرجى تحديد وقت الافتتاح ووقت الإغلاق');
+                                    return;
+                                  }
+                                  if (!ImageStorageService
+                                      .isMerchantUploadedImage(
+                                          _profileImageBase64)) {
+                                    _showMessage('يرجى رفع صورتك الشخصية');
                                     return;
                                   }
                                 }
-                                if (_requiresStoreLocation &&
+                                if (!_isProfessionalSetup &&
+                                    _requiresStoreLocation &&
                                     (_storeLatitude == null ||
                                         _storeLongitude == null)) {
                                   _showMessage(
@@ -744,13 +860,23 @@ class _MerchantSetupScreenState extends State<MerchantSetupScreen> {
                                         _selectedProfessionalCategoryId,
                                   });
                                   await appProvider.activateMerchantRole();
+                                  if (!context.mounted) return;
+                                  _showMessage(
+                                    appProvider.isMerchantApproved
+                                        ? (_isProfessionalSetup
+                                            ? 'تم حفظ بياناتك بنجاح.'
+                                            : 'تم حفظ بيانات المتجر بنجاح.')
+                                        : (_isProfessionalSetup
+                                            ? 'تم إرسال طلبك. سيظهر ملفك في قسم المهنيين بعد موافقة الإدارة.'
+                                            : 'تم إرسال طلبك. سيتم تفعيل حسابك بعد موافقة الإدارة.'),
+                                  );
                                 } catch (error) {
                                   _showMessage(
                                       'تعذر حفظ بيانات التاجر: $error');
                                 }
                               },
                               child: Text(
-                                'حفظ وتفعيل ${labels.storeLabelAr}',
+                                'إرسال طلب ${labels.storeLabelAr}',
                                 style: const TextStyle(
                                   fontWeight: FontWeight.w800,
                                   fontFamily: 'Cairo',
@@ -839,6 +965,88 @@ class _MerchantSetupScreenState extends State<MerchantSetupScreen> {
     });
   }
 
+  Widget _buildProfessionPicker() {
+    final professions = DummyData.professionalsSubCategories;
+    return CustomScrollView(
+      physics: const BouncingScrollPhysics(),
+      slivers: [
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 8),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: const [
+                Text(
+                  'ما هي مهنتك؟',
+                  style: TextStyle(
+                    fontFamily: 'Cairo',
+                    fontSize: 22,
+                    fontWeight: FontWeight.w900,
+                    color: Color(0xFF1A1A1A),
+                  ),
+                ),
+                SizedBox(height: 8),
+                Text(
+                  'اختر التخصص المناسب لك. بعد موافقة الإدارة سيظهر ملفك للزبائن مع إمكانية التواصل عبر واتساب والهاتف.',
+                  style: TextStyle(
+                    fontFamily: 'Cairo',
+                    fontSize: 14,
+                    color: Colors.grey,
+                    height: 1.5,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        SliverPadding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+          sliver: SliverGrid(
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 2,
+              crossAxisSpacing: 10,
+              mainAxisSpacing: 10,
+              childAspectRatio: 1,
+            ),
+            delegate: SliverChildBuilderDelegate(
+              (context, index) {
+                final profession = professions[index];
+                return GestureDetector(
+                  onTap: () => setState(
+                    () => _selectedProfessionalCategoryId = profession.id,
+                  ),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(15),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.05),
+                          blurRadius: 8,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(15),
+                      child: AppImage(
+                        imageData: profession.image,
+                        width: double.infinity,
+                        height: double.infinity,
+                        fit: BoxFit.contain,
+                      ),
+                    ),
+                  ),
+                );
+              },
+              childCount: professions.length,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildInitialActivitySelection() {
     return Column(
       children: [
@@ -879,8 +1087,12 @@ class _MerchantSetupScreenState extends State<MerchantSetupScreen> {
               return GestureDetector(
                 onTap: () {
                   setState(() {
-                    _selectedServiceIds.clear(); // السماح باختيار خدمة واحدة فقط
-                    _selectedServiceIds.add(cat.id);
+                    _selectedServiceIds
+                      ..clear()
+                      ..add(cat.id);
+                    if (cat.id == 'professionals') {
+                      _selectedProfessionalCategoryId = null;
+                    }
                   });
                 },
                 child: Container(
@@ -997,9 +1209,10 @@ class _MerchantSetupScreenState extends State<MerchantSetupScreen> {
     }
   }
 
-  Widget _buildLocationCard() {
+  Widget _buildLocationCard({bool required = false}) {
     final hasLocation = _storeLatitude != null && _storeLongitude != null;
-    final title = _locationTitleFor(_primaryServiceId);
+    final baseTitle = _locationTitleFor(_primaryServiceId);
+    final title = required ? '$baseTitle (مطلوب)' : baseTitle;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(14),

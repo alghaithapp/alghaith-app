@@ -145,11 +145,16 @@ class PushNotificationService {
 
   Future<void> _handleForegroundMessage(RemoteMessage message) async {
     await PushNotificationInbox.handleIncoming(message);
+    final eventKey = message.data['eventKey']?.toString() ?? '';
+    if (eventKey.contains(':approved') || eventKey.contains(':rejected')) {
+      await PushNotificationInbox.onCourierStatusPush?.call();
+    }
   }
 
   void _handleOpenedMessage(RemoteMessage message) {
     debugPrint('Push: opened ${message.data}');
     unawaited(PushNotificationInbox.clearUnread());
+    unawaited(PushNotificationInbox.onCourierStatusPush?.call());
   }
 
   String _platformLabel() {

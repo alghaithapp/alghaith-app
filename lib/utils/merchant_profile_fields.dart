@@ -122,4 +122,42 @@ class MerchantProfileFields {
     }
     return '';
   }
+
+  static bool isApproved(Map<String, dynamic>? store) {
+    if (store == null) return false;
+    if (store['isApproved'] == true || store['is_approved'] == true) return true;
+    if (approvalStatus(store) == 'approved') return true;
+    if (approvalStatus(store) == 'pending' || approvalStatus(store) == 'rejected') {
+      return false;
+    }
+    if (store['isApproved'] == false || store['is_approved'] == false) {
+      return false;
+    }
+    final name = store['name']?.toString().trim() ??
+        store['store_name']?.toString().trim() ??
+        '';
+    return name.isNotEmpty;
+  }
+
+  static String approvalStatus(Map<String, dynamic>? store) {
+    if (isApproved(store)) return 'approved';
+    final status =
+        store?['approvalStatus']?.toString().trim() ??
+            store?['approval_status']?.toString().trim() ??
+            '';
+    if (status == 'rejected') return 'rejected';
+    if (status == 'pending') return 'pending';
+    if (store?['isApproved'] == false || store?['is_approved'] == false) {
+      return 'pending';
+    }
+    return 'approved';
+  }
+
+  static bool isRejected(Map<String, dynamic>? store) =>
+      approvalStatus(store) == 'rejected';
+
+  static String rejectionMessage(Map<String, dynamic>? store) =>
+      store?['rejectionMessageAr']?.toString().trim() ??
+      store?['rejection_message_ar']?.toString().trim() ??
+      '';
 }

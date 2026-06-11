@@ -101,6 +101,17 @@ class _ProfessionalsDirectoryScreenState
     return AppHelpers.supportWhatsAppNumber;
   }
 
+  String _profilePhone(Map<String, dynamic> profile) {
+    final phone = profile['phone']?.toString().trim();
+    if (phone != null && phone.isNotEmpty) return phone;
+    final info = profile['professional_info'];
+    if (info is Map) {
+      final value = info['phone']?.toString().trim();
+      if (value != null && value.isNotEmpty) return value;
+    }
+    return _profileWhatsapp(profile);
+  }
+
   @override
   Widget build(BuildContext context) {
     final query = _searchController.text.trim().toLowerCase();
@@ -147,8 +158,7 @@ class _ProfessionalsDirectoryScreenState
                   final filtered = profiles.where((profile) {
                     final name = _profileName(profile).toLowerCase();
                     final desc = _profileDescription(profile).toLowerCase();
-                    final phone =
-                        profile['phone']?.toString().toLowerCase() ?? '';
+                    final phone = _profilePhone(profile).toLowerCase();
                     final whatsapp = _profileWhatsapp(profile).toLowerCase();
                     if (query.isEmpty) return true;
                     return name.contains(query) ||
@@ -174,7 +184,7 @@ class _ProfessionalsDirectoryScreenState
                       return _ProfessionalCard(
                         name: _profileName(profile),
                         description: _profileDescription(profile),
-                        phone: profile['phone']?.toString() ?? '',
+                        phone: _profilePhone(profile),
                         whatsapp: _profileWhatsapp(profile),
                         address: profile['address']?.toString() ?? '',
                         openTime: profile['open_time']?.toString() ?? '',

@@ -2,9 +2,12 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/ui/account_ui.dart';
+import '../../core/theme/app_colors.dart';
 import '../../providers/app_provider.dart';
 import '../../utils/extensions.dart';
 import '../../widgets/app_image.dart';
+import '../../widgets/app_logo.dart';
 
 class AdminDashboardScreen extends StatefulWidget {
   const AdminDashboardScreen({super.key});
@@ -41,25 +44,43 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
     final reports = provider.adminReports ?? const {};
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF2F2F7),
+      backgroundColor: accountBackground,
       appBar: AppBar(
+        backgroundColor: Colors.white,
+        elevation: 0,
+        centerTitle: true,
+        leading: const Padding(
+          padding: EdgeInsets.all(10),
+          child: AppLogo(size: 28),
+        ),
         title: const Text(
           'لوحة الإدارة',
-          style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w900),
+          style: TextStyle(
+            fontFamily: 'Cairo',
+            fontWeight: FontWeight.w900,
+            color: accountHeadline,
+          ),
         ),
         bottom: TabBar(
           controller: _tabController,
-          indicatorColor: Colors.red.shade700,
-          labelColor: Colors.red.shade700,
-          unselectedLabelColor: Colors.grey,
+          indicatorColor: accountBrandRed,
+          labelColor: accountBrandRed,
+          unselectedLabelColor: accountBodyGray,
+          indicatorWeight: 3,
           labelStyle: const TextStyle(
             fontFamily: 'Cairo',
+            fontWeight: FontWeight.w900,
+            fontSize: 13,
+          ),
+          unselectedLabelStyle: const TextStyle(
+            fontFamily: 'Cairo',
             fontWeight: FontWeight.w700,
+            fontSize: 12,
           ),
           tabs: const [
-            Tab(text: 'التقارير', icon: Icon(Icons.bar_chart_rounded)),
-            Tab(text: 'إدارة التجار', icon: Icon(Icons.store_rounded)),
-            Tab(text: 'مندوبو التوصيل', icon: Icon(Icons.delivery_dining_rounded)),
+            Tab(text: 'التقارير', icon: Icon(Icons.bar_chart_rounded, size: 20)),
+            Tab(text: 'إدارة التجار', icon: Icon(Icons.store_rounded, size: 20)),
+            Tab(text: 'المندوبين', icon: Icon(Icons.delivery_dining_rounded, size: 20)),
           ],
         ),
         actions: [
@@ -69,7 +90,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
               provider.refreshAllMerchants();
               provider.refreshAllCouriers();
             },
-            icon: const Icon(Icons.refresh_rounded),
+            icon: const Icon(Icons.refresh_rounded, color: accountHeadline),
           ),
         ],
       ),
@@ -106,6 +127,7 @@ class _ReportsTab extends StatelessWidget {
               fontFamily: 'Cairo',
               fontWeight: FontWeight.w900,
               fontSize: 18,
+              color: accountHeadline,
             ),
           ),
           const SizedBox(height: 12),
@@ -170,6 +192,7 @@ class _ReportsTab extends StatelessWidget {
               fontFamily: 'Cairo',
               fontWeight: FontWeight.w900,
               fontSize: 16,
+              color: accountHeadline,
             ),
           ),
           const SizedBox(height: 10),
@@ -178,12 +201,36 @@ class _ReportsTab extends StatelessWidget {
           const SizedBox(height: 16),
           SizedBox(
             width: double.infinity,
-            child: CupertinoButton(
-              color: Colors.blue.shade700,
-              onPressed: () => provider.setUserRole('customer'),
-              child: const Text(
-                'التبديل إلى حساب الزبون',
-                style: TextStyle(fontFamily: 'Cairo'),
+            child: Container(
+              height: 52,
+              decoration: BoxDecoration(
+                gradient: AccountUi.brandGradient,
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: accountBrandRed.withValues(alpha: 0.25),
+                    blurRadius: 12,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: () => provider.setUserRole('customer'),
+                  borderRadius: BorderRadius.circular(16),
+                  child: const Center(
+                    child: Text(
+                      'التبديل إلى حساب الزبون',
+                      style: TextStyle(
+                        fontFamily: 'Cairo',
+                        fontWeight: FontWeight.w900,
+                        color: Colors.white,
+                        fontSize: 15,
+                      ),
+                    ),
+                  ),
+                ),
               ),
             ),
           ),
@@ -191,11 +238,15 @@ class _ReportsTab extends StatelessWidget {
           SizedBox(
             width: double.infinity,
             child: CupertinoButton(
-              color: Colors.black87,
+              color: CupertinoColors.systemRed.withValues(alpha: 0.1),
               onPressed: provider.resetAll,
               child: const Text(
                 'تسجيل الخروج',
-                style: TextStyle(fontFamily: 'Cairo'),
+                style: TextStyle(
+                  fontFamily: 'Cairo',
+                  fontWeight: FontWeight.w800,
+                  color: CupertinoColors.systemRed,
+                ),
               ),
             ),
           ),
@@ -374,17 +425,17 @@ class _MerchantCard extends StatelessWidget {
     final serviceId = merchant['primaryServiceId']?.toString() ?? '';
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: isFrozen
-              ? Colors.red.shade200
-              : (isBazaarMember ? Colors.amber.shade300 : Colors.grey.shade200),
-          width: isFrozen || isBazaarMember ? 1.5 : 1,
-        ),
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: AccountUi.cardDecoration(radius: 22).copyWith(
+        border: (isFrozen || isBazaarMember)
+            ? Border.all(
+                color: isFrozen
+                    ? Colors.red.withValues(alpha: 0.3)
+                    : accountBrandRed.withValues(alpha: 0.4),
+                width: 1.5,
+              )
+            : null,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -396,10 +447,10 @@ class _MerchantCard extends StatelessWidget {
                 height: 44,
                 decoration: BoxDecoration(
                   color: isFrozen
-                      ? Colors.red.shade50
+                      ? Colors.red.withValues(alpha: 0.1)
                       : (isBazaarMember
-                          ? Colors.amber.shade50
-                          : Colors.grey.shade100),
+                          ? accountBrandRed.withValues(alpha: 0.1)
+                          : accountBackground),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Icon(
@@ -407,8 +458,8 @@ class _MerchantCard extends StatelessWidget {
                       ? Icons.block_rounded
                       : (isBazaarMember ? Icons.verified : Icons.store),
                   color: isFrozen
-                      ? Colors.red.shade700
-                      : (isBazaarMember ? Colors.amber.shade700 : Colors.grey),
+                      ? Colors.red
+                      : (isBazaarMember ? accountBrandRed : accountBodyGray),
                   size: 22,
                 ),
               ),
@@ -421,8 +472,9 @@ class _MerchantCard extends StatelessWidget {
                       storeName.isNotEmpty ? storeName : 'متجر بدون اسم',
                       style: const TextStyle(
                         fontFamily: 'Cairo',
-                        fontWeight: FontWeight.w800,
-                        fontSize: 14,
+                        fontWeight: FontWeight.w900,
+                        fontSize: 15,
+                        color: accountHeadline,
                       ),
                     ),
                     if (fullName.isNotEmpty)
@@ -430,8 +482,9 @@ class _MerchantCard extends StatelessWidget {
                         fullName,
                         style: const TextStyle(
                           fontFamily: 'Cairo',
-                          fontSize: 11,
-                          color: Colors.grey,
+                          fontSize: 12,
+                          color: accountBodyGray,
+                          fontWeight: FontWeight.w500,
                         ),
                       ),
                   ],
@@ -662,10 +715,8 @@ class _ReportCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: color.withValues(alpha: 0.2)),
+      decoration: AccountUi.cardDecoration(radius: 18).copyWith(
+        border: Border.all(color: color.withValues(alpha: 0.15)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -702,12 +753,9 @@ class _RecentOrderTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-      ),
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(14),
+      decoration: AccountUi.cardDecoration(radius: 16),
       child: Row(
         children: [
           Expanded(
@@ -972,14 +1020,14 @@ class _CourierCard extends StatelessWidget {
     final rejectionMessage = courier['rejectionMessageAr']?.toString() ?? '';
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: AccountUi.cardDecoration(radius: 22).copyWith(
         border: Border.all(
-          color: isApproved ? Colors.green.shade300 : Colors.orange.shade300,
-          width: isApproved ? 1.5 : 1,
+          color: isApproved
+              ? Colors.green.withValues(alpha: 0.3)
+              : accountBrandRed.withValues(alpha: 0.3),
+          width: 1.5,
         ),
       ),
       child: Column(
@@ -997,21 +1045,23 @@ class _CourierCard extends StatelessWidget {
                       children: [
                         Text(
                           name,
-                      style: const TextStyle(
-                        fontFamily: 'Cairo',
-                        fontWeight: FontWeight.w900,
-                        fontSize: 15,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      phone,
-                      style: const TextStyle(
-                        fontFamily: 'Cairo',
-                        fontSize: 12,
-                        color: Colors.grey,
-                      ),
-                    ),
+                          style: const TextStyle(
+                            fontFamily: 'Cairo',
+                            fontWeight: FontWeight.w900,
+                            fontSize: 16,
+                            color: accountHeadline,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          phone,
+                          style: const TextStyle(
+                            fontFamily: 'Cairo',
+                            fontSize: 13,
+                            color: accountBodyGray,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
                     const SizedBox(height: 6),
                     Wrap(
                       spacing: 6,
@@ -1024,8 +1074,8 @@ class _CourierCard extends StatelessWidget {
                           ),
                           decoration: BoxDecoration(
                             color: isApproved
-                                ? Colors.green.shade50
-                                : Colors.orange.shade50,
+                                ? Colors.green.withValues(alpha: 0.1)
+                                : accountBrandRed.withValues(alpha: 0.1),
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: Text(
@@ -1037,12 +1087,12 @@ class _CourierCard extends StatelessWidget {
                             style: TextStyle(
                               fontFamily: 'Cairo',
                               fontSize: 11,
-                              fontWeight: FontWeight.w700,
+                              fontWeight: FontWeight.w800,
                               color: isApproved
-                                  ? Colors.green.shade800
+                                  ? Colors.green.shade700
                                   : isRejected
-                                      ? Colors.red.shade800
-                                      : Colors.orange.shade800,
+                                      ? Colors.red
+                                      : accountBrandRed,
                             ),
                           ),
                         ),
@@ -1080,11 +1130,11 @@ class _CourierCard extends StatelessWidget {
               const SizedBox(height: 12),
               Text(
                 'صورة الدراجة',
-                style: TextStyle(
+                style: const TextStyle(
                   fontFamily: 'Cairo',
-                  fontWeight: FontWeight.w800,
+                  fontWeight: FontWeight.w900,
                   fontSize: 13,
-                  color: Colors.grey.shade800,
+                  color: accountHeadline,
                 ),
               ),
               const SizedBox(height: 8),
@@ -1138,8 +1188,7 @@ class _CourierCard extends StatelessWidget {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Icon(Icons.home_rounded,
-                  size: 16, color: Colors.grey.shade600),
+              const Icon(Icons.home_rounded, size: 16, color: accountBodyGray),
               const SizedBox(width: 6),
               Expanded(
                 child: Text(
@@ -1148,6 +1197,8 @@ class _CourierCard extends StatelessWidget {
                     fontFamily: 'Cairo',
                     fontSize: 12,
                     height: 1.45,
+                    color: accountHeadline,
+                    fontWeight: FontWeight.w500,
                   ),
                 ),
               ),

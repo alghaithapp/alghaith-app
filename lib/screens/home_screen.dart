@@ -57,7 +57,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 },
                 child: Container(
                   width: double.infinity,
-                  height: 240, // تم تكبير الارتفاع لاستغلال مساحة البحث المحذوفة
+                  height: 200, // تم تقليل الارتفاع بطلب من المستخدم
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(15),

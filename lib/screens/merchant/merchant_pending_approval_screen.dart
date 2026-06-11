@@ -6,20 +6,20 @@ import 'package:provider/provider.dart';
 
 import '../../core/notifications/push_notification_service.dart';
 import '../../providers/app_provider.dart';
-import '../../utils/courier_profile_fields.dart';
 import '../../utils/helpers.dart';
-import 'delivery_setup_screen.dart';
+import '../../utils/merchant_profile_fields.dart';
+import 'merchant_setup_screen.dart';
 
-class DeliveryPendingApprovalScreen extends StatefulWidget {
-  const DeliveryPendingApprovalScreen({super.key});
+class MerchantPendingApprovalScreen extends StatefulWidget {
+  const MerchantPendingApprovalScreen({super.key});
 
   @override
-  State<DeliveryPendingApprovalScreen> createState() =>
-      _DeliveryPendingApprovalScreenState();
+  State<MerchantPendingApprovalScreen> createState() =>
+      _MerchantPendingApprovalScreenState();
 }
 
-class _DeliveryPendingApprovalScreenState
-    extends State<DeliveryPendingApprovalScreen> with WidgetsBindingObserver {
+class _MerchantPendingApprovalScreenState
+    extends State<MerchantPendingApprovalScreen> with WidgetsBindingObserver {
   bool _isRefreshing = false;
   Timer? _pollTimer;
 
@@ -58,18 +58,24 @@ class _DeliveryPendingApprovalScreenState
     setState(() => _isRefreshing = true);
     try {
       final provider = context.read<AppProvider>();
-      final wasApproved = provider.isCourierApproved;
+      final wasApproved = provider.isMerchantApproved;
       await provider.refreshAccountFromCloud();
       if (!mounted) return;
-      final approved = context.read<AppProvider>().isCourierApproved;
+      final approved = context.read<AppProvider>().isMerchantApproved;
       if (!wasApproved && approved) {
+        final isProfessional =
+            context.read<AppProvider>().merchantServiceIds.contains('professionals') ||
+                context.read<AppProvider>().merchantActiveServiceId ==
+                    'professionals';
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
+          SnackBar(
             content: Text(
-              'تم تفعيل حسابك! مرحباً بك.',
-              style: TextStyle(fontFamily: 'Cairo'),
+              isProfessional
+                  ? 'تم تفعيل ملف المهنة! مرحباً بك.'
+                  : 'تم تفعيل متجرك! مرحباً بك.',
+              style: const TextStyle(fontFamily: 'Cairo'),
             ),
-            duration: Duration(seconds: 5),
+            duration: const Duration(seconds: 5),
           ),
         );
       }
@@ -81,10 +87,14 @@ class _DeliveryPendingApprovalScreenState
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<AppProvider>();
-    final profile = provider.courierProfile;
-    final name = CourierProfileFields.name(profile);
-    final isRejected = CourierProfileFields.isRejected(profile);
-    final rejectionMessage = CourierProfileFields.rejectionMessage(profile);
+    final store = provider.merchantStore;
+    final storeName = provider.merchantStoreName;
+    final isProfessional = provider.merchantServiceIds.contains('professionals') ||
+        provider.merchantActiveServiceId == 'professionals';
+    final isRejected = MerchantProfileFields.isRejected(store);
+    final rejectionMessage = MerchantProfileFields.rejectionMessage(store);
+    final accountLabel = isProfessional ? 'حساب المهني' : 'حساب التاجر';
+    final profileLabel = isProfessional ? 'ملف المهنة' : 'متجر';
 
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7FB),
@@ -116,13 +126,19 @@ class _DeliveryPendingApprovalScreenState
             Icon(
               isRejected
                   ? Icons.error_outline_rounded
-                  : Icons.hourglass_top_rounded,
+                  : (isProfessional
+                      ? Icons.engineering_rounded
+                      : Icons.storefront_rounded),
               size: 72,
-              color: isRejected ? Colors.red.shade700 : Colors.orange.shade700,
+              color: isRejected ? Colors.red.shade700 : const Color(0xFF145B66),
             ),
             const SizedBox(height: 24),
             Text(
-              isRejected ? 'يرجى تعديل بياناتك' : 'طلبك قيد المراجعة',
+              isRejected
+                  ? (isProfessional
+                      ? 'يرجى تعديل بيانات ملف المهنة'
+                      : 'يرجى تعديل بيانات متجرك')
+                  : 'طلبك قيد المراجعة',
               textAlign: TextAlign.center,
               style: const TextStyle(
                 fontFamily: 'Cairo',
@@ -132,11 +148,13 @@ class _DeliveryPendingApprovalScreenState
             ),
             const SizedBox(height: 12),
             Text(
-              name.isNotEmpty
-                  ? 'مرحباً $name، ${isRejected ? 'لم تُقبل بياناتك بعد.' : 'تم استلام بياناتك بنجاح.'}'
+              storeName.isNotEmpty
+                  ? '$profileLabel "$storeName" ${isRejected ? 'لم يُقبل بعد.' : 'بانتظار موافقة الإدارة.'}'
                   : (isRejected
-                      ? 'لم تُقبل بياناتك بعد.'
-                      : 'تم استلام بياناتك بنجاح.'),
+                      ? 'لم يُقبل طلبك بعد.'
+                      : (isProfessional
+                          ? 'تم استلام بيانات ملف المهنة بنجاح.'
+                          : 'تم استلام بيانات متجرك بنجاح.')),
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontFamily: 'Cairo',
@@ -169,11 +187,14 @@ class _DeliveryPendingApprovalScreenState
               ),
             ] else ...[
               const SizedBox(height: 8),
-              const Text(
-                'لن يُفعَّل حساب مندوب التوصيل إلا بعد موافقة الإدارة من لوحة '
-                'التحكم. ستصلك إشعار عند التفعيل.',
+              Text(
+                isProfessional
+                    ? 'لن يُفعَّل $accountLabel ولا يظهر في قسم المهنيين للزبائن إلا بعد موافقة الإدارة. '
+                        'ستصلك إشعار عند التفعيل.'
+                    : 'لن يُفعَّل $accountLabel ولا يظهر للزبائن إلا بعد موافقة الإدارة. '
+                        'ستصلك إشعار عند التفعيل.',
                 textAlign: TextAlign.center,
-                style: TextStyle(
+                style: const TextStyle(
                   fontFamily: 'Cairo',
                   fontSize: 14,
                   height: 1.65,
@@ -186,13 +207,17 @@ class _DeliveryPendingApprovalScreenState
               onPressed: () {
                 Navigator.of(context).push(
                   MaterialPageRoute<void>(
-                    builder: (_) => const DeliverySetupScreen(),
+                    builder: (_) => const MerchantSetupScreen(),
                   ),
                 );
               },
               icon: const Icon(Icons.edit_rounded),
               label: Text(
-                isRejected ? 'تعديل البيانات وإعادة الإرسال' : 'تعديل البيانات',
+                isRejected
+                    ? 'تعديل البيانات وإعادة الإرسال'
+                    : (isProfessional
+                        ? 'تعديل بيانات المهنة'
+                        : 'تعديل بيانات المتجر'),
                 style: const TextStyle(
                   fontFamily: 'Cairo',
                   fontWeight: FontWeight.w700,
@@ -200,7 +225,7 @@ class _DeliveryPendingApprovalScreenState
               ),
               style: FilledButton.styleFrom(
                 backgroundColor:
-                    isRejected ? Colors.red.shade700 : const Color(0xFF007A7A),
+                    isRejected ? Colors.red.shade700 : const Color(0xFF145B66),
                 padding: const EdgeInsets.symmetric(vertical: 14),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(14),
@@ -211,7 +236,7 @@ class _DeliveryPendingApprovalScreenState
             FilledButton.icon(
               onPressed: () => AppHelpers.launchWhatsApp(
                 AppHelpers.supportWhatsAppNumber,
-                'مرحباً، أنا مندوب توصيل وبانتظار موافقة الإدارة على حسابي.',
+                'مرحباً، أنا تاجر وبانتظار موافقة الإدارة على حساب متجري.',
               ),
               icon: const Icon(Icons.support_agent_rounded),
               label: const Text(
@@ -219,7 +244,8 @@ class _DeliveryPendingApprovalScreenState
                 style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w700),
               ),
               style: FilledButton.styleFrom(
-                backgroundColor: const Color(0xFF007A7A),
+                backgroundColor: const Color(0xFFF5A01D),
+                foregroundColor: const Color(0xFF1A1A1A),
                 padding: const EdgeInsets.symmetric(vertical: 14),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(14),

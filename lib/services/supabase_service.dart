@@ -292,6 +292,24 @@ class SupabaseService {
         isFrozen: isFrozen,
       );
 
+  static Future<void> toggleMerchantApprovalStatus({
+    required String merchantPhone,
+    required bool isApproved,
+  }) =>
+      _db.toggleMerchantApprovalStatus(
+        merchantPhone: merchantPhone,
+        isApproved: isApproved,
+      );
+
+  static Future<void> rejectMerchantApplication({
+    required String merchantPhone,
+    required String reasonKey,
+  }) =>
+      _db.rejectMerchantApplication(
+        merchantPhone: merchantPhone,
+        reasonKey: reasonKey,
+      );
+
   static Future<void> saveDeviceToken({
     required String phone,
     required String token,

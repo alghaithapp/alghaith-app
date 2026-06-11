@@ -161,26 +161,36 @@ class MerchantWorkingHoursPicker extends StatelessWidget {
                       SizedBox(
                         height: pickerHeight,
                         width: double.infinity,
-                        child: CupertinoTheme(
-                          data: const CupertinoThemeData(
-                            textTheme: CupertinoTextThemeData(
-                              dateTimePickerTextStyle: TextStyle(
-                                fontSize: 22,
-                                fontFamily: 'Cairo',
+                        child: Directionality(
+                          textDirection: TextDirection.ltr,
+                          child: CupertinoTheme(
+                            data: const CupertinoThemeData(
+                              brightness: Brightness.light,
+                              scaffoldBackgroundColor: Colors.white,
+                              primaryColor: _brand,
+                              textTheme: CupertinoTextThemeData(
+                                dateTimePickerTextStyle: TextStyle(
+                                  fontSize: 24,
+                                  fontWeight: FontWeight.w700,
+                                  color: Color(0xFF1A1A1A),
+                                  letterSpacing: 0.5,
+                                ),
                               ),
                             ),
-                          ),
-                          child: CupertinoDatePicker(
-                            mode: CupertinoDatePickerMode.time,
-                            use24hFormat: false,
-                            initialDateTime: initialDateTime,
-                            onDateTimeChanged: (dateTime) {
-                              selected = TimeOfDay(
-                                hour: dateTime.hour,
-                                minute: dateTime.minute,
-                              );
-                              setSheetState(() {});
-                            },
+                            child: CupertinoDatePicker(
+                              mode: CupertinoDatePickerMode.time,
+                              use24hFormat: false,
+                              initialDateTime: initialDateTime,
+                              backgroundColor: Colors.white,
+                              onDateTimeChanged: (dateTime) {
+                                setSheetState(() {
+                                  selected = TimeOfDay(
+                                    hour: dateTime.hour,
+                                    minute: dateTime.minute,
+                                  );
+                                });
+                              },
+                            ),
                           ),
                         ),
                       ),

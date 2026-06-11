@@ -25,6 +25,7 @@ import 'screens/phone_login_screen.dart';
 import 'screens/role_selection_screen.dart';
 import 'screens/customer_setup_screen.dart';
 import 'screens/merchant/merchant_setup_screen.dart';
+import 'screens/merchant/merchant_pending_approval_screen.dart';
 import 'screens/merchant/merchant_shell.dart';
 import 'screens/admin/admin_dashboard_screen.dart';
 import 'core/notifications/push_notification_service.dart';
@@ -180,9 +181,13 @@ class AlGhaithApp extends StatelessWidget {
       }
 
       if (appProvider.userRole == 'merchant') {
-        return !appProvider.hasCompletedMerchantProfile
-            ? const ExitConfirmScope(child: MerchantSetupScreen())
-            : const ExitConfirmScope(child: MerchantShell());
+        if (!appProvider.hasCompletedMerchantProfile) {
+          return const ExitConfirmScope(child: MerchantSetupScreen());
+        }
+        if (!appProvider.isMerchantApproved) {
+          return const ExitConfirmScope(child: MerchantPendingApprovalScreen());
+        }
+        return const ExitConfirmScope(child: MerchantShell());
       } else if (appProvider.userRole == 'driver') {
         return appProvider.hasDriverProfile
             ? const ExitConfirmScope(child: DriverShell())
@@ -252,6 +257,8 @@ class _PushNotificationLifecycleScopeState extends State<PushNotificationLifecyc
     WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       unawaited(PushNotificationService.instance.onAppResumed());
+      if (!mounted) return;
+      unawaited(context.read<AppProvider>().refreshCourierApprovalIfNeeded());
     });
   }
 
@@ -265,6 +272,8 @@ class _PushNotificationLifecycleScopeState extends State<PushNotificationLifecyc
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       unawaited(PushNotificationService.instance.onAppResumed());
+      if (!mounted) return;
+      unawaited(context.read<AppProvider>().refreshCourierApprovalIfNeeded());
     }
   }
 

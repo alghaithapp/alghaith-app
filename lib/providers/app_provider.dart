@@ -6,6 +6,7 @@ import '../core/catalog/marketplace_catalog.dart';
 import '../core/catalog/marketplace_stats.dart';
 import '../core/checkout/cart_promo.dart';
 import '../core/notifications/notification_hub.dart';
+import '../core/notifications/push_notification_inbox.dart';
 import '../core/notifications/push_notification_service.dart';
 import '../core/config/app_config.dart';
 import '../core/utils/phone_utils.dart';
@@ -82,6 +83,7 @@ class AppProvider extends ChangeNotifier {
   String? _customerAvatarBase64;
 
   AppProvider() {
+    PushNotificationInbox.onCourierStatusPush = handleCourierStatusPush;
     _loadSettings();
   }
 
@@ -174,6 +176,10 @@ class AppProvider extends ChangeNotifier {
   bool get isRestoring => _isRestoring;
   bool get hasCompletedMerchantProfile =>
       _merchantStore != null && merchantStoreName.isNotEmpty;
+  bool get isMerchantApproved =>
+      MerchantProfileFields.isApproved(_merchantStore);
+  bool get canUseMerchantAccount =>
+      hasCompletedMerchantProfile && isMerchantApproved;
   bool get isMerchantStoreOpen => (_merchantStore?['isOpen'] as bool?) ?? true;
   bool get isBazaarApproved =>
       (_merchantStore?['isBazaarMember'] as bool?) ??
@@ -1477,6 +1483,13 @@ class AppProvider extends ChangeNotifier {
       'isOpen': row['is_open'] as bool? ?? true,
       'isFrozen': row['is_frozen'] as bool? ?? false,
       'isBazaarMember': row['is_bazaar_member'] as bool? ?? false,
+      'isApproved': row['is_approved'] as bool? ?? row['isApproved'] as bool?,
+      'approvalStatus':
+          row['approval_status']?.toString() ?? row['approvalStatus']?.toString(),
+      'rejectionReasonKey': row['rejection_reason_key']?.toString() ??
+          row['rejectionReasonKey']?.toString(),
+      'rejectionMessageAr': row['rejection_message_ar']?.toString() ??
+          row['rejectionMessageAr']?.toString(),
       'serviceIds': _decodeStringList(row['service_ids']),
       'activeServiceId': row['active_service_id']?.toString(),
       'restaurantCategory': row['restaurant_category']?.toString(),
@@ -1500,11 +1513,59 @@ class AppProvider extends ChangeNotifier {
 
   void _applyMerchantStoreSnapshot(Map<String, dynamic> snapshot) {
     if (snapshot.isEmpty) return;
+    final previousStore = _merchantStore == null
+        ? null
+        : Map<String, dynamic>.from(_merchantStore!);
+    final wasApproved = MerchantProfileFields.isApproved(previousStore);
+    final wasRejected = MerchantProfileFields.isRejected(previousStore);
+    final previousRejectionMessage =
+        MerchantProfileFields.rejectionMessage(previousStore);
+
     _merchantStore = Map<String, dynamic>.from(snapshot);
+    _notifyMerchantApprovalTransition(
+      wasApproved: wasApproved,
+      wasRejected: wasRejected,
+      previousRejectionMessage: previousRejectionMessage,
+    );
+  }
+
+  void _notifyMerchantApprovalTransition({
+    required bool wasApproved,
+    required bool wasRejected,
+    required String previousRejectionMessage,
+  }) {
+    if (!hasCompletedMerchantProfile) return;
+
+    final nowApproved = isMerchantApproved;
+    final nowRejected = MerchantProfileFields.isRejected(_merchantStore);
+    final rejectionMessage =
+        MerchantProfileFields.rejectionMessage(_merchantStore);
+
+    if (nowApproved && !wasApproved) {
+      _notificationHub.onMerchantProfileActivated();
+      _queueUnreadPromptForRole('merchant');
+      return;
+    }
+
+    if (nowRejected &&
+        (!wasRejected || rejectionMessage != previousRejectionMessage)) {
+      _notificationHub.onMerchantRejected(rejectionMessage);
+      _queueUnreadPromptForRole('merchant');
+    }
   }
 
   /// تطبيق الحالة المسترجعة من السحابة
   void _applyRemoteState(Map<String, dynamic> state) {
+    final previousCourierProfile = _courierProfile == null
+        ? null
+        : Map<String, dynamic>.from(_courierProfile!);
+    final wasCourierApproved =
+        CourierProfileFields.isApproved(previousCourierProfile);
+    final wasCourierRejected =
+        CourierProfileFields.isRejected(previousCourierProfile);
+    final previousRejectionMessage =
+        CourierProfileFields.rejectionMessage(previousCourierProfile);
+
     _darkMode = state['darkMode'] as bool? ?? _darkMode;
     _inAppAlertsEnabled = state['inAppAlertsEnabled'] as bool? ??
         state['notificationsEnabled'] as bool? ??
@@ -1517,6 +1578,11 @@ class AppProvider extends ChangeNotifier {
     final courierProfile = state['courierProfile'];
     if (courierProfile is Map) {
       _courierProfile = Map<String, dynamic>.from(courierProfile);
+      _notifyCourierApprovalTransition(
+        wasApproved: wasCourierApproved,
+        wasRejected: wasCourierRejected,
+        previousRejectionMessage: previousRejectionMessage,
+      );
     }
     _accountType = _trimmedOrNull(
           state['accountType']?.toString() ?? state['account_type']?.toString(),
@@ -1825,6 +1891,16 @@ class AppProvider extends ChangeNotifier {
               _merchantStore?['logoImage']?.toString(),
           workSamples: merchantWorkSampleImagesBase64,
         ),
+        if (_merchantStore?['isApproved'] != null)
+          'is_approved': _merchantStore?['isApproved'] == true,
+        if (_merchantStore?['approvalStatus'] != null)
+          'approval_status': _merchantStore?['approvalStatus']?.toString(),
+        if (_merchantStore?['rejectionReasonKey'] != null)
+          'rejection_reason_key':
+              _merchantStore?['rejectionReasonKey']?.toString(),
+        if (_merchantStore?['rejectionMessageAr'] != null)
+          'rejection_message_ar':
+              _merchantStore?['rejectionMessageAr']?.toString(),
       });
     } catch (error) {
       debugPrint('Merchant store sync failed: $error');
@@ -2036,6 +2112,7 @@ class AppProvider extends ChangeNotifier {
   }
 
   Future<void> setMerchantStore(Map<String, dynamic> storeData) async {
+    final wasApproved = MerchantProfileFields.isApproved(_merchantStore);
     final serviceIds = (storeData['serviceIds'] as List?)
             ?.map((item) => item.toString())
             .where((item) => item.isNotEmpty)
@@ -2052,7 +2129,7 @@ class AppProvider extends ChangeNotifier {
         _toDoubleValue(storeData['lat']);
     final longitude = _toDoubleValue(storeData['longitude']) ??
         _toDoubleValue(storeData['lng']);
-    _merchantStore = {
+    final nextStore = {
       'name': (storeData['name'] as String?)?.trim() ?? '',
       'description': (storeData['description'] as String?)?.trim() ?? '',
       'category': category,
@@ -2106,6 +2183,21 @@ class AppProvider extends ChangeNotifier {
             (storeData['professionalInfo'] as Map)['professionId'],
       ...storeData,
     };
+    _merchantStore = {
+      ...nextStore,
+      'isApproved': wasApproved,
+    };
+    if (!wasApproved) {
+      _merchantStore!['approvalStatus'] = 'pending';
+      _merchantStore!.remove('rejectionReasonKey');
+      _merchantStore!.remove('rejectionMessageAr');
+      _merchantStore!.remove('rejectedAt');
+      _merchantStore!.remove('rejection_reason_key');
+      _merchantStore!.remove('rejection_message_ar');
+      _merchantStore!.remove('rejected_at');
+    } else {
+      _merchantStore!['approvalStatus'] = 'approved';
+    }
     notifyListeners();
     await _persistMerchantStoreAndState();
   }
@@ -2169,6 +2261,16 @@ class AppProvider extends ChangeNotifier {
       ..._merchantStore!,
       ...normalized,
     };
+    if (MerchantProfileFields.isRejected(_merchantStore)) {
+      _merchantStore!['isApproved'] = false;
+      _merchantStore!['approvalStatus'] = 'pending';
+      _merchantStore!.remove('rejectionReasonKey');
+      _merchantStore!.remove('rejectionMessageAr');
+      _merchantStore!.remove('rejectedAt');
+      _merchantStore!.remove('rejection_reason_key');
+      _merchantStore!.remove('rejection_message_ar');
+      _merchantStore!.remove('rejected_at');
+    }
     notifyListeners();
     unawaited(_persistMerchantStoreAndState());
   }
@@ -3782,7 +3884,6 @@ class AppProvider extends ChangeNotifier {
       await _persistLocalBackup();
     }
     await _refreshMerchantIncomingOrders();
-    _notificationHub.onMerchantProfileActivated();
   }
 
   static String _roleLabelAr(String role) {
@@ -4057,6 +4158,43 @@ class AppProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  void _notifyCourierApprovalTransition({
+    required bool wasApproved,
+    required bool wasRejected,
+    required String previousRejectionMessage,
+  }) {
+    if (!hasCourierProfile) return;
+
+    final nowApproved = isCourierApproved;
+    final nowRejected = CourierProfileFields.isRejected(_courierProfile);
+    final rejectionMessage =
+        CourierProfileFields.rejectionMessage(_courierProfile);
+
+    if (nowApproved && !wasApproved) {
+      _notificationHub.onCourierApproved();
+      _queueUnreadPromptForRole('delivery');
+      return;
+    }
+
+    if (nowRejected &&
+        (!wasRejected || rejectionMessage != previousRejectionMessage)) {
+      _notificationHub.onCourierRejected(rejectionMessage);
+      _queueUnreadPromptForRole('delivery');
+    }
+  }
+
+  Future<void> refreshCourierApprovalIfNeeded() async {
+    if (_userRole != 'delivery' || !hasCourierProfile || isCourierApproved) {
+      return;
+    }
+    await refreshAccountFromCloud();
+  }
+
+  Future<void> handleCourierStatusPush() async {
+    if (_userRole != 'delivery' || !hasCourierProfile) return;
+    await refreshAccountFromCloud();
+  }
+
   Future<void> refreshAllCouriers() async {
     final phone = _trimmedOrNull(_authPhone) ?? _trimmedOrNull(_customerPhone);
     if (phone == null || !SupabaseService.isConfigured) return;
@@ -4083,6 +4221,58 @@ class AppProvider extends ChangeNotifier {
       notifyListeners();
     } catch (error) {
       debugPrint('ADMIN_REJECT_COURIER_ERROR: $error');
+      rethrow;
+    }
+  }
+
+  Future<void> toggleMerchantApproval(
+    String merchantPhone,
+    bool isApproved,
+  ) async {
+    final phone = _trimmedOrNull(_authPhone) ?? _trimmedOrNull(_customerPhone);
+    if (phone == null || !SupabaseService.isConfigured) return;
+    try {
+      await SupabaseService.toggleMerchantApprovalStatus(
+        merchantPhone: merchantPhone,
+        isApproved: isApproved,
+      );
+      final selfPhone = _trimmedOrNull(_authPhone);
+      if (selfPhone != null &&
+          PhoneUtils.variants(selfPhone).contains(
+            PhoneUtils.normalize(merchantPhone),
+          )) {
+        await _restoreRemoteSession(selfPhone);
+      }
+      await refreshAllMerchants();
+      notifyListeners();
+    } catch (error) {
+      debugPrint('ADMIN_MERCHANT_APPROVAL_ERROR: $error');
+      rethrow;
+    }
+  }
+
+  Future<void> rejectMerchantApplication(
+    String merchantPhone,
+    String reasonKey,
+  ) async {
+    final phone = _trimmedOrNull(_authPhone) ?? _trimmedOrNull(_customerPhone);
+    if (phone == null || !SupabaseService.isConfigured) return;
+    try {
+      await SupabaseService.rejectMerchantApplication(
+        merchantPhone: merchantPhone,
+        reasonKey: reasonKey,
+      );
+      final selfPhone = _trimmedOrNull(_authPhone);
+      if (selfPhone != null &&
+          PhoneUtils.variants(selfPhone).contains(
+            PhoneUtils.normalize(merchantPhone),
+          )) {
+        await _restoreRemoteSession(selfPhone);
+      }
+      await refreshAllMerchants();
+      notifyListeners();
+    } catch (error) {
+      debugPrint('ADMIN_REJECT_MERCHANT_ERROR: $error');
       rethrow;
     }
   }

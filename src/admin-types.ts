@@ -39,6 +39,13 @@ export interface ToggleBazaarResponse {
   bazaarProductSync?: BazaarProductSyncResult;
 }
 
+export type MerchantRejectionReasonKey =
+  | 'storeName'
+  | 'phone'
+  | 'address'
+  | 'images'
+  | 'description';
+
 export interface MerchantSummary {
   phone: string;
   storeName: string;
@@ -46,6 +53,10 @@ export interface MerchantSummary {
   primaryServiceId: string;
   isOpen: boolean;
   isFrozen: boolean;
+  isApproved: boolean;
+  approvalStatus: 'pending' | 'approved' | 'rejected';
+  rejectionReasonKey: MerchantRejectionReasonKey | null;
+  rejectionMessageAr: string | null;
   rating: number;
   isBazaarMember: boolean;
   createdAt: string | null;
@@ -141,6 +152,17 @@ export interface CourierSummary {
   accountType: string;
   updatedAt: string | null;
 }
+
+export const MERCHANT_REJECTION_REASONS: Array<{
+  key: MerchantRejectionReasonKey;
+  label: string;
+}> = [
+  { key: 'storeName', label: 'اسم المتجر غير واضح أو غير مطابق' },
+  { key: 'phone', label: 'رقم الهاتف أو واتساب غير صحيح' },
+  { key: 'address', label: 'العنوان أو الموقع على الخريطة غير واضح' },
+  { key: 'images', label: 'صور المتجر (الشعار/الغلاف) غير مناسبة' },
+  { key: 'description', label: 'وصف المتجر ناقص أو غير مناسب' },
+];
 
 export const COURIER_REJECTION_REASONS: Array<{
   key: CourierRejectionReasonKey;

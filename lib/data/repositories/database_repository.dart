@@ -557,6 +557,26 @@ class DatabaseRepository {
     });
   }
 
+  Future<void> toggleMerchantApprovalStatus({
+    required String merchantPhone,
+    required bool isApproved,
+  }) async {
+    await ApiClient.instance.put('/db/admin/merchant-approval', body: {
+      'merchantPhone': _phone(merchantPhone),
+      'isApproved': isApproved,
+    });
+  }
+
+  Future<void> rejectMerchantApplication({
+    required String merchantPhone,
+    required String reasonKey,
+  }) async {
+    await ApiClient.instance.put('/db/admin/merchant-rejection', body: {
+      'merchantPhone': _phone(merchantPhone),
+      'reasonKey': reasonKey,
+    });
+  }
+
   Future<void> saveDeviceToken({
     required String phone,
     required String token,

@@ -11,6 +11,8 @@ import 'notification_sound.dart';
 class PushNotificationInbox {
   PushNotificationInbox._();
 
+  static Future<void> Function()? onCourierStatusPush;
+
   static const int summaryNotificationId = 900001;
   static const String unreadCountKey = 'push_unread_count';
   static const String inboxItemsKey = 'push_inbox_items';
