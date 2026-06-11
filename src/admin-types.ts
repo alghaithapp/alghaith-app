@@ -124,6 +124,8 @@ export interface MerchantProduct {
   createdAt: string | null;
 }
 
+export type CourierRejectionReasonKey = 'name' | 'phone' | 'address' | 'vehicleImage';
+
 export interface CourierSummary {
   phone: string;
   name: string;
@@ -132,7 +134,20 @@ export interface CourierSummary {
   vehicleImage: string;
   available: boolean;
   isApproved: boolean;
+  approvalStatus: 'pending' | 'approved' | 'rejected';
+  rejectionReasonKey: CourierRejectionReasonKey | null;
+  rejectionMessageAr: string | null;
   role: string;
   accountType: string;
   updatedAt: string | null;
 }
+
+export const COURIER_REJECTION_REASONS: Array<{
+  key: CourierRejectionReasonKey;
+  label: string;
+}> = [
+  { key: 'name', label: 'الاسم غير صحيح — يرجى كتابة الاسم الثلاثي بشكل صحيح' },
+  { key: 'phone', label: 'رقم الهاتف غير صحيح — يرجى إدخال رقم مفعّل على واتساب' },
+  { key: 'address', label: 'عنوان السكن غير صحيح أو غير واضح' },
+  { key: 'vehicleImage', label: 'صورة الدراجة غير واضحة أو غير مقبولة' },
+];

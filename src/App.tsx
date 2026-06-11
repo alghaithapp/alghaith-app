@@ -5,6 +5,7 @@ import {
   BarChart3,
   Bike,
   Building2,
+  ExternalLink,
   LoaderCircle,
   Lock,
   LogOut,
@@ -14,6 +15,7 @@ import {
   ShoppingBag,
   Store,
   Users,
+  XCircle,
 } from 'lucide-react';
 
 import {
@@ -21,6 +23,7 @@ import {
   loadCouriers,
   loadMerchantDetails,
   loadMerchants,
+  rejectCourierApplication,
   sendCode,
   syncMerchantBazaarProducts,
   toggleCourierApproval,
@@ -30,10 +33,12 @@ import {
 } from './admin-api';
 import type {
   AdminReports,
+  CourierRejectionReasonKey,
   CourierSummary,
   MerchantDetails,
   MerchantSummary,
 } from './admin-types';
+import { COURIER_REJECTION_REASONS } from './admin-types';
 
 const SESSION_STORAGE_KEY = 'alghaith-admin-session-v1';
 
@@ -117,6 +122,9 @@ function App() {
   const [isLoadingData, setIsLoadingData] = useState(false);
   const [isLoadingDetails, setIsLoadingDetails] = useState(false);
   const [activeActionKey, setActiveActionKey] = useState('');
+  const [rejectTarget, setRejectTarget] = useState<CourierSummary | null>(null);
+  const [rejectReasonKey, setRejectReasonKey] =
+    useState<CourierRejectionReasonKey>('name');
 
   useEffect(() => {
     const stored = readStoredSession();
@@ -218,7 +226,12 @@ function App() {
   );
 
   const pendingCourierQueue = useMemo(
-    () => couriers.filter((courier) => courier.isApproved !== true),
+    () =>
+      couriers.filter(
+        (courier) =>
+          !courier.isApproved &&
+          (courier.approvalStatus === 'pending' || !courier.approvalStatus),
+      ),
     [couriers],
   );
 
@@ -311,6 +324,28 @@ function App() {
     } catch (error) {
       const message =
         error instanceof Error ? error.message : 'تعذر مزامنة ظهور البازار.';
+      setActionError(message);
+    } finally {
+      setActiveActionKey('');
+    }
+  }
+
+  async function handleCourierRejection() {
+    if (!token || !rejectTarget) return;
+    const actionKey = `reject:${rejectTarget.phone}`;
+    setActiveActionKey(actionKey);
+    setActionError('');
+    setSuccessMessage('');
+    try {
+      await rejectCourierApplication(token, rejectTarget.phone, rejectReasonKey);
+      setSuccessMessage(
+        `تم رفض طلب ${rejectTarget.name || rejectTarget.phone} وإرسال إشعار للمندوب.`,
+      );
+      setRejectTarget(null);
+      await refreshCoreData(token);
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'تعذر رفض طلب المندوب.';
       setActionError(message);
     } finally {
       setActiveActionKey('');
@@ -602,26 +637,21 @@ function App() {
                       {filteredCouriers.map((courier) => {
                         const approvalLoading =
                           activeActionKey === `courier:${courier.phone}`;
+                        const rejectLoading =
+                          activeActionKey === `reject:${courier.phone}`;
+                        const isRejected = courier.approvalStatus === 'rejected';
+                        const isPending = !courier.isApproved && !isRejected;
                         return (
                           <article key={courier.phone} className="merchant-card courier-card">
                             <div className="merchant-main">
                               <div className="courier-card-leading">
-                                {courier.vehicleImage ? (
-                                  <img
-                                    className="courier-avatar"
-                                    src={courier.vehicleImage}
-                                    alt={courier.name || 'صورة الدراجة'}
-                                  />
-                                ) : (
-                                  <div className="courier-avatar placeholder">
-                                    <Bike size={28} />
-                                  </div>
-                                )}
                                 <div>
                                   <div className="merchant-title-row">
                                     <h4>{courier.name || 'مندوب بدون اسم'}</h4>
                                     {courier.isApproved ? (
                                       <span className="status-badge success">مفعّل</span>
+                                    ) : isRejected ? (
+                                      <span className="status-badge danger">مرفوض</span>
                                     ) : (
                                       <span className="status-badge danger">
                                         بانتظار الموافقة
@@ -646,7 +676,50 @@ function App() {
                                   <p className="merchant-description">
                                     {courier.homeAddress || 'لا يوجد عنوان محفوظ.'}
                                   </p>
+                                  {isRejected && courier.rejectionMessageAr ? (
+                                    <p className="courier-rejection-note">
+                                      سبب الرفض: {courier.rejectionMessageAr}
+                                    </p>
+                                  ) : null}
                                 </div>
+                              </div>
+
+                              <div className="courier-media-panel">
+                                <div className="courier-media-head">
+                                  <strong>صورة الدراجة</strong>
+                                  {courier.vehicleImage ? (
+                                    <a
+                                      className="courier-media-link"
+                                      href={courier.vehicleImage}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                    >
+                                      <ExternalLink size={14} />
+                                      <span>عرض بالحجم الكامل</span>
+                                    </a>
+                                  ) : null}
+                                </div>
+                                {courier.vehicleImage ? (
+                                  <a
+                                    href={courier.vehicleImage}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="courier-media-frame"
+                                  >
+                                    <img
+                                      className="courier-media-image"
+                                      src={courier.vehicleImage}
+                                      alt={courier.name || 'صورة الدراجة'}
+                                      loading="lazy"
+                                      referrerPolicy="no-referrer"
+                                    />
+                                  </a>
+                                ) : (
+                                  <div className="courier-media-empty">
+                                    <Bike size={28} />
+                                    <span>لم يتم رفع صورة للدراجة</span>
+                                  </div>
+                                )}
                               </div>
                             </div>
 
@@ -657,7 +730,7 @@ function App() {
                                     ? 'soft-button danger'
                                     : 'soft-button success'
                                 }
-                                disabled={approvalLoading}
+                                disabled={approvalLoading || rejectLoading}
                                 onClick={() => {
                                   handleCourierApproval(courier).catch(() => undefined);
                                 }}
@@ -673,6 +746,24 @@ function App() {
                                     : 'موافقة وتفعيل'}
                                 </span>
                               </button>
+
+                              {isPending || isRejected ? (
+                                <button
+                                  className="soft-button danger"
+                                  disabled={approvalLoading || rejectLoading}
+                                  onClick={() => {
+                                    setRejectReasonKey('name');
+                                    setRejectTarget(courier);
+                                  }}
+                                >
+                                  {rejectLoading ? (
+                                    <LoaderCircle className="spin" size={16} />
+                                  ) : (
+                                    <XCircle size={16} />
+                                  )}
+                                  <span>رفض الطلب</span>
+                                </button>
+                              ) : null}
                             </div>
                           </article>
                         );
@@ -1022,6 +1113,68 @@ function App() {
           )}
         </section>
       </section>
+
+      {rejectTarget ? (
+        <div className="modal-backdrop" role="presentation">
+          <div className="modal-card" role="dialog" aria-modal="true">
+            <div className="panel-header">
+              <div>
+                <h3>رفض طلب المندوب</h3>
+                <p>
+                  اختر سبب الرفض. سيصل إشعار للمندوب {rejectTarget.name || rejectTarget.phone}{' '}
+                  ليقوم بتعديل بياناته وإعادة الإرسال.
+                </p>
+              </div>
+            </div>
+
+            <div className="reject-reason-list">
+              {COURIER_REJECTION_REASONS.map((reason) => (
+                <label
+                  key={reason.key}
+                  className={
+                    rejectReasonKey === reason.key
+                      ? 'reject-reason-option active'
+                      : 'reject-reason-option'
+                  }
+                >
+                  <input
+                    type="radio"
+                    name="courier-reject-reason"
+                    checked={rejectReasonKey === reason.key}
+                    onChange={() => setRejectReasonKey(reason.key)}
+                  />
+                  <span>{reason.label}</span>
+                </label>
+              ))}
+            </div>
+
+            <div className="modal-actions">
+              <button
+                className="ghost-button"
+                type="button"
+                onClick={() => setRejectTarget(null)}
+              >
+                إلغاء
+              </button>
+              <button
+                className="soft-button danger"
+                type="button"
+                disabled={activeActionKey === `reject:${rejectTarget.phone}`}
+                onClick={() => {
+                  handleCourierRejection().catch(() => undefined);
+                }}
+              >
+                {activeActionKey === `reject:${rejectTarget.phone}` ? (
+                  <LoaderCircle className="spin" size={16} />
+                ) : (
+                  <XCircle size={16} />
+                )}
+                <span>تأكيد الرفض وإرسال الإشعار</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </main>
   );
 }

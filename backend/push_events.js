@@ -448,6 +448,24 @@ async function onOrderSaved({ previousMeta, nextMeta, isNew }) {
   }
 }
 
+async function onCourierRejected(courierPhone, message, reasonKey = '') {
+  const phone = String(courierPhone || '').trim();
+  const body = String(message || '').trim();
+  if (!phone || !body) return;
+
+  await sendPushToPhone(
+    phone,
+    buildPushPayload({
+      title: 'طلب المندوب يحتاج تعديلاً',
+      body,
+      audience: 'courier',
+      orderId: '',
+      eventKey: `courier:${phone}:rejected:${reasonKey || 'general'}`,
+      category: 'account',
+    })
+  );
+}
+
 async function onCourierApproved(courierPhone) {
   const phone = String(courierPhone || '').trim();
   if (!phone) return;
@@ -486,6 +504,7 @@ async function onMerchantFrozen(merchantPhone, isFrozen) {
 module.exports = {
   onOrderSaved,
   onCourierApproved,
+  onCourierRejected,
   onMerchantFrozen,
   sendPushToPhone,
   notifyActiveCouriers,

@@ -790,6 +790,107 @@ class _CourierManagementTabState extends State<_CourierManagementTab> {
     }
   }
 
+  Future<void> _showRejectDialog(
+    BuildContext context,
+    AppProvider provider,
+    Map<String, dynamic> courier,
+  ) async {
+    final phone = courier['phone']?.toString() ?? '';
+    if (phone.isEmpty || _busyCourierPhone != null) return;
+
+    const reasons = <Map<String, String>>[
+      {
+        'key': 'name',
+        'label': 'الاسم غير صحيح — يرجى كتابة الاسم الثلاثي بشكل صحيح',
+      },
+      {
+        'key': 'phone',
+        'label': 'رقم الهاتف غير صحيح — يرجى إدخال رقم مفعّل على واتساب',
+      },
+      {'key': 'address', 'label': 'عنوان السكن غير صحيح أو غير واضح'},
+      {'key': 'vehicleImage', 'label': 'صورة الدراجة غير واضحة أو غير مقبولة'},
+    ];
+    var selectedKey = reasons.first['key']!;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text(
+            'رفض طلب المندوب',
+            style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w900),
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'اختر سبب الرفض. سيصل إشعار للمندوب ليقوم بتعديل بياناته.',
+                  style: TextStyle(fontFamily: 'Cairo', height: 1.5),
+                ),
+                const SizedBox(height: 12),
+                ...reasons.map(
+                  (reason) => RadioListTile<String>(
+                    value: reason['key']!,
+                    groupValue: selectedKey,
+                    onChanged: (value) {
+                      if (value == null) return;
+                      setDialogState(() => selectedKey = value);
+                    },
+                    title: Text(
+                      reason['label']!,
+                      style: const TextStyle(fontFamily: 'Cairo', fontSize: 13),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('إلغاء', style: TextStyle(fontFamily: 'Cairo')),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text(
+                'تأكيد الرفض',
+                style: TextStyle(fontFamily: 'Cairo'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+    setState(() => _busyCourierPhone = phone);
+    try {
+      await provider.rejectCourierApplication(phone, selectedKey);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'تم رفض الطلب وإرسال إشعار للمندوب',
+            style: TextStyle(fontFamily: 'Cairo'),
+          ),
+        ),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'تعذر رفض طلب المندوب',
+            style: TextStyle(fontFamily: 'Cairo'),
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _busyCourierPhone = null);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<AppProvider>();
@@ -835,6 +936,7 @@ class _CourierManagementTabState extends State<_CourierManagementTab> {
                       ),
                     );
                   },
+                  onReject: () => _showRejectDialog(context, provider, courier),
                 );
               },
             ),
@@ -846,11 +948,13 @@ class _CourierCard extends StatelessWidget {
   final Map<String, dynamic> courier;
   final bool isBusy;
   final VoidCallback onToggleApproval;
+  final VoidCallback onReject;
 
   const _CourierCard({
     required this.courier,
     required this.isBusy,
     required this.onToggleApproval,
+    required this.onReject,
   });
 
   @override
@@ -863,6 +967,9 @@ class _CourierCard extends StatelessWidget {
     final vehicleImage = courier['vehicleImage']?.toString() ?? '';
     final available = courier['available'] != false;
     final isApproved = courier['isApproved'] == true;
+    final approvalStatus = courier['approvalStatus']?.toString() ?? '';
+    final isRejected = approvalStatus == 'rejected';
+    final rejectionMessage = courier['rejectionMessageAr']?.toString() ?? '';
 
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
@@ -878,35 +985,18 @@ class _CourierCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
+          Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              ClipRRect(
-                borderRadius: BorderRadius.circular(12),
-                child: vehicleImage.isNotEmpty
-                    ? AppImage(
-                        imageData: vehicleImage,
-                        width: 72,
-                        height: 72,
-                        fit: BoxFit.cover,
-                      )
-                    : Container(
-                        width: 72,
-                        height: 72,
-                        color: Colors.grey.shade100,
-                        child: const Icon(
-                          Icons.motorcycle_rounded,
-                          color: Colors.grey,
-                        ),
-                      ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      name,
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          name,
                       style: const TextStyle(
                         fontFamily: 'Cairo',
                         fontWeight: FontWeight.w900,
@@ -939,14 +1029,20 @@ class _CourierCard extends StatelessWidget {
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: Text(
-                            isApproved ? 'مفعّل' : 'بانتظار الموافقة',
+                            isApproved
+                                ? 'مفعّل'
+                                : isRejected
+                                    ? 'مرفوض'
+                                    : 'بانتظار الموافقة',
                             style: TextStyle(
                               fontFamily: 'Cairo',
                               fontSize: 11,
                               fontWeight: FontWeight.w700,
                               color: isApproved
                                   ? Colors.green.shade800
-                                  : Colors.orange.shade800,
+                                  : isRejected
+                                      ? Colors.red.shade800
+                                      : Colors.orange.shade800,
                             ),
                           ),
                         ),
@@ -976,11 +1072,68 @@ class _CourierCard extends StatelessWidget {
                           ),
                       ],
                     ),
-                  ],
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'صورة الدراجة',
+                style: TextStyle(
+                  fontFamily: 'Cairo',
+                  fontWeight: FontWeight.w800,
+                  fontSize: 13,
+                  color: Colors.grey.shade800,
                 ),
               ),
+              const SizedBox(height: 8),
+              if (vehicleImage.isNotEmpty)
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(14),
+                  child: AppImage(
+                    imageData: vehicleImage,
+                    width: double.infinity,
+                    height: 180,
+                    fit: BoxFit.cover,
+                  ),
+                )
+              else
+                Container(
+                  width: double.infinity,
+                  height: 120,
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade100,
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: const Icon(
+                    Icons.motorcycle_rounded,
+                    color: Colors.grey,
+                    size: 36,
+                  ),
+                ),
             ],
           ),
+          if (isRejected && rejectionMessage.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: Colors.red.shade50,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Text(
+                'سبب الرفض: $rejectionMessage',
+                style: TextStyle(
+                  fontFamily: 'Cairo',
+                  fontSize: 12,
+                  color: Colors.red.shade900,
+                  height: 1.45,
+                ),
+              ),
+            ),
+          ],
           const SizedBox(height: 10),
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -1001,37 +1154,64 @@ class _CourierCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 12),
-          SizedBox(
-            width: double.infinity,
-            child: FilledButton.icon(
-              onPressed: isBusy ? null : onToggleApproval,
-              icon: isBusy
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CupertinoActivityIndicator(radius: 8),
-                    )
-                  : Icon(
-                      isApproved
-                          ? Icons.block_rounded
-                          : Icons.verified_rounded,
+          Row(
+            children: [
+              Expanded(
+                child: FilledButton.icon(
+                  onPressed: isBusy ? null : onToggleApproval,
+                  icon: isBusy
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CupertinoActivityIndicator(radius: 8),
+                        )
+                      : Icon(
+                          isApproved
+                              ? Icons.block_rounded
+                              : Icons.verified_rounded,
+                        ),
+                  label: Text(
+                    isApproved ? 'إلغاء التفعيل' : 'موافقة وتفعيل',
+                    style: const TextStyle(
+                      fontFamily: 'Cairo',
+                      fontWeight: FontWeight.w700,
                     ),
-              label: Text(
-                isApproved ? 'إلغاء التفعيل' : 'موافقة وتفعيل',
-                style: const TextStyle(
-                  fontFamily: 'Cairo',
-                  fontWeight: FontWeight.w700,
+                  ),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: isApproved
+                        ? Colors.red.shade700
+                        : Colors.green.shade700,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
                 ),
               ),
-              style: FilledButton.styleFrom(
-                backgroundColor:
-                    isApproved ? Colors.red.shade700 : Colors.green.shade700,
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
+              if (!isApproved) ...[
+                const SizedBox(width: 8),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: isBusy ? null : onReject,
+                    icon: const Icon(Icons.cancel_rounded),
+                    label: const Text(
+                      'رفض الطلب',
+                      style: TextStyle(
+                        fontFamily: 'Cairo',
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.red.shade700,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                  ),
                 ),
-              ),
-            ),
+              ],
+            ],
           ),
         ],
       ),

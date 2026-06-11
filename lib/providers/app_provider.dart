@@ -1960,11 +1960,21 @@ class AppProvider extends ChangeNotifier {
     final wasApproved = CourierProfileFields.isApproved(_courierProfile);
     final next = Map<String, dynamic>.from(profile);
     next.remove('isApproved');
+    next.remove('approvalStatus');
+    next.remove('rejectionReasonKey');
+    next.remove('rejectionMessageAr');
+    next.remove('rejectedAt');
     _courierProfile = {
       ...?_courierProfile,
       ...next,
       'isApproved': wasApproved,
     };
+    if (!wasApproved) {
+      _courierProfile!['approvalStatus'] = 'pending';
+      _courierProfile!.remove('rejectionReasonKey');
+      _courierProfile!.remove('rejectionMessageAr');
+      _courierProfile!.remove('rejectedAt');
+    }
     final phone = _trimmedOrNull(_authPhone) ?? _trimmedOrNull(_customerPhone);
     if (phone != null) {
       await SupabaseService.saveUserState(phone, _buildRemoteState());
@@ -4055,6 +4065,25 @@ class AppProvider extends ChangeNotifier {
       notifyListeners();
     } catch (error) {
       debugPrint('ADMIN_COURIERS_ERROR: $error');
+    }
+  }
+
+  Future<void> rejectCourierApplication(
+    String courierPhone,
+    String reasonKey,
+  ) async {
+    final phone = _trimmedOrNull(_authPhone) ?? _trimmedOrNull(_customerPhone);
+    if (phone == null || !SupabaseService.isConfigured) return;
+    try {
+      await SupabaseService.rejectCourierApplication(
+        courierPhone: courierPhone,
+        reasonKey: reasonKey,
+      );
+      await refreshAllCouriers();
+      notifyListeners();
+    } catch (error) {
+      debugPrint('ADMIN_REJECT_COURIER_ERROR: $error');
+      rethrow;
     }
   }
 

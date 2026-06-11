@@ -537,6 +537,16 @@ class DatabaseRepository {
     });
   }
 
+  Future<void> rejectCourierApplication({
+    required String courierPhone,
+    required String reasonKey,
+  }) async {
+    await ApiClient.instance.put('/db/admin/courier-rejection', body: {
+      'courierPhone': _phone(courierPhone),
+      'reasonKey': reasonKey,
+    });
+  }
+
   Future<void> toggleMerchantFreezeStatus({
     required String merchantPhone,
     required bool isFrozen,

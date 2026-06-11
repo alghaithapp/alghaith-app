@@ -35,4 +35,17 @@ class CourierProfileFields {
 
   static bool isApproved(Map<String, dynamic>? profile) =>
       profile?['isApproved'] == true;
+
+  static String approvalStatus(Map<String, dynamic>? profile) {
+    if (isApproved(profile)) return 'approved';
+    final status = profile?['approvalStatus']?.toString().trim();
+    if (status == 'rejected') return 'rejected';
+    return 'pending';
+  }
+
+  static bool isRejected(Map<String, dynamic>? profile) =>
+      approvalStatus(profile) == 'rejected';
+
+  static String rejectionMessage(Map<String, dynamic>? profile) =>
+      profile?['rejectionMessageAr']?.toString().trim() ?? '';
 }

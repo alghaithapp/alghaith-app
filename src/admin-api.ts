@@ -96,6 +96,18 @@ export async function toggleCourierApproval(
   });
 }
 
+export async function rejectCourierApplication(
+  token: string,
+  courierPhone: string,
+  reasonKey: string,
+) {
+  return request(DATABASE_API_BASE_URL, '/db/admin/courier-rejection', {
+    method: 'PUT',
+    token,
+    body: JSON.stringify({ courierPhone, reasonKey }),
+  });
+}
+
 export async function loadMerchantDetails(
   token: string,
   merchantPhone: string,

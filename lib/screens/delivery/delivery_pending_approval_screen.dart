@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../providers/app_provider.dart';
+import '../../utils/courier_profile_fields.dart';
 import '../../utils/helpers.dart';
 import 'delivery_setup_screen.dart';
 
@@ -60,14 +61,17 @@ class _DeliveryPendingApprovalScreenState
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<AppProvider>();
-    final name = provider.courierProfile?['name']?.toString().trim() ?? '';
+    final profile = provider.courierProfile;
+    final name = CourierProfileFields.name(profile);
+    final isRejected = CourierProfileFields.isRejected(profile);
+    final rejectionMessage = CourierProfileFields.rejectionMessage(profile);
 
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7FB),
       appBar: AppBar(
-        title: const Text(
-          'بانتظار الموافقة',
-          style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w900),
+        title: Text(
+          isRejected ? 'طلبك يحتاج تعديلاً' : 'بانتظار الموافقة',
+          style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w900),
         ),
         actions: [
           IconButton(
@@ -90,15 +94,17 @@ class _DeliveryPendingApprovalScreenState
           children: [
             const SizedBox(height: 24),
             Icon(
-              Icons.hourglass_top_rounded,
+              isRejected
+                  ? Icons.error_outline_rounded
+                  : Icons.hourglass_top_rounded,
               size: 72,
-              color: Colors.orange.shade700,
+              color: isRejected ? Colors.red.shade700 : Colors.orange.shade700,
             ),
             const SizedBox(height: 24),
-            const Text(
-              'طلبك قيد المراجعة',
+            Text(
+              isRejected ? 'يرجى تعديل بياناتك' : 'طلبك قيد المراجعة',
               textAlign: TextAlign.center,
-              style: TextStyle(
+              style: const TextStyle(
                 fontFamily: 'Cairo',
                 fontWeight: FontWeight.w900,
                 fontSize: 22,
@@ -107,8 +113,10 @@ class _DeliveryPendingApprovalScreenState
             const SizedBox(height: 12),
             Text(
               name.isNotEmpty
-                  ? 'مرحباً $name، تم استلام بياناتك بنجاح.'
-                  : 'تم استلام بياناتك بنجاح.',
+                  ? 'مرحباً $name، ${isRejected ? 'لم تُقبل بياناتك بعد.' : 'تم استلام بياناتك بنجاح.'}'
+                  : (isRejected
+                      ? 'لم تُقبل بياناتك بعد.'
+                      : 'تم استلام بياناتك بنجاح.'),
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontFamily: 'Cairo',
@@ -117,20 +125,44 @@ class _DeliveryPendingApprovalScreenState
                 color: Colors.grey.shade700,
               ),
             ),
-            const SizedBox(height: 8),
-            const Text(
-              'لن يُفعَّل حساب مندوب التوصيل إلا بعد موافقة الإدارة من لوحة '
-              'التحكم. ستصلك إشعار عند التفعيل.',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontFamily: 'Cairo',
-                fontSize: 14,
-                height: 1.65,
-                color: Colors.grey,
+            if (isRejected && rejectionMessage.isNotEmpty) ...[
+              const SizedBox(height: 16),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: Colors.red.shade50,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: Colors.red.shade200),
+                ),
+                child: Text(
+                  rejectionMessage,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontFamily: 'Cairo',
+                    fontSize: 14,
+                    height: 1.65,
+                    color: Colors.red.shade900,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
               ),
-            ),
+            ] else ...[
+              const SizedBox(height: 8),
+              const Text(
+                'لن يُفعَّل حساب مندوب التوصيل إلا بعد موافقة الإدارة من لوحة '
+                'التحكم. ستصلك إشعار عند التفعيل.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontFamily: 'Cairo',
+                  fontSize: 14,
+                  height: 1.65,
+                  color: Colors.grey,
+                ),
+              ),
+            ],
             const SizedBox(height: 32),
-            OutlinedButton.icon(
+            FilledButton.icon(
               onPressed: () {
                 Navigator.of(context).push(
                   MaterialPageRoute<void>(
@@ -139,11 +171,16 @@ class _DeliveryPendingApprovalScreenState
                 );
               },
               icon: const Icon(Icons.edit_rounded),
-              label: const Text(
-                'تعديل البيانات',
-                style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w700),
+              label: Text(
+                isRejected ? 'تعديل البيانات وإعادة الإرسال' : 'تعديل البيانات',
+                style: const TextStyle(
+                  fontFamily: 'Cairo',
+                  fontWeight: FontWeight.w700,
+                ),
               ),
-              style: OutlinedButton.styleFrom(
+              style: FilledButton.styleFrom(
+                backgroundColor:
+                    isRejected ? Colors.red.shade700 : const Color(0xFF007A7A),
                 padding: const EdgeInsets.symmetric(vertical: 14),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(14),

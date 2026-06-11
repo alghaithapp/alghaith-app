@@ -54,6 +54,7 @@ const {
   getAllMerchants,
   getAllCouriers,
   toggleCourierApprovalStatus,
+  rejectCourierApplication,
   getAdminMerchantDetails,
   toggleBazaarMemberStatus,
   toggleMerchantFreezeStatus,
@@ -1340,6 +1341,32 @@ app.put('/db/admin/courier-approval', async (req, res) => {
       ? 403
       : message.includes('not found')
         ? 404
+        : 500;
+    return res.status(status).json({ message });
+  }
+});
+
+app.put('/db/admin/courier-rejection', async (req, res) => {
+  try {
+    const phone = requireAuthorizedPhone(req, res, { allowMissing: true });
+    if (!phone) return;
+    const courierPhone = String(req.body?.courierPhone || '').trim();
+    const reasonKey = String(req.body?.reasonKey || '').trim();
+    if (!courierPhone) {
+      return res.status(400).json({ message: 'courierPhone is required.' });
+    }
+    if (!reasonKey) {
+      return res.status(400).json({ message: 'reasonKey is required.' });
+    }
+    const result = await rejectCourierApplication(phone, courierPhone, reasonKey);
+    return res.json(result);
+  } catch (error) {
+    console.error('reject courier error:', error);
+    const message = error?.message || 'Failed to reject courier application.';
+    const status = message.includes('Admin access')
+      ? 403
+      : message.includes('not found') || message.includes('Invalid')
+        ? 400
         : 500;
     return res.status(status).json({ message });
   }

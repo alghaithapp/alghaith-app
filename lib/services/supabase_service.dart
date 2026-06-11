@@ -274,6 +274,15 @@ class SupabaseService {
         isApproved: isApproved,
       );
 
+  static Future<void> rejectCourierApplication({
+    required String courierPhone,
+    required String reasonKey,
+  }) =>
+      _db.rejectCourierApplication(
+        courierPhone: courierPhone,
+        reasonKey: reasonKey,
+      );
+
   static Future<void> toggleMerchantFreezeStatus({
     required String merchantPhone,
     required bool isFrozen,

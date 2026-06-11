@@ -2453,6 +2453,30 @@ function isCourierApproved(profile) {
   return profile?.isApproved === true;
 }
 
+const COURIER_REJECTION_REASONS = {
+  name: 'الاسم غير صحيح. يرجى إدخال الاسم الثلاثي (الاسم الأول + الأب + العائلة) بشكل واضح.',
+  phone: 'رقم الهاتف غير صحيح. يرجى إدخال رقم مفعّل على واتساب.',
+  address: 'عنوان السكن غير واضح أو غير مكتمل. يرجى تعديل العنوان.',
+  vehicleImage: 'صورة الدراجة غير واضحة أو غير مقبولة. يرجى رفع صورة أوضح للدراجة.',
+};
+
+function courierApprovalStatus(profile) {
+  if (!profile || typeof profile !== 'object') return 'pending';
+  if (profile.isApproved === true || profile.approvalStatus === 'approved') {
+    return 'approved';
+  }
+  const status = String(profile.approvalStatus ?? '').trim();
+  if (status === 'rejected') return 'rejected';
+  return 'pending';
+}
+
+function courierRejectionMessage(profile) {
+  const explicit = String(profile?.rejectionMessageAr ?? '').trim();
+  if (explicit) return explicit;
+  const key = String(profile?.rejectionReasonKey ?? '').trim();
+  return COURIER_REJECTION_REASONS[key] || '';
+}
+
 function mapCourierForAdmin(phone, user, profile) {
   const name = String(profile.name ?? '').trim();
   const contactPhone = String(profile.phone ?? phone ?? '').trim();
@@ -2471,6 +2495,9 @@ function mapCourierForAdmin(phone, user, profile) {
     vehicleImage,
     available: profile.available !== false,
     isApproved: isCourierApproved(profile),
+    approvalStatus: courierApprovalStatus(profile),
+    rejectionReasonKey: String(profile.rejectionReasonKey ?? '').trim() || null,
+    rejectionMessageAr: courierRejectionMessage(profile) || null,
     role: String(user?.role ?? '').trim(),
     accountType: String(user?.account_type ?? '').trim(),
     updatedAt: user?.updated_at ?? null,
@@ -2516,9 +2543,13 @@ async function getAllCouriers(adminPhone) {
   }
 
   return couriers.sort((a, b) => {
-    if (a.isApproved !== b.isApproved) {
-      return a.isApproved ? 1 : -1;
-    }
+    const rank = (item) => {
+      if (item.approvalStatus === 'pending') return 0;
+      if (item.approvalStatus === 'rejected') return 1;
+      return 2;
+    };
+    const rankDiff = rank(a) - rank(b);
+    if (rankDiff !== 0) return rankDiff;
     return String(a.name || '').localeCompare(String(b.name || ''), 'ar');
   });
 }
@@ -2805,7 +2836,13 @@ async function toggleCourierApprovalStatus(adminPhone, courierPhone, isApproved)
   const nextProfile = {
     ...profile,
     isApproved: Boolean(isApproved),
+    approvalStatus: Boolean(isApproved) ? 'approved' : 'pending',
   };
+  if (Boolean(isApproved)) {
+    delete nextProfile.rejectionReasonKey;
+    delete nextProfile.rejectionMessageAr;
+    delete nextProfile.rejectedAt;
+  }
   await saveUserState(phoneKey, {
     ...state,
     courierProfile: nextProfile,
@@ -2821,6 +2858,48 @@ async function toggleCourierApprovalStatus(adminPhone, courierPhone, isApproved)
     } catch (error) {
       console.error('push onCourierApproved error:', error?.message || error);
     }
+  }
+
+  return { success: true, courier: mapped };
+}
+
+async function rejectCourierApplication(adminPhone, courierPhone, reasonKey) {
+  await assertAdminAccess(adminPhone);
+
+  const normalizedReason = String(reasonKey || '').trim();
+  const message = COURIER_REJECTION_REASONS[normalizedReason];
+  if (!message) {
+    throw new Error('Invalid rejection reason.');
+  }
+
+  const phoneKey = await resolvePhoneKey(courierPhone);
+  const state = (await getUserState(phoneKey)) || {};
+  const profile = readCourierProfileFromState(state);
+  if (!profile || !isCourierProfileComplete(profile)) {
+    throw new Error('Courier profile not found.');
+  }
+
+  const nextProfile = {
+    ...profile,
+    isApproved: false,
+    approvalStatus: 'rejected',
+    rejectionReasonKey: normalizedReason,
+    rejectionMessageAr: message,
+    rejectedAt: nowIso(),
+  };
+  await saveUserState(phoneKey, {
+    ...state,
+    courierProfile: nextProfile,
+  });
+
+  const user = await getAppUser(phoneKey);
+  const mapped = mapCourierForAdmin(phoneKey, user, nextProfile);
+
+  try {
+    const { onCourierRejected } = require('./push_events');
+    await onCourierRejected(phoneKey, message, normalizedReason);
+  } catch (error) {
+    console.error('push onCourierRejected error:', error?.message || error);
   }
 
   return { success: true, courier: mapped };
@@ -2903,6 +2982,7 @@ module.exports = {
   getAllMerchants,
   getAllCouriers,
   toggleCourierApprovalStatus,
+  rejectCourierApplication,
   getAdminMerchantDetails,
   toggleBazaarMemberStatus,
   toggleMerchantFreezeStatus,
