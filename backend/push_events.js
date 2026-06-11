@@ -492,6 +492,41 @@ async function onCourierApproved(courierPhone) {
   );
 }
 
+async function onMerchantRejected(merchantPhone, message, reasonKey = '') {
+  const phone = String(merchantPhone || '').trim();
+  const body = String(message || '').trim();
+  if (!phone || !body) return;
+
+  await sendPushToPhone(
+    phone,
+    buildPushPayload({
+      title: 'طلب التاجر يحتاج تعديلاً',
+      body,
+      audience: 'merchant',
+      orderId: '',
+      eventKey: `merchant:${phone}:rejected:${reasonKey || 'general'}`,
+      category: 'account',
+    })
+  );
+}
+
+async function onMerchantApproved(merchantPhone) {
+  const phone = String(merchantPhone || '').trim();
+  if (!phone) return;
+
+  await sendPushToPhone(
+    phone,
+    buildPushPayload({
+      title: 'تم تفعيل حساب التاجر',
+      body: 'وافقت الإدارة على طلبك. يمكنك الآن إدارة متجرك واستقبال الطلبات.',
+      audience: 'merchant',
+      orderId: '',
+      eventKey: `merchant:${phone}:approved`,
+      category: 'account',
+    })
+  );
+}
+
 async function onMerchantFrozen(merchantPhone, isFrozen) {
   if (!isFrozen) return;
   const phone = String(merchantPhone || '').trim();
@@ -514,6 +549,8 @@ module.exports = {
   onOrderSaved,
   onCourierApproved,
   onCourierRejected,
+  onMerchantApproved,
+  onMerchantRejected,
   onMerchantFrozen,
   sendPushToPhone,
   notifyActiveCouriers,

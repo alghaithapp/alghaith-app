@@ -55,6 +55,8 @@ const {
   getAllCouriers,
   toggleCourierApprovalStatus,
   rejectCourierApplication,
+  toggleMerchantApprovalStatus,
+  rejectMerchantApplication,
   getAdminMerchantDetails,
   toggleBazaarMemberStatus,
   toggleMerchantFreezeStatus,
@@ -1363,6 +1365,55 @@ app.put('/db/admin/courier-rejection', async (req, res) => {
   } catch (error) {
     console.error('reject courier error:', error);
     const message = error?.message || 'Failed to reject courier application.';
+    const status = message.includes('Admin access')
+      ? 403
+      : message.includes('not found') || message.includes('Invalid')
+        ? 400
+        : 500;
+    return res.status(status).json({ message });
+  }
+});
+
+app.put('/db/admin/merchant-approval', async (req, res) => {
+  try {
+    const phone = requireAuthorizedPhone(req, res, { allowMissing: true });
+    if (!phone) return;
+    const merchantPhone = String(req.body?.merchantPhone || '').trim();
+    const isApproved = req.body?.isApproved === true;
+    if (!merchantPhone) {
+      return res.status(400).json({ message: 'merchantPhone is required.' });
+    }
+    const result = await toggleMerchantApprovalStatus(phone, merchantPhone, isApproved);
+    return res.json(result);
+  } catch (error) {
+    console.error('toggle merchant approval error:', error);
+    const message = error?.message || 'Failed to toggle merchant approval.';
+    const status = message.includes('Admin access')
+      ? 403
+      : message.includes('not found')
+        ? 404
+        : 500;
+    return res.status(status).json({ message });
+  }
+});
+
+app.put('/db/admin/merchant-rejection', async (req, res) => {
+  try {
+    const phone = requireAuthorizedPhone(req, res, { allowMissing: true });
+    if (!phone) return;
+    const merchantPhone = String(req.body?.merchantPhone || '').trim();
+    const reasonKey = String(req.body?.reasonKey || '').trim();
+    if (!merchantPhone) {
+      return res.status(400).json({ message: 'merchantPhone is required.' });
+    }
+    if (!reasonKey) {
+      return res.status(400).json({ message: 'reasonKey is required.' });
+    }
+    const result = await rejectMerchantApplication(phone, merchantPhone, reasonKey);
+    return res.json(result);
+  } catch (error) {
+    console.error('reject merchant error:', error);
+    const message = error?.message || 'Failed to reject merchant application.';
     const status = message.includes('Admin access')
       ? 403
       : message.includes('not found') || message.includes('Invalid')

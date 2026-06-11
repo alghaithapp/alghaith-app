@@ -126,6 +126,117 @@ function isMerchantFrozen(profile) {
   return profile?.is_frozen === true;
 }
 
+function isMerchantApproved(profile) {
+  if (!profile) return false;
+  if (profile.is_approved === true || profile.isApproved === true) return true;
+  const status = String(profile.approval_status ?? profile.approvalStatus ?? '').trim();
+  if (status === 'approved') return true;
+  if (status === 'pending' || status === 'rejected') return false;
+  if (profile.is_approved === false || profile.isApproved === false) return false;
+  const storeName = String(
+    profile.store_name ?? profile.storeName ?? profile.name ?? ''
+  ).trim();
+  return storeName.length > 0;
+}
+
+function merchantApprovalStatus(profile) {
+  if (isMerchantApproved(profile)) return 'approved';
+  const status = String(profile.approval_status ?? profile.approvalStatus ?? '').trim();
+  if (status === 'rejected') return 'rejected';
+  if (status === 'pending') return 'pending';
+  if (profile.is_approved === false || profile.isApproved === false) return 'pending';
+  return 'approved';
+}
+
+function merchantRejectionMessage(profile) {
+  return String(profile?.rejection_message_ar ?? profile?.rejectionMessageAr ?? '').trim();
+}
+
+const MERCHANT_REJECTION_REASONS = {
+  storeName:
+    'اسم المتجر غير واضح أو غير مطابق. يرجى إدخال اسم المتجر بشكل صحيح.',
+  phone:
+    'رقم الهاتف أو واتساب غير صحيح. يرجى إدخال رقم مفعّل على واتساب.',
+  address:
+    'عنوان المتجر أو موقعه على الخريطة غير واضح. يرجى تحديد الموقع بدقة.',
+  images:
+    'صور المتجر (الشعار أو الغلاف) غير واضحة أو غير مناسبة. يرجى رفع صور أفضل.',
+  description:
+    'وصف المتجر ناقص أو غير مناسب. يرجى كتابة وصف واضح لنشاطك.',
+};
+
+function mapMerchantApprovalFields(profile) {
+  return {
+    isApproved: isMerchantApproved(profile),
+    approvalStatus: merchantApprovalStatus(profile),
+    rejectionReasonKey:
+      String(profile?.rejection_reason_key ?? profile?.rejectionReasonKey ?? '').trim() ||
+      null,
+    rejectionMessageAr: merchantRejectionMessage(profile) || null,
+  };
+}
+
+async function syncMerchantApprovalToState(phoneKey, patch = {}) {
+  const state = (await getUserState(phoneKey)) || {};
+  const merchantStore =
+    state.merchantStore && typeof state.merchantStore === 'object'
+      ? { ...state.merchantStore }
+      : {};
+  const nextStore = { ...merchantStore, ...patch };
+  await saveUserState(phoneKey, { ...state, merchantStore: nextStore });
+  return nextStore;
+}
+
+async function updateMerchantApprovalRecord(phoneKey, patch = {}) {
+  const supabase = assertSupabaseAdmin();
+  const variants = getPhoneVariants(phoneKey);
+  const dbPatch = { updated_at: nowIso() };
+  if (patch.isApproved !== undefined) {
+    dbPatch.is_approved = Boolean(patch.isApproved);
+  }
+  if (patch.approvalStatus !== undefined) {
+    dbPatch.approval_status = String(patch.approvalStatus || '').trim();
+  }
+  if (patch.rejectionReasonKey !== undefined) {
+    dbPatch.rejection_reason_key = patch.rejectionReasonKey || null;
+  }
+  if (patch.rejectionMessageAr !== undefined) {
+    dbPatch.rejection_message_ar = patch.rejectionMessageAr || null;
+  }
+  if (patch.rejectedAt !== undefined) {
+    dbPatch.rejected_at = patch.rejectedAt || null;
+  }
+
+  const { data, error } = await supabase
+    .from('merchant_profiles')
+    .update(dbPatch)
+    .in('phone', variants)
+    .select();
+
+  if (error && !/column/i.test(error.message || '')) {
+    throw new Error(error.message);
+  }
+
+  const statePatch = {
+    isApproved: patch.isApproved,
+    is_approved: patch.isApproved,
+    approvalStatus: patch.approvalStatus,
+    approval_status: patch.approvalStatus,
+    rejectionReasonKey: patch.rejectionReasonKey ?? null,
+    rejection_reason_key: patch.rejectionReasonKey ?? null,
+    rejectionMessageAr: patch.rejectionMessageAr ?? null,
+    rejection_message_ar: patch.rejectionMessageAr ?? null,
+    rejectedAt: patch.rejectedAt ?? null,
+    rejected_at: patch.rejectedAt ?? null,
+  };
+  Object.keys(statePatch).forEach((key) => {
+    if (statePatch[key] === undefined) delete statePatch[key];
+  });
+  await syncMerchantApprovalToState(phoneKey, statePatch);
+
+  return Array.isArray(data) && data.length > 0 ? data[0] : null;
+}
+
 /** أقسام التسوق العالمي فقط — لا تُخلط مع التسوق المحلي. */
 const GLOBAL_SHOPPING_SUB_CATEGORY_IDS = new Set(['iran', 'china']);
 
@@ -769,6 +880,35 @@ async function saveMerchantProfile(phone, data = {}) {
       data.restaurant_category ?? data.restaurantCategory
     );
   }
+  if (await hasColumn('merchant_profiles', 'is_approved')) {
+    if (data.is_approved !== undefined || data.isApproved !== undefined) {
+      basePayload.is_approved = Boolean(data.is_approved ?? data.isApproved);
+    }
+  }
+  if (await hasColumn('merchant_profiles', 'approval_status')) {
+    assignIfDefined(
+      basePayload,
+      'approval_status',
+      data.approval_status ?? data.approvalStatus
+    );
+  }
+  if (await hasColumn('merchant_profiles', 'rejection_reason_key')) {
+    assignIfDefined(
+      basePayload,
+      'rejection_reason_key',
+      data.rejection_reason_key ?? data.rejectionReasonKey
+    );
+  }
+  if (await hasColumn('merchant_profiles', 'rejection_message_ar')) {
+    assignIfDefined(
+      basePayload,
+      'rejection_message_ar',
+      data.rejection_message_ar ?? data.rejectionMessageAr
+    );
+  }
+  if (await hasColumn('merchant_profiles', 'rejected_at')) {
+    assignIfDefined(basePayload, 'rejected_at', data.rejected_at ?? data.rejectedAt);
+  }
   const phoneKey = await resolvePhoneKey(phone);
   return saveRow('merchant_profiles', { ...basePayload, phone: phoneKey }, 'phone');
 }
@@ -1033,6 +1173,9 @@ async function saveCustomerOrder(phone, data = {}, options = {}) {
     }
     if (isMerchantFrozen(merchantProfile)) {
       throw new Error('MERCHANT_FROZEN');
+    }
+    if (!isMerchantApproved(merchantProfile)) {
+      throw new Error('MERCHANT_NOT_APPROVED');
     }
   }
 
@@ -1910,6 +2053,7 @@ async function listProfessionalProfiles(professionId = '') {
   const target = String(professionId || '').trim();
   return profiles.filter((row) => {
     if (isMerchantFrozen(row)) return false;
+    if (!isMerchantApproved(row)) return false;
     const serviceIds = normalizeArray(row.service_ids);
     const hasProfessionals = serviceIds
       .map((item) => String(item))
@@ -1936,6 +2080,7 @@ async function listMerchantStoresByService({
     const isOpen = profile.is_open !== false;
     if (!isOpen) continue;
     if (isMerchantFrozen(profile)) continue;
+    if (!isMerchantApproved(profile)) continue;
     if (!merchantQualifiesForServiceListing(profile, normalizedServiceId)) {
       continue;
     }
@@ -2684,7 +2829,17 @@ async function getAllMerchants(adminPhone) {
     createdAt: m.created_at,
     fullName: userByPhone[m.phone]?.full_name || '',
     role: userByPhone[m.phone]?.role || '',
+    ...mapMerchantApprovalFields(m),
   };
+  }).sort((a, b) => {
+    const rank = (item) => {
+      if (item.approvalStatus === 'pending') return 0;
+      if (item.approvalStatus === 'rejected') return 1;
+      return 2;
+    };
+    const rankDiff = rank(a) - rank(b);
+    if (rankDiff !== 0) return rankDiff;
+    return String(a.storeName || '').localeCompare(String(b.storeName || ''), 'ar');
   });
 }
 
@@ -2905,6 +3060,85 @@ async function rejectCourierApplication(adminPhone, courierPhone, reasonKey) {
   return { success: true, courier: mapped };
 }
 
+async function toggleMerchantApprovalStatus(adminPhone, merchantPhone, isApproved) {
+  await assertAdminAccess(adminPhone);
+
+  const phoneKey = await resolvePhoneKey(merchantPhone);
+  const profile = await getMerchantProfile(phoneKey);
+  if (!profile || !String(profile.store_name || '').trim()) {
+    throw new Error('Merchant profile not found.');
+  }
+
+  const patch = {
+    isApproved: Boolean(isApproved),
+    approvalStatus: Boolean(isApproved) ? 'approved' : 'pending',
+    rejectionReasonKey: null,
+    rejectionMessageAr: null,
+    rejectedAt: null,
+  };
+  await updateMerchantApprovalRecord(phoneKey, patch);
+
+  if (Boolean(isApproved)) {
+    try {
+      const { onMerchantApproved } = require('./push_events');
+      await onMerchantApproved(phoneKey);
+    } catch (error) {
+      console.error('push onMerchantApproved error:', error?.message || error);
+    }
+  }
+
+  const refreshed = await getMerchantProfile(phoneKey);
+  return {
+    success: true,
+    merchant: {
+      phone: phoneKey,
+      storeName: refreshed?.store_name || '',
+      ...mapMerchantApprovalFields(refreshed || {}),
+    },
+  };
+}
+
+async function rejectMerchantApplication(adminPhone, merchantPhone, reasonKey) {
+  await assertAdminAccess(adminPhone);
+
+  const normalizedReason = String(reasonKey || '').trim();
+  const message = MERCHANT_REJECTION_REASONS[normalizedReason];
+  if (!message) {
+    throw new Error('Invalid rejection reason.');
+  }
+
+  const phoneKey = await resolvePhoneKey(merchantPhone);
+  const profile = await getMerchantProfile(phoneKey);
+  if (!profile || !String(profile.store_name || '').trim()) {
+    throw new Error('Merchant profile not found.');
+  }
+
+  await updateMerchantApprovalRecord(phoneKey, {
+    isApproved: false,
+    approvalStatus: 'rejected',
+    rejectionReasonKey: normalizedReason,
+    rejectionMessageAr: message,
+    rejectedAt: nowIso(),
+  });
+
+  try {
+    const { onMerchantRejected } = require('./push_events');
+    await onMerchantRejected(phoneKey, message, normalizedReason);
+  } catch (error) {
+    console.error('push onMerchantRejected error:', error?.message || error);
+  }
+
+  const refreshed = await getMerchantProfile(phoneKey);
+  return {
+    success: true,
+    merchant: {
+      phone: phoneKey,
+      storeName: refreshed?.store_name || '',
+      ...mapMerchantApprovalFields(refreshed || {}),
+    },
+  };
+}
+
 async function toggleMerchantFreezeStatus(adminPhone, merchantPhone, isFrozen) {
   await assertAdminAccess(adminPhone);
 
@@ -2983,6 +3217,8 @@ module.exports = {
   getAllCouriers,
   toggleCourierApprovalStatus,
   rejectCourierApplication,
+  toggleMerchantApprovalStatus,
+  rejectMerchantApplication,
   getAdminMerchantDetails,
   toggleBazaarMemberStatus,
   toggleMerchantFreezeStatus,
