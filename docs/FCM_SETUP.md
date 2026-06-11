@@ -46,6 +46,7 @@ FIREBASE_SERVICE_ACCOUNT_JSON={"type":"service_account",...}
 
 ```
 supabase/add_device_tokens.sql
+supabase/add_push_inbox_state.sql
 ```
 
 4. ادفع `backend/` إلى Railway (أو أعد النشر).
@@ -72,7 +73,36 @@ GET https://alghaith-app-production.up.railway.app/health
 | تم التسليم | الزبون |
 | اكتمال الطلب | الزبون |
 
-## 6) اختبار سريع
+## 6) صوت الإشعار المميز
+
+التطبيق يستخدم صوتاً مخصصاً باسم `alghaith_notify.wav`.
+
+لتغيير الصوت:
+
+1. استبدل الملف في `assets/sounds/alghaith_notify.wav` بصوتك (أقل من 30 ثانية، WAV أو MP3 محوّل لـ WAV).
+2. شغّل:
+
+```bash
+node scripts/generate_notification_sound.cjs
+```
+
+3. أعد بناء التطبيق (Android + iOS).
+
+ملاحظات:
+
+- **Android**: الملف يُنسخ إلى `android/app/src/main/res/raw/`.
+- **iOS**: الملف يُنسخ إلى `ios/Runner/` ويُضمَّن في Xcode Resources.
+- على Android، تغيير الصوت يستخدم قناة جديدة `alghaith_orders_v2` لأن القناة القديمة لا تتغير بعد إنشائها.
+
+## 7) تذكير الإشعارات غير المقروءة
+
+إذا وصلت إشعارات للمستخدم ولم يفتح التطبيق لمدة **ساعتين**، يرسل الخادم تذكيراً واحداً:
+
+> «لديك X إشعارات لم تقرأها في الغيث»
+
+عند فتح التطبيق يُصفَّر العداد تلقائياً عبر `PUT /db/push-inbox/opened`.
+
+## 8) اختبار سريع
 
 1. سجّل دخولاً من جهاز حقيقي (محاكي iOS لا يدعم push بشكل كامل).
 2. وافق على صلاحية الإشعارات.

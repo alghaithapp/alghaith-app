@@ -20,6 +20,9 @@
   --whatsapp: #25d366;
   --whatsapp-dark: #128c7e;
   --whatsapp-glow: rgba(37, 211, 102, 0.25);
+  --facebook: #1877f2;
+  --facebook-dark: #0d65d9;
+  --facebook-glow: rgba(24, 119, 242, 0.22);
 
   --text: #f0efe7;
   --text-soft: #a8a6a0;
@@ -738,6 +741,21 @@ img {
 .support-card-whatsapp .support-icon {
   background: rgba(37, 211, 102, 0.1);
   color: var(--whatsapp);
+}
+
+.support-card-facebook .support-icon {
+  background: rgba(24, 119, 242, 0.1);
+  color: var(--facebook);
+}
+
+.btn-facebook {
+  color: #fff;
+  background: linear-gradient(135deg, var(--facebook), var(--facebook-dark));
+  box-shadow: 0 8px 24px var(--facebook-glow);
+}
+
+.btn-facebook:hover {
+  box-shadow: 0 12px 36px var(--facebook-glow);
 }
 
 /* ── Footer ── */

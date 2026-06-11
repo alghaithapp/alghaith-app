@@ -24,7 +24,7 @@ class MerchantSupportScreen extends StatelessWidget {
         children: [
           _SupportCard(
             title: 'واتساب',
-            subtitle: 'تواصل سريع مع فريق الدعم الفني',
+            subtitle: AppHelpers.supportPhoneNumber,
             iconWidget: const WhatsAppIcon(size: 36),
             onTap: () => AppHelpers.launchWhatsApp(
               AppHelpers.supportWhatsAppNumber,
@@ -33,9 +33,15 @@ class MerchantSupportScreen extends StatelessWidget {
           ),
           _SupportCard(
             title: 'اتصال',
-            subtitle: 'اتصال مباشر مع فريق الدعم',
+            subtitle: AppHelpers.supportPhoneNumber,
             icon: Icons.phone_rounded,
-            onTap: () => AppHelpers.makePhoneCall('07701234567'),
+            onTap: () => AppHelpers.makePhoneCall(AppHelpers.supportPhoneNumber),
+          ),
+          _SupportCard(
+            title: 'فيسبوك',
+            subtitle: 'صفحة الغيث الرسمية',
+            icon: Icons.facebook_rounded,
+            onTap: AppHelpers.openFacebookPage,
           ),
         ],
       ),

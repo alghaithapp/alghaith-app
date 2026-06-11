@@ -1,4 +1,9 @@
-const { getDeviceTokensForPhone, removeDeviceTokens } = require('./supabase_repo');
+const {
+  getDeviceTokensForPhone,
+  removeDeviceTokens,
+  getActiveCourierPhones,
+  recordPushInboxDelivered,
+} = require('./supabase_repo');
 const { sendPushToTokens } = require('./push_notifications');
 
 function displayOrderNumber(meta) {
@@ -10,7 +15,62 @@ function displayOrderNumber(meta) {
   return `#${String(seed % 1000000).padStart(6, '0')}`;
 }
 
-async function sendPushToPhone(phone, payload) {
+function noteText(meta) {
+  return {
+    ar: String(meta?.payload?.noteAr ?? '').trim(),
+    en: String(meta?.payload?.noteEn ?? '').trim(),
+  };
+}
+
+function isCustomerCancelledBeforeApproval(meta) {
+  const { ar, en } = noteText(meta);
+  return (
+    en.includes('Cancelled by customer before merchant') ||
+    ar.includes('ألغى الطلب من الزبون قبل موافقة')
+  );
+}
+
+function isOrderRejected(meta) {
+  if (meta.statusKey === 'rejected') return true;
+  const { ar, en } = noteText(meta);
+  return (
+    en.includes('Rejected reason') ||
+    ar.includes('سبب الرفض') ||
+    String(meta?.payload?.statusEn ?? '').trim() === 'Rejected'
+  );
+}
+
+function isTimeoutCancellation(meta) {
+  const { ar, en } = noteText(meta);
+  return en.toLowerCase().includes('timeout') || ar.includes('مهلة');
+}
+
+function isMerchantApprovedCancellation(meta) {
+  const { ar, en } = noteText(meta);
+  return (
+    en.includes('Merchant approved cancellation') ||
+    ar.includes('موافقة التاجر على إلغاء') ||
+    ar.includes('تمت الموافقة على إلغاء')
+  );
+}
+
+function isDeliveryPool(meta) {
+  return (
+    meta?.statusKey === 'delivering' &&
+    meta?.deliveryStatusKey === 'waiting' &&
+    !meta?.courierPhone
+  );
+}
+
+function shouldTrackPushInbox(payload, options = {}) {
+  if (options.skipInboxTracking) return false;
+  const category = String(payload?.data?.category ?? '').trim();
+  if (category === 'inbox_reminder') return false;
+  const eventKey = String(payload?.data?.eventKey ?? '').trim();
+  return !eventKey.includes(':unread_reminder');
+}
+
+async function sendPushToPhone(phone, payload, options = {}) {
   const normalizedPhone = String(phone || '').trim();
   if (!normalizedPhone) return;
 
@@ -22,11 +82,30 @@ async function sendPushToPhone(phone, payload) {
   if (result.invalidTokens?.length) {
     await removeDeviceTokens(result.invalidTokens);
   }
+
+  if (result.sent > 0 && shouldTrackPushInbox(payload, options)) {
+    try {
+      await recordPushInboxDelivered(normalizedPhone);
+    } catch (error) {
+      console.error('push inbox track error:', error?.message || error);
+    }
+  }
 }
 
 async function notifyPhones(phones, payload) {
-  const uniquePhones = [...new Set((phones || []).map((item) => String(item || '').trim()).filter(Boolean))];
+  const uniquePhones = [
+    ...new Set((phones || []).map((item) => String(item || '').trim()).filter(Boolean)),
+  ];
   await Promise.all(uniquePhones.map((phone) => sendPushToPhone(phone, payload)));
+}
+
+async function notifyActiveCouriers(payload, excludePhones = []) {
+  const excluded = new Set(
+    (excludePhones || []).map((item) => String(item || '').trim()).filter(Boolean)
+  );
+  const courierPhones = await getActiveCourierPhones();
+  const targets = courierPhones.filter((phone) => !excluded.has(phone));
+  await notifyPhones(targets, payload);
 }
 
 function buildPushPayload({ title, body, audience, orderId, eventKey, category = 'order' }) {
@@ -51,6 +130,8 @@ async function onOrderSaved({ previousMeta, nextMeta, isNew }) {
   const nextStatus = nextMeta.statusKey || '';
   const previousDelivery = previousMeta?.deliveryStatusKey || '';
   const nextDelivery = nextMeta.deliveryStatusKey || '';
+  const previousCourier = previousMeta?.courierPhone || '';
+  const nextCourier = nextMeta.courierPhone || '';
 
   if (isNew && nextStatus === 'pending' && nextMeta.merchantPhone) {
     await sendPushToPhone(
@@ -69,6 +150,37 @@ async function onOrderSaved({ previousMeta, nextMeta, isNew }) {
   if (!previousMeta) return;
 
   if (previousStatus !== nextStatus) {
+    if (nextStatus === 'cancel_requested' && nextMeta.merchantPhone) {
+      await sendPushToPhone(
+        nextMeta.merchantPhone,
+        buildPushPayload({
+          title: 'طلب إلغاء من الزبون',
+          body: `الزبون يطلب إلغاء الطلب ${orderNumber}`,
+          audience: 'merchant',
+          orderId,
+          eventKey: `merchant:${orderId}:cancel_requested`,
+        })
+      );
+    }
+
+    if (
+      previousStatus === 'pending' &&
+      nextStatus === 'cancelled' &&
+      isCustomerCancelledBeforeApproval(nextMeta) &&
+      nextMeta.merchantPhone
+    ) {
+      await sendPushToPhone(
+        nextMeta.merchantPhone,
+        buildPushPayload({
+          title: 'ألغى الزبون الطلب',
+          body: `الزبون ألغى الطلب ${orderNumber} قبل القبول`,
+          audience: 'merchant',
+          orderId,
+          eventKey: `merchant:${orderId}:customer_cancelled_pending`,
+        })
+      );
+    }
+
     if (nextStatus === 'accepted' && nextMeta.customerPhone) {
       await sendPushToPhone(
         nextMeta.customerPhone,
@@ -80,17 +192,85 @@ async function onOrderSaved({ previousMeta, nextMeta, isNew }) {
           eventKey: `customer:${orderId}:accepted`,
         })
       );
-    } else if (nextStatus === 'cancelled' && nextMeta.customerPhone) {
+    } else if (nextStatus === 'preparing' && nextMeta.customerPhone) {
       await sendPushToPhone(
         nextMeta.customerPhone,
         buildPushPayload({
-          title: 'تم إلغاء الطلب',
-          body: `الطلب ${orderNumber} أُلغي`,
+          title: 'طلبك قيد التحضير',
+          body: `المتجر يجهّز طلبك ${orderNumber}`,
           audience: 'customer',
           orderId,
-          eventKey: `customer:${orderId}:cancelled`,
+          eventKey: `customer:${orderId}:preparing`,
         })
       );
+    } else if (
+      previousStatus === 'cancel_requested' &&
+      nextStatus !== 'cancel_requested' &&
+      nextStatus !== 'cancelled' &&
+      nextMeta.customerPhone
+    ) {
+      await sendPushToPhone(
+        nextMeta.customerPhone,
+        buildPushPayload({
+          title: 'رفض التاجر إلغاء الطلب',
+          body: `سيستمر تنفيذ طلبك ${orderNumber}`,
+          audience: 'customer',
+          orderId,
+          eventKey: `customer:${orderId}:cancel_rejected`,
+        })
+      );
+    } else if (
+      previousStatus === 'cancel_requested' &&
+      nextStatus === 'cancelled' &&
+      isMerchantApprovedCancellation(nextMeta) &&
+      nextMeta.customerPhone
+    ) {
+      await sendPushToPhone(
+        nextMeta.customerPhone,
+        buildPushPayload({
+          title: 'تم إلغاء طلبك',
+          body: `وافق التاجر على إلغاء الطلب ${orderNumber}`,
+          audience: 'customer',
+          orderId,
+          eventKey: `customer:${orderId}:cancel_approved`,
+        })
+      );
+    } else if (nextStatus === 'cancelled' && nextMeta.customerPhone) {
+      if (isTimeoutCancellation(nextMeta)) {
+        await sendPushToPhone(
+          nextMeta.customerPhone,
+          buildPushPayload({
+            title: 'انتهت مهلة الطلب',
+            body: `لم يرد التاجر خلال 20 دقيقة وأُلغي الطلب ${orderNumber}`,
+            audience: 'customer',
+            orderId,
+            eventKey: `customer:${orderId}:timeout`,
+          })
+        );
+      } else if (isOrderRejected(nextMeta)) {
+        const { ar } = noteText(nextMeta);
+        await sendPushToPhone(
+          nextMeta.customerPhone,
+          buildPushPayload({
+            title: 'تم رفض طلبك',
+            body: ar || `التاجر رفض الطلب ${orderNumber}`,
+            audience: 'customer',
+            orderId,
+            eventKey: `customer:${orderId}:rejected`,
+          })
+        );
+      } else if (!isMerchantApprovedCancellation(nextMeta)) {
+        await sendPushToPhone(
+          nextMeta.customerPhone,
+          buildPushPayload({
+            title: 'تم إلغاء الطلب',
+            body: `الطلب ${orderNumber} أُلغي`,
+            audience: 'customer',
+            orderId,
+            eventKey: `customer:${orderId}:cancelled`,
+          })
+        );
+      }
     } else if (nextStatus === 'delivering' && nextMeta.customerPhone) {
       await sendPushToPhone(
         nextMeta.customerPhone,
@@ -113,6 +293,36 @@ async function onOrderSaved({ previousMeta, nextMeta, isNew }) {
           eventKey: `customer:${orderId}:completed`,
         })
       );
+
+      if (nextMeta.merchantPhone) {
+        await sendPushToPhone(
+          nextMeta.merchantPhone,
+          buildPushPayload({
+            title: 'اكتمل الطلب',
+            body: `الطلب ${orderNumber} اكتمل`,
+            audience: 'merchant',
+            orderId,
+            eventKey: `merchant:${orderId}:completed`,
+          })
+        );
+      }
+    }
+
+    if (
+      nextStatus === 'cancelled' &&
+      previousStatus !== 'cancelled' &&
+      previousCourier
+    ) {
+      await sendPushToPhone(
+        previousCourier,
+        buildPushPayload({
+          title: 'تم إلغاء الطلب',
+          body: `الطلب ${orderNumber} أُلغي بعد تعيينك`,
+          audience: 'courier',
+          orderId,
+          eventKey: `courier:${orderId}:cancelled`,
+        })
+      );
     }
   }
 
@@ -125,9 +335,22 @@ async function onOrderSaved({ previousMeta, nextMeta, isNew }) {
           body: `تم تعيين مندوب لطلب ${orderNumber}`,
           audience: 'customer',
           orderId,
-          eventKey: `customer:${orderId}:courier_accepted`,
+          eventKey: `shared:${orderId}:courier_accepted`,
         })
       );
+
+      if (nextCourier) {
+        await sendPushToPhone(
+          nextCourier,
+          buildPushPayload({
+            title: 'تم قبول طلب التوصيل',
+            body: `أنت المندوب المعيّن لطلب ${orderNumber}`,
+            audience: 'courier',
+            orderId,
+            eventKey: `courier:${orderId}:accepted`,
+          })
+        );
+      }
     } else if (nextDelivery === 'picked_up' && nextMeta.customerPhone) {
       await sendPushToPhone(
         nextMeta.customerPhone,
@@ -139,6 +362,19 @@ async function onOrderSaved({ previousMeta, nextMeta, isNew }) {
           eventKey: `customer:${orderId}:picked_up`,
         })
       );
+
+      if (nextMeta.merchantPhone) {
+        await sendPushToPhone(
+          nextMeta.merchantPhone,
+          buildPushPayload({
+            title: 'استلم المندوب الطلب',
+            body: `المندوب استلم الطلب ${orderNumber} من متجرك`,
+            audience: 'merchant',
+            orderId,
+            eventKey: `merchant:${orderId}:picked_up`,
+          })
+        );
+      }
     } else if (nextDelivery === 'on_way' && nextMeta.customerPhone) {
       await sendPushToPhone(
         nextMeta.customerPhone,
@@ -150,22 +386,109 @@ async function onOrderSaved({ previousMeta, nextMeta, isNew }) {
           eventKey: `customer:${orderId}:on_way`,
         })
       );
-    } else if (nextDelivery === 'delivered' && nextMeta.customerPhone) {
-      await sendPushToPhone(
-        nextMeta.customerPhone,
-        buildPushPayload({
-          title: 'تم التسليم',
-          body: `تم تسليم طلبك ${orderNumber}`,
-          audience: 'customer',
-          orderId,
-          eventKey: `customer:${orderId}:delivered`,
-        })
-      );
+    } else if (nextDelivery === 'delivered') {
+      if (nextMeta.customerPhone) {
+        await sendPushToPhone(
+          nextMeta.customerPhone,
+          buildPushPayload({
+            title: 'تم التسليم',
+            body: `تم تسليم طلبك ${orderNumber}`,
+            audience: 'customer',
+            orderId,
+            eventKey: `customer:${orderId}:delivered`,
+          })
+        );
+      }
+
+      if (nextMeta.merchantPhone) {
+        await sendPushToPhone(
+          nextMeta.merchantPhone,
+          buildPushPayload({
+            title: 'تم تسليم الطلب',
+            body: `تم تسليم الطلب ${orderNumber} للزبون`,
+            audience: 'merchant',
+            orderId,
+            eventKey: `merchant:${orderId}:delivered`,
+          })
+        );
+      }
     }
   }
+
+  const enteredPool = isDeliveryPool(nextMeta) && !isDeliveryPool(previousMeta);
+  if (enteredPool) {
+    await notifyActiveCouriers(
+      buildPushPayload({
+        title: 'طلب توصيل جديد',
+        body: `طلب ${orderNumber} متاح للتوصيل الآن`,
+        audience: 'courier',
+        orderId,
+        eventKey: `courier:${orderId}:pool_new`,
+      }),
+      nextMeta.payload?.rejectedByCouriers || []
+    );
+  }
+
+  const returnedToPool =
+    isDeliveryPool(nextMeta) &&
+    isDeliveryPool(previousMeta) &&
+    previousCourier &&
+    !nextCourier;
+  if (returnedToPool) {
+    await notifyActiveCouriers(
+      buildPushPayload({
+        title: 'طلب عاد لقائمة التوصيل',
+        body: `الطلب ${orderNumber} متاح مجدداً للمندوبين`,
+        audience: 'courier',
+        orderId,
+        eventKey: `courier:${orderId}:pool_returned`,
+      }),
+      nextMeta.payload?.rejectedByCouriers || []
+    );
+  }
+}
+
+async function onCourierApproved(courierPhone) {
+  const phone = String(courierPhone || '').trim();
+  if (!phone) return;
+
+  await sendPushToPhone(
+    phone,
+    buildPushPayload({
+      title: 'تم تفعيل حساب المندوب',
+      body: 'وافقت الإدارة على طلبك. يمكنك الآن استقبال طلبات التوصيل.',
+      audience: 'courier',
+      orderId: '',
+      eventKey: `courier:${phone}:approved`,
+      category: 'account',
+    })
+  );
+}
+
+async function onMerchantFrozen(merchantPhone, isFrozen) {
+  if (!isFrozen) return;
+  const phone = String(merchantPhone || '').trim();
+  if (!phone) return;
+
+  await sendPushToPhone(
+    phone,
+    buildPushPayload({
+      title: 'تم تجميد حسابك',
+      body: 'حساب المتجر مجمّد ولا يستقبل طلبات جديدة. تواصل مع الإدارة.',
+      audience: 'merchant',
+      orderId: '',
+      eventKey: `merchant:${phone}:frozen`,
+      category: 'account',
+    })
+  );
 }
 
 module.exports = {
   onOrderSaved,
+  onCourierApproved,
+  onMerchantFrozen,
   sendPushToPhone,
+  notifyActiveCouriers,
+  buildPushPayload,
+  displayOrderNumber,
 };

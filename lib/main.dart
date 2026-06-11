@@ -17,6 +17,7 @@ import 'screens/orders_screen.dart';
 import 'screens/account_screen.dart';
 import 'screens/favorites_screen.dart';
 import 'screens/delivery/delivery_setup_screen.dart';
+import 'screens/delivery/delivery_pending_approval_screen.dart';
 import 'screens/delivery/delivery_shell.dart';
 import 'screens/driver/driver_setup_screen.dart';
 import 'screens/driver/driver_shell.dart';
@@ -187,9 +188,13 @@ class AlGhaithApp extends StatelessWidget {
             ? const ExitConfirmScope(child: DriverShell())
             : const ExitConfirmScope(child: DriverSetupScreen());
       } else if (appProvider.userRole == 'delivery') {
-        return appProvider.hasCourierProfile
-            ? const ExitConfirmScope(child: DeliveryShell())
-            : const ExitConfirmScope(child: DeliverySetupScreen());
+        if (!appProvider.hasCourierProfile) {
+          return const ExitConfirmScope(child: DeliverySetupScreen());
+        }
+        if (!appProvider.isCourierApproved) {
+          return const ExitConfirmScope(child: DeliveryPendingApprovalScreen());
+        }
+        return const ExitConfirmScope(child: DeliveryShell());
       } else if (appProvider.userRole == 'admin') {
         return const ExitConfirmScope(child: AdminDashboardScreen());
       }
@@ -203,28 +208,68 @@ class AlGhaithApp extends StatelessWidget {
       return const ExitConfirmScope(child: MainShell());
     }
 
-    return MaterialApp(
-      title: 'الغيث',
-      debugShowCheckedModeBanner: false,
-      themeMode: appProvider.themeMode,
-      // تحديد لون الخلفية الافتراضي لمنع الشاشة الرصاصية
-      color: AppColors.scaffold,
-      theme: AppTheme.light,
-      darkTheme: AppTheme.dark,
-      builder: (context, child) {
-        return AppSystemUiScope(
-          child: Directionality(
-            textDirection: TextDirection.rtl,
-            child: Material(
-              type: MaterialType.transparency,
-              child: child!,
+    return PushNotificationLifecycleScope(
+      child: MaterialApp(
+        title: 'الغيث',
+        debugShowCheckedModeBanner: false,
+        themeMode: appProvider.themeMode,
+        // تحديد لون الخلفية الافتراضي لمنع الشاشة الرصاصية
+        color: AppColors.scaffold,
+        theme: AppTheme.light,
+        darkTheme: AppTheme.dark,
+        builder: (context, child) {
+          return AppSystemUiScope(
+            child: Directionality(
+              textDirection: TextDirection.rtl,
+              child: Material(
+                type: MaterialType.transparency,
+                child: child!,
+              ),
             ),
-          ),
-        );
-      },
-      home: getHome(),
+          );
+        },
+        home: getHome(),
+      ),
     );
   }
+}
+
+class PushNotificationLifecycleScope extends StatefulWidget {
+  final Widget child;
+
+  const PushNotificationLifecycleScope({super.key, required this.child});
+
+  @override
+  State<PushNotificationLifecycleScope> createState() =>
+      _PushNotificationLifecycleScopeState();
+}
+
+class _PushNotificationLifecycleScopeState extends State<PushNotificationLifecycleScope>
+    with WidgetsBindingObserver {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      unawaited(PushNotificationService.instance.onAppResumed());
+    });
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      unawaited(PushNotificationService.instance.onAppResumed());
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
 }
 
 class MainShell extends StatefulWidget {

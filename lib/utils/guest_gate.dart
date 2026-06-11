@@ -11,6 +11,19 @@ import '../providers/app_provider.dart';
 class GuestGate {
   const GuestGate._();
 
+  /// يخرج من وضع الزائر ويعيد المستخدم إلى شاشة تسجيل الدخول.
+  ///
+  /// يُفرّغ مكدس التنقّل أولاً لأن تغيير [MaterialApp.home] وحده لا يزيل
+  /// الشاشات المفتوحة فوق الشاشة الرئيسية.
+  static void exitGuestToLogin(BuildContext context) {
+    final provider = context.read<AppProvider>();
+    final navigator = Navigator.of(context, rootNavigator: true);
+    if (navigator.canPop()) {
+      navigator.popUntil((route) => route.isFirst);
+    }
+    provider.resetAll();
+  }
+
   /// يعيد `true` إذا كان المستخدم مسجّلاً للدخول (لديه جلسة هاتف فعلية).
   /// إذا كان زائراً، يعرض نافذة تدعوه لتسجيل الدخول ويعيد `false`.
   static bool requireAccount(
@@ -39,8 +52,7 @@ class GuestGate {
           message: message,
           onLogin: () {
             Navigator.of(sheetContext).pop();
-            // الخروج من وضع الزائر يعيد التطبيق تلقائياً إلى شاشة تسجيل الدخول.
-            provider.resetAll();
+            exitGuestToLogin(context);
           },
         );
       },

@@ -2,6 +2,8 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/storage/bazaar_approval_notice_store.dart';
+import '../../core/theme/app_theme.dart';
 import '../../models/app_models.dart';
 import '../../providers/app_provider.dart';
 import '../../utils/dummy_data.dart';
@@ -34,6 +36,8 @@ class MerchantProductsScreen extends StatefulWidget {
 class _MerchantProductsScreenState extends State<MerchantProductsScreen> {
   final _searchController = TextEditingController();
   bool _isSyncingCatalog = false;
+  bool _showBazaarApprovedNotice = false;
+  bool? _lastBazaarApproved;
 
   bool _ensureCanPublish(AppProvider provider, String serviceId) {
     if (provider.canPublishForService(serviceId)) return true;
@@ -152,10 +156,14 @@ class _MerchantProductsScreenState extends State<MerchantProductsScreen> {
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
-            style: FilledButton.styleFrom(backgroundColor: _brand),
+            style: AppButtonStyles.accentFilled(),
             child: const Text(
               'حذف',
-              style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w800),
+              style: TextStyle(
+                fontFamily: 'Cairo',
+                fontWeight: FontWeight.w800,
+                color: Colors.white,
+              ),
             ),
           ),
         ],
@@ -185,9 +193,33 @@ class _MerchantProductsScreenState extends State<MerchantProductsScreen> {
     super.dispose();
   }
 
+  Future<void> _refreshBazaarNoticeState() async {
+    final provider = context.read<AppProvider>();
+    final phone = provider.authPhone?.trim() ?? '';
+    if (phone.isEmpty) {
+      if (mounted) setState(() => _showBazaarApprovedNotice = false);
+      return;
+    }
+
+    if (!provider.isBazaarApproved) {
+      await BazaarApprovalNoticeStore.clearSeen(phone);
+      if (mounted) setState(() => _showBazaarApprovedNotice = false);
+      return;
+    }
+
+    final seen = await BazaarApprovalNoticeStore.hasSeen(phone);
+    if (mounted) setState(() => _showBazaarApprovedNotice = !seen);
+  }
+
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<AppProvider>();
+    if (_lastBazaarApproved != provider.isBazaarApproved) {
+      _lastBazaarApproved = provider.isBazaarApproved;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _refreshBazaarNoticeState();
+      });
+    }
     final labels = provider.merchantActiveLabels;
     final serviceId = provider.merchantActiveServiceId;
     final serviceIds = provider.merchantServiceIds;
@@ -230,9 +262,17 @@ class _MerchantProductsScreenState extends State<MerchantProductsScreen> {
             ),
             if (serviceId == 'product' || serviceId == 'restaurant') ...[
               const SizedBox(height: 14),
-              provider.isBazaarApproved
-                  ? const _BazaarApprovedBanner()
-                  : const _BazaarVisibilityBanner(),
+              if (provider.isBazaarApproved && _showBazaarApprovedNotice)
+                _BazaarApprovedBanner(
+                  onDisplayed: () {
+                    final phone = provider.authPhone?.trim() ?? '';
+                    if (phone.isNotEmpty) {
+                      BazaarApprovalNoticeStore.markSeen(phone);
+                    }
+                  },
+                )
+              else if (!provider.isBazaarApproved)
+                const _BazaarVisibilityBanner(),
             ],
             const SizedBox(height: 14),
             _SearchField(
@@ -240,8 +280,9 @@ class _MerchantProductsScreenState extends State<MerchantProductsScreen> {
               onChanged: (_) => setState(() {}),
             ),
             const SizedBox(height: 18),
-            if (serviceId == 'product') ...[
+            if (serviceId == 'product' || serviceId == 'restaurant') ...[
               _StoreSectionsBanner(
+                isRestaurant: serviceId == 'restaurant',
                 sectionCount: provider.merchantProductSections.length,
                 onManage: () {
                   Navigator.of(context).push(
@@ -278,7 +319,8 @@ class _MerchantProductsScreenState extends State<MerchantProductsScreen> {
                   padding: const EdgeInsets.only(bottom: 12),
                   child: _PremiumProductCard(
                     item: item,
-                    sectionLabel: serviceId == 'product'
+                    sectionLabel: (serviceId == 'product' ||
+                            serviceId == 'restaurant')
                         ? provider.merchantProductSectionName(item.sectionId)
                         : null,
                     onToggle: () {
@@ -298,10 +340,12 @@ class _MerchantProductsScreenState extends State<MerchantProductsScreen> {
 }
 
 class _StoreSectionsBanner extends StatelessWidget {
+  final bool isRestaurant;
   final int sectionCount;
   final VoidCallback onManage;
 
   const _StoreSectionsBanner({
+    this.isRestaurant = false,
     required this.sectionCount,
     required this.onManage,
   });
@@ -331,9 +375,9 @@ class _StoreSectionsBanner extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'أقسام متجرك',
-                  style: TextStyle(
+                Text(
+                  isRestaurant ? 'أقسام مطعمك' : 'أقسام متجرك',
+                  style: const TextStyle(
                     fontFamily: 'Cairo',
                     fontWeight: FontWeight.w900,
                     fontSize: 15,
@@ -341,8 +385,10 @@ class _StoreSectionsBanner extends StatelessWidget {
                 ),
                 Text(
                   sectionCount == 0
-                      ? 'لم تُنشئ أقساماً بعد — الزبون يرى منتجاتك دون تنظيم'
-                      : '$sectionCount قسم — يرتب منتجاتك للزبون',
+                      ? (isRestaurant
+                          ? 'أنشئ أقسام المنيو (بيتزا، شاورما…) قبل نشر الأصناف'
+                          : 'لم تُنشئ أقساماً بعد — الزبون يرى منتجاتك دون تنظيم')
+                      : '$sectionCount قسم — يرتب ${isRestaurant ? 'منيوك' : 'منتجاتك'} للزبون',
                   style: TextStyle(
                     fontFamily: 'Cairo',
                     fontSize: 12,
@@ -355,18 +401,16 @@ class _StoreSectionsBanner extends StatelessWidget {
           ),
           FilledButton(
             onPressed: onManage,
-            style: FilledButton.styleFrom(
-              backgroundColor: _brand,
+            style: AppButtonStyles.accentFilled(
+              borderRadius: BorderRadius.circular(12),
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
             ),
             child: Text(
               sectionCount == 0 ? 'إنشاء' : 'إدارة',
               style: const TextStyle(
                 fontFamily: 'Cairo',
                 fontWeight: FontWeight.w800,
+                color: Colors.white,
               ),
             ),
           ),
@@ -879,14 +923,9 @@ class _ActionRow extends StatelessWidget {
                 fontSize: 14,
               ),
             ),
-            style: FilledButton.styleFrom(
-              backgroundColor: _brand,
-              foregroundColor: Colors.white,
+            style: AppButtonStyles.accentFilled(
+              borderRadius: BorderRadius.circular(999),
               minimumSize: const Size.fromHeight(48),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(999),
-              ),
-              elevation: 0,
             ),
           ),
         ),
@@ -1193,8 +1232,23 @@ class _EmptyProductsCard extends StatelessWidget {
   }
 }
 
-class _BazaarApprovedBanner extends StatelessWidget {
-  const _BazaarApprovedBanner();
+class _BazaarApprovedBanner extends StatefulWidget {
+  final VoidCallback onDisplayed;
+
+  const _BazaarApprovedBanner({required this.onDisplayed});
+
+  @override
+  State<_BazaarApprovedBanner> createState() => _BazaarApprovedBannerState();
+}
+
+class _BazaarApprovedBannerState extends State<_BazaarApprovedBanner> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      widget.onDisplayed();
+    });
+  }
 
   @override
   Widget build(BuildContext context) {

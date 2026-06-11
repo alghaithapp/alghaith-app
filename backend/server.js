@@ -52,15 +52,19 @@ const {
   getAdminReports,
   saveMerchantReview,
   getAllMerchants,
+  getAllCouriers,
+  toggleCourierApprovalStatus,
   getAdminMerchantDetails,
   toggleBazaarMemberStatus,
   toggleMerchantFreezeStatus,
   syncMerchantProductsForBazaar,
   saveDeviceToken,
   deleteDeviceToken,
+  markPushInboxOpened,
 } = require('./supabase_repo');
 const { validatePromoCode } = require('./promo_codes');
 const { isPushConfigured } = require('./push_notifications');
+const { startPushScheduler } = require('./push_scheduler');
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -693,6 +697,18 @@ app.put('/db/device-token', async (req, res) => {
   }
 });
 
+app.put('/db/push-inbox/opened', async (req, res) => {
+  try {
+    const phone = requireAuthorizedPhone(req, res);
+    if (!phone) return;
+    const result = await markPushInboxOpened(phone);
+    return res.json(result);
+  } catch (error) {
+    console.error('mark push-inbox opened error:', error);
+    return res.status(500).json({ message: error?.message || 'Failed to mark inbox opened.' });
+  }
+});
+
 app.delete('/db/device-token', async (req, res) => {
   try {
     const phone = requireAuthorizedPhone(req, res);
@@ -1231,6 +1247,20 @@ app.get('/db/admin/merchants', async (req, res) => {
   }
 });
 
+app.get('/db/admin/couriers', async (req, res) => {
+  try {
+    const phone = requireAuthorizedPhone(req, res, { allowMissing: true });
+    if (!phone) return;
+    const couriers = await getAllCouriers(phone);
+    return res.json(couriers);
+  } catch (error) {
+    console.error('admin couriers error:', error);
+    const message = error?.message || 'Failed to load couriers.';
+    const status = message.includes('Admin access') ? 403 : 500;
+    return res.status(status).json({ message });
+  }
+});
+
 app.get('/db/admin/merchant-details', async (req, res) => {
   try {
     const phone = requireAuthorizedPhone(req, res, { allowMissing: true });
@@ -1292,6 +1322,29 @@ app.post('/db/admin/merchant-bazaar-sync', async (req, res) => {
   }
 });
 
+app.put('/db/admin/courier-approval', async (req, res) => {
+  try {
+    const phone = requireAuthorizedPhone(req, res, { allowMissing: true });
+    if (!phone) return;
+    const courierPhone = String(req.body?.courierPhone || '').trim();
+    const isApproved = req.body?.isApproved === true;
+    if (!courierPhone) {
+      return res.status(400).json({ message: 'courierPhone is required.' });
+    }
+    const result = await toggleCourierApprovalStatus(phone, courierPhone, isApproved);
+    return res.json(result);
+  } catch (error) {
+    console.error('toggle courier approval error:', error);
+    const message = error?.message || 'Failed to toggle courier approval.';
+    const status = message.includes('Admin access')
+      ? 403
+      : message.includes('not found')
+        ? 404
+        : 500;
+    return res.status(status).json({ message });
+  }
+});
+
 app.put('/db/admin/merchant-freeze', async (req, res) => {
   try {
     const phone = requireAuthorizedPhone(req, res, { allowMissing: true });
@@ -1313,4 +1366,8 @@ app.put('/db/admin/merchant-freeze', async (req, res) => {
 
 app.listen(port, () => {
   console.log(`Auth backend listening on port ${port}`);
+  if (isPushConfigured()) {
+    startPushScheduler();
+    console.log('Push scheduler started.');
+  }
 });

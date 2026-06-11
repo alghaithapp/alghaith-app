@@ -19,6 +19,7 @@ import '../services/image_storage_service.dart';
 import '../utils/merchant_service_labels.dart';
 import '../models/merchant_product_section.dart';
 import '../utils/merchant_product_sections.dart';
+import '../utils/courier_profile_fields.dart';
 import '../utils/merchant_profile_fields.dart';
 
 class AppProvider extends ChangeNotifier {
@@ -250,8 +251,11 @@ class AppProvider extends ChangeNotifier {
       '';
   String get merchantPhone =>
       (_merchantStore?['phone'] as String?)?.trim() ?? '';
-  String get merchantWhatsApp =>
-      (_merchantStore?['whatsapp'] as String?)?.trim() ?? merchantPhone;
+  String get merchantWhatsApp {
+    final explicit = (_merchantStore?['whatsapp'] as String?)?.trim() ?? '';
+    if (explicit.isNotEmpty) return explicit;
+    return merchantPhone;
+  }
   String get merchantAddress =>
       MerchantProfileFields.addressFromMap(_merchantStore);
   double? get merchantLatitude =>
@@ -413,7 +417,11 @@ class AppProvider extends ChangeNotifier {
   bool get hasDriverProfile => _driverProfile != null;
   Map<String, dynamic>? get courierProfile => _courierProfile;
   bool get hasCourierProfile =>
-      (_courierProfile?['name']?.toString().trim().isNotEmpty ?? false);
+      CourierProfileFields.isComplete(_courierProfile);
+  bool get isCourierApproved =>
+      CourierProfileFields.isApproved(_courierProfile);
+  bool get canUseCourierAccount =>
+      hasCourierProfile && isCourierApproved;
   String get deliveryCourierName {
     final name = _courierProfile?['name']?.toString().trim();
     if (name != null && name.isNotEmpty) return name;
@@ -1949,9 +1957,13 @@ class AppProvider extends ChangeNotifier {
   }
 
   Future<void> setCourierProfile(Map<String, dynamic> profile) async {
+    final wasApproved = CourierProfileFields.isApproved(_courierProfile);
+    final next = Map<String, dynamic>.from(profile);
+    next.remove('isApproved');
     _courierProfile = {
       ...?_courierProfile,
-      ...profile,
+      ...next,
+      'isApproved': wasApproved,
     };
     final phone = _trimmedOrNull(_authPhone) ?? _trimmedOrNull(_customerPhone);
     if (phone != null) {
@@ -3814,6 +3826,7 @@ class AppProvider extends ChangeNotifier {
     _courierPoolOrders.clear();
     _courierAssignedOrders.clear();
     _adminReports = null;
+    _allCouriers = [];
     _taxiRequests.clear();
     _addresses.clear();
     _notifications.clear();
@@ -4010,8 +4023,11 @@ class AppProvider extends ChangeNotifier {
 
   Map<String, dynamic>? get adminReports => _adminReports;
   List<Map<String, dynamic>> _allMerchants = [];
+  List<Map<String, dynamic>> _allCouriers = [];
   List<Map<String, dynamic>> get allMerchants =>
       List<Map<String, dynamic>>.unmodifiable(_allMerchants);
+  List<Map<String, dynamic>> get allCouriers =>
+      List<Map<String, dynamic>>.unmodifiable(_allCouriers);
 
   Future<void> refreshAllMerchants() async {
     final phone = _trimmedOrNull(_authPhone) ?? _trimmedOrNull(_customerPhone);
@@ -4021,6 +4037,55 @@ class AppProvider extends ChangeNotifier {
       notifyListeners();
     } catch (error) {
       debugPrint('ADMIN_MERCHANTS_ERROR: $error');
+    }
+  }
+
+  Future<void> refreshAccountFromCloud() async {
+    final phone = _trimmedOrNull(_authPhone);
+    if (phone == null) return;
+    await _restoreRemoteSession(phone);
+    notifyListeners();
+  }
+
+  Future<void> refreshAllCouriers() async {
+    final phone = _trimmedOrNull(_authPhone) ?? _trimmedOrNull(_customerPhone);
+    if (phone == null || !SupabaseService.isConfigured) return;
+    try {
+      _allCouriers = await SupabaseService.loadAllCouriers();
+      notifyListeners();
+    } catch (error) {
+      debugPrint('ADMIN_COURIERS_ERROR: $error');
+    }
+  }
+
+  Future<void> toggleCourierApproval(
+    String courierPhone,
+    bool isApproved,
+  ) async {
+    final phone = _trimmedOrNull(_authPhone) ?? _trimmedOrNull(_customerPhone);
+    if (phone == null || !SupabaseService.isConfigured) return;
+    try {
+      await SupabaseService.toggleCourierApprovalStatus(
+        courierPhone: courierPhone,
+        isApproved: isApproved,
+      );
+      final index =
+          _allCouriers.indexWhere((c) => c['phone']?.toString() == courierPhone);
+      if (index != -1) {
+        _allCouriers[index] = Map<String, dynamic>.from(_allCouriers[index]);
+        _allCouriers[index]['isApproved'] = isApproved;
+      }
+      final selfPhone = _trimmedOrNull(_authPhone);
+      if (selfPhone != null &&
+          PhoneUtils.variants(selfPhone).contains(
+            PhoneUtils.normalize(courierPhone),
+          )) {
+        await _restoreRemoteSession(selfPhone);
+      }
+      notifyListeners();
+    } catch (error) {
+      debugPrint('ADMIN_TOGGLE_COURIER_ERROR: $error');
+      rethrow;
     }
   }
 

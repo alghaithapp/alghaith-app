@@ -504,6 +504,15 @@ class DatabaseRepository {
         .toList();
   }
 
+  Future<List<Map<String, dynamic>>> loadAllCouriers() async {
+    final result = await ApiClient.instance.get('/db/admin/couriers');
+    if (result is! List) return const [];
+    return result
+        .whereType<Map>()
+        .map((item) => Map<String, dynamic>.from(item))
+        .toList();
+  }
+
   Future<Map<String, dynamic>> toggleMerchantBazaarStatus({
     required String merchantPhone,
     required bool isBazaarMember,
@@ -516,6 +525,16 @@ class DatabaseRepository {
       return Map<String, dynamic>.from(result);
     }
     return const {};
+  }
+
+  Future<void> toggleCourierApprovalStatus({
+    required String courierPhone,
+    required bool isApproved,
+  }) async {
+    await ApiClient.instance.put('/db/admin/courier-approval', body: {
+      'courierPhone': _phone(courierPhone),
+      'isApproved': isApproved,
+    });
   }
 
   Future<void> toggleMerchantFreezeStatus({
@@ -551,6 +570,12 @@ class DatabaseRepository {
         'token': token,
       },
     );
+  }
+
+  Future<void> markPushInboxOpened({required String phone}) async {
+    await ApiClient.instance.put('/db/push-inbox/opened', body: {
+      'phone': _phone(phone),
+    });
   }
 
   Future<void> deleteAccount(String phone) async {

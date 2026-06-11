@@ -4,6 +4,45 @@ import 'package:google_fonts/google_fonts.dart';
 
 import 'app_colors.dart';
 
+/// أنماط أزرار موحّدة — نص وأيقونات بيضاء على الخلفية البرتقالية.
+abstract final class AppButtonStyles {
+  static ButtonStyle accentFilled({
+    BorderRadiusGeometry borderRadius =
+        const BorderRadius.all(Radius.circular(14)),
+    EdgeInsetsGeometry? padding,
+    Size? minimumSize,
+  }) {
+    return FilledButton.styleFrom(
+      backgroundColor: AppColors.accent,
+      foregroundColor: Colors.white,
+      disabledBackgroundColor: AppColors.accent.withValues(alpha: 0.45),
+      disabledForegroundColor: Colors.white.withValues(alpha: 0.9),
+      iconColor: Colors.white,
+      padding: padding,
+      minimumSize: minimumSize,
+      shape: RoundedRectangleBorder(borderRadius: borderRadius),
+    );
+  }
+
+  static ButtonStyle accentElevated({
+    BorderRadiusGeometry borderRadius =
+        const BorderRadius.all(Radius.circular(14)),
+    EdgeInsetsGeometry? padding,
+    Size? minimumSize,
+  }) {
+    return ElevatedButton.styleFrom(
+      backgroundColor: AppColors.accent,
+      foregroundColor: Colors.white,
+      disabledBackgroundColor: AppColors.accent.withValues(alpha: 0.45),
+      disabledForegroundColor: Colors.white.withValues(alpha: 0.9),
+      iconColor: Colors.white,
+      padding: padding,
+      minimumSize: minimumSize,
+      shape: RoundedRectangleBorder(borderRadius: borderRadius),
+    );
+  }
+}
+
 abstract final class AppTheme {
   static ThemeData get light {
     final base = ThemeData(
@@ -47,21 +86,9 @@ abstract final class AppTheme {
           borderRadius: BorderRadius.all(Radius.circular(24)),
         ),
       ),
-      filledButtonTheme: FilledButtonThemeData(
-        style: FilledButton.styleFrom(
-          backgroundColor: AppColors.accent,
-          foregroundColor: Colors.white,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
-          ),
-        ),
-      ),
-      elevatedButtonTheme: ElevatedButtonThemeData(
-        style: ElevatedButton.styleFrom(
-          backgroundColor: AppColors.accent,
-          foregroundColor: Colors.white,
-        ),
-      ),
+      filledButtonTheme: FilledButtonThemeData(style: AppButtonStyles.accentFilled()),
+      elevatedButtonTheme:
+          ElevatedButtonThemeData(style: AppButtonStyles.accentElevated()),
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
           foregroundColor: AppColors.accent,
@@ -107,12 +134,9 @@ abstract final class AppTheme {
         brightness: Brightness.dark,
         primaryColor: AppColors.accent,
       ),
-      filledButtonTheme: FilledButtonThemeData(
-        style: FilledButton.styleFrom(
-          backgroundColor: AppColors.accent,
-          foregroundColor: Colors.white,
-        ),
-      ),
+      filledButtonTheme: FilledButtonThemeData(style: AppButtonStyles.accentFilled()),
+      elevatedButtonTheme:
+          ElevatedButtonThemeData(style: AppButtonStyles.accentElevated()),
     );
   }
 }

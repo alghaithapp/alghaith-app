@@ -5,7 +5,24 @@ import 'package:url_launcher/url_launcher.dart';
 import 'dart:io';
 
 class AppHelpers {
-  static const String supportWhatsAppNumber = '9647701234567';
+  /// رقم الدعم الفني — صيغة محلية للاتصال.
+  static const String supportPhoneNumber = '07830889994';
+
+  /// نفس الرقم بصيغة واتساب الدولية (بدون +).
+  static const String supportWhatsAppNumber = '9647830889994';
+
+  /// صفحة فيسبوك الرسمية لتطبيق الغيث.
+  static const String facebookPageUrl =
+      'https://www.facebook.com/profile.php?id=61590688592051';
+
+  static Future<void> openFacebookPage() async {
+    final uri = Uri.parse(facebookPageUrl);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+      return;
+    }
+    await launchUrl(uri, mode: LaunchMode.externalApplication);
+  }
 
   static Future<void> launchWhatsApp(String phone, String message) async {
     final targetPhone = phone.isNotEmpty ? phone : supportWhatsAppNumber;

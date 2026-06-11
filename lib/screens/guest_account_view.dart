@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../core/ui/account_ui.dart';
 import '../providers/app_provider.dart';
+import '../utils/guest_gate.dart';
 import '../widgets/account/account_page_header.dart';
 
 /// واجهة حساب الزائر — تصميم iOS حديث يشجّع على تسجيل الدخول.
@@ -34,8 +35,7 @@ class GuestAccountView extends StatelessWidget {
                       ),
                       child: Center(
                         child: _GuestMainCard(
-                          onLogin: () =>
-                              context.read<AppProvider>().resetAll(),
+                          onLogin: () => GuestGate.exitGuestToLogin(context),
                         ),
                       ),
                     ),

@@ -64,15 +64,12 @@ class MerchantDashboardScreen extends StatelessWidget {
             ),
           ),
           SliverToBoxAdapter(
-            child: Transform.translate(
-              offset: const Offset(0, -18),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: _ProfilePillButton(
-                  onTap: () => Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => const MerchantProfileScreen(),
-                    ),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
+              child: _ProfilePillButton(
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const MerchantProfileScreen(),
                   ),
                 ),
               ),
@@ -80,7 +77,7 @@ class MerchantDashboardScreen extends StatelessWidget {
           ),
           SliverToBoxAdapter(
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
               child: _SectionHeader(
                 title: 'إحصائيات المتجر',
                 icon: Icons.analytics_outlined,
@@ -90,40 +87,52 @@ class MerchantDashboardScreen extends StatelessWidget {
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-              child: SizedBox(
-                height: 118,
-                child: ListView(
-                  scrollDirection: Axis.horizontal,
-                  children: [
-                    _StatCard(
-                      label: 'إجمالي ${labels.itemPluralAr}',
-                      value: '${provider.merchantProductCount}',
-                      icon: Icons.inventory_2_rounded,
-                      color: Colors.blue,
-                    ),
-                    const SizedBox(width: 10),
-                    _StatCard(
-                      label: 'طلبات جديدة',
-                      value: '${provider.merchantPendingOrdersCount}',
-                      icon: Icons.notifications_active_rounded,
-                      color: AppColors.accent,
-                    ),
-                    const SizedBox(width: 10),
-                    _StatCard(
-                      label: 'طلبات مكتملة',
-                      value: '${provider.merchantCompletedOrdersCount}',
-                      icon: Icons.check_circle_rounded,
-                      color: Colors.green,
-                    ),
-                    const SizedBox(width: 10),
-                    _StatCard(
-                      label: 'مبيعات اليوم',
-                      value: '${todaySales.toPrice()} د.ع',
-                      icon: Icons.payments_rounded,
-                      color: _brand,
-                    ),
-                  ],
-                ),
+              child: Column(
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _StatCard(
+                          label: 'إجمالي ${labels.itemPluralAr}',
+                          value: '${provider.merchantProductCount}',
+                          icon: Icons.inventory_2_rounded,
+                          color: Colors.blue,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: _StatCard(
+                          label: 'طلبات جديدة',
+                          value: '${provider.merchantPendingOrdersCount}',
+                          icon: Icons.notifications_active_rounded,
+                          color: AppColors.accent,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _StatCard(
+                          label: 'طلبات مكتملة',
+                          value: '${provider.merchantCompletedOrdersCount}',
+                          icon: Icons.check_circle_rounded,
+                          color: Colors.green,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: _StatCard(
+                          label: 'مبيعات اليوم',
+                          value: '${todaySales.toPrice()} د.ع',
+                          icon: Icons.payments_rounded,
+                          color: _brand,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ),
             ),
           ),
@@ -170,28 +179,8 @@ class MerchantDashboardScreen extends StatelessWidget {
           ),
           SliverToBoxAdapter(
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
               child: _AlertsCard(alerts: alerts),
-            ),
-          ),
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 22, 16, 32),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  const _SectionHeader(
-                    title: 'أداء المتجر',
-                    icon: Icons.insights_rounded,
-                  ),
-                  const SizedBox(height: 12),
-                  _PerformanceCard(
-                    acceptanceRate: provider.merchantAcceptanceRate,
-                    rejectionRate: provider.merchantRejectionRate,
-                    avgResponseMinutes: provider.merchantAverageResponseMinutes,
-                  ),
-                ],
-              ),
             ),
           ),
         ],
@@ -650,8 +639,8 @@ class _StatCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 132,
-      padding: const EdgeInsets.all(14),
+      height: 104,
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
@@ -682,7 +671,7 @@ class _StatCard extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(
               fontFamily: 'Cairo',
-              fontSize: 20,
+              fontSize: 17,
               fontWeight: FontWeight.w900,
               color: Color(0xFF1A1A1A),
             ),
@@ -1061,139 +1050,6 @@ class _AlertRow extends StatelessWidget {
           ),
         ],
       ),
-    );
-  }
-}
-
-class _PerformanceCard extends StatelessWidget {
-  final double acceptanceRate;
-  final double rejectionRate;
-  final double avgResponseMinutes;
-
-  const _PerformanceCard({
-    required this.acceptanceRate,
-    required this.rejectionRate,
-    required this.avgResponseMinutes,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(22),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 16,
-            offset: const Offset(0, 6),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: _RingMetric(
-              value: '${acceptanceRate.toStringAsFixed(0)}%',
-              label: 'معدل قبول الطلبات',
-              progress: (acceptanceRate / 100).clamp(0.0, 1.0),
-              color: Colors.green,
-            ),
-          ),
-          Expanded(
-            child: _RingMetric(
-              value: '${rejectionRate.toStringAsFixed(0)}%',
-              label: 'معدل رفض الطلبات',
-              progress: (rejectionRate / 100).clamp(0.0, 1.0),
-              color: Colors.red,
-            ),
-          ),
-          Expanded(
-            child: _RingMetric(
-              value: '${avgResponseMinutes.toStringAsFixed(0)} د',
-              label: 'متوسط وقت الرد',
-              progress: (1 - (avgResponseMinutes / 30).clamp(0.0, 1.0)),
-              color: Colors.blue,
-              subtitle: 'دقيقة',
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _RingMetric extends StatelessWidget {
-  final String value;
-  final String label;
-  final double progress;
-  final Color color;
-  final String? subtitle;
-
-  const _RingMetric({
-    required this.value,
-    required this.label,
-    required this.progress,
-    required this.color,
-    this.subtitle,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        SizedBox(
-          width: 76,
-          height: 76,
-          child: Stack(
-            alignment: Alignment.center,
-            children: [
-              SizedBox(
-                width: 76,
-                height: 76,
-                child: CircularProgressIndicator(
-                  value: progress,
-                  strokeWidth: 7,
-                  backgroundColor: color.withValues(alpha: 0.12),
-                  color: color,
-                  strokeCap: StrokeCap.round,
-                ),
-              ),
-              Text(
-                value,
-                style: TextStyle(
-                  fontFamily: 'Cairo',
-                  fontWeight: FontWeight.w900,
-                  fontSize: 13,
-                  color: color,
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          label,
-          textAlign: TextAlign.center,
-          style: const TextStyle(
-            fontFamily: 'Cairo',
-            fontSize: 10,
-            fontWeight: FontWeight.w700,
-            color: Color(0xFF6B7280),
-            height: 1.35,
-          ),
-        ),
-        if (subtitle != null)
-          Text(
-            subtitle!,
-            style: TextStyle(
-              fontFamily: 'Cairo',
-              fontSize: 9,
-              color: color.withValues(alpha: 0.8),
-            ),
-          ),
-      ],
     );
   }
 }

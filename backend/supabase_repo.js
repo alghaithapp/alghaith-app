@@ -608,6 +608,14 @@ async function deleteAppUser(phone) {
       throw new Error(tokenError.message);
     }
 
+    const { error: inboxError } = await supabase
+      .from('push_inbox_state')
+      .delete()
+      .in('phone', phoneVariants);
+    if (inboxError && !/does not exist/i.test(inboxError.message || '')) {
+      console.warn('deleteAppUser push_inbox_state cleanup:', inboxError.message);
+    }
+
     for (const tableColumn of ['merchant_phone', 'customer_phone']) {
       const { error: reviewError } = await supabase
         .from('merchant_reviews')
@@ -754,8 +762,19 @@ async function saveMerchantProfile(phone, data = {}) {
       data.product_sections ?? data.productSections
     );
   }
+  if (await hasColumn('merchant_profiles', 'restaurant_category')) {
+    assignIfDefined(
+      basePayload,
+      'restaurant_category',
+      data.restaurant_category ?? data.restaurantCategory
+    );
+  }
   const phoneKey = await resolvePhoneKey(phone);
   return saveRow('merchant_profiles', { ...basePayload, phone: phoneKey }, 'phone');
+}
+
+function merchantProfileSections(profile) {
+  return normalizeArray(profile?.product_sections ?? profile?.productSections);
 }
 
 async function deleteMerchantProfile(phone) {
@@ -970,6 +989,10 @@ async function saveCustomerFavorite(phone, data = {}) {
   return inserted || null;
 }
 
+async function listAllCustomerOrders() {
+  return selectMany('customer_orders', [], { column: 'updated_at', ascending: false });
+}
+
 async function getCustomerOrders(phone) {
   const variants = getPhoneVariants(phone);
   if (variants.length === 0) return [];
@@ -980,7 +1003,7 @@ async function getCustomerOrders(phone) {
   );
 }
 
-async function saveCustomerOrder(phone, data = {}) {
+async function saveCustomerOrder(phone, data = {}, options = {}) {
   const customerPhone = await resolvePhoneKey(phone);
   await ensureAppUser(customerPhone, data);
   const order = normalizeObject(data.order ?? data.order_payload);
@@ -1050,15 +1073,17 @@ async function saveCustomerOrder(phone, data = {}) {
   const savedRow = await saveRow('customer_orders', payload, 'id');
   const nextMeta = readOrderMeta(savedRow);
 
-  try {
-    const { onOrderSaved } = require('./push_events');
-    await onOrderSaved({
-      previousMeta,
-      nextMeta,
-      isNew: !existingRow,
-    });
-  } catch (error) {
-    console.error('push onOrderSaved error:', error?.message || error);
+  if (!options.skipPush) {
+    try {
+      const { onOrderSaved } = require('./push_events');
+      await onOrderSaved({
+        previousMeta,
+        nextMeta,
+        isNew: !existingRow,
+      });
+    } catch (error) {
+      console.error('push onOrderSaved error:', error?.message || error);
+    }
   }
 
   return savedRow;
@@ -1526,6 +1551,36 @@ async function deleteAllDeviceTokens(phone) {
   return { success: true };
 }
 
+async function getActiveCourierPhones() {
+  const users = await selectMany('app_users', []);
+  const phones = new Set();
+
+  for (const user of users) {
+    const phone = String(user.phone ?? '').trim();
+    if (!phone) continue;
+
+    const role = String(user.role ?? '').trim();
+    const accountType = String(user.account_type ?? '').trim();
+    const isDeliveryAccount =
+      role === 'delivery' || accountType === 'delivery';
+    const isMarketplace = accountType === 'marketplace' || !accountType;
+
+    if (!isDeliveryAccount && !isMarketplace) continue;
+
+    const state = await getUserState(phone);
+    const profile = state?.courierProfile;
+    if (
+      isCourierProfileComplete(profile) &&
+      isCourierApproved(profile) &&
+      profile.available !== false
+    ) {
+      phones.add(phone);
+    }
+  }
+
+  return [...phones];
+}
+
 async function getDeviceTokensForPhone(phone) {
   const variants = getPhoneVariants(phone);
   if (variants.length === 0) return [];
@@ -1534,6 +1589,144 @@ async function getDeviceTokensForPhone(phone) {
     [{ method: 'in', column: 'phone', value: variants }],
     { column: 'updated_at', ascending: false }
   );
+}
+
+async function recordPushInboxDelivered(phone) {
+  const phoneKey = await resolvePhoneKey(phone);
+  const supabase = assertSupabaseAdmin();
+  const now = nowIso();
+  const { data: existing, error: readError } = await supabase
+    .from('push_inbox_state')
+    .select('*')
+    .eq('phone', phoneKey)
+    .maybeSingle();
+
+  if (readError && !/does not exist/i.test(readError.message || '')) {
+    throw new Error(readError.message);
+  }
+  if (readError && /does not exist/i.test(readError.message || '')) {
+    return { skipped: true };
+  }
+
+  const nextCount = Number(existing?.unread_count || 0) + 1;
+  const payload = {
+    phone: phoneKey,
+    unread_count: nextCount,
+    last_push_at: now,
+    updated_at: now,
+  };
+
+  if (existing) {
+    const { error } = await supabase
+      .from('push_inbox_state')
+      .update(payload)
+      .eq('phone', phoneKey);
+    if (error) throw new Error(error.message);
+  } else {
+    const { error } = await supabase.from('push_inbox_state').insert(payload);
+    if (error) throw new Error(error.message);
+  }
+
+  return { success: true, unreadCount: nextCount };
+}
+
+async function markPushInboxOpened(phone) {
+  const phoneKey = await resolvePhoneKey(phone);
+  const supabase = assertSupabaseAdmin();
+  const now = nowIso();
+  const { data: existing, error: readError } = await supabase
+    .from('push_inbox_state')
+    .select('phone')
+    .eq('phone', phoneKey)
+    .maybeSingle();
+
+  if (readError && !/does not exist/i.test(readError.message || '')) {
+    throw new Error(readError.message);
+  }
+  if (readError && /does not exist/i.test(readError.message || '')) {
+    return { success: true, skipped: true };
+  }
+
+  const payload = {
+    unread_count: 0,
+    last_opened_at: now,
+    updated_at: now,
+  };
+
+  if (existing) {
+    const { error } = await supabase
+      .from('push_inbox_state')
+      .update(payload)
+      .eq('phone', phoneKey);
+    if (error) throw new Error(error.message);
+  } else {
+    const { error } = await supabase.from('push_inbox_state').insert({
+      phone: phoneKey,
+      ...payload,
+    });
+    if (error) throw new Error(error.message);
+  }
+
+  return { success: true };
+}
+
+async function markPushInboxReminderSent(phone) {
+  const phoneKey = await resolvePhoneKey(phone);
+  const supabase = assertSupabaseAdmin();
+  const now = nowIso();
+  const { error } = await supabase
+    .from('push_inbox_state')
+    .update({
+      last_reminder_at: now,
+      updated_at: now,
+    })
+    .eq('phone', phoneKey);
+  if (error && !/does not exist/i.test(error.message || '')) {
+    throw new Error(error.message);
+  }
+  return { success: true };
+}
+
+async function listPushInboxStatesNeedingReminder() {
+  const supabase = assertSupabaseAdmin();
+  const { data, error } = await supabase.from('push_inbox_state').select('*');
+  if (error) {
+    if (/does not exist/i.test(error.message || '')) return [];
+    throw new Error(error.message);
+  }
+
+  const reminderAfterMs = 2 * 60 * 60 * 1000;
+  const nowMs = Date.now();
+
+  return (data || []).filter((row) => {
+    const unreadCount = Number(row.unread_count || 0);
+    if (unreadCount <= 0) return false;
+
+    const lastPush = new Date(row.last_push_at || 0);
+    if (Number.isNaN(lastPush.getTime()) || nowMs - lastPush.getTime() < reminderAfterMs) {
+      return false;
+    }
+
+    const lastOpened = row.last_opened_at ? new Date(row.last_opened_at) : null;
+    if (
+      lastOpened &&
+      !Number.isNaN(lastOpened.getTime()) &&
+      lastOpened.getTime() >= lastPush.getTime()
+    ) {
+      return false;
+    }
+
+    const lastReminder = row.last_reminder_at ? new Date(row.last_reminder_at) : null;
+    if (
+      lastReminder &&
+      !Number.isNaN(lastReminder.getTime()) &&
+      lastReminder.getTime() >= lastPush.getTime()
+    ) {
+      return false;
+    }
+
+    return true;
+  });
 }
 
 async function removeDeviceTokens(tokens = []) {
@@ -1603,6 +1796,24 @@ async function saveMerchantProduct(phone, data = {}) {
   if (targetCategory === 'bazar_ghaith' && !canMerchantPublishInBazaar(merchantProfile)) {
     throw new Error('BAZAAR_APPROVAL_REQUIRED');
   }
+
+  const publishCategory = targetCategory === 'bazar_ghaith' ? 'product' : targetCategory;
+  if (publishCategory === 'restaurant' || publishCategory === 'product') {
+    const sections = merchantProfileSections(merchantProfile);
+    if (sections.length > 0) {
+      const sectionId = String(data.section_id ?? data.sectionId ?? '').trim();
+      if (!sectionId) {
+        throw new Error('SECTION_REQUIRED');
+      }
+      const known = sections.some(
+        (section) => String(section?.id ?? '').trim() === sectionId
+      );
+      if (!known) {
+        throw new Error('SECTION_NOT_FOUND');
+      }
+    }
+  }
+
   assignIfDefined(payload, 'name_ar', data.name_ar ?? data.nameAr ?? '');
   assignIfDefined(payload, 'name_en', data.name_en ?? data.nameEn ?? '');
   assignIfDefined(
@@ -2218,6 +2429,100 @@ async function saveMerchantReview({
   }
 }
 
+function readCourierProfileFromState(state) {
+  if (!state || typeof state !== 'object') return null;
+  const profile = state.courierProfile;
+  if (!profile || typeof profile !== 'object') return null;
+  return profile;
+}
+
+function isCourierProfileComplete(profile) {
+  if (!profile || typeof profile !== 'object') return false;
+  const name = String(profile.name ?? '').trim();
+  const contactPhone = String(profile.phone ?? '').trim();
+  const homeAddress = String(
+    profile.homeAddress ?? profile.address ?? profile.area ?? ''
+  ).trim();
+  const vehicleImage = String(
+    profile.vehicleImage ?? profile.bikeImage ?? ''
+  ).trim();
+  return Boolean(name && contactPhone && homeAddress && vehicleImage);
+}
+
+function isCourierApproved(profile) {
+  return profile?.isApproved === true;
+}
+
+function mapCourierForAdmin(phone, user, profile) {
+  const name = String(profile.name ?? '').trim();
+  const contactPhone = String(profile.phone ?? phone ?? '').trim();
+  const homeAddress = String(
+    profile.homeAddress ?? profile.address ?? profile.area ?? ''
+  ).trim();
+  const vehicleImage = String(
+    profile.vehicleImage ?? profile.bikeImage ?? ''
+  ).trim();
+
+  return {
+    phone: String(phone || '').trim(),
+    name,
+    contactPhone,
+    homeAddress,
+    vehicleImage,
+    available: profile.available !== false,
+    isApproved: isCourierApproved(profile),
+    role: String(user?.role ?? '').trim(),
+    accountType: String(user?.account_type ?? '').trim(),
+    updatedAt: user?.updated_at ?? null,
+  };
+}
+
+async function getAllCouriers(adminPhone) {
+  await assertAdminAccess(adminPhone);
+
+  const [users, states] = await Promise.all([
+    selectMany('app_users', [], { column: 'updated_at', ascending: false }),
+    selectMany('app_state', [], { column: 'updated_at', ascending: false }),
+  ]);
+
+  const stateByPhone = {};
+  for (const row of states) {
+    const phone = String(row.phone || '').trim();
+    if (!phone) continue;
+    stateByPhone[phone] = row.state || {};
+  }
+
+  const couriers = [];
+  const seen = new Set();
+
+  for (const user of users) {
+    const phone = String(user.phone || '').trim();
+    if (!phone || seen.has(phone)) continue;
+
+    const state = stateByPhone[phone] || {};
+    const profile = readCourierProfileFromState(state);
+    if (!profile || !isCourierProfileComplete(profile)) continue;
+
+    const name = String(profile.name ?? '').trim();
+    const role = String(user.role ?? '').trim();
+    const accountType = String(user.account_type ?? '').trim();
+    const isCourierAccount =
+      role === 'delivery' || accountType === 'delivery' || name.length > 0;
+
+    if (!isCourierAccount) continue;
+
+    seen.add(phone);
+    couriers.push(mapCourierForAdmin(phone, user, profile));
+  }
+
+  return couriers.sort((a, b) => {
+    if (a.isApproved !== b.isApproved) {
+      return a.isApproved ? 1 : -1;
+    }
+    return String(a.name || '').localeCompare(String(b.name || ''), 'ar');
+  });
+}
+
 async function getAllMerchants(adminPhone) {
   await assertAdminAccess(adminPhone);
   
@@ -2487,6 +2792,40 @@ async function toggleBazaarMemberStatus(adminPhone, merchantPhone, isBazaarMembe
   return result;
 }
 
+async function toggleCourierApprovalStatus(adminPhone, courierPhone, isApproved) {
+  await assertAdminAccess(adminPhone);
+
+  const phoneKey = await resolvePhoneKey(courierPhone);
+  const state = (await getUserState(phoneKey)) || {};
+  const profile = readCourierProfileFromState(state);
+  if (!profile || !isCourierProfileComplete(profile)) {
+    throw new Error('Courier profile not found.');
+  }
+
+  const nextProfile = {
+    ...profile,
+    isApproved: Boolean(isApproved),
+  };
+  await saveUserState(phoneKey, {
+    ...state,
+    courierProfile: nextProfile,
+  });
+
+  const user = await getAppUser(phoneKey);
+  const mapped = mapCourierForAdmin(phoneKey, user, nextProfile);
+
+  if (Boolean(isApproved)) {
+    try {
+      const { onCourierApproved } = require('./push_events');
+      await onCourierApproved(phoneKey);
+    } catch (error) {
+      console.error('push onCourierApproved error:', error?.message || error);
+    }
+  }
+
+  return { success: true, courier: mapped };
+}
+
 async function toggleMerchantFreezeStatus(adminPhone, merchantPhone, isFrozen) {
   await assertAdminAccess(adminPhone);
 
@@ -2503,6 +2842,14 @@ async function toggleMerchantFreezeStatus(adminPhone, merchantPhone, isFrozen) {
   if (!Array.isArray(data) || data.length === 0) {
     throw new Error('Merchant not found.');
   }
+
+  try {
+    const { onMerchantFrozen } = require('./push_events');
+    await onMerchantFrozen(merchantPhone, Boolean(isFrozen));
+  } catch (error) {
+    console.error('push onMerchantFrozen error:', error?.message || error);
+  }
+
   return { success: true, merchant: data[0] };
 }
 
@@ -2523,6 +2870,8 @@ module.exports = {
   getCustomerFavorites,
   saveCustomerFavorite,
   getCustomerOrders,
+  listAllCustomerOrders,
+  readOrderMeta,
   saveCustomerOrder,
   getMerchantProfile,
   saveMerchantProfile,
@@ -2552,6 +2901,8 @@ module.exports = {
   canonicalPhone,
   saveMerchantReview,
   getAllMerchants,
+  getAllCouriers,
+  toggleCourierApprovalStatus,
   getAdminMerchantDetails,
   toggleBazaarMemberStatus,
   toggleMerchantFreezeStatus,
@@ -2561,4 +2912,9 @@ module.exports = {
   deleteAllDeviceTokens,
   getDeviceTokensForPhone,
   removeDeviceTokens,
+  getActiveCourierPhones,
+  recordPushInboxDelivered,
+  markPushInboxOpened,
+  markPushInboxReminderSent,
+  listPushInboxStatesNeedingReminder,
 };

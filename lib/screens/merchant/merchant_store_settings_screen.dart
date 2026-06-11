@@ -65,7 +65,8 @@ class _MerchantStoreSettingsScreenState
     _nameController.text = provider.merchantStoreName;
     _descController.text = provider.merchantDescription;
     _phoneController.text = provider.merchantPhone;
-    _whatsappController.text = provider.merchantWhatsApp;
+    _whatsappController.text =
+        (provider.merchantStore?['whatsapp'] as String?)?.trim() ?? '';
     _addressController.text = provider.merchantAddress;
     _openTime = provider.merchantOpenTime;
     _closeTime = provider.merchantCloseTime;
@@ -92,6 +93,12 @@ class _MerchantStoreSettingsScreenState
         ),
       );
     }
+  }
+
+  String _resolveWhatsAppNumber() {
+    final whatsapp = _whatsappController.text.trim();
+    if (whatsapp.isNotEmpty) return whatsapp;
+    return _phoneController.text.trim();
   }
 
   @override
@@ -300,11 +307,17 @@ class _MerchantStoreSettingsScreenState
               controller: _descController,
               maxLines: 3),
           _Field(
-              label: 'رقم الهاتف',
-              controller: _phoneController),
+            label: 'رقم الهاتف',
+            controller: _phoneController,
+            hintText: 'يجب أن يكون رقم واتساب فعّال',
+            keyboardType: TextInputType.phone,
+          ),
           _Field(
-              label: 'واتساب',
-              controller: _whatsappController),
+            label: 'رقم واتساب',
+            controller: _whatsappController,
+            hintText: 'اختياري — اتركه فارغاً لاستخدام نفس رقم الهاتف',
+            keyboardType: TextInputType.phone,
+          ),
           _Field(
               label: 'العنوان',
               controller: _addressController),
@@ -443,7 +456,7 @@ class _MerchantStoreSettingsScreenState
                 'name': _nameController.text.trim(),
                 'description': _descController.text.trim(),
                 'phone': _phoneController.text.trim(),
-                'whatsapp': _whatsappController.text.trim(),
+                'whatsapp': _resolveWhatsAppNumber(),
                 'address': _addressController.text.trim(),
                 'latitude': _storeLatitude,
                 'longitude': _storeLongitude,
@@ -474,7 +487,7 @@ class _MerchantStoreSettingsScreenState
                         'latitude': _storeLatitude,
                         'longitude': _storeLongitude,
                         'phone': _phoneController.text.trim(),
-                        'whatsapp': _whatsappController.text.trim(),
+                        'whatsapp': _resolveWhatsAppNumber(),
                         'openTime': _openTime,
                         'closeTime': _closeTime,
                         'profileImageBase64': _profileImageBase64,
@@ -824,12 +837,14 @@ class _Field extends StatelessWidget {
   final TextEditingController controller;
   final int maxLines;
   final TextInputType keyboardType;
+  final String? hintText;
 
   const _Field({
     required this.label,
     required this.controller,
     this.maxLines = 1,
     this.keyboardType = TextInputType.text,
+    this.hintText,
   });
 
   @override
@@ -842,6 +857,12 @@ class _Field extends StatelessWidget {
         keyboardType: keyboardType,
         decoration: InputDecoration(
           labelText: label,
+          hintText: hintText,
+          hintStyle: const TextStyle(
+            fontFamily: 'Cairo',
+            fontSize: 12,
+            color: Color(0xFF9CA3AF),
+          ),
           filled: true,
           fillColor: Colors.white,
           border: OutlineInputBorder(

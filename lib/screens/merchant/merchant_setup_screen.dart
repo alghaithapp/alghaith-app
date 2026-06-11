@@ -48,6 +48,12 @@ class _MerchantSetupScreenState extends State<MerchantSetupScreen> {
 
   String get _primaryServiceId => _selectedServiceIds.first;
 
+  String _resolveWhatsAppNumber() {
+    final whatsapp = _whatsappController.text.trim();
+    if (whatsapp.isNotEmpty) return whatsapp;
+    return _phoneController.text.trim();
+  }
+
   @override
   void dispose() {
     _nameController.dispose();
@@ -90,7 +96,8 @@ class _MerchantSetupScreenState extends State<MerchantSetupScreen> {
       if (_phoneController.text.isEmpty)
         _phoneController.text = provider.merchantPhone;
       if (_whatsappController.text.isEmpty) {
-        _whatsappController.text = provider.merchantWhatsApp;
+        _whatsappController.text =
+            (provider.merchantStore?['whatsapp'] as String?)?.trim() ?? '';
       }
       if (_addressController.text.isEmpty) {
         _addressController.text = provider.merchantAddress;
@@ -288,14 +295,20 @@ class _MerchantSetupScreenState extends State<MerchantSetupScreen> {
                         maxLines: 3),
                     const SizedBox(height: 14),
                     _buildField(
-                        'رقم الهاتف', _phoneController),
+                      'رقم الهاتف (يجب أن يكون رقم واتساب)',
+                      _phoneController,
+                      keyboardType: TextInputType.phone,
+                    ),
+                    const SizedBox(height: 14),
+                    _buildField(
+                      'رقم واتساب (اختياري)',
+                      _whatsappController,
+                      hintText:
+                          'اتركه فارغاً لاستخدام نفس رقم الهاتف أعلاه',
+                      keyboardType: TextInputType.phone,
+                    ),
                     const SizedBox(height: 14),
                     if (_isProfessionalSetup) ...[
-                      _buildField(
-                        'رقم الواتساب',
-                        _whatsappController,
-                      ),
-                      const SizedBox(height: 14),
                       _sectionTitle('تخصص المهنة'),
                       const SizedBox(height: 10),
                       DropdownButtonFormField<String>(
@@ -592,14 +605,12 @@ class _MerchantSetupScreenState extends State<MerchantSetupScreen> {
                           if (_isProfessionalSetup) {
                             final address = _addressController.text.trim();
                             final phone = _phoneController.text.trim();
-                            final whatsapp = _whatsappController.text.trim();
                             final openTime = _openTime.trim();
                             final closeTime = _closeTime.trim();
                             final professionId =
                                 _selectedProfessionalCategoryId;
                             if (address.isEmpty ||
                                 phone.isEmpty ||
-                                whatsapp.isEmpty ||
                                 openTime.isEmpty ||
                                 closeTime.isEmpty ||
                                 professionId == null ||
@@ -637,7 +648,7 @@ class _MerchantSetupScreenState extends State<MerchantSetupScreen> {
                                 ? _logoImageBase64
                                 : _profileImageBase64,
                             'phone': _phoneController.text.trim(),
-                            'whatsapp': _whatsappController.text.trim(),
+                            'whatsapp': _resolveWhatsAppNumber(),
                             'address': _addressController.text.trim(),
                             'latitude': _storeLatitude,
                             'longitude': _storeLongitude,
@@ -660,7 +671,7 @@ class _MerchantSetupScreenState extends State<MerchantSetupScreen> {
                                     'latitude': _storeLatitude,
                                     'longitude': _storeLongitude,
                                     'phone': _phoneController.text.trim(),
-                                    'whatsapp': _whatsappController.text.trim(),
+                                    'whatsapp': _resolveWhatsAppNumber(),
                                     'openTime': _openTime.trim(),
                                     'closeTime': _closeTime.trim(),
                                     'profileImageBase64': _profileImageBase64,
@@ -853,6 +864,7 @@ class _MerchantSetupScreenState extends State<MerchantSetupScreen> {
     TextEditingController controller, {
     int maxLines = 1,
     TextInputType keyboardType = TextInputType.text,
+    String? hintText,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -865,6 +877,18 @@ class _MerchantSetupScreenState extends State<MerchantSetupScreen> {
             fontFamily: 'Cairo',
           ),
         ),
+        if (hintText != null && hintText.isNotEmpty) ...[
+          const SizedBox(height: 4),
+          Text(
+            hintText,
+            style: TextStyle(
+              color: Colors.grey.shade500,
+              fontSize: 11,
+              fontFamily: 'Cairo',
+              height: 1.35,
+            ),
+          ),
+        ],
         const SizedBox(height: 8),
         CupertinoTextField(
           controller: controller,

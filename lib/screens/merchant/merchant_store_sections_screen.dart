@@ -3,11 +3,12 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../models/merchant_product_section.dart';
+import '../../core/theme/app_theme.dart';
 import '../../providers/app_provider.dart';
 
 const _brand = Color(0xFFF5A01D);
 
-/// إدارة أقسام منتجات متجر التسوق (يُنشئها التاجر).
+/// إدارة أقسام المتجر أو مطعم التاجر (يُنشئها التاجر).
 class MerchantStoreSectionsScreen extends StatefulWidget {
   const MerchantStoreSectionsScreen({super.key});
 
@@ -138,8 +139,11 @@ class _MerchantStoreSectionsScreenState
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
-            style: FilledButton.styleFrom(backgroundColor: _brand),
-            child: const Text('حذف', style: TextStyle(fontFamily: 'Cairo')),
+            style: AppButtonStyles.accentFilled(),
+            child: const Text(
+              'حذف',
+              style: TextStyle(fontFamily: 'Cairo', color: Colors.white),
+            ),
           ),
         ],
       ),
@@ -161,6 +165,7 @@ class _MerchantStoreSectionsScreenState
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<AppProvider>();
+    final isRestaurant = provider.merchantActiveServiceId == 'restaurant';
 
     return Directionality(
       textDirection: TextDirection.rtl,
@@ -169,9 +174,12 @@ class _MerchantStoreSectionsScreenState
         appBar: AppBar(
           backgroundColor: Colors.white,
           surfaceTintColor: Colors.white,
-          title: const Text(
-            'أقسام المتجر',
-            style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w900),
+          title: Text(
+            isRestaurant ? 'أقسام المطعم' : 'أقسام المتجر',
+            style: const TextStyle(
+              fontFamily: 'Cairo',
+              fontWeight: FontWeight.w900,
+            ),
           ),
         ),
         body: ListView(
@@ -183,10 +191,15 @@ class _MerchantStoreSectionsScreenState
                 color: const Color(0xFFFFF3E0),
                 borderRadius: BorderRadius.circular(18),
               ),
-              child: const Text(
-                'أنشئ أقساماً داخل متجرك (مثل: مكسرات، حلويات، عروض). '
-                'عند دخول الزبون لمتجرك يرى المنتجات مرتبة حسب هذه الأقسام وليس كلها معاً.',
-                style: TextStyle(
+              child: Text(
+                isRestaurant
+                    ? 'أنشئ أقسام المنيو (مثل: بيتزا، شاورما، غربي). '
+                        'لا يمكن نشر صنف بدون اختيار قسم. '
+                        'بعد موافقة الإدارة على البازار يظهر مطعمك في المطاعم والبازار.'
+                    : 'أنشئ أقساماً داخل متجرك (مثل: مكسرات، حلويات، عروض). '
+                        'لا يمكن نشر منتج بدون اختيار قسم. '
+                        'بعد موافقة الإدارة على البازار يظهر متجرك في التسوق والبازار.',
+                style: const TextStyle(
                   fontFamily: 'Cairo',
                   height: 1.5,
                   fontSize: 13,
@@ -245,15 +258,13 @@ class _MerchantStoreSectionsScreenState
                       const Spacer(),
                       FilledButton(
                         onPressed: _submitSection,
-                        style: FilledButton.styleFrom(
-                          backgroundColor: _brand,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                        ),
+                        style: AppButtonStyles.accentFilled(),
                         child: Text(
                           _editingId == null ? 'إضافة القسم' : 'حفظ التعديل',
-                          style: const TextStyle(fontFamily: 'Cairo'),
+                          style: const TextStyle(
+                            fontFamily: 'Cairo',
+                            color: Colors.white,
+                          ),
                         ),
                       ),
                     ],
@@ -337,12 +348,9 @@ class _MerchantStoreSectionsScreenState
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
             child: FilledButton(
               onPressed: _saving ? null : _saveAll,
-              style: FilledButton.styleFrom(
-                backgroundColor: _brand,
+              style: AppButtonStyles.accentFilled(
+                borderRadius: BorderRadius.circular(16),
                 padding: const EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
               ),
               child: _saving
                   ? const SizedBox(
@@ -359,6 +367,7 @@ class _MerchantStoreSectionsScreenState
                         fontFamily: 'Cairo',
                         fontWeight: FontWeight.w900,
                         fontSize: 16,
+                        color: Colors.white,
                       ),
                     ),
             ),

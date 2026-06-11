@@ -257,6 +257,17 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
               'مرحبًا، أحتاج مساعدة في تطبيق الغيث',
             ),
           ),
+          const SizedBox(height: 10),
+          _SupportButton(
+            label: 'تابعنا على فيسبوك',
+            color: const Color(0xFF1877F2),
+            iconWidget: const Icon(
+              Icons.facebook_rounded,
+              color: Color(0xFF1877F2),
+              size: 38,
+            ),
+            onTap: AppHelpers.openFacebookPage,
+          ),
         ],
       ),
     );

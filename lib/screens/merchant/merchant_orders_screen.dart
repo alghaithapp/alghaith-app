@@ -5,8 +5,10 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../models/app_models.dart';
+import '../../core/theme/app_theme.dart';
 import '../../providers/app_provider.dart';
 import '../../utils/extensions.dart';
+import 'merchant_notifications_screen.dart';
 import 'order_details_screen.dart';
 
 const _bg = Color(0xFFF2F2F7);
@@ -120,7 +122,11 @@ class _MerchantOrdersScreenState extends State<MerchantOrdersScreen> {
                 onSearch: () => _openSearchSheet(context),
                 onFilter: () => _openFilterSheet(context),
                 onNotifications: () {
-                  setState(() => _selectedTab = 0);
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => const MerchantNotificationsScreen(),
+                    ),
+                  );
                 },
               ),
             ),
@@ -305,12 +311,9 @@ class _MerchantOrdersScreenState extends State<MerchantOrdersScreen> {
               const SizedBox(height: 16),
               FilledButton(
                 onPressed: () => Navigator.pop(ctx, controller.text.trim()),
-                style: FilledButton.styleFrom(
-                  backgroundColor: _brand,
+                style: AppButtonStyles.accentFilled(
+                  borderRadius: BorderRadius.circular(16),
                   minimumSize: const Size.fromHeight(50),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                  ),
                 ),
                 child: const Text(
                   'بحث',
@@ -318,6 +321,7 @@ class _MerchantOrdersScreenState extends State<MerchantOrdersScreen> {
                     fontFamily: 'Cairo',
                     fontWeight: FontWeight.w800,
                     fontSize: 15,
+                    color: Colors.white,
                   ),
                 ),
               ),
@@ -401,10 +405,14 @@ class _MerchantOrdersScreenState extends State<MerchantOrdersScreen> {
           ),
           FilledButton(
             onPressed: () => Navigator.pop(context, controller.text.trim()),
-            style: FilledButton.styleFrom(backgroundColor: _brand),
+            style: AppButtonStyles.accentFilled(),
             child: const Text(
               'تأكيد الرفض',
-              style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w800),
+              style: TextStyle(
+                fontFamily: 'Cairo',
+                fontWeight: FontWeight.w800,
+                color: Colors.white,
+              ),
             ),
           ),
         ],
@@ -462,77 +470,57 @@ class _PremiumHeader extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              if (showBack || showHome) ...[
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: IconButton(
-                    onPressed: showBack ? onBack : onHome,
-                    icon: Icon(
-                      showBack
+              Row(
+                children: [
+                  if (showBack || showHome) ...[
+                    _HeaderIconButton(
+                      icon: showBack
                           ? Icons.arrow_forward_ios_rounded
                           : Icons.home_rounded,
-                      size: 20,
-                      color: const Color(0xFF1C1C1E),
+                      onTap: showBack ? onBack! : onHome!,
                     ),
-                    style: IconButton.styleFrom(
-                      backgroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                    ),
+                    const SizedBox(width: 8),
+                  ],
+                  _HeaderIconButton(
+                    icon: Icons.search_rounded,
+                    onTap: onSearch,
                   ),
-                ),
-                const SizedBox(height: 4),
-              ],
-              Row(
+                  const SizedBox(width: 8),
+                  _HeaderIconButton(
+                    icon: Icons.tune_rounded,
+                    onTap: onFilter,
+                  ),
+                  const SizedBox(width: 8),
+                  _HeaderIconButton(
+                    icon: Icons.notifications_rounded,
+                    onTap: onNotifications,
+                    badge: pendingCount > 0 ? pendingCount : null,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              const Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: const [
-                        Text(
-                          'الطلبات',
-                          style: TextStyle(
-                            fontFamily: 'Cairo',
-                            fontSize: 28,
-                            fontWeight: FontWeight.w900,
-                            color: Color(0xFF1C1C1E),
-                            height: 1.15,
-                          ),
-                        ),
-                        SizedBox(height: 6),
-                        Text(
-                          'إدارة طلبات المتجر واتخاذ الإجراءات بسرعة',
-                          style: TextStyle(
-                            fontFamily: 'Cairo',
-                            fontSize: 13,
-                            color: Color(0xFF636366),
-                            height: 1.45,
-                          ),
-                        ),
-                      ],
+                  Text(
+                    'الطلبات',
+                    style: TextStyle(
+                      fontFamily: 'Cairo',
+                      fontSize: 28,
+                      fontWeight: FontWeight.w900,
+                      color: Color(0xFF1C1C1E),
+                      height: 1.15,
                     ),
                   ),
-                  const SizedBox(width: 12),
-                  Row(
-                    children: [
-                      _HeaderIconButton(
-                        icon: Icons.search_rounded,
-                        onTap: onSearch,
-                      ),
-                      const SizedBox(width: 8),
-                      _HeaderIconButton(
-                        icon: Icons.tune_rounded,
-                        onTap: onFilter,
-                      ),
-                      const SizedBox(width: 8),
-                      _HeaderIconButton(
-                        icon: Icons.notifications_rounded,
-                        onTap: onNotifications,
-                        badge: pendingCount > 0 ? pendingCount : null,
-                      ),
-                    ],
+                  SizedBox(height: 6),
+                  Text(
+                    'إدارة طلبات المتجر واتخاذ الإجراءات بسرعة',
+                    style: TextStyle(
+                      fontFamily: 'Cairo',
+                      fontSize: 13,
+                      color: Color(0xFF636366),
+                      height: 1.45,
+                    ),
                   ),
                 ],
               ),

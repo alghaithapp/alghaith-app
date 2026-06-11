@@ -390,6 +390,12 @@ class _SettingsListCard extends StatelessWidget {
         ),
       ),
       _SettingsItemData(
+        icon: Icons.facebook_rounded,
+        color: const Color(0xFF1877F2),
+        title: 'صفحة الغيث على فيسبوك',
+        onTap: AppHelpers.openFacebookPage,
+      ),
+      _SettingsItemData(
         icon: Icons.chat_rounded,
         color: Colors.green,
         title: 'اتصل بنا (واتساب)',

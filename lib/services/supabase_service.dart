@@ -253,6 +253,9 @@ class SupabaseService {
   static Future<List<Map<String, dynamic>>> loadAllMerchants() =>
       _db.loadAllMerchants();
 
+  static Future<List<Map<String, dynamic>>> loadAllCouriers() =>
+      _db.loadAllCouriers();
+
   static Future<Map<String, dynamic>> toggleMerchantBazaarStatus({
     required String merchantPhone,
     required bool isBazaarMember,
@@ -260,6 +263,15 @@ class SupabaseService {
       _db.toggleMerchantBazaarStatus(
         merchantPhone: merchantPhone,
         isBazaarMember: isBazaarMember,
+      );
+
+  static Future<void> toggleCourierApprovalStatus({
+    required String courierPhone,
+    required bool isApproved,
+  }) =>
+      _db.toggleCourierApprovalStatus(
+        courierPhone: courierPhone,
+        isApproved: isApproved,
       );
 
   static Future<void> toggleMerchantFreezeStatus({
@@ -287,6 +299,9 @@ class SupabaseService {
     required String token,
   }) =>
       _db.deleteDeviceToken(phone: phone, token: token);
+
+  static Future<void> markPushInboxOpened({required String phone}) =>
+      _db.markPushInboxOpened(phone: phone);
 
   static Future<void> deleteAccount(String phone) => _db.deleteAccount(phone);
 }

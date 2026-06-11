@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../core/theme/app_theme.dart';
 import '../models/app_models.dart';
 import '../utils/guest_gate.dart';
 import '../utils/helpers.dart';
@@ -88,12 +89,8 @@ class CatalogContactButtons extends StatelessWidget {
               'اتصال',
               style: TextStyle(fontFamily: 'Cairo'),
             ),
-            style: FilledButton.styleFrom(
-              backgroundColor: const Color(0xFFF5A01D),
+            style: AppButtonStyles.accentFilled(
               padding: const EdgeInsets.symmetric(vertical: 10),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(14),
-              ),
             ),
           ),
         ),

@@ -3,15 +3,18 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../models/app_models.dart';
+import '../models/merchant_product_section.dart';
 import '../providers/app_provider.dart';
 import '../utils/extensions.dart';
 import '../utils/guest_gate.dart';
 import '../utils/helpers.dart';
 import '../utils/merchant_profile_fields.dart';
 import '../core/theme/app_colors.dart';
+import '../core/theme/app_theme.dart';
 import '../widgets/app_image.dart';
 import '../widgets/product_image_preview.dart';
 import '../widgets/service_navigation_buttons.dart';
+import '../utils/merchant_product_sections.dart';
 import 'cart_screen.dart';
 
 const _brandRed = AppColors.accent;
@@ -36,7 +39,7 @@ class _RestaurantMenuScreenState extends State<RestaurantMenuScreen>
   final TextEditingController _searchController = TextEditingController();
   final GlobalKey _cartIconKey = GlobalKey();
   final GlobalKey _stackKey = GlobalKey();
-  String? _selectedCategory;
+  String? _selectedSectionKey;
 
   @override
   void initState() {
@@ -127,26 +130,22 @@ class _RestaurantMenuScreenState extends State<RestaurantMenuScreen>
         .toList();
   }
 
-  List<String> _categoriesFromItems(List<ListItem> items) {
-    final labels = <String>{'الكل'};
-    for (final item in items) {
-      final label = item.subCategory?.trim().isNotEmpty == true
-          ? item.subCategory!.trim()
-          : item.categoryLabelAr.trim();
-      if (label.isNotEmpty) labels.add(label);
-    }
-    return labels.toList();
-  }
+  List<MerchantProductSection> get _storeSections =>
+      MerchantProductSections.parseFromProfile(widget.storeProfile);
+
+  List<Map<String, dynamic>> get _rawProducts =>
+      widget.storeProducts.cast<Map<String, dynamic>>();
 
   List<ListItem> _filterMenuItems(List<ListItem> items, String query) {
     var filtered = items;
-    if (_selectedCategory != null && _selectedCategory != 'الكل') {
-      filtered = filtered.where((item) {
-        final label = item.subCategory?.trim().isNotEmpty == true
-            ? item.subCategory!.trim()
-            : item.categoryLabelAr.trim();
-        return label == _selectedCategory;
-      }).toList();
+    final sections = _storeSections;
+    if (sections.isNotEmpty && _selectedSectionKey != null) {
+      final allowedIds = MerchantProductSections.filterProducts(
+        products: _rawProducts,
+        sections: sections,
+        selectedKey: _selectedSectionKey,
+      ).map((row) => row['id']?.toString()).toSet();
+      filtered = filtered.where((item) => allowedIds.contains(item.id)).toList();
     }
     if (query.isEmpty) return filtered;
     return filtered.where((item) {
@@ -206,17 +205,15 @@ class _RestaurantMenuScreenState extends State<RestaurantMenuScreen>
             child: const Text('إلغاء', style: TextStyle(fontFamily: 'Cairo')),
           ),
           FilledButton(
-            style: FilledButton.styleFrom(
-              backgroundColor: _brandRed,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(14),
-              ),
-            ),
+            style: AppButtonStyles.accentFilled(),
             onPressed: () => Navigator.of(dialogContext).pop(true),
             child: const Text(
               'إفراغ السلة',
-              style:
-                  TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w800),
+              style: TextStyle(
+                fontFamily: 'Cairo',
+                fontWeight: FontWeight.w800,
+                color: Colors.white,
+              ),
             ),
           ),
         ],
@@ -278,7 +275,10 @@ class _RestaurantMenuScreenState extends State<RestaurantMenuScreen>
     final query = _searchController.text.trim().toLowerCase();
     final restaurant = _restaurant;
     final allItems = _allMenuItems(provider);
-    final categories = _categoriesFromItems(allItems);
+    final sectionTabs = MerchantProductSections.tabsForStore(
+      sections: _storeSections,
+      products: _rawProducts,
+    );
     final menuItems = _filterMenuItems(allItems, query);
     final isRestaurantFavorite = provider.isFavoriteId(restaurant.id);
 
@@ -361,62 +361,63 @@ class _RestaurantMenuScreenState extends State<RestaurantMenuScreen>
                   ),
                 ),
               ),
-              SliverToBoxAdapter(
-                child: SizedBox(
-                  height: 46,
-                  child: ListView.separated(
-                    padding: const EdgeInsets.symmetric(horizontal: 20),
-                    scrollDirection: Axis.horizontal,
-                    itemCount: categories.length,
-                    separatorBuilder: (_, __) => const SizedBox(width: 10),
-                    itemBuilder: (context, index) {
-                      final category = categories[index];
-                      final selected =
-                          (_selectedCategory ?? 'الكل') == category;
-                      return GestureDetector(
-                        onTap: () => setState(
-                          () => _selectedCategory =
-                              category == 'الكل' ? 'الكل' : category,
-                        ),
-                        child: AnimatedContainer(
-                          duration: const Duration(milliseconds: 220),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 18,
-                            vertical: 10,
+              if (sectionTabs.length > 1)
+                SliverToBoxAdapter(
+                  child: SizedBox(
+                    height: 46,
+                    child: ListView.separated(
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      scrollDirection: Axis.horizontal,
+                      itemCount: sectionTabs.length,
+                      separatorBuilder: (_, __) => const SizedBox(width: 10),
+                      itemBuilder: (context, index) {
+                        final tab = sectionTabs[index];
+                        final selected = _selectedSectionKey == tab.key;
+                        return GestureDetector(
+                          onTap: () => setState(
+                            () => _selectedSectionKey = tab.key,
                           ),
-                          decoration: BoxDecoration(
-                            color: selected ? _brandRed : Colors.white,
-                            borderRadius: BorderRadius.circular(999),
-                            border: Border.all(
-                              color: selected
-                                  ? _brandRed
-                                  : const Color(0xFFE8E8E8),
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 220),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 18,
+                              vertical: 10,
                             ),
-                            boxShadow: selected
-                                ? [
-                                    BoxShadow(
-                                      color: _brandRed.withValues(alpha: 0.28),
-                                      blurRadius: 12,
-                                      offset: const Offset(0, 4),
-                                    ),
-                                  ]
-                                : null,
-                          ),
-                          child: Text(
-                            category,
-                            style: TextStyle(
-                              fontFamily: 'Cairo',
-                              fontWeight: FontWeight.w800,
-                              fontSize: 13,
-                              color: selected ? Colors.white : Colors.black87,
+                            decoration: BoxDecoration(
+                              color: selected ? _brandRed : Colors.white,
+                              borderRadius: BorderRadius.circular(999),
+                              border: Border.all(
+                                color: selected
+                                    ? _brandRed
+                                    : const Color(0xFFE8E8E8),
+                              ),
+                              boxShadow: selected
+                                  ? [
+                                      BoxShadow(
+                                        color:
+                                            _brandRed.withValues(alpha: 0.28),
+                                        blurRadius: 12,
+                                        offset: const Offset(0, 4),
+                                      ),
+                                    ]
+                                  : null,
+                            ),
+                            child: Text(
+                              tab.label,
+                              style: TextStyle(
+                                fontFamily: 'Cairo',
+                                fontWeight: FontWeight.w800,
+                                fontSize: 13,
+                                color:
+                                    selected ? Colors.white : Colors.black87,
+                              ),
                             ),
                           ),
-                        ),
-                      );
-                    },
+                        );
+                      },
+                    ),
                   ),
                 ),
-              ),
               if (query.isEmpty && topOrdered.isNotEmpty) ...[
                 const SliverToBoxAdapter(
                   child: Padding(

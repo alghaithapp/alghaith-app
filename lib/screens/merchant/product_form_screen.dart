@@ -85,8 +85,11 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
     final labels = merchantServiceLabels(serviceId);
     final showShoppingSubCategoryPicker = serviceId == 'product';
     final showCarsSubCategoryPicker = serviceId == 'cars';
+    final showRestaurantSectionPicker = serviceId == 'restaurant';
     final showSubCategoryPicker =
         showShoppingSubCategoryPicker || showCarsSubCategoryPicker;
+    final showStoreSectionPicker =
+        showShoppingSubCategoryPicker || showRestaurantSectionPicker;
     final shoppingSubCategories = showShoppingSubCategoryPicker
         ? DummyData.shoppingSubCategories
         : const <ServiceCategory>[];
@@ -105,9 +108,12 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
     final subCategoryOptions = showShoppingSubCategoryPicker
         ? shoppingSubCategories
         : carsSubCategories;
-    final storeSections = showSubCategoryPicker
+    final storeSections = showStoreSectionPicker
         ? appProvider.merchantProductSections
         : const [];
+    final storeSectionLabel = showRestaurantSectionPicker
+        ? 'قسم داخل مطعمك'
+        : 'قسم داخل متجرك';
     final isEdit = widget.item != null;
     final title = isEdit
         ? labels.editItemAr
@@ -230,13 +236,13 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                       ),
                       const SizedBox(height: 16),
                     ],
-                    if (showSubCategoryPicker) ...[
+                    if (showStoreSectionPicker) ...[
                       Row(
                         children: [
-                          const Expanded(
+                          Expanded(
                             child: Text(
-                              'قسم داخل متجرك',
-                              style: TextStyle(
+                              storeSectionLabel,
+                              style: const TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.w800,
                                 fontFamily: 'Cairo',
@@ -269,9 +275,11 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                             color: const Color(0xFFFFF3E0),
                             borderRadius: BorderRadius.circular(14),
                           ),
-                          child: const Text(
-                            'أنشئ قسماً واحداً على الأقل (مكسرات، حلويات…) ثم اختره للمنتج.',
-                            style: TextStyle(
+                          child: Text(
+                            showRestaurantSectionPicker
+                                ? 'أنشئ قسماً واحداً على الأقل (بيتزا، شاورما، غربي…) ثم اختره للصنف.'
+                                : 'أنشئ قسماً واحداً على الأقل (مكسرات، حلويات…) ثم اختره للمنتج.',
+                            style: const TextStyle(
                               fontFamily: 'Cairo',
                               fontSize: 13,
                               height: 1.4,
@@ -562,10 +570,15 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
       );
       return;
     }
-    if (serviceId == 'product' && provider.merchantProductSections.isEmpty) {
+    if ((serviceId == 'product' || serviceId == 'restaurant') &&
+        provider.merchantProductSections.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('أنشئ قسماً داخل متجرك أولاً من «إدارة الأقسام».'),
+        SnackBar(
+          content: Text(
+            serviceId == 'restaurant'
+                ? 'أنشئ قسماً داخل مطعمك أولاً من «إدارة الأقسام».'
+                : 'أنشئ قسماً داخل متجرك أولاً من «إدارة الأقسام».',
+          ),
         ),
       );
       return;
@@ -588,8 +601,15 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
       subCategory: (serviceId == 'product' || serviceId == 'cars')
           ? (_selectedSubCategoryId ?? widget.item?.subCategory)
           : widget.item?.subCategory,
-      sectionId: serviceId == 'product' ? _selectedSectionId : widget.item?.sectionId,
-      categoryLabelAr: labels.productsTitleAr,
+      sectionId: (serviceId == 'product' || serviceId == 'restaurant')
+          ? _selectedSectionId
+          : widget.item?.sectionId,
+      categoryLabelAr: (serviceId == 'product' || serviceId == 'restaurant') &&
+              _selectedSectionId != null &&
+              _selectedSectionId!.isNotEmpty
+          ? (provider.merchantProductSectionName(_selectedSectionId) ??
+              labels.productsTitleAr)
+          : labels.productsTitleAr,
       categoryLabelEn: labels.productsTitleEn,
       image: (_imageBase64 != null && _imageBase64!.startsWith('http'))
           ? _imageBase64!

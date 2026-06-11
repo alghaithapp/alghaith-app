@@ -50,25 +50,27 @@ async function sendPushToTokens(tokens, { title, body, data = {} } = {}) {
   }
 
   const messaging = admin.messaging();
+  const safeTitle = String(title || 'الغيث').trim();
+  const safeBody = String(body || '').trim();
   const response = await messaging.sendEachForMulticast({
     tokens: uniqueTokens,
-    notification: {
-      title: String(title || 'الغيث').trim(),
-      body: String(body || '').trim(),
-    },
-    data: normalizeData(data),
+    data: normalizeData({
+      ...data,
+      title: safeTitle,
+      body: safeBody,
+    }),
     android: {
       priority: 'high',
-      notification: {
-        channelId: 'alghaith_orders',
-        sound: 'default',
-      },
     },
     apns: {
+      headers: {
+        'apns-priority': '10',
+      },
       payload: {
         aps: {
-          sound: 'default',
+          'content-available': 1,
           badge: 1,
+          sound: 'alghaith_notify.wav',
         },
       },
     },

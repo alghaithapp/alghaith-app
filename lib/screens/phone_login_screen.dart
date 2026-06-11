@@ -6,6 +6,8 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../core/theme/app_colors.dart';
+import '../core/utils/phone_utils.dart';
+import '../core/utils/western_digits_input_formatter.dart';
 import '../providers/app_provider.dart';
 import '../services/phone_auth_api.dart';
 import '../utils/apple_review_auth.dart';
@@ -53,7 +55,7 @@ class _PhoneLoginScreenState extends State<PhoneLoginScreen> {
   }
 
   void _maybeAutoVerify() {
-    final code = _codeController.text.trim();
+    final code = PhoneUtils.digitsOnly(_codeController.text);
     if (!_otpSent || _isSubmitting) {
       return;
     }
@@ -146,7 +148,7 @@ class _PhoneLoginScreenState extends State<PhoneLoginScreen> {
 
   Future<void> _verifyCode() async {
     final phone = AppleReviewAuth.canonicalizeInput(_phoneController.text);
-    final code = _codeController.text.trim();
+    final code = PhoneUtils.digitsOnly(_codeController.text);
     if (!_otpSent) {
       _showSnack('أرسل رمز التحقق أولاً');
       return;
@@ -313,7 +315,8 @@ class _LoginCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final media = MediaQuery.of(context);
-    final isCodeValid = RegExp(r'^\d{6}$').hasMatch(codeController.text.trim());
+    final isCodeValid =
+        PhoneUtils.digitsOnly(codeController.text).length == 6;
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -450,8 +453,7 @@ class _PhoneFieldState extends State<_PhoneField> {
 
   @override
   Widget build(BuildContext context) {
-    final digitCount =
-        widget.controller.text.replaceAll(RegExp(r'\D'), '').length;
+    final digitCount = PhoneUtils.digitsOnly(widget.controller.text).length;
     final isComplete = digitCount == 11;
     final hasInput = digitCount > 0;
 
@@ -483,9 +485,8 @@ class _PhoneFieldState extends State<_PhoneField> {
         controller: widget.controller,
         keyboardType: TextInputType.phone,
         maxLength: 11,
-        inputFormatters: [
-          FilteringTextInputFormatter.digitsOnly,
-          LengthLimitingTextInputFormatter(11),
+        inputFormatters: const [
+          WesternDigitsInputFormatter(maxLength: 11),
         ],
         style: TextStyle(
           fontFamily: 'Cairo',
@@ -569,7 +570,9 @@ class _CodeField extends StatelessWidget {
               keyboardType: TextInputType.number,
               textAlign: TextAlign.center,
               maxLength: 6,
-              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              inputFormatters: const [
+                WesternDigitsInputFormatter(maxLength: 6),
+              ],
               autofillHints: const [AutofillHints.oneTimeCode], // تفعيل ميزة الاستيراد التلقائي من النظام
               style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, letterSpacing: 8),
               decoration: const InputDecoration(
@@ -585,7 +588,8 @@ class _CodeField extends StatelessWidget {
             child: TextButton.icon(
               onPressed: () async {
                 final data = await Clipboard.getData('text/plain');
-                final pasted = data?.text?.replaceAll(RegExp(r'\D'), '') ?? '';
+                final pasted =
+                    PhoneUtils.digitsOnly(data?.text ?? '');
                 if (pasted.isNotEmpty) {
                   controller.text = pasted.length > 6 ? pasted.substring(0, 6) : pasted;
                 }

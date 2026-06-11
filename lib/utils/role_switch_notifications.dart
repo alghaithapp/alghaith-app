@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../models/app_notification.dart';
 import '../providers/app_provider.dart';
 import '../screens/merchant/merchant_notifications_screen.dart';
+import '../core/theme/app_theme.dart';
 import '../screens/notifications_screen.dart';
 import '../widgets/in_app_notification_banner.dart';
 
@@ -72,12 +73,14 @@ class RoleSwitchNotificationPresenter {
               Navigator.pop(ctx);
               _openInbox(context);
             },
-            style: FilledButton.styleFrom(
-              backgroundColor: const Color(0xFFF5A01D),
-            ),
+            style: AppButtonStyles.accentFilled(),
             child: const Text(
               'عرض الكل',
-              style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w800),
+              style: TextStyle(
+                fontFamily: 'Cairo',
+                fontWeight: FontWeight.w800,
+                color: Colors.white,
+              ),
             ),
           ),
         ],

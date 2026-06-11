@@ -51,6 +51,7 @@ class _ShoppingStoresScreenState extends State<ShoppingStoresScreen> {
   final TextEditingController _searchController = TextEditingController();
   late Future<List<Map<String, dynamic>>> _futureStores;
   String _selectedFilter = 'الكل';
+  String _bazaarKindFilter = 'all';
 
   final List<String> _filters = [
     'الكل',
@@ -94,6 +95,13 @@ class _ShoppingStoresScreenState extends State<ShoppingStoresScreen> {
       return services.map((e) => e.toString()).contains('restaurant');
     }
     return primary == 'restaurant';
+  }
+
+  bool _storeMatchesBazaarKind(Map profile) {
+    if (!_isBazaarChannel || _bazaarKindFilter == 'all') return true;
+    final isRestaurant = _isRestaurantStore(profile);
+    if (_bazaarKindFilter == 'restaurant') return isRestaurant;
+    return !isRestaurant;
   }
 
   bool _storeMatchesCuisineFilter(Map profile) {
@@ -204,6 +212,42 @@ class _ShoppingStoresScreenState extends State<ShoppingStoresScreen> {
                   ),
                 ),
 
+                if (_isBazaarChannel)
+                  SliverToBoxAdapter(
+                    child: Container(
+                      height: 55,
+                      margin: const EdgeInsets.only(bottom: 8),
+                      child: ListView(
+                        scrollDirection: Axis.horizontal,
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        children: [
+                          _BazaarKindChip(
+                            label: 'الكل',
+                            selected: _bazaarKindFilter == 'all',
+                            color: primaryRed,
+                            onTap: () =>
+                                setState(() => _bazaarKindFilter = 'all'),
+                          ),
+                          _BazaarKindChip(
+                            label: 'مطاعم',
+                            selected: _bazaarKindFilter == 'restaurant',
+                            color: primaryRed,
+                            onTap: () => setState(
+                              () => _bazaarKindFilter = 'restaurant',
+                            ),
+                          ),
+                          _BazaarKindChip(
+                            label: 'متاجر',
+                            selected: _bazaarKindFilter == 'store',
+                            color: primaryRed,
+                            onTap: () =>
+                                setState(() => _bazaarKindFilter = 'store'),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+
                 // 2. Category Filters
                 if (widget.showCuisineFilters)
                   SliverToBoxAdapter(
@@ -303,8 +347,9 @@ class _ShoppingStoresScreenState extends State<ShoppingStoresScreen> {
                       final matchesQuery =
                           name.contains(query) || desc.contains(query);
                       final matchesFilter = _storeMatchesCuisineFilter(p);
+                      final matchesBazaarKind = _storeMatchesBazaarKind(p);
 
-                      return matchesQuery && matchesFilter;
+                      return matchesQuery && matchesFilter && matchesBazaarKind;
                     }).toList();
 
                     if (filtered.isEmpty) {
@@ -332,21 +377,24 @@ class _ShoppingStoresScreenState extends State<ShoppingStoresScreen> {
                               final products =
                                   (filtered[index]['products'] as List)
                                       .cast<Map<String, dynamic>>();
+                              final openAsRestaurant =
+                                  widget.storeKind ==
+                                          MerchantStoreKind.restaurant ||
+                                      (_isBazaarChannel &&
+                                          _isRestaurantStore(profile));
                               Navigator.of(context).push(
                                 CupertinoPageRoute(
-                                  builder: (_) =>
-                                      widget.storeKind ==
-                                              MerchantStoreKind.restaurant
-                                          ? RestaurantMenuScreen(
-                                              storeProfile: profile,
-                                              storeProducts: products,
-                                            )
-                                          : ShoppingStoreMenuScreen(
-                                              profile: profile,
-                                              products: products,
-                                              subCategory: widget.subCategory,
-                                              storeKind: widget.storeKind,
-                                            ),
+                                  builder: (_) => openAsRestaurant
+                                      ? RestaurantMenuScreen(
+                                          storeProfile: profile,
+                                          storeProducts: products,
+                                        )
+                                      : ShoppingStoreMenuScreen(
+                                          profile: profile,
+                                          products: products,
+                                          subCategory: widget.subCategory,
+                                          storeKind: widget.storeKind,
+                                        ),
                                 ),
                               );
                             },
@@ -367,7 +415,9 @@ class _ShoppingStoresScreenState extends State<ShoppingStoresScreen> {
               bottom: 0,
               left: 0,
               right: 0,
-              child: _GuestModeBanner(onLogin: () => appProvider.resetAll()),
+              child: _GuestModeBanner(
+                onLogin: () => GuestGate.exitGuestToLogin(context),
+              ),
             ),
         ],
       ),
@@ -1525,6 +1575,57 @@ class _StoreCartNavButton extends StatelessWidget {
                     ),
                   ),
               ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _BazaarKindChip extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _BazaarKindChip({
+    required this.label,
+    required this.selected,
+    required this.color,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 5),
+      child: GestureDetector(
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 250),
+          padding: const EdgeInsets.symmetric(horizontal: 22),
+          decoration: BoxDecoration(
+            color: selected ? color : const Color(0xFFF5F5F5),
+            borderRadius: BorderRadius.circular(25),
+            boxShadow: selected
+                ? [
+                    BoxShadow(
+                      color: color.withValues(alpha: 0.28),
+                      blurRadius: 8,
+                      offset: const Offset(0, 4),
+                    ),
+                  ]
+                : null,
+          ),
+          alignment: Alignment.center,
+          child: Text(
+            label,
+            style: TextStyle(
+              fontFamily: 'Cairo',
+              fontWeight: FontWeight.bold,
+              fontSize: 13,
+              color: selected ? Colors.white : const Color(0xFF4A4A4A),
             ),
           ),
         ),

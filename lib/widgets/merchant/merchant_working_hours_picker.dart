@@ -1,6 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
+import '../../core/theme/app_theme.dart';
 import '../../utils/merchant_profile_fields.dart';
 
 /// اختيار وقت الافتتاح (صباحاً) ووقت الإغلاق (مساءً) بشكل احترافي.
@@ -137,14 +138,11 @@ class MerchantWorkingHoursPicker extends StatelessWidget {
                             FilledButton(
                               onPressed: () =>
                                   Navigator.pop(sheetContext, selected),
-                              style: FilledButton.styleFrom(
-                                backgroundColor: _brand,
+                              style: AppButtonStyles.accentFilled(
+                                borderRadius: BorderRadius.circular(12),
                                 padding: const EdgeInsets.symmetric(
                                   horizontal: 18,
                                   vertical: 10,
-                                ),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
                                 ),
                               ),
                               child: const Text(
@@ -152,6 +150,7 @@ class MerchantWorkingHoursPicker extends StatelessWidget {
                                 style: TextStyle(
                                   fontFamily: 'Cairo',
                                   fontWeight: FontWeight.w800,
+                                  color: Colors.white,
                                 ),
                               ),
                             ),

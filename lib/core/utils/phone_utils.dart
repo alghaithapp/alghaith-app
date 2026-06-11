@@ -2,8 +2,28 @@
 class PhoneUtils {
   const PhoneUtils._();
 
+  /// يحوّل الأرقام العربية (٠١٢…) والفارسية (۰۱۲…) إلى أرقام لاتينية.
+  static String toWesternDigits(String input) {
+    final buffer = StringBuffer();
+    for (final codeUnit in input.runes) {
+      if (codeUnit >= 0x0660 && codeUnit <= 0x0669) {
+        buffer.writeCharCode(0x0030 + (codeUnit - 0x0660));
+      } else if (codeUnit >= 0x06F0 && codeUnit <= 0x06F9) {
+        buffer.writeCharCode(0x0030 + (codeUnit - 0x06F0));
+      } else {
+        buffer.writeCharCode(codeUnit);
+      }
+    }
+    return buffer.toString();
+  }
+
+  /// يستخرج الأرقام فقط بعد تحويلها إلى صيغة لاتينية.
+  static String digitsOnly(String input) {
+    return toWesternDigits(input).replaceAll(RegExp(r'\D'), '');
+  }
+
   static String normalize(String phone) {
-    final digits = phone.trim().replaceAll(RegExp(r'\D'), '');
+    final digits = digitsOnly(phone);
     if (digits.isEmpty) return '';
     if (digits.startsWith('0') && digits.length >= 11) {
       return '+964${digits.substring(1)}';
@@ -18,7 +38,7 @@ class PhoneUtils {
   }
 
   static List<String> variants(String phone) {
-    final digits = phone.replaceAll(RegExp(r'\D'), '');
+    final digits = digitsOnly(phone);
     if (digits.length < 10) {
       final trimmed = phone.trim();
       return trimmed.isEmpty ? const [] : [trimmed];

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../providers/app_provider.dart';
+import '../../utils/helpers.dart';
 import '../../utils/account_role_switch.dart';
 import '../../widgets/app_image.dart';
 import '../../widgets/app_logo.dart';
@@ -113,6 +114,11 @@ class MerchantMoreScreen extends StatelessWidget {
               builder: (_) => const MerchantProfileScreen(),
             ),
           ),
+          onEditContact: () => Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => const MerchantStoreSettingsScreen(),
+            ),
+          ),
         ),
         const SizedBox(height: 12),
         _SyncCatalogButton(cardColor: cardColor),
@@ -153,7 +159,8 @@ class MerchantMoreScreen extends StatelessWidget {
         _MoreTile(
           cardColor: cardColor,
           title: 'الدعم الفني',
-          subtitle: 'تواصل سريع عبر واتساب أو الاتصال مع فريق الدعم',
+          subtitle:
+              'واتساب أو اتصال: ${AppHelpers.supportPhoneNumber}',
           icon: Icons.support_agent_rounded,
           onTap: () => Navigator.of(context).push(
               MaterialPageRoute(builder: (_) => const MerchantSupportScreen())),
@@ -225,6 +232,7 @@ class _MiniProfileCard extends StatelessWidget {
   final int workSamplesCount;
   final List<String> samples;
   final VoidCallback onOpenProfile;
+  final VoidCallback onEditContact;
 
   const _MiniProfileCard({
     required this.cardColor,
@@ -234,12 +242,18 @@ class _MiniProfileCard extends StatelessWidget {
     required this.workSamplesCount,
     required this.samples,
     required this.onOpenProfile,
+    required this.onEditContact,
   });
 
   @override
   Widget build(BuildContext context) {
-    final phoneValue = phone.trim().isNotEmpty ? phone : '-';
-    final whatsappValue = whatsapp.trim().isNotEmpty ? whatsapp : '-';
+    final phoneTrimmed = phone.trim();
+    final whatsappTrimmed = whatsapp.trim();
+    final hasContact = phoneTrimmed.isNotEmpty || whatsappTrimmed.isNotEmpty;
+    final phoneValue = phoneTrimmed.isNotEmpty
+        ? phoneTrimmed
+        : 'يجب وضع رقم به واتساب';
+    final whatsappValue = whatsappTrimmed.isNotEmpty ? whatsappTrimmed : phoneValue;
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -258,8 +272,27 @@ class _MiniProfileCard extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 10),
-          _RowInfo(label: 'الهاتف', value: phoneValue),
-          _RowInfo(label: 'WhatsApp', value: whatsappValue),
+          _RowInfo(
+            label: 'الهاتف',
+            value: phoneValue,
+            emphasize: !hasContact,
+          ),
+          _RowInfo(
+            label: 'واتساب',
+            value: whatsappValue,
+            emphasize: !hasContact,
+          ),
+          if (!hasContact) ...[
+            const SizedBox(height: 6),
+            TextButton.icon(
+              onPressed: onEditContact,
+              icon: const Icon(Icons.edit_rounded, size: 16),
+              label: const Text(
+                'إضافة رقم واتساب من إعدادات المتجر',
+                style: TextStyle(fontFamily: 'Cairo', fontSize: 12),
+              ),
+            ),
+          ],
           if (showWorkSamples)
             _RowInfo(
                 label: 'نماذج الأعمال',
@@ -304,14 +337,20 @@ class _MiniProfileCard extends StatelessWidget {
 class _RowInfo extends StatelessWidget {
   final String label;
   final String value;
+  final bool emphasize;
 
-  const _RowInfo({required this.label, required this.value});
+  const _RowInfo({
+    required this.label,
+    required this.value,
+    this.emphasize = false,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 6),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Expanded(
             child: Text(
@@ -323,12 +362,17 @@ class _RowInfo extends StatelessWidget {
               ),
             ),
           ),
-          Text(
-            value,
-            style: const TextStyle(
-              fontWeight: FontWeight.w800,
-              fontFamily: 'Cairo',
-              fontSize: 12,
+          const SizedBox(width: 8),
+          Flexible(
+            child: Text(
+              value,
+              textAlign: TextAlign.end,
+              style: TextStyle(
+                fontWeight: FontWeight.w800,
+                fontFamily: 'Cairo',
+                fontSize: 12,
+                color: emphasize ? const Color(0xFFEA580C) : null,
+              ),
             ),
           ),
         ],

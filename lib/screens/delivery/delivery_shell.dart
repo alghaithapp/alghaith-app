@@ -11,12 +11,14 @@ import '../../models/app_models.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/ui/app_bottom_nav_style.dart';
 import '../../providers/app_provider.dart';
+import '../../utils/courier_profile_fields.dart';
 import 'delivery_earnings_screen.dart';
 import 'delivery_setup_screen.dart';
 import '../../utils/account_role_switch.dart';
 import '../../utils/extensions.dart';
 import '../../utils/helpers.dart';
 import '../../utils/role_notification_poller.dart';
+import '../../widgets/app_image.dart';
 import '../../utils/role_switch_notifications.dart';
 import '../../screens/notifications_screen.dart';
 import '../../widgets/safe_bottom_bar.dart';
@@ -579,26 +581,42 @@ class DeliveryAccountScreen extends StatelessWidget {
             ),
             const SizedBox(height: 12),
             _InfoTile(
-              label: 'الاسم',
-              value: '${profile['name'] ?? appProvider.deliveryCourierName}',
+              label: 'الاسم الثلاثي',
+              value: CourierProfileFields.name(profile).isNotEmpty
+                  ? CourierProfileFields.name(profile)
+                  : appProvider.deliveryCourierName,
             ),
             _InfoTile(
               label: 'الهاتف',
               value: appProvider.courierPhone,
             ),
             _InfoTile(
-              label: 'الدراجة',
-              value: '${profile['vehicle'] ?? '-'}',
+              label: 'عنوان السكن',
+              value: CourierProfileFields.homeAddress(profile).isNotEmpty
+                  ? CourierProfileFields.homeAddress(profile)
+                  : '—',
             ),
-            _InfoTile(
-              label: 'المنطقة',
-              value: '${profile['area'] ?? '-'}',
-            ),
-            if ('${profile['notes'] ?? ''}'.trim().isNotEmpty)
-              _InfoTile(
-                label: 'ملاحظات',
-                value: '${profile['notes']}',
+            if (CourierProfileFields.vehicleImage(profile).isNotEmpty) ...[
+              const SizedBox(height: 8),
+              const Text(
+                'صورة الدراجة',
+                style: TextStyle(
+                  fontFamily: 'Cairo',
+                  fontWeight: FontWeight.w800,
+                  fontSize: 13,
+                ),
               ),
+              const SizedBox(height: 8),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(14),
+                child: AppImage(
+                  imageData: CourierProfileFields.vehicleImage(profile),
+                  height: 140,
+                  width: double.infinity,
+                  fit: BoxFit.cover,
+                ),
+              ),
+            ],
             _InfoTile(
               label: 'الطلبات الجديدة',
               value: '${appProvider.deliveryIncomingOrders.length}',
@@ -612,21 +630,6 @@ class DeliveryAccountScreen extends StatelessWidget {
               value: '${appProvider.deliveryCompletedOrders.length}',
             ),
             const SizedBox(height: 12),
-            CupertinoButton.filled(
-              color: AppColors.accentDark,
-              onPressed: () {
-                Navigator.of(context).push(
-                  CupertinoPageRoute(
-                    builder: (_) => const DeliveryEarningsScreen(),
-                  ),
-                );
-              },
-              child: Text(
-                'شاشة الأرباح',
-                style: const TextStyle(fontFamily: 'Cairo'),
-              ),
-            ),
-            const SizedBox(height: 10),
             CupertinoButton.filled(
               color: const Color(0xFF007A7A),
               onPressed: () {

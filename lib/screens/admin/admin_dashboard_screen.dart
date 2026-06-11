@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../../providers/app_provider.dart';
 import '../../utils/extensions.dart';
+import '../../widgets/app_image.dart';
 
 class AdminDashboardScreen extends StatefulWidget {
   const AdminDashboardScreen({super.key});
@@ -19,11 +20,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(length: 3, vsync: this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final provider = context.read<AppProvider>();
       provider.refreshAdminReports();
       provider.refreshAllMerchants();
+      provider.refreshAllCouriers();
     });
   }
 
@@ -57,6 +59,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
           tabs: const [
             Tab(text: 'التقارير', icon: Icon(Icons.bar_chart_rounded)),
             Tab(text: 'إدارة التجار', icon: Icon(Icons.store_rounded)),
+            Tab(text: 'مندوبو التوصيل', icon: Icon(Icons.delivery_dining_rounded)),
           ],
         ),
         actions: [
@@ -64,6 +67,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
             onPressed: () {
               provider.refreshAdminReports();
               provider.refreshAllMerchants();
+              provider.refreshAllCouriers();
             },
             icon: const Icon(Icons.refresh_rounded),
           ),
@@ -74,6 +78,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
         children: [
           _ReportsTab(reports: reports),
           const _MerchantManagementTab(),
+          const _CourierManagementTab(),
         ],
       ),
     );
@@ -732,6 +737,300 @@ class _RecentOrderTile extends StatelessWidget {
             style: const TextStyle(
               fontFamily: 'Cairo',
               fontWeight: FontWeight.w900,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CourierManagementTab extends StatefulWidget {
+  const _CourierManagementTab();
+
+  @override
+  State<_CourierManagementTab> createState() => _CourierManagementTabState();
+}
+
+class _CourierManagementTabState extends State<_CourierManagementTab> {
+  String? _busyCourierPhone;
+
+  Future<void> _handleApproval({
+    required String courierPhone,
+    required bool enabling,
+    required Future<void> Function() operation,
+  }) async {
+    if (_busyCourierPhone != null || courierPhone.isEmpty) return;
+    setState(() => _busyCourierPhone = courierPhone);
+    try {
+      await operation();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            enabling
+                ? 'تم تفعيل حساب المندوب'
+                : 'تم إلغاء تفعيل حساب المندوب',
+            style: const TextStyle(fontFamily: 'Cairo'),
+          ),
+        ),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'تعذر تحديث حالة المندوب',
+            style: TextStyle(fontFamily: 'Cairo'),
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _busyCourierPhone = null);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final provider = context.watch<AppProvider>();
+    final couriers = provider.allCouriers;
+
+    return RefreshIndicator(
+      onRefresh: provider.refreshAllCouriers,
+      child: couriers.isEmpty
+          ? ListView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              children: const [
+                SizedBox(height: 120),
+                Center(
+                  child: Text(
+                    'لا يوجد مندوبو توصيل مسجلون بعد',
+                    style: TextStyle(
+                      fontFamily: 'Cairo',
+                      fontSize: 16,
+                      color: Colors.grey,
+                    ),
+                  ),
+                ),
+              ],
+            )
+          : ListView.builder(
+              padding: const EdgeInsets.all(12),
+              physics: const AlwaysScrollableScrollPhysics(),
+              itemCount: couriers.length,
+              itemBuilder: (context, index) {
+                final courier = couriers[index];
+                final phone = courier['phone']?.toString() ?? '';
+                return _CourierCard(
+                  courier: courier,
+                  isBusy: _busyCourierPhone == phone,
+                  onToggleApproval: () {
+                    final enabling = courier['isApproved'] != true;
+                    _handleApproval(
+                      courierPhone: phone,
+                      enabling: enabling,
+                      operation: () => provider.toggleCourierApproval(
+                        phone,
+                        enabling,
+                      ),
+                    );
+                  },
+                );
+              },
+            ),
+    );
+  }
+}
+
+class _CourierCard extends StatelessWidget {
+  final Map<String, dynamic> courier;
+  final bool isBusy;
+  final VoidCallback onToggleApproval;
+
+  const _CourierCard({
+    required this.courier,
+    required this.isBusy,
+    required this.onToggleApproval,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final name = courier['name']?.toString() ?? '—';
+    final phone = courier['contactPhone']?.toString() ??
+        courier['phone']?.toString() ??
+        '—';
+    final homeAddress = courier['homeAddress']?.toString() ?? '—';
+    final vehicleImage = courier['vehicleImage']?.toString() ?? '';
+    final available = courier['available'] != false;
+    final isApproved = courier['isApproved'] == true;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isApproved ? Colors.green.shade300 : Colors.orange.shade300,
+          width: isApproved ? 1.5 : 1,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: vehicleImage.isNotEmpty
+                    ? AppImage(
+                        imageData: vehicleImage,
+                        width: 72,
+                        height: 72,
+                        fit: BoxFit.cover,
+                      )
+                    : Container(
+                        width: 72,
+                        height: 72,
+                        color: Colors.grey.shade100,
+                        child: const Icon(
+                          Icons.motorcycle_rounded,
+                          color: Colors.grey,
+                        ),
+                      ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      name,
+                      style: const TextStyle(
+                        fontFamily: 'Cairo',
+                        fontWeight: FontWeight.w900,
+                        fontSize: 15,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      phone,
+                      style: const TextStyle(
+                        fontFamily: 'Cairo',
+                        fontSize: 12,
+                        color: Colors.grey,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: isApproved
+                                ? Colors.green.shade50
+                                : Colors.orange.shade50,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            isApproved ? 'مفعّل' : 'بانتظار الموافقة',
+                            style: TextStyle(
+                              fontFamily: 'Cairo',
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: isApproved
+                                  ? Colors.green.shade800
+                                  : Colors.orange.shade800,
+                            ),
+                          ),
+                        ),
+                        if (isApproved)
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: available
+                                  ? Colors.blue.shade50
+                                  : Colors.grey.shade100,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              available ? 'متاح للتوصيل' : 'غير متاح',
+                              style: TextStyle(
+                                fontFamily: 'Cairo',
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                                color: available
+                                    ? Colors.blue.shade800
+                                    : Colors.grey.shade700,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(Icons.home_rounded,
+                  size: 16, color: Colors.grey.shade600),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  homeAddress,
+                  style: const TextStyle(
+                    fontFamily: 'Cairo',
+                    fontSize: 12,
+                    height: 1.45,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
+              onPressed: isBusy ? null : onToggleApproval,
+              icon: isBusy
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CupertinoActivityIndicator(radius: 8),
+                    )
+                  : Icon(
+                      isApproved
+                          ? Icons.block_rounded
+                          : Icons.verified_rounded,
+                    ),
+              label: Text(
+                isApproved ? 'إلغاء التفعيل' : 'موافقة وتفعيل',
+                style: const TextStyle(
+                  fontFamily: 'Cairo',
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              style: FilledButton.styleFrom(
+                backgroundColor:
+                    isApproved ? Colors.red.shade700 : Colors.green.shade700,
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
             ),
           ),
         ],

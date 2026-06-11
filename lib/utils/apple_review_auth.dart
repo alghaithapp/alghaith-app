@@ -1,3 +1,5 @@
+import '../core/utils/phone_utils.dart';
+
 /// حساب تجريبي لمراجعي App Store — لا يُرسل OTP حقيقي.
 class AppleReviewAuth {
   const AppleReviewAuth._();
@@ -12,8 +14,7 @@ class AppleReviewAuth {
     '7000000000',
   };
 
-  static String digitsOnly(String phone) =>
-      phone.trim().replaceAll(RegExp(r'\D'), '');
+  static String digitsOnly(String phone) => PhoneUtils.digitsOnly(phone);
 
   static bool isDemoPhone(String phone) {
     final digits = digitsOnly(phone);
