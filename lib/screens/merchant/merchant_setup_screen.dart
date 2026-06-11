@@ -223,7 +223,7 @@ class _MerchantSetupScreenState extends State<MerchantSetupScreen> {
     appProvider.setUserRole('customer');
   }
 
-  String _navigationTitle(merchantServiceLabels labels) {
+  String _navigationTitle(MerchantServiceLabels labels) {
     if (_selectedServiceIds.isEmpty) return labels.accountTitleAr;
     if (_awaitingProfessionPick) return 'اختر تخصصك المهني';
     if (_isProfessionalSetup) return 'إعداد ملف المهنة';
