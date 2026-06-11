@@ -1,6 +1,7 @@
 import type {
   AdminReports,
   AdminSession,
+  CourierSummary,
   MerchantDetails,
   MerchantSummary,
   ToggleBazaarResponse,
@@ -77,6 +78,22 @@ export async function loadAdminReports(token: string): Promise<AdminReports> {
 
 export async function loadMerchants(token: string): Promise<MerchantSummary[]> {
   return request<MerchantSummary[]>(DATABASE_API_BASE_URL, '/db/admin/merchants', { token });
+}
+
+export async function loadCouriers(token: string): Promise<CourierSummary[]> {
+  return request<CourierSummary[]>(DATABASE_API_BASE_URL, '/db/admin/couriers', { token });
+}
+
+export async function toggleCourierApproval(
+  token: string,
+  courierPhone: string,
+  isApproved: boolean,
+) {
+  return request(DATABASE_API_BASE_URL, '/db/admin/courier-approval', {
+    method: 'PUT',
+    token,
+    body: JSON.stringify({ courierPhone, isApproved }),
+  });
 }
 
 export async function loadMerchantDetails(

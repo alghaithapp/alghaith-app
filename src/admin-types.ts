@@ -123,3 +123,16 @@ export interface MerchantProduct {
   isAvailable: boolean;
   createdAt: string | null;
 }
+
+export interface CourierSummary {
+  phone: string;
+  name: string;
+  contactPhone: string;
+  homeAddress: string;
+  vehicleImage: string;
+  available: boolean;
+  isApproved: boolean;
+  role: string;
+  accountType: string;
+  updatedAt: string | null;
+}

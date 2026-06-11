@@ -3,6 +3,7 @@ import {
   AlertTriangle,
   BadgeCheck,
   BarChart3,
+  Bike,
   Building2,
   LoaderCircle,
   Lock,
@@ -17,23 +18,26 @@ import {
 
 import {
   loadAdminReports,
+  loadCouriers,
   loadMerchantDetails,
   loadMerchants,
   sendCode,
   syncMerchantBazaarProducts,
+  toggleCourierApproval,
   toggleMerchantBazaar,
   toggleMerchantFreeze,
   verifyCode,
 } from './admin-api';
 import type {
   AdminReports,
+  CourierSummary,
   MerchantDetails,
   MerchantSummary,
 } from './admin-types';
 
 const SESSION_STORAGE_KEY = 'alghaith-admin-session-v1';
 
-type AdminView = 'dashboard' | 'merchants' | 'approvals';
+type AdminView = 'dashboard' | 'merchants' | 'approvals' | 'couriers';
 
 interface StoredSession {
   token: string;
@@ -105,6 +109,7 @@ function App() {
   const [search, setSearch] = useState('');
   const [reports, setReports] = useState<AdminReports | null>(null);
   const [merchants, setMerchants] = useState<MerchantSummary[]>([]);
+  const [couriers, setCouriers] = useState<CourierSummary[]>([]);
   const [selectedMerchantPhone, setSelectedMerchantPhone] = useState('');
   const [merchantDetails, setMerchantDetails] = useState<MerchantDetails | null>(
     null,
@@ -124,12 +129,14 @@ function App() {
     setIsLoadingData(true);
     setBootError('');
     try {
-      const [nextReports, nextMerchants] = await Promise.all([
+      const [nextReports, nextMerchants, nextCouriers] = await Promise.all([
         loadAdminReports(authToken),
         loadMerchants(authToken),
+        loadCouriers(authToken),
       ]);
       setReports(nextReports);
       setMerchants(nextMerchants);
+      setCouriers(nextCouriers);
 
       const merchantPhone =
         preferredMerchantPhone ||
@@ -210,6 +217,27 @@ function App() {
     [merchants],
   );
 
+  const pendingCourierQueue = useMemo(
+    () => couriers.filter((courier) => courier.isApproved !== true),
+    [couriers],
+  );
+
+  const filteredCouriers = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    if (!query) return couriers;
+    return couriers.filter((courier) => {
+      const haystack = [
+        courier.name,
+        courier.contactPhone,
+        courier.phone,
+        courier.homeAddress,
+      ]
+        .join(' ')
+        .toLowerCase();
+      return haystack.includes(query);
+    });
+  }, [couriers, search]);
+
   async function handleSendCode(event: FormEvent) {
     event.preventDefault();
     setIsSendingCode(true);
@@ -258,6 +286,7 @@ function App() {
     setOtpSent(false);
     setReports(null);
     setMerchants([]);
+    setCouriers([]);
     setMerchantDetails(null);
     setSelectedMerchantPhone('');
     setSuccessMessage('');
@@ -282,6 +311,30 @@ function App() {
     } catch (error) {
       const message =
         error instanceof Error ? error.message : 'تعذر مزامنة ظهور البازار.';
+      setActionError(message);
+    } finally {
+      setActiveActionKey('');
+    }
+  }
+
+  async function handleCourierApproval(courier: CourierSummary) {
+    if (!token) return;
+    const enabling = courier.isApproved !== true;
+    const actionKey = `courier:${courier.phone}`;
+    setActiveActionKey(actionKey);
+    setActionError('');
+    setSuccessMessage('');
+    try {
+      await toggleCourierApproval(token, courier.phone, enabling);
+      setSuccessMessage(
+        enabling
+          ? `تم تفعيل حساب المندوب ${courier.name || courier.phone}.`
+          : `تم إلغاء تفعيل حساب المندوب ${courier.name || courier.phone}.`,
+      );
+      await refreshCoreData(token);
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'تعذر تحديث حالة المندوب.';
       setActionError(message);
     } finally {
       setActiveActionKey('');
@@ -347,8 +400,8 @@ function App() {
             <p className="eyebrow">AL GHAITH ADMIN</p>
             <h1>لوحة إدارة بازار ومطاعم الغيث</h1>
             <p>
-              دخول آمن برقم الهاتف لعرض الإحصائيات الكاملة، تجميد التجار، والموافقة
-              على النشر داخل قسم بازار ومطاعم الغيث.
+              دخول آمن برقم الهاتف لعرض الإحصائيات الكاملة، تجميد التجار، الموافقة
+              على مندوبي التوصيل، والموافقة على النشر داخل قسم بازار ومطاعم الغيث.
             </p>
           </div>
 
@@ -439,6 +492,16 @@ function App() {
               <BadgeCheck size={18} />
               <span>موافقات البازار</span>
             </button>
+            <button
+              className={view === 'couriers' ? 'nav-item active' : 'nav-item'}
+              onClick={() => setView('couriers')}
+            >
+              <Bike size={18} />
+              <span>مندوبو التوصيل</span>
+              {pendingCourierQueue.length > 0 ? (
+                <span className="nav-badge">{pendingCourierQueue.length}</span>
+              ) : null}
+            </button>
           </nav>
 
           <button className="ghost-button logout" onClick={handleLogout}>
@@ -457,7 +520,11 @@ function App() {
             <div className="topbar-search">
               <Search size={18} />
               <input
-                placeholder="ابحث عن تاجر أو رقم هاتف"
+                placeholder={
+                  view === 'couriers'
+                    ? 'ابحث عن مندوب أو رقم هاتف'
+                    : 'ابحث عن تاجر أو رقم هاتف'
+                }
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
               />
@@ -502,26 +569,123 @@ function App() {
                 />
               </section>
 
-              <section className="main-grid">
+              <section className={view === 'couriers' ? 'main-grid couriers-only' : 'main-grid'}>
                 <div className="panel wide">
                   <div className="panel-header">
                     <div>
                       <h3>
-                        {view === 'approvals'
-                          ? 'طلبات الموافقة داخل بازار ومطاعم الغيث'
-                          : 'قائمة التجار'}
+                        {view === 'couriers'
+                          ? 'مندوبو التوصيل'
+                          : view === 'approvals'
+                            ? 'طلبات الموافقة داخل بازار ومطاعم الغيث'
+                            : 'قائمة التجار'}
                       </h3>
                       <p>
-                        {view === 'approvals'
-                          ? 'الموافقة هنا تفتح للتاجر قسم بازار ومطاعم الغيث لأول مرة فقط.'
-                          : 'استعراض الحالة، الأرباح، الطلبات، وعدد المنتجات المنشورة لكل تاجر.'}
+                        {view === 'couriers'
+                          ? 'راجع بيانات المندوب ووافق على تفعيل حسابه قبل أن يستقبل طلبات التوصيل.'
+                          : view === 'approvals'
+                            ? 'الموافقة هنا تفتح للتاجر قسم بازار ومطاعم الغيث لأول مرة فقط.'
+                            : 'استعراض الحالة، الأرباح، الطلبات، وعدد المنتجات المنشورة لكل تاجر.'}
                       </p>
                     </div>
                     <span className="panel-chip">
-                      {view === 'approvals' ? approvalQueue.length : filteredMerchants.length}
+                      {view === 'couriers'
+                        ? filteredCouriers.length
+                        : view === 'approvals'
+                          ? approvalQueue.length
+                          : filteredMerchants.length}
                     </span>
                   </div>
 
+                  {view === 'couriers' ? (
+                    <div className="merchant-list">
+                      {filteredCouriers.map((courier) => {
+                        const approvalLoading =
+                          activeActionKey === `courier:${courier.phone}`;
+                        return (
+                          <article key={courier.phone} className="merchant-card courier-card">
+                            <div className="merchant-main">
+                              <div className="courier-card-leading">
+                                {courier.vehicleImage ? (
+                                  <img
+                                    className="courier-avatar"
+                                    src={courier.vehicleImage}
+                                    alt={courier.name || 'صورة الدراجة'}
+                                  />
+                                ) : (
+                                  <div className="courier-avatar placeholder">
+                                    <Bike size={28} />
+                                  </div>
+                                )}
+                                <div>
+                                  <div className="merchant-title-row">
+                                    <h4>{courier.name || 'مندوب بدون اسم'}</h4>
+                                    {courier.isApproved ? (
+                                      <span className="status-badge success">مفعّل</span>
+                                    ) : (
+                                      <span className="status-badge danger">
+                                        بانتظار الموافقة
+                                      </span>
+                                    )}
+                                    {courier.isApproved ? (
+                                      courier.available ? (
+                                        <span className="status-badge success">
+                                          متاح للتوصيل
+                                        </span>
+                                      ) : (
+                                        <span className="status-badge muted">غير متاح</span>
+                                      )
+                                    ) : null}
+                                  </div>
+                                  <p className="merchant-meta">
+                                    هاتف التواصل:{' '}
+                                    <span dir="ltr">
+                                      {courier.contactPhone || courier.phone}
+                                    </span>
+                                  </p>
+                                  <p className="merchant-description">
+                                    {courier.homeAddress || 'لا يوجد عنوان محفوظ.'}
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="merchant-actions">
+                              <button
+                                className={
+                                  courier.isApproved
+                                    ? 'soft-button danger'
+                                    : 'soft-button success'
+                                }
+                                disabled={approvalLoading}
+                                onClick={() => {
+                                  handleCourierApproval(courier).catch(() => undefined);
+                                }}
+                              >
+                                {approvalLoading ? (
+                                  <LoaderCircle className="spin" size={16} />
+                                ) : (
+                                  <BadgeCheck size={16} />
+                                )}
+                                <span>
+                                  {courier.isApproved
+                                    ? 'إلغاء التفعيل'
+                                    : 'موافقة وتفعيل'}
+                                </span>
+                              </button>
+                            </div>
+                          </article>
+                        );
+                      })}
+
+                      {filteredCouriers.length === 0 ? (
+                        <div className="empty-state">
+                          <Bike size={22} />
+                          <p>لا يوجد مندوبو توصيل مطابقون للبحث الحالي.</p>
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : (
                   <div className="merchant-list">
                     {(view === 'approvals' ? approvalQueue : filteredMerchants).map((merchant) => {
                       const freezeLoading = activeActionKey === `freeze:${merchant.phone}`;
@@ -682,8 +846,10 @@ function App() {
                       </div>
                     ) : null}
                   </div>
+                  )}
                 </div>
 
+                {view === 'couriers' ? null : (
                 <div className="panel details">
                   <div className="panel-header">
                     <div>
@@ -814,6 +980,7 @@ function App() {
                     </div>
                   )}
                 </div>
+                )}
               </section>
 
               <section className="panel recent-orders-panel">
