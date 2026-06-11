@@ -76,9 +76,18 @@ async function sendPushToPhone(phone, payload, options = {}) {
 
   const rows = await getDeviceTokensForPhone(normalizedPhone);
   const tokens = rows.map((row) => row.token).filter(Boolean);
-  if (!tokens.length) return;
+  if (!tokens.length) {
+    const eventKey = String(payload?.data?.eventKey ?? '').trim();
+    console.warn(
+      `push: no device tokens for phone=${normalizedPhone}${eventKey ? ` event=${eventKey}` : ''}`
+    );
+    return;
+  }
 
-  const result = await sendPushToTokens(tokens, payload);
+  const showSystemBanner =
+    options.showSystemBanner === true ||
+    String(payload?.data?.category ?? '').trim() === 'account';
+  const result = await sendPushToTokens(tokens, { ...payload, showSystemBanner });
   if (result.invalidTokens?.length) {
     await removeDeviceTokens(result.invalidTokens);
   }

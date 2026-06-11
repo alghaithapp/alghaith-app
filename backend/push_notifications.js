@@ -40,7 +40,10 @@ function normalizeData(data = {}) {
   return normalized;
 }
 
-async function sendPushToTokens(tokens, { title, body, data = {} } = {}) {
+async function sendPushToTokens(
+  tokens,
+  { title, body, data = {}, showSystemBanner = false } = {}
+) {
   const uniqueTokens = [...new Set((tokens || []).map((item) => String(item || '').trim()).filter(Boolean))];
   if (!uniqueTokens.length) {
     return { sent: 0, failed: 0, invalidTokens: [] };
@@ -52,7 +55,7 @@ async function sendPushToTokens(tokens, { title, body, data = {} } = {}) {
   const messaging = admin.messaging();
   const safeTitle = String(title || 'الغيث').trim();
   const safeBody = String(body || '').trim();
-  const response = await messaging.sendEachForMulticast({
+  const message = {
     tokens: uniqueTokens,
     data: normalizeData({
       ...data,
@@ -74,7 +77,16 @@ async function sendPushToTokens(tokens, { title, body, data = {} } = {}) {
         },
       },
     },
-  });
+  };
+
+  if (showSystemBanner && safeBody) {
+    message.notification = {
+      title: safeTitle,
+      body: safeBody,
+    };
+  }
+
+  const response = await messaging.sendEachForMulticast(message);
 
   const invalidTokens = [];
   response.responses.forEach((item, index) => {
