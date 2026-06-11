@@ -277,10 +277,12 @@ class SupabaseService {
   static Future<void> rejectCourierApplication({
     required String courierPhone,
     required String reasonKey,
+    String? rejectionMessageAr,
   }) =>
       _db.rejectCourierApplication(
         courierPhone: courierPhone,
         reasonKey: reasonKey,
+        rejectionMessageAr: rejectionMessageAr,
       );
 
   static Future<void> toggleMerchantFreezeStatus({
@@ -304,10 +306,12 @@ class SupabaseService {
   static Future<void> rejectMerchantApplication({
     required String merchantPhone,
     required String reasonKey,
+    String? rejectionMessageAr,
   }) =>
       _db.rejectMerchantApplication(
         merchantPhone: merchantPhone,
         reasonKey: reasonKey,
+        rejectionMessageAr: rejectionMessageAr,
       );
 
   static Future<void> saveDeviceToken({

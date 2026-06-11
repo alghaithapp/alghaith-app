@@ -153,7 +153,7 @@ class _DriverSetupScreenState extends State<DriverSetupScreen> {
                 provider.setUserRole('driver');
               },
               child: const Text(
-                'حفظ وتفعيل حساب التكسي',
+                'إرسال طلب التفعيل',
                 style: TextStyle(
                   fontFamily: 'Cairo',
                   fontWeight: FontWeight.w900,

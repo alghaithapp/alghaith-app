@@ -540,10 +540,13 @@ class DatabaseRepository {
   Future<void> rejectCourierApplication({
     required String courierPhone,
     required String reasonKey,
+    String? rejectionMessageAr,
   }) async {
     await ApiClient.instance.put('/db/admin/courier-rejection', body: {
       'courierPhone': _phone(courierPhone),
       'reasonKey': reasonKey,
+      if (rejectionMessageAr != null && rejectionMessageAr.trim().isNotEmpty)
+        'rejectionMessageAr': rejectionMessageAr.trim(),
     });
   }
 
@@ -570,10 +573,13 @@ class DatabaseRepository {
   Future<void> rejectMerchantApplication({
     required String merchantPhone,
     required String reasonKey,
+    String? rejectionMessageAr,
   }) async {
     await ApiClient.instance.put('/db/admin/merchant-rejection', body: {
       'merchantPhone': _phone(merchantPhone),
       'reasonKey': reasonKey,
+      if (rejectionMessageAr != null && rejectionMessageAr.trim().isNotEmpty)
+        'rejectionMessageAr': rejectionMessageAr.trim(),
     });
   }
 

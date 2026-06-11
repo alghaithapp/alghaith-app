@@ -19,6 +19,7 @@ import 'screens/favorites_screen.dart';
 import 'screens/delivery/delivery_setup_screen.dart';
 import 'screens/delivery/delivery_pending_approval_screen.dart';
 import 'screens/delivery/delivery_shell.dart';
+import 'screens/driver/driver_pending_approval_screen.dart';
 import 'screens/driver/driver_setup_screen.dart';
 import 'screens/driver/driver_shell.dart';
 import 'screens/phone_login_screen.dart';
@@ -189,9 +190,13 @@ class AlGhaithApp extends StatelessWidget {
         }
         return const ExitConfirmScope(child: MerchantShell());
       } else if (appProvider.userRole == 'driver') {
-        return appProvider.hasDriverProfile
-            ? const ExitConfirmScope(child: DriverShell())
-            : const ExitConfirmScope(child: DriverSetupScreen());
+        if (!appProvider.hasDriverProfile) {
+          return const ExitConfirmScope(child: DriverSetupScreen());
+        }
+        if (!appProvider.isDriverApproved) {
+          return const ExitConfirmScope(child: DriverPendingApprovalScreen());
+        }
+        return const ExitConfirmScope(child: DriverShell());
       } else if (appProvider.userRole == 'delivery') {
         if (!appProvider.hasCourierProfile) {
           return const ExitConfirmScope(child: DeliverySetupScreen());

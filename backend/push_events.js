@@ -527,6 +527,41 @@ async function onMerchantApproved(merchantPhone) {
   );
 }
 
+async function onDriverRejected(driverPhone, message, reasonKey = '') {
+  const phone = String(driverPhone || '').trim();
+  const body = String(message || '').trim();
+  if (!phone || !body) return;
+
+  await sendPushToPhone(
+    phone,
+    buildPushPayload({
+      title: 'طلب التكسي يحتاج تعديلاً',
+      body,
+      audience: 'driver',
+      orderId: '',
+      eventKey: `driver:${phone}:rejected:${reasonKey || 'general'}`,
+      category: 'account',
+    })
+  );
+}
+
+async function onDriverApproved(driverPhone) {
+  const phone = String(driverPhone || '').trim();
+  if (!phone) return;
+
+  await sendPushToPhone(
+    phone,
+    buildPushPayload({
+      title: 'تم تفعيل حساب التكسي',
+      body: 'وافقت الإدارة على طلبك. يمكنك الآن استقبال طلبات الركوب.',
+      audience: 'driver',
+      orderId: '',
+      eventKey: `driver:${phone}:approved`,
+      category: 'account',
+    })
+  );
+}
+
 async function onMerchantFrozen(merchantPhone, isFrozen) {
   if (!isFrozen) return;
   const phone = String(merchantPhone || '').trim();
@@ -551,6 +586,8 @@ module.exports = {
   onCourierRejected,
   onMerchantApproved,
   onMerchantRejected,
+  onDriverApproved,
+  onDriverRejected,
   onMerchantFrozen,
   sendPushToPhone,
   notifyActiveCouriers,

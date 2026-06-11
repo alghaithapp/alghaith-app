@@ -57,9 +57,14 @@ const {
   rejectCourierApplication,
   toggleMerchantApprovalStatus,
   rejectMerchantApplication,
+  toggleDriverApprovalStatus,
+  rejectDriverApplication,
   getAdminMerchantDetails,
   toggleBazaarMemberStatus,
   toggleMerchantFreezeStatus,
+  getAllAdminAccounts,
+  adminDeleteAccount,
+  adminSuspendAccount,
   syncMerchantProductsForBazaar,
   saveDeviceToken,
   deleteDeviceToken,
@@ -1354,13 +1359,21 @@ app.put('/db/admin/courier-rejection', async (req, res) => {
     if (!phone) return;
     const courierPhone = String(req.body?.courierPhone || '').trim();
     const reasonKey = String(req.body?.reasonKey || '').trim();
+    const rejectionMessageAr = String(
+      req.body?.rejectionMessageAr || req.body?.message || ''
+    ).trim();
     if (!courierPhone) {
       return res.status(400).json({ message: 'courierPhone is required.' });
     }
-    if (!reasonKey) {
-      return res.status(400).json({ message: 'reasonKey is required.' });
+    if (!reasonKey && !rejectionMessageAr) {
+      return res.status(400).json({ message: 'Rejection reason is required.' });
     }
-    const result = await rejectCourierApplication(phone, courierPhone, reasonKey);
+    const result = await rejectCourierApplication(
+      phone,
+      courierPhone,
+      reasonKey,
+      rejectionMessageAr
+    );
     return res.json(result);
   } catch (error) {
     console.error('reject courier error:', error);
@@ -1403,13 +1416,21 @@ app.put('/db/admin/merchant-rejection', async (req, res) => {
     if (!phone) return;
     const merchantPhone = String(req.body?.merchantPhone || '').trim();
     const reasonKey = String(req.body?.reasonKey || '').trim();
+    const rejectionMessageAr = String(
+      req.body?.rejectionMessageAr || req.body?.message || ''
+    ).trim();
     if (!merchantPhone) {
       return res.status(400).json({ message: 'merchantPhone is required.' });
     }
-    if (!reasonKey) {
-      return res.status(400).json({ message: 'reasonKey is required.' });
+    if (!reasonKey && !rejectionMessageAr) {
+      return res.status(400).json({ message: 'Rejection reason is required.' });
     }
-    const result = await rejectMerchantApplication(phone, merchantPhone, reasonKey);
+    const result = await rejectMerchantApplication(
+      phone,
+      merchantPhone,
+      reasonKey,
+      rejectionMessageAr
+    );
     return res.json(result);
   } catch (error) {
     console.error('reject merchant error:', error);
@@ -1417,6 +1438,63 @@ app.put('/db/admin/merchant-rejection', async (req, res) => {
     const status = message.includes('Admin access')
       ? 403
       : message.includes('not found') || message.includes('Invalid')
+        ? 400
+        : 500;
+    return res.status(status).json({ message });
+  }
+});
+
+app.put('/db/admin/driver-approval', async (req, res) => {
+  try {
+    const phone = requireAuthorizedPhone(req, res, { allowMissing: true });
+    if (!phone) return;
+    const driverPhone = String(req.body?.driverPhone || '').trim();
+    const isApproved = req.body?.isApproved === true;
+    if (!driverPhone) {
+      return res.status(400).json({ message: 'driverPhone is required.' });
+    }
+    const result = await toggleDriverApprovalStatus(phone, driverPhone, isApproved);
+    return res.json(result);
+  } catch (error) {
+    console.error('toggle driver approval error:', error);
+    const message = error?.message || 'Failed to toggle driver approval.';
+    const status = message.includes('Admin access')
+      ? 403
+      : message.includes('not found')
+        ? 404
+        : 500;
+    return res.status(status).json({ message });
+  }
+});
+
+app.put('/db/admin/driver-rejection', async (req, res) => {
+  try {
+    const phone = requireAuthorizedPhone(req, res, { allowMissing: true });
+    if (!phone) return;
+    const driverPhone = String(req.body?.driverPhone || '').trim();
+    const reasonKey = String(req.body?.reasonKey || '').trim();
+    const rejectionMessageAr = String(
+      req.body?.rejectionMessageAr || req.body?.message || ''
+    ).trim();
+    if (!driverPhone) {
+      return res.status(400).json({ message: 'driverPhone is required.' });
+    }
+    if (!reasonKey && !rejectionMessageAr) {
+      return res.status(400).json({ message: 'Rejection reason is required.' });
+    }
+    const result = await rejectDriverApplication(
+      phone,
+      driverPhone,
+      reasonKey,
+      rejectionMessageAr
+    );
+    return res.json(result);
+  } catch (error) {
+    console.error('reject driver error:', error);
+    const message = error?.message || 'Failed to reject driver application.';
+    const status = message.includes('Admin access')
+      ? 403
+      : message.includes('not found') || message.includes('required')
         ? 400
         : 500;
     return res.status(status).json({ message });
@@ -1438,6 +1516,67 @@ app.put('/db/admin/merchant-freeze', async (req, res) => {
     console.error('toggle freeze error:', error);
     const message = error?.message || 'Failed to toggle freeze status.';
     const status = message.includes('Admin access') ? 403 : 500;
+    return res.status(status).json({ message });
+  }
+});
+
+app.get('/db/admin/accounts', async (req, res) => {
+  try {
+    const phone = requireAuthorizedPhone(req, res, { allowMissing: true });
+    if (!phone) return;
+    const accounts = await getAllAdminAccounts(phone);
+    return res.json(accounts);
+  } catch (error) {
+    console.error('admin accounts error:', error);
+    const message = error?.message || 'Failed to load accounts.';
+    const status = message.includes('Admin access') ? 403 : 500;
+    return res.status(status).json({ message });
+  }
+});
+
+app.put('/db/admin/account-suspend', async (req, res) => {
+  try {
+    const phone = requireAuthorizedPhone(req, res, { allowMissing: true });
+    if (!phone) return;
+    const accountPhone = String(req.body?.accountPhone || '').trim();
+    const isSuspended = req.body?.isSuspended === true;
+    if (!accountPhone) {
+      return res.status(400).json({ message: 'accountPhone is required.' });
+    }
+    const result = await adminSuspendAccount(phone, accountPhone, isSuspended);
+    return res.json(result);
+  } catch (error) {
+    console.error('admin account suspend error:', error);
+    const message = error?.message || 'Failed to update account suspension.';
+    const status = message.includes('Admin access')
+      ? 403
+      : message.includes('not found') || message.includes('Cannot')
+        ? 400
+        : 500;
+    return res.status(status).json({ message });
+  }
+});
+
+app.delete('/db/admin/account', async (req, res) => {
+  try {
+    const phone = requireAuthorizedPhone(req, res, { allowMissing: true });
+    if (!phone) return;
+    const accountPhone = String(
+      req.body?.accountPhone || req.query?.accountPhone || ''
+    ).trim();
+    if (!accountPhone) {
+      return res.status(400).json({ message: 'accountPhone is required.' });
+    }
+    const result = await adminDeleteAccount(phone, accountPhone);
+    return res.json(result);
+  } catch (error) {
+    console.error('admin account delete error:', error);
+    const message = error?.message || 'Failed to delete account.';
+    const status = message.includes('Admin access')
+      ? 403
+      : message.includes('not found') || message.includes('Cannot')
+        ? 400
+        : 500;
     return res.status(status).json({ message });
   }
 });

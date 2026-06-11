@@ -2665,7 +2665,8 @@ function mapCourierForAdmin(phone, user, profile) {
     contactPhone,
     homeAddress,
     vehicleImage,
-    available: profile.available !== false,
+    available: profile.available !== false && profile.isSuspended !== true,
+    isSuspended: profile.isSuspended === true,
     isApproved: isCourierApproved(profile),
     approvalStatus: courierApprovalStatus(profile),
     rejectionReasonKey: String(profile.rejectionReasonKey ?? '').trim() || null,
@@ -3045,14 +3046,37 @@ async function toggleCourierApprovalStatus(adminPhone, courierPhone, isApproved)
   return { success: true, courier: mapped };
 }
 
-async function rejectCourierApplication(adminPhone, courierPhone, reasonKey) {
+function resolveRejectionMessage(reasonKey, rejectionMessageAr, catalog = {}) {
+  const custom = String(rejectionMessageAr || '').trim();
+  if (custom) {
+    return {
+      message: custom,
+      key: String(reasonKey || 'custom').trim() || 'custom',
+    };
+  }
+  const normalizedReason = String(reasonKey || '').trim();
+  const message = catalog[normalizedReason];
+  if (!message) return null;
+  return { message, key: normalizedReason };
+}
+
+async function rejectCourierApplication(
+  adminPhone,
+  courierPhone,
+  reasonKey = '',
+  rejectionMessageAr = ''
+) {
   await assertAdminAccess(adminPhone);
 
-  const normalizedReason = String(reasonKey || '').trim();
-  const message = COURIER_REJECTION_REASONS[normalizedReason];
-  if (!message) {
-    throw new Error('Invalid rejection reason.');
+  const resolved = resolveRejectionMessage(
+    reasonKey,
+    rejectionMessageAr,
+    COURIER_REJECTION_REASONS
+  );
+  if (!resolved) {
+    throw new Error('Rejection reason is required.');
   }
+  const { message, key: normalizedReason } = resolved;
 
   const phoneKey = await resolvePhoneKey(courierPhone);
   const state = (await getUserState(phoneKey)) || {};
@@ -3125,14 +3149,23 @@ async function toggleMerchantApprovalStatus(adminPhone, merchantPhone, isApprove
   };
 }
 
-async function rejectMerchantApplication(adminPhone, merchantPhone, reasonKey) {
+async function rejectMerchantApplication(
+  adminPhone,
+  merchantPhone,
+  reasonKey = '',
+  rejectionMessageAr = ''
+) {
   await assertAdminAccess(adminPhone);
 
-  const normalizedReason = String(reasonKey || '').trim();
-  const message = MERCHANT_REJECTION_REASONS[normalizedReason];
-  if (!message) {
-    throw new Error('Invalid rejection reason.');
+  const resolved = resolveRejectionMessage(
+    reasonKey,
+    rejectionMessageAr,
+    MERCHANT_REJECTION_REASONS
+  );
+  if (!resolved) {
+    throw new Error('Rejection reason is required.');
   }
+  const { message, key: normalizedReason } = resolved;
 
   const phoneKey = await resolvePhoneKey(merchantPhone);
   const profile = await getMerchantProfile(phoneKey);
@@ -3193,6 +3226,523 @@ async function toggleMerchantFreezeStatus(adminPhone, merchantPhone, isFrozen) {
   return { success: true, merchant: data[0] };
 }
 
+async function isProtectedAdminAccount(phone) {
+  const phoneKey = await resolvePhoneKey(phone);
+  const variants = getPhoneVariants(phoneKey);
+  const adminPhones = await getConfiguredAdminPhones();
+  if (variants.some((item) => adminPhones.has(item))) {
+    return true;
+  }
+  const user = await getAppUser(phoneKey);
+  if (String(user?.role ?? '').trim() === 'admin') {
+    return true;
+  }
+  const state = await getUserState(phoneKey);
+  if (state?.adminAccess === true) {
+    return true;
+  }
+  const role = String(state?.userRole ?? state?.user_role ?? '').trim();
+  return role === 'admin';
+}
+
+function readDriverProfileFromState(state) {
+  if (!state || typeof state !== 'object') return null;
+  const profile = state.driverProfile;
+  if (!profile || typeof profile !== 'object') return null;
+  return profile;
+}
+
+function isDriverProfileComplete(profile) {
+  if (!profile || typeof profile !== 'object') return false;
+  const name = String(profile.name ?? '').trim();
+  const phone = String(profile.phone ?? '').trim();
+  const vehicle = String(profile.vehicle ?? '').trim();
+  const plate = String(profile.plate ?? '').trim();
+  const area = String(profile.area ?? '').trim();
+  return Boolean(name && phone && vehicle && plate && area);
+}
+
+function isDriverApproved(profile) {
+  return profile?.isApproved === true;
+}
+
+function driverApprovalStatus(profile) {
+  if (!profile || typeof profile !== 'object') return 'pending';
+  if (isDriverApproved(profile)) return 'approved';
+  if (String(profile.approvalStatus ?? '').trim() === 'rejected') return 'rejected';
+  return 'pending';
+}
+
+function driverRejectionMessage(profile) {
+  return String(profile?.rejectionMessageAr ?? '').trim();
+}
+
+function resolveAccountApproval(state, merchantProfile, kind) {
+  if (kind === 'customer' || kind === 'admin') {
+    return {
+      needsApproval: false,
+      approvalStatus: null,
+      isApproved: true,
+      rejectionMessageAr: null,
+    };
+  }
+  if (kind === 'merchant') {
+    const profile = merchantProfile || {};
+    return {
+      needsApproval: true,
+      approvalStatus: merchantApprovalStatus(profile),
+      isApproved: isMerchantApproved(profile),
+      rejectionMessageAr: merchantRejectionMessage(profile) || null,
+    };
+  }
+  if (kind === 'courier') {
+    const profile = readCourierProfileFromState(state);
+    return {
+      needsApproval: true,
+      approvalStatus: courierApprovalStatus(profile),
+      isApproved: isCourierApproved(profile),
+      rejectionMessageAr: courierRejectionMessage(profile) || null,
+    };
+  }
+  if (kind === 'driver') {
+    const profile = readDriverProfileFromState(state);
+    return {
+      needsApproval: true,
+      approvalStatus: driverApprovalStatus(profile),
+      isApproved: isDriverApproved(profile),
+      rejectionMessageAr: driverRejectionMessage(profile) || null,
+    };
+  }
+  return {
+    needsApproval: false,
+    approvalStatus: null,
+    isApproved: true,
+    rejectionMessageAr: null,
+  };
+}
+
+async function toggleDriverApprovalStatus(adminPhone, driverPhone, isApproved) {
+  await assertAdminAccess(adminPhone);
+
+  const phoneKey = await resolvePhoneKey(driverPhone);
+  const state = (await getUserState(phoneKey)) || {};
+  const profile = readDriverProfileFromState(state);
+  if (!profile || !isDriverProfileComplete(profile)) {
+    throw new Error('Driver profile not found.');
+  }
+
+  const nextProfile = {
+    ...profile,
+    isApproved: Boolean(isApproved),
+    approvalStatus: Boolean(isApproved) ? 'approved' : 'pending',
+  };
+  if (Boolean(isApproved)) {
+    delete nextProfile.rejectionReasonKey;
+    delete nextProfile.rejectionMessageAr;
+    delete nextProfile.rejectedAt;
+  }
+  await saveUserState(phoneKey, {
+    ...state,
+    driverProfile: nextProfile,
+  });
+
+  const user = await getAppUser(phoneKey);
+  const refreshedState = (await getUserState(phoneKey)) || {};
+  const mapped = mapAdminAccountSummary(user, refreshedState, null);
+
+  if (Boolean(isApproved)) {
+    try {
+      const { onDriverApproved } = require('./push_events');
+      await onDriverApproved(phoneKey);
+    } catch (error) {
+      console.error('push onDriverApproved error:', error?.message || error);
+    }
+  }
+
+  return { success: true, driver: mapped };
+}
+
+async function rejectDriverApplication(
+  adminPhone,
+  driverPhone,
+  reasonKey = '',
+  rejectionMessageAr = ''
+) {
+  await assertAdminAccess(adminPhone);
+
+  const resolved = resolveRejectionMessage(reasonKey, rejectionMessageAr, {});
+  if (!resolved) {
+    throw new Error('Rejection reason is required.');
+  }
+  const { message, key: normalizedReason } = resolved;
+
+  const phoneKey = await resolvePhoneKey(driverPhone);
+  const state = (await getUserState(phoneKey)) || {};
+  const profile = readDriverProfileFromState(state);
+  if (!profile || !isDriverProfileComplete(profile)) {
+    throw new Error('Driver profile not found.');
+  }
+
+  const nextProfile = {
+    ...profile,
+    isApproved: false,
+    approvalStatus: 'rejected',
+    rejectionReasonKey: normalizedReason,
+    rejectionMessageAr: message,
+    rejectedAt: nowIso(),
+  };
+  await saveUserState(phoneKey, {
+    ...state,
+    driverProfile: nextProfile,
+  });
+
+  const user = await getAppUser(phoneKey);
+  const refreshedState = (await getUserState(phoneKey)) || {};
+  const mapped = mapAdminAccountSummary(user, refreshedState, null);
+
+  try {
+    const { onDriverRejected } = require('./push_events');
+    await onDriverRejected(phoneKey, message, normalizedReason);
+  } catch (error) {
+    console.error('push onDriverRejected error:', error?.message || error);
+  }
+
+  return { success: true, driver: mapped };
+}
+
+function classifyAdminAccountKind(user, state, merchantProfile) {
+  const role = String(user?.role ?? '').trim();
+  const accountType = String(user?.account_type ?? '').trim();
+
+  if (role === 'admin' || state?.adminAccess === true) {
+    return 'admin';
+  }
+
+  const storeName = String(merchantProfile?.store_name ?? '').trim();
+  const merchantStoreName = String(state?.merchantStore?.name ?? '').trim();
+  if (role === 'merchant' || storeName || merchantStoreName) {
+    return 'merchant';
+  }
+
+  const driverProfile = readDriverProfileFromState(state);
+  if (
+    role === 'driver' ||
+    accountType === 'driver' ||
+    (driverProfile && Object.keys(driverProfile).length > 0)
+  ) {
+    return 'driver';
+  }
+
+  const courierProfile = readCourierProfileFromState(state);
+  if (
+    role === 'delivery' ||
+    accountType === 'delivery' ||
+    isCourierProfileComplete(courierProfile)
+  ) {
+    return 'courier';
+  }
+
+  return 'customer';
+}
+
+function accountDisplayName(user, state, merchantProfile, kind) {
+  const fullName = String(user?.full_name ?? '').trim();
+  const merchantName = String(merchantProfile?.store_name ?? '').trim();
+  const merchantStoreName = String(state?.merchantStore?.name ?? '').trim();
+  const courierName = String(readCourierProfileFromState(state)?.name ?? '').trim();
+  const driverName = String(readDriverProfileFromState(state)?.name ?? '').trim();
+  const professionalName = String(
+    normalizeObject(merchantProfile?.professional_info)?.name ?? ''
+  ).trim();
+
+  if (kind === 'merchant') {
+    return merchantName || merchantStoreName || professionalName || fullName || 'تاجر';
+  }
+  if (kind === 'courier') {
+    return courierName || fullName || 'مندوب توصيل';
+  }
+  if (kind === 'driver') {
+    return driverName || fullName || 'سائق تكسي';
+  }
+  if (kind === 'admin') {
+    return fullName || 'مشرف';
+  }
+  return fullName || 'زبون';
+}
+
+function resolveAccountSuspended(state, merchantProfile) {
+  if (state?.accountSuspended === true) return true;
+  if (isMerchantFrozen(merchantProfile)) return true;
+  const courierProfile = readCourierProfileFromState(state);
+  if (courierProfile?.isSuspended === true) return true;
+  const driverProfile = readDriverProfileFromState(state);
+  if (driverProfile?.isSuspended === true) return true;
+  return false;
+}
+
+function mapAdminAccountSummary(user, state, merchantProfile) {
+  const phone = String(user?.phone ?? '').trim();
+  const kind = classifyAdminAccountKind(user, state, merchantProfile);
+  const courierProfile = readCourierProfileFromState(state);
+  const driverProfile = readDriverProfileFromState(state);
+  const approval = resolveAccountApproval(state, merchantProfile, kind);
+
+  return {
+    phone,
+    displayName: accountDisplayName(user, state, merchantProfile, kind),
+    fullName: String(user?.full_name ?? '').trim(),
+    role: String(user?.role ?? '').trim(),
+    accountType: String(user?.account_type ?? '').trim(),
+    kind,
+    isSuspended: resolveAccountSuspended(state, merchantProfile),
+    merchantStoreName: String(merchantProfile?.store_name ?? '').trim(),
+    primaryServiceId: String(merchantProfile?.primary_service_id ?? '').trim(),
+    courierApproved: isCourierApproved(courierProfile),
+    needsApproval: approval.needsApproval,
+    approvalStatus: approval.approvalStatus,
+    isApproved: approval.isApproved,
+    rejectionMessageAr: approval.rejectionMessageAr,
+    updatedAt: user?.updated_at ?? merchantProfile?.updated_at ?? null,
+    createdAt: user?.created_at ?? merchantProfile?.created_at ?? null,
+    hasMerchantProfile: Boolean(merchantProfile),
+    hasCourierProfile: isCourierProfileComplete(courierProfile),
+    hasDriverProfile: isDriverProfileComplete(driverProfile),
+  };
+}
+
+async function getAllAdminAccounts(adminPhone) {
+  await assertAdminAccess(adminPhone);
+
+  const [users, states, merchants] = await Promise.all([
+    selectMany('app_users', [], { column: 'updated_at', ascending: false }),
+    selectMany('app_state', [], { column: 'updated_at', ascending: false }),
+    selectMany('merchant_profiles', []),
+  ]);
+
+  const stateByPhone = {};
+  for (const row of states) {
+    const phone = String(row.phone || '').trim();
+    if (!phone) continue;
+    stateByPhone[phone] = row.state || {};
+  }
+
+  const merchantByPhone = {};
+  for (const row of merchants) {
+    const phone = String(row.phone || '').trim();
+    if (!phone) continue;
+    merchantByPhone[phone] = row;
+  }
+
+  const accounts = users
+    .map((user) => {
+      const phone = String(user.phone || '').trim();
+      if (!phone) return null;
+      const state = stateByPhone[phone] || {};
+      const merchantProfile = merchantByPhone[phone] || null;
+      return mapAdminAccountSummary(user, state, merchantProfile);
+    })
+    .filter(Boolean);
+
+  const kindRank = {
+    admin: 0,
+    merchant: 1,
+    courier: 2,
+    driver: 3,
+    customer: 4,
+  };
+
+  return accounts.sort((a, b) => {
+    const rankDiff = (kindRank[a.kind] ?? 9) - (kindRank[b.kind] ?? 9);
+    if (rankDiff !== 0) return rankDiff;
+    if (a.isSuspended !== b.isSuspended) {
+      return a.isSuspended ? -1 : 1;
+    }
+    return String(a.displayName || '').localeCompare(String(b.displayName || ''), 'ar');
+  });
+}
+
+async function deleteAllCustomerAddressesForPhone(phone) {
+  const phoneKey = await resolvePhoneKey(phone);
+  const supabase = assertSupabaseAdmin();
+  const variants = getPhoneVariants(phoneKey);
+  if (variants.length === 0) return;
+
+  if (await hasColumn('customer_addresses', 'phone')) {
+    const { error } = await supabase
+      .from('customer_addresses')
+      .delete()
+      .in('phone', variants);
+    if (error && !/does not exist/i.test(error.message || '')) {
+      throw new Error(error.message);
+    }
+    return;
+  }
+
+  const userId = await getAppUserId(phoneKey);
+  if (!userId) return;
+  const { error } = await supabase
+    .from('customer_addresses')
+    .delete()
+    .eq('user_id', userId);
+  if (error && !/does not exist/i.test(error.message || '')) {
+    throw new Error(error.message);
+  }
+}
+
+async function purgeAccountData(phone) {
+  const phoneKey = await resolvePhoneKey(phone);
+  const supabase = assertSupabaseAdmin();
+  const variants = getPhoneVariants(phoneKey);
+
+  if (variants.length > 0) {
+    const { error: productsError } = await supabase
+      .from('merchant_products')
+      .delete()
+      .in('phone', variants);
+    if (productsError && !/does not exist/i.test(productsError.message || '')) {
+      throw new Error(productsError.message);
+    }
+
+    if (await hasColumn('customer_favorites', 'phone')) {
+      const { error: favoritesError } = await supabase
+        .from('customer_favorites')
+        .delete()
+        .in('phone', variants);
+      if (favoritesError && !/does not exist/i.test(favoritesError.message || '')) {
+        console.warn('purgeAccountData favorites cleanup:', favoritesError.message);
+      }
+    }
+  }
+
+  try {
+    await deleteMerchantProfile(phoneKey);
+  } catch (error) {
+    if (!/not found|No rows/i.test(String(error?.message || ''))) {
+      console.warn('purgeAccountData merchant profile:', error?.message || error);
+    }
+  }
+
+  try {
+    await deleteCustomerProfile(phoneKey);
+  } catch (error) {
+    if (!/not found|No rows/i.test(String(error?.message || ''))) {
+      console.warn('purgeAccountData customer profile:', error?.message || error);
+    }
+  }
+
+  try {
+    await deleteAllCustomerAddressesForPhone(phoneKey);
+  } catch (error) {
+    console.warn('purgeAccountData customer addresses:', error?.message || error);
+  }
+
+  try {
+    await deleteUserState(phoneKey);
+  } catch (error) {
+    console.warn('purgeAccountData user state:', error?.message || error);
+  }
+
+  try {
+    await deleteAllDeviceTokens(phoneKey);
+  } catch (error) {
+    console.warn('purgeAccountData device tokens:', error?.message || error);
+  }
+
+  await deleteAppUser(phoneKey);
+  return { success: true, phone: phoneKey };
+}
+
+async function adminDeleteAccount(adminPhone, targetPhone) {
+  await assertAdminAccess(adminPhone);
+
+  const phoneKey = await resolvePhoneKey(targetPhone);
+  if (!phoneKey) {
+    throw new Error('Account phone is required.');
+  }
+
+  const adminKey = await resolvePhoneKey(adminPhone);
+  if (getPhoneVariants(adminKey).some((item) => getPhoneVariants(phoneKey).includes(item))) {
+    throw new Error('Cannot delete your own admin session account.');
+  }
+
+  if (await isProtectedAdminAccount(phoneKey)) {
+    throw new Error('Cannot delete a protected admin account.');
+  }
+
+  const existing = await getAppUser(phoneKey);
+  if (!existing) {
+    throw new Error('Account not found.');
+  }
+
+  return purgeAccountData(phoneKey);
+}
+
+async function adminSuspendAccount(adminPhone, targetPhone, isSuspended) {
+  await assertAdminAccess(adminPhone);
+
+  const phoneKey = await resolvePhoneKey(targetPhone);
+  if (!phoneKey) {
+    throw new Error('Account phone is required.');
+  }
+
+  if (await isProtectedAdminAccount(phoneKey)) {
+    throw new Error('Cannot suspend a protected admin account.');
+  }
+
+  const existing = await getAppUser(phoneKey);
+  if (!existing) {
+    throw new Error('Account not found.');
+  }
+
+  const state = (await getUserState(phoneKey)) || {};
+  const merchantProfile = await getMerchantProfile(phoneKey);
+  const courierProfile = readCourierProfileFromState(state);
+  const driverProfile = readDriverProfileFromState(state);
+
+  const nextState = {
+    ...state,
+    accountSuspended: Boolean(isSuspended),
+    suspendedAt: isSuspended ? nowIso() : null,
+  };
+
+  if (courierProfile) {
+    nextState.courierProfile = {
+      ...courierProfile,
+      isSuspended: Boolean(isSuspended),
+      available: !isSuspended,
+    };
+  }
+
+  if (driverProfile) {
+    nextState.driverProfile = {
+      ...driverProfile,
+      isSuspended: Boolean(isSuspended),
+      available: !isSuspended,
+    };
+  }
+
+  await saveUserState(phoneKey, nextState);
+
+  if (merchantProfile) {
+    const supabase = assertSupabaseAdmin();
+    const variants = getPhoneVariants(phoneKey);
+    const { error } = await supabase
+      .from('merchant_profiles')
+      .update({ is_frozen: Boolean(isSuspended), updated_at: nowIso() })
+      .in('phone', variants);
+    if (error) throw new Error(error.message);
+  }
+
+  const refreshedState = (await getUserState(phoneKey)) || nextState;
+  const refreshedMerchant = await getMerchantProfile(phoneKey);
+  return {
+    success: true,
+    phone: phoneKey,
+    isSuspended: resolveAccountSuspended(refreshedState, refreshedMerchant),
+    account: mapAdminAccountSummary(existing, refreshedState, refreshedMerchant),
+  };
+}
+
 module.exports = {
   isConfigured,
   supabaseKeyRole,
@@ -3246,9 +3796,14 @@ module.exports = {
   rejectCourierApplication,
   toggleMerchantApprovalStatus,
   rejectMerchantApplication,
+  toggleDriverApprovalStatus,
+  rejectDriverApplication,
   getAdminMerchantDetails,
   toggleBazaarMemberStatus,
   toggleMerchantFreezeStatus,
+  getAllAdminAccounts,
+  adminDeleteAccount,
+  adminSuspendAccount,
   syncMerchantProductsForBazaar,
   saveDeviceToken,
   deleteDeviceToken,

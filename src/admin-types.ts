@@ -137,6 +137,35 @@ export interface MerchantProduct {
 
 export type CourierRejectionReasonKey = 'name' | 'phone' | 'address' | 'vehicleImage';
 
+export type AdminAccountKind =
+  | 'customer'
+  | 'merchant'
+  | 'courier'
+  | 'driver'
+  | 'admin';
+
+export interface AdminAccountSummary {
+  phone: string;
+  displayName: string;
+  fullName: string;
+  role: string;
+  accountType: string;
+  kind: AdminAccountKind;
+  isSuspended: boolean;
+  needsApproval: boolean;
+  approvalStatus: 'pending' | 'approved' | 'rejected' | null;
+  isApproved: boolean;
+  rejectionMessageAr: string | null;
+  merchantStoreName: string;
+  primaryServiceId: string;
+  courierApproved: boolean;
+  updatedAt: string | null;
+  createdAt: string | null;
+  hasMerchantProfile: boolean;
+  hasCourierProfile: boolean;
+  hasDriverProfile: boolean;
+}
+
 export interface CourierSummary {
   phone: string;
   name: string;
@@ -144,6 +173,7 @@ export interface CourierSummary {
   homeAddress: string;
   vehicleImage: string;
   available: boolean;
+  isSuspended: boolean;
   isApproved: boolean;
   approvalStatus: 'pending' | 'approved' | 'rejected';
   rejectionReasonKey: CourierRejectionReasonKey | null;

@@ -609,6 +609,31 @@ class NotificationHub {
     );
   }
 
+  void onDriverApproved() {
+    _notify(
+      title: 'تم تفعيل حساب التكسي',
+      body: 'وافقت الإدارة على طلبك. يمكنك الآن استقبال طلبات الركوب.',
+      audience: 'driver',
+      category: NotificationCategory.account,
+      priority: NotificationPriority.urgent,
+      eventKey: 'driver:account:approved',
+    );
+  }
+
+  void onDriverRejected(String message) {
+    final body = message.trim().isNotEmpty
+        ? message.trim()
+        : 'يرجى تعديل بياناتك وإعادة إرسال الطلب.';
+    _notify(
+      title: 'طلب التكسي يحتاج تعديلاً',
+      body: body,
+      audience: 'driver',
+      category: NotificationCategory.account,
+      priority: NotificationPriority.urgent,
+      eventKey: 'driver:account:rejected',
+    );
+  }
+
   void onAdminReportsUpdated(
     Map<String, dynamic>? previous,
     Map<String, dynamic>? current,

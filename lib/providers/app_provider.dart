@@ -21,6 +21,7 @@ import '../utils/merchant_service_labels.dart';
 import '../models/merchant_product_section.dart';
 import '../utils/merchant_product_sections.dart';
 import '../utils/courier_profile_fields.dart';
+import '../utils/driver_profile_fields.dart';
 import '../utils/merchant_profile_fields.dart';
 
 class AppProvider extends ChangeNotifier {
@@ -420,7 +421,8 @@ class AppProvider extends ChangeNotifier {
   bool get merchantCatalogSeeded => false;
   String? get driverType => _driverType;
   Map<String, dynamic>? get driverProfile => _driverProfile;
-  bool get hasDriverProfile => _driverProfile != null;
+  bool get hasDriverProfile => DriverProfileFields.isComplete(_driverProfile);
+  bool get isDriverApproved => DriverProfileFields.isApproved(_driverProfile);
   Map<String, dynamic>? get courierProfile => _courierProfile;
   bool get hasCourierProfile =>
       CourierProfileFields.isComplete(_courierProfile);
@@ -1571,9 +1573,24 @@ class AppProvider extends ChangeNotifier {
         state['notificationsEnabled'] as bool? ??
         _inAppAlertsEnabled;
     _driverType = state['driverType'] as String? ?? _driverType;
+    final previousDriverProfile = _driverProfile == null
+        ? null
+        : Map<String, dynamic>.from(_driverProfile!);
+    final wasDriverApproved =
+        DriverProfileFields.isApproved(previousDriverProfile);
+    final wasDriverRejected =
+        DriverProfileFields.isRejected(previousDriverProfile);
+    final previousDriverRejectionMessage =
+        DriverProfileFields.rejectionMessage(previousDriverProfile);
+
     final driverProfile = state['driverProfile'];
     if (driverProfile is Map) {
       _driverProfile = Map<String, dynamic>.from(driverProfile);
+      _notifyDriverApprovalTransition(
+        wasApproved: wasDriverApproved,
+        wasRejected: wasDriverRejected,
+        previousRejectionMessage: previousDriverRejectionMessage,
+      );
     }
     final courierProfile = state['courierProfile'];
     if (courierProfile is Map) {
@@ -2017,15 +2034,28 @@ class AppProvider extends ChangeNotifier {
   }
 
   Future<void> setDriverProfile(Map<String, dynamic> profile) async {
+    final wasApproved = DriverProfileFields.isApproved(_driverProfile);
     final normalized = Map<String, dynamic>.from(profile);
     normalized['type'] = 'taxi';
     normalized['services'] = {'taxi': true, 'delivery': false};
     _driverType = 'taxi';
+    normalized.remove('isApproved');
+    normalized.remove('approvalStatus');
+    normalized.remove('rejectionReasonKey');
+    normalized.remove('rejectionMessageAr');
+    normalized.remove('rejectedAt');
 
     _driverProfile = {
       ...?_driverProfile,
       ...normalized,
+      'isApproved': wasApproved,
     };
+    if (!wasApproved) {
+      _driverProfile!['approvalStatus'] = 'pending';
+      _driverProfile!.remove('rejectionReasonKey');
+      _driverProfile!.remove('rejectionMessageAr');
+      _driverProfile!.remove('rejectedAt');
+    }
     if (_authPhone != null && _authPhone!.isNotEmpty) {
       await SupabaseService.saveUserState(_authPhone!, _buildRemoteState());
     }
@@ -4158,6 +4188,31 @@ class AppProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  void _notifyDriverApprovalTransition({
+    required bool wasApproved,
+    required bool wasRejected,
+    required String previousRejectionMessage,
+  }) {
+    if (!hasDriverProfile) return;
+
+    final nowApproved = isDriverApproved;
+    final nowRejected = DriverProfileFields.isRejected(_driverProfile);
+    final rejectionMessage =
+        DriverProfileFields.rejectionMessage(_driverProfile);
+
+    if (nowApproved && !wasApproved) {
+      _notificationHub.onDriverApproved();
+      _queueUnreadPromptForRole('driver');
+      return;
+    }
+
+    if (nowRejected &&
+        (!wasRejected || rejectionMessage != previousRejectionMessage)) {
+      _notificationHub.onDriverRejected(rejectionMessage);
+      _queueUnreadPromptForRole('driver');
+    }
+  }
+
   void _notifyCourierApprovalTransition({
     required bool wasApproved,
     required bool wasRejected,
@@ -4208,14 +4263,16 @@ class AppProvider extends ChangeNotifier {
 
   Future<void> rejectCourierApplication(
     String courierPhone,
-    String reasonKey,
-  ) async {
+    String reasonKey, {
+    String? rejectionMessageAr,
+  }) async {
     final phone = _trimmedOrNull(_authPhone) ?? _trimmedOrNull(_customerPhone);
     if (phone == null || !SupabaseService.isConfigured) return;
     try {
       await SupabaseService.rejectCourierApplication(
         courierPhone: courierPhone,
         reasonKey: reasonKey,
+        rejectionMessageAr: rejectionMessageAr,
       );
       await refreshAllCouriers();
       notifyListeners();
@@ -4253,14 +4310,16 @@ class AppProvider extends ChangeNotifier {
 
   Future<void> rejectMerchantApplication(
     String merchantPhone,
-    String reasonKey,
-  ) async {
+    String reasonKey, {
+    String? rejectionMessageAr,
+  }) async {
     final phone = _trimmedOrNull(_authPhone) ?? _trimmedOrNull(_customerPhone);
     if (phone == null || !SupabaseService.isConfigured) return;
     try {
       await SupabaseService.rejectMerchantApplication(
         merchantPhone: merchantPhone,
         reasonKey: reasonKey,
+        rejectionMessageAr: rejectionMessageAr,
       );
       final selfPhone = _trimmedOrNull(_authPhone);
       if (selfPhone != null &&

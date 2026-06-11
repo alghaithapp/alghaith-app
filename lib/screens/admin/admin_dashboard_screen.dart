@@ -859,6 +859,7 @@ class _CourierManagementTabState extends State<_CourierManagementTab> {
       {'key': 'vehicleImage', 'label': 'صورة الدراجة غير واضحة أو غير مقبولة'},
     ];
     var selectedKey = reasons.first['key']!;
+    final customMessageController = TextEditingController();
 
     final confirmed = await showDialog<bool>(
       context: context,
@@ -873,8 +874,19 @@ class _CourierManagementTabState extends State<_CourierManagementTab> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 const Text(
-                  'اختر سبب الرفض. سيصل إشعار للمندوب ليقوم بتعديل بياناته.',
+                  'اكتب سبب الرفض ليظهر للمندوب، أو اختر سبباً جاهزاً ثم عدّله.',
                   style: TextStyle(fontFamily: 'Cairo', height: 1.5),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: customMessageController,
+                  maxLines: 3,
+                  decoration: const InputDecoration(
+                    labelText: 'سبب الرفض (يظهر للمستخدم)',
+                    border: OutlineInputBorder(),
+                    alignLabelWithHint: true,
+                  ),
+                  style: const TextStyle(fontFamily: 'Cairo', fontSize: 13),
                 ),
                 const SizedBox(height: 12),
                 ...reasons.map(
@@ -883,7 +895,10 @@ class _CourierManagementTabState extends State<_CourierManagementTab> {
                     groupValue: selectedKey,
                     onChanged: (value) {
                       if (value == null) return;
-                      setDialogState(() => selectedKey = value);
+                      setDialogState(() {
+                        selectedKey = value;
+                        customMessageController.text = reason['label']!;
+                      });
                     },
                     title: Text(
                       reason['label']!,
@@ -911,10 +926,29 @@ class _CourierManagementTabState extends State<_CourierManagementTab> {
       ),
     );
 
+    final rejectionMessage = customMessageController.text.trim();
+    customMessageController.dispose();
+
     if (confirmed != true || !mounted) return;
+    if (rejectionMessage.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'يرجى كتابة سبب الرفض ليظهر للمندوب',
+            style: TextStyle(fontFamily: 'Cairo'),
+          ),
+        ),
+      );
+      return;
+    }
     setState(() => _busyCourierPhone = phone);
     try {
-      await provider.rejectCourierApplication(phone, selectedKey);
+      await provider.rejectCourierApplication(
+        phone,
+        selectedKey,
+        rejectionMessageAr: rejectionMessage,
+      );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(

@@ -1,4 +1,5 @@
 import type {
+  AdminAccountSummary,
   AdminReports,
   AdminSession,
   CourierSummary,
@@ -84,6 +85,34 @@ export async function loadCouriers(token: string): Promise<CourierSummary[]> {
   return request<CourierSummary[]>(DATABASE_API_BASE_URL, '/db/admin/couriers', { token });
 }
 
+export async function loadAdminAccounts(
+  token: string,
+): Promise<AdminAccountSummary[]> {
+  return request<AdminAccountSummary[]>(DATABASE_API_BASE_URL, '/db/admin/accounts', {
+    token,
+  });
+}
+
+export async function suspendAdminAccount(
+  token: string,
+  accountPhone: string,
+  isSuspended: boolean,
+) {
+  return request(DATABASE_API_BASE_URL, '/db/admin/account-suspend', {
+    method: 'PUT',
+    token,
+    body: JSON.stringify({ accountPhone, isSuspended }),
+  });
+}
+
+export async function deleteAdminAccount(token: string, accountPhone: string) {
+  return request(DATABASE_API_BASE_URL, '/db/admin/account', {
+    method: 'DELETE',
+    token,
+    body: JSON.stringify({ accountPhone }),
+  });
+}
+
 export async function toggleCourierApproval(
   token: string,
   courierPhone: string,
@@ -99,12 +128,38 @@ export async function toggleCourierApproval(
 export async function rejectCourierApplication(
   token: string,
   courierPhone: string,
-  reasonKey: string,
+  rejectionMessageAr: string,
+  reasonKey = 'custom',
 ) {
   return request(DATABASE_API_BASE_URL, '/db/admin/courier-rejection', {
     method: 'PUT',
     token,
-    body: JSON.stringify({ courierPhone, reasonKey }),
+    body: JSON.stringify({ courierPhone, reasonKey, rejectionMessageAr }),
+  });
+}
+
+export async function toggleDriverApproval(
+  token: string,
+  driverPhone: string,
+  isApproved: boolean,
+) {
+  return request(DATABASE_API_BASE_URL, '/db/admin/driver-approval', {
+    method: 'PUT',
+    token,
+    body: JSON.stringify({ driverPhone, isApproved }),
+  });
+}
+
+export async function rejectDriverApplication(
+  token: string,
+  driverPhone: string,
+  rejectionMessageAr: string,
+  reasonKey = 'custom',
+) {
+  return request(DATABASE_API_BASE_URL, '/db/admin/driver-rejection', {
+    method: 'PUT',
+    token,
+    body: JSON.stringify({ driverPhone, reasonKey, rejectionMessageAr }),
   });
 }
 
@@ -126,19 +181,20 @@ export async function toggleMerchantApproval(
   return request(DATABASE_API_BASE_URL, '/db/admin/merchant-approval', {
     token,
     method: 'PUT',
-    body: { merchantPhone, isApproved },
+    body: JSON.stringify({ merchantPhone, isApproved }),
   });
 }
 
 export async function rejectMerchantApplication(
   token: string,
   merchantPhone: string,
-  reasonKey: string,
+  rejectionMessageAr: string,
+  reasonKey = 'custom',
 ) {
   return request(DATABASE_API_BASE_URL, '/db/admin/merchant-rejection', {
     token,
     method: 'PUT',
-    body: { merchantPhone, reasonKey },
+    body: JSON.stringify({ merchantPhone, reasonKey, rejectionMessageAr }),
   });
 }
 

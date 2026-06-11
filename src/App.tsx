@@ -15,39 +15,52 @@ import {
   Shield,
   ShoppingBag,
   Store,
+  Trash2,
+  UserX,
   Users,
   X,
   XCircle,
 } from 'lucide-react';
 
 import {
+  deleteAdminAccount,
+  loadAdminAccounts,
   loadAdminReports,
   loadCouriers,
   loadMerchantDetails,
   loadMerchants,
   rejectCourierApplication,
+  rejectDriverApplication,
   rejectMerchantApplication,
   sendCode,
+  suspendAdminAccount,
   syncMerchantBazaarProducts,
   toggleCourierApproval,
+  toggleDriverApproval,
   toggleMerchantApproval,
   toggleMerchantBazaar,
   toggleMerchantFreeze,
   verifyCode,
 } from './admin-api';
 import type {
+  AdminAccountKind,
+  AdminAccountSummary,
   AdminReports,
-  CourierRejectionReasonKey,
   CourierSummary,
   MerchantDetails,
-  MerchantRejectionReasonKey,
   MerchantSummary,
 } from './admin-types';
 import { COURIER_REJECTION_REASONS, MERCHANT_REJECTION_REASONS } from './admin-types';
 
+type RejectAccountTarget = Pick<
+  AdminAccountSummary,
+  'phone' | 'displayName' | 'kind'
+>;
+
 const SESSION_STORAGE_KEY = 'alghaith-admin-session-v1';
 
-type AdminView = 'dashboard' | 'merchants' | 'approvals' | 'couriers';
+type AdminView = 'dashboard' | 'accounts' | 'merchants' | 'approvals' | 'couriers';
+type AccountFilter = 'all' | AdminAccountKind;
 
 const VIEW_META: Record<
   AdminView,
@@ -75,6 +88,12 @@ const VIEW_META: Record<
     eyebrow: 'مندوبو التوصيل',
     title: 'إدارة مندوبي التوصيل',
     subtitle: 'راجع بيانات المندوب ووافق على تفعيل حسابه قبل استقبال الطلبات.',
+    showSearch: true,
+  },
+  accounts: {
+    eyebrow: 'إدارة الحسابات',
+    title: 'جميع حسابات المنصة',
+    subtitle: 'حذف أو تعليق حسابات الزبائن، التجار، المهنيين، مندوبي التوصيل، وسائقي التكسي.',
     showSearch: true,
   },
 };
@@ -119,6 +138,27 @@ function canRequestBazaarApproval(merchant: MerchantSummary) {
   return merchant.primaryServiceId === 'restaurant' || merchant.primaryServiceId === 'product';
 }
 
+function accountNeedsApproval(account: AdminAccountSummary) {
+  return account.needsApproval === true;
+}
+
+function accountKindLabel(kind: AdminAccountKind) {
+  switch (kind) {
+    case 'customer':
+      return 'زبون';
+    case 'merchant':
+      return 'تاجر / مهني';
+    case 'courier':
+      return 'مندوب توصيل';
+    case 'driver':
+      return 'سائق تكسي';
+    case 'admin':
+      return 'مشرف';
+    default:
+      return kind;
+  }
+}
+
 function readStoredSession(): StoredSession | null {
   try {
     const raw = window.localStorage.getItem(SESSION_STORAGE_KEY);
@@ -150,6 +190,8 @@ function App() {
   const [reports, setReports] = useState<AdminReports | null>(null);
   const [merchants, setMerchants] = useState<MerchantSummary[]>([]);
   const [couriers, setCouriers] = useState<CourierSummary[]>([]);
+  const [accounts, setAccounts] = useState<AdminAccountSummary[]>([]);
+  const [accountFilter, setAccountFilter] = useState<AccountFilter>('all');
   const [selectedMerchantPhone, setSelectedMerchantPhone] = useState('');
   const [merchantDetails, setMerchantDetails] = useState<MerchantDetails | null>(
     null,
@@ -157,14 +199,11 @@ function App() {
   const [isLoadingData, setIsLoadingData] = useState(false);
   const [isLoadingDetails, setIsLoadingDetails] = useState(false);
   const [activeActionKey, setActiveActionKey] = useState('');
-  const [rejectTarget, setRejectTarget] = useState<CourierSummary | null>(null);
-  const [rejectReasonKey, setRejectReasonKey] =
-    useState<CourierRejectionReasonKey>('name');
-  const [rejectMerchantTarget, setRejectMerchantTarget] =
-    useState<MerchantSummary | null>(null);
-  const [rejectMerchantReasonKey, setRejectMerchantReasonKey] =
-    useState<MerchantRejectionReasonKey>('storeName');
+  const [rejectAccountTarget, setRejectAccountTarget] =
+    useState<RejectAccountTarget | null>(null);
+  const [rejectMessage, setRejectMessage] = useState('');
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<AdminAccountSummary | null>(null);
 
   useEffect(() => {
     const stored = readStoredSession();
@@ -177,14 +216,16 @@ function App() {
     setIsLoadingData(true);
     setBootError('');
     try {
-      const [nextReports, nextMerchants, nextCouriers] = await Promise.all([
+      const [nextReports, nextMerchants, nextCouriers, nextAccounts] = await Promise.all([
         loadAdminReports(authToken),
         loadMerchants(authToken),
         loadCouriers(authToken),
+        loadAdminAccounts(authToken),
       ]);
       setReports(nextReports);
       setMerchants(nextMerchants);
       setCouriers(nextCouriers);
+      setAccounts(nextAccounts);
 
       const merchantPhone =
         preferredMerchantPhone ||
@@ -284,6 +325,27 @@ function App() {
     [merchants],
   );
 
+  const filteredAccounts = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    return accounts.filter((account) => {
+      if (accountFilter !== 'all' && account.kind !== accountFilter) {
+        return false;
+      }
+      if (!query) return true;
+      const haystack = [
+        account.displayName,
+        account.fullName,
+        account.phone,
+        account.kind,
+        account.merchantStoreName,
+        account.primaryServiceId,
+      ]
+        .join(' ')
+        .toLowerCase();
+      return haystack.includes(query);
+    });
+  }, [accounts, accountFilter, search]);
+
   const filteredCouriers = useMemo(() => {
     const query = search.trim().toLowerCase();
     if (!query) return couriers;
@@ -355,7 +417,9 @@ function App() {
     setReports(null);
     setMerchants([]);
     setCouriers([]);
+    setAccounts([]);
     setMerchantDetails(null);
+    setDeleteTarget(null);
     setSelectedMerchantPhone('');
     setSuccessMessage('');
     setActionError('');
@@ -409,49 +473,69 @@ function App() {
     }
   }
 
-  async function handleMerchantRejection() {
-    if (!token || !rejectMerchantTarget) return;
-    const actionKey = `reject-merchant:${rejectMerchantTarget.phone}`;
+  function openRejectConfirm(target: RejectAccountTarget) {
+    setRejectAccountTarget(target);
+    setRejectMessage('');
+  }
+
+  async function handleRejectAccount() {
+    if (!token || !rejectAccountTarget) return;
+    const message = rejectMessage.trim();
+    if (!message) {
+      setActionError('يرجى كتابة سبب الرفض ليظهر للمستخدم.');
+      return;
+    }
+    const actionKey = `reject-account:${rejectAccountTarget.phone}`;
     setActiveActionKey(actionKey);
     setActionError('');
     setSuccessMessage('');
     try {
-      await rejectMerchantApplication(
-        token,
-        rejectMerchantTarget.phone,
-        rejectMerchantReasonKey,
-      );
+      if (rejectAccountTarget.kind === 'merchant') {
+        await rejectMerchantApplication(token, rejectAccountTarget.phone, message);
+      } else if (rejectAccountTarget.kind === 'courier') {
+        await rejectCourierApplication(token, rejectAccountTarget.phone, message);
+      } else if (rejectAccountTarget.kind === 'driver') {
+        await rejectDriverApplication(token, rejectAccountTarget.phone, message);
+      } else {
+        throw new Error('لا يمكن رفض هذا النوع من الحسابات.');
+      }
       setSuccessMessage(
-        `تم رفض طلب ${rejectMerchantTarget.storeName || rejectMerchantTarget.phone} وإرسال إشعار للتاجر.`,
+        `تم رفض طلب ${rejectAccountTarget.displayName || rejectAccountTarget.phone} وإرسال السبب للمستخدم.`,
       );
-      setRejectMerchantTarget(null);
+      setRejectAccountTarget(null);
+      setRejectMessage('');
       await refreshCoreData(token);
     } catch (error) {
-      const message =
-        error instanceof Error ? error.message : 'تعذر رفض طلب التاجر.';
-      setActionError(message);
+      const messageText =
+        error instanceof Error ? error.message : 'تعذر رفض الطلب.';
+      setActionError(messageText);
     } finally {
       setActiveActionKey('');
     }
   }
 
-  async function handleCourierRejection() {
-    if (!token || !rejectTarget) return;
-    const actionKey = `reject:${rejectTarget.phone}`;
+  async function handleApproveAccount(account: AdminAccountSummary) {
+    if (!token || !accountNeedsApproval(account)) return;
+    const actionKey = `approve-account:${account.phone}`;
     setActiveActionKey(actionKey);
     setActionError('');
     setSuccessMessage('');
     try {
-      await rejectCourierApplication(token, rejectTarget.phone, rejectReasonKey);
+      if (account.kind === 'merchant') {
+        await toggleMerchantApproval(token, account.phone, true);
+      } else if (account.kind === 'courier') {
+        await toggleCourierApproval(token, account.phone, true);
+      } else if (account.kind === 'driver') {
+        await toggleDriverApproval(token, account.phone, true);
+      }
       setSuccessMessage(
-        `تم رفض طلب ${rejectTarget.name || rejectTarget.phone} وإرسال إشعار للمندوب.`,
+        `تمت موافقة وتفعيل حساب ${account.displayName || account.phone}.`,
       );
-      setRejectTarget(null);
-      await refreshCoreData(token);
+      await refreshCoreData(token, account.kind === 'merchant' ? account.phone : undefined);
     } catch (error) {
-      const message =
-        error instanceof Error ? error.message : 'تعذر رفض طلب المندوب.';
-      setActionError(message);
+      const messageText =
+        error instanceof Error ? error.message : 'تعذر تفعيل الحساب.';
+      setActionError(messageText);
     } finally {
       setActiveActionKey('');
     }
@@ -475,6 +559,68 @@ function App() {
     } catch (error) {
       const message =
         error instanceof Error ? error.message : 'تعذر تحديث حالة المندوب.';
+      setActionError(message);
+    } finally {
+      setActiveActionKey('');
+    }
+  }
+
+  function openDeleteConfirm(target: AdminAccountSummary) {
+    if (target.kind === 'admin') {
+      setActionError('لا يمكن حذف حساب مشرف محمي.');
+      return;
+    }
+    setDeleteTarget(target);
+  }
+
+  async function handleDeleteAccount() {
+    if (!token || !deleteTarget) return;
+    const actionKey = `delete-account:${deleteTarget.phone}`;
+    setActiveActionKey(actionKey);
+    setActionError('');
+    setSuccessMessage('');
+    try {
+      await deleteAdminAccount(token, deleteTarget.phone);
+      setSuccessMessage(
+        `تم حذف حساب ${deleteTarget.displayName || deleteTarget.phone} نهائياً.`,
+      );
+      setDeleteTarget(null);
+      if (selectedMerchantPhone === deleteTarget.phone) {
+        setSelectedMerchantPhone('');
+        setMerchantDetails(null);
+      }
+      await refreshCoreData(token);
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'تعذر حذف الحساب.';
+      setActionError(message);
+    } finally {
+      setActiveActionKey('');
+    }
+  }
+
+  async function handleSuspendAccount(account: AdminAccountSummary) {
+    if (!token) return;
+    if (account.kind === 'admin') {
+      setActionError('لا يمكن تعليق حساب مشرف محمي.');
+      return;
+    }
+    const enabling = account.isSuspended === true;
+    const actionKey = `suspend-account:${account.phone}`;
+    setActiveActionKey(actionKey);
+    setActionError('');
+    setSuccessMessage('');
+    try {
+      await suspendAdminAccount(token, account.phone, !enabling);
+      setSuccessMessage(
+        enabling
+          ? `تم فك تعليق حساب ${account.displayName || account.phone}.`
+          : `تم تعليق حساب ${account.displayName || account.phone}.`,
+      );
+      await refreshCoreData(token, account.phone);
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'تعذر تحديث حالة التعليق.';
       setActionError(message);
     } finally {
       setActiveActionKey('');
@@ -627,6 +773,13 @@ function App() {
               <span>الملخص العام</span>
             </button>
             <button
+              className={view === 'accounts' ? 'nav-item active' : 'nav-item'}
+              onClick={() => switchView('accounts')}
+            >
+              <Users size={18} />
+              <span>إدارة الحسابات</span>
+            </button>
+            <button
               className={view === 'merchants' ? 'nav-item active' : 'nav-item'}
               onClick={() => switchView('merchants')}
             >
@@ -688,7 +841,9 @@ function App() {
                     placeholder={
                       view === 'couriers'
                         ? 'ابحث عن مندوب أو رقم هاتف'
-                        : 'ابحث عن تاجر أو رقم هاتف'
+                        : view === 'accounts'
+                          ? 'ابحث عن حساب أو رقم هاتف'
+                          : 'ابحث عن تاجر أو رقم هاتف'
                     }
                     value={search}
                     onChange={(event) => setSearch(event.target.value)}
@@ -800,7 +955,7 @@ function App() {
               {view === 'dashboard' ? null : (
               <section
                 className={
-                  view === 'couriers' || view === 'approvals'
+                  view === 'couriers' || view === 'approvals' || view === 'accounts'
                     ? 'main-grid couriers-only'
                     : 'main-grid'
                 }
@@ -809,36 +964,215 @@ function App() {
                   <div className="panel-header">
                     <div>
                       <h3>
-                        {view === 'couriers'
-                          ? 'جميع المندوبين'
-                          : view === 'approvals'
-                            ? 'قائمة الانتظار'
-                            : 'جميع التجار'}
+                        {view === 'accounts'
+                          ? 'جميع الحسابات'
+                          : view === 'couriers'
+                            ? 'جميع المندوبين'
+                            : view === 'approvals'
+                              ? 'قائمة الانتظار'
+                              : 'جميع التجار'}
                       </h3>
                       <p>
-                        {view === 'couriers'
-                          ? 'اضغط على الإجراء المناسب لكل مندوب.'
-                          : view === 'approvals'
-                            ? 'تجار مطاعم ومتاجر بانتظار الموافقة على البازار.'
-                            : 'اختر تاجراً لعرض تفاصيله في اللوحة الجانبية.'}
+                        {view === 'accounts'
+                          ? 'يمكنك تعليق أي حساب أو حذفه نهائياً بعد التأكيد.'
+                          : view === 'couriers'
+                            ? 'اضغط على الإجراء المناسب لكل مندوب.'
+                            : view === 'approvals'
+                              ? 'تجار مطاعم ومتاجر بانتظار الموافقة على البازار.'
+                              : 'اختر تاجراً لعرض تفاصيله في اللوحة الجانبية.'}
                       </p>
                     </div>
                     <span className="panel-chip">
-                      {view === 'couriers'
-                        ? filteredCouriers.length
-                        : view === 'approvals'
-                          ? approvalQueue.length
-                          : filteredMerchants.length}
+                      {view === 'accounts'
+                        ? filteredAccounts.length
+                        : view === 'couriers'
+                          ? filteredCouriers.length
+                          : view === 'approvals'
+                            ? approvalQueue.length
+                            : filteredMerchants.length}
                     </span>
                   </div>
 
-                  {view === 'couriers' ? (
+                  {view === 'accounts' ? (
+                    <>
+                      <div className="account-filter-row">
+                        {(
+                          [
+                            ['all', 'الكل'],
+                            ['customer', 'زبائن'],
+                            ['merchant', 'تجار'],
+                            ['courier', 'مندوبين'],
+                            ['driver', 'تكسي'],
+                          ] as Array<[AccountFilter, string]>
+                        ).map(([filter, label]) => (
+                          <button
+                            key={filter}
+                            type="button"
+                            className={
+                              accountFilter === filter
+                                ? 'account-filter-chip active'
+                                : 'account-filter-chip'
+                            }
+                            onClick={() => setAccountFilter(filter)}
+                          >
+                            {label}
+                          </button>
+                        ))}
+                      </div>
+                      <div className="merchant-list">
+                        {filteredAccounts.map((account) => {
+                          const suspendLoading =
+                            activeActionKey === `suspend-account:${account.phone}`;
+                          const deleteLoading =
+                            activeActionKey === `delete-account:${account.phone}`;
+                          const approvalLoading =
+                            activeActionKey === `approve-account:${account.phone}`;
+                          const rejectLoading =
+                            activeActionKey === `reject-account:${account.phone}`;
+                          const isAdmin = account.kind === 'admin';
+                          const needsApproval = accountNeedsApproval(account);
+                          const isRejected = account.approvalStatus === 'rejected';
+                          const isPending =
+                            needsApproval && !account.isApproved && !isRejected;
+                          return (
+                            <article key={account.phone} className="merchant-card account-card">
+                              <div className="merchant-main">
+                                <div>
+                                  <div className="merchant-title-row">
+                                    <h4>{account.displayName || 'حساب بدون اسم'}</h4>
+                                    <span className="status-badge muted">
+                                      {accountKindLabel(account.kind)}
+                                    </span>
+                                    {needsApproval ? (
+                                      account.isApproved ? (
+                                        <span className="status-badge success">مفعّل</span>
+                                      ) : isRejected ? (
+                                        <span className="status-badge danger">مرفوض</span>
+                                      ) : (
+                                        <span className="status-badge warning">
+                                          بانتظار الموافقة
+                                        </span>
+                                      )
+                                    ) : null}
+                                    {account.isSuspended ? (
+                                      <span className="status-badge danger">معلّق</span>
+                                    ) : (
+                                      <span className="status-badge success">نشط</span>
+                                    )}
+                                  </div>
+                                  <p className="merchant-meta">
+                                    {account.fullName || 'بدون اسم مسجّل'} ·{' '}
+                                    <span dir="ltr">{account.phone}</span>
+                                  </p>
+                                  {account.kind === 'merchant' && account.merchantStoreName ? (
+                                    <p className="merchant-description">
+                                      {serviceLabel(account.primaryServiceId)} ·{' '}
+                                      {account.merchantStoreName}
+                                    </p>
+                                  ) : (
+                                    <p className="merchant-description">
+                                      آخر تحديث: {formatDate(account.updatedAt)}
+                                    </p>
+                                  )}
+                                  {isRejected && account.rejectionMessageAr ? (
+                                    <p className="courier-rejection-note">
+                                      سبب الرفض الحالي: {account.rejectionMessageAr}
+                                    </p>
+                                  ) : null}
+                                </div>
+                              </div>
+                              <div className="merchant-actions">
+                                {needsApproval && isPending ? (
+                                  <button
+                                    className="soft-button success"
+                                    disabled={
+                                      approvalLoading || rejectLoading || suspendLoading
+                                    }
+                                    onClick={() => {
+                                      handleApproveAccount(account).catch(() => undefined);
+                                    }}
+                                  >
+                                    {approvalLoading ? (
+                                      <LoaderCircle className="spin" size={16} />
+                                    ) : (
+                                      <BadgeCheck size={16} />
+                                    )}
+                                    <span>موافقة وتفعيل</span>
+                                  </button>
+                                ) : null}
+                                {needsApproval && (isPending || isRejected) ? (
+                                  <button
+                                    className="soft-button danger"
+                                    disabled={
+                                      approvalLoading || rejectLoading || suspendLoading
+                                    }
+                                    onClick={() => openRejectConfirm(account)}
+                                  >
+                                    <XCircle size={16} />
+                                    <span>رفض مع سبب</span>
+                                  </button>
+                                ) : null}
+                                {!isAdmin ? (
+                                  <button
+                                    className={
+                                      account.isSuspended
+                                        ? 'soft-button success'
+                                        : 'soft-button danger'
+                                    }
+                                    disabled={
+                                      suspendLoading ||
+                                      deleteLoading ||
+                                      approvalLoading ||
+                                      rejectLoading
+                                    }
+                                    onClick={() => {
+                                      handleSuspendAccount(account).catch(() => undefined);
+                                    }}
+                                  >
+                                    {suspendLoading ? (
+                                      <LoaderCircle className="spin" size={16} />
+                                    ) : (
+                                      <UserX size={16} />
+                                    )}
+                                    <span>
+                                      {account.isSuspended ? 'فك التعليق' : 'تعليق الحساب'}
+                                    </span>
+                                  </button>
+                                ) : null}
+                                {!isAdmin ? (
+                                  <button
+                                    className="soft-button danger"
+                                    disabled={
+                                      suspendLoading ||
+                                      deleteLoading ||
+                                      approvalLoading ||
+                                      rejectLoading
+                                    }
+                                    onClick={() => openDeleteConfirm(account)}
+                                  >
+                                    <Trash2 size={16} />
+                                    <span>حذف الحساب</span>
+                                  </button>
+                                ) : null}
+                              </div>
+                            </article>
+                          );
+                        })}
+                        {filteredAccounts.length === 0 ? (
+                          <div className="empty-state">
+                            <Users size={22} />
+                            <p>لا توجد حسابات مطابقة للبحث الحالي.</p>
+                          </div>
+                        ) : null}
+                      </div>
+                    </>
+                  ) : view === 'couriers' ? (
                     <div className="merchant-list">
                       {filteredCouriers.map((courier) => {
                         const approvalLoading =
                           activeActionKey === `courier:${courier.phone}`;
                         const rejectLoading =
-                          activeActionKey === `reject:${courier.phone}`;
+                          activeActionKey === `reject-account:${courier.phone}`;
                         const isRejected = courier.approvalStatus === 'rejected';
                         const isPending = !courier.isApproved && !isRejected;
                         return (
@@ -857,6 +1191,9 @@ function App() {
                                         بانتظار الموافقة
                                       </span>
                                     )}
+                                    {courier.isSuspended ? (
+                                      <span className="status-badge danger">معلّق</span>
+                                    ) : null}
                                     {courier.isApproved ? (
                                       courier.available ? (
                                         <span className="status-badge success">
@@ -952,8 +1289,11 @@ function App() {
                                   className="soft-button danger"
                                   disabled={approvalLoading || rejectLoading}
                                   onClick={() => {
-                                    setRejectReasonKey('name');
-                                    setRejectTarget(courier);
+                                    openRejectConfirm({
+                                      phone: courier.phone,
+                                      displayName: courier.name || courier.phone,
+                                      kind: 'courier',
+                                    });
                                   }}
                                 >
                                   {rejectLoading ? (
@@ -964,6 +1304,78 @@ function App() {
                                   <span>رفض الطلب</span>
                                 </button>
                               ) : null}
+
+                              <button
+                                className={
+                                  courier.isSuspended
+                                    ? 'soft-button success'
+                                    : 'soft-button danger'
+                                }
+                                disabled={
+                                  approvalLoading ||
+                                  rejectLoading ||
+                                  activeActionKey === `suspend-account:${courier.phone}`
+                                }
+                                onClick={() => {
+                                  const account =
+                                    accounts.find((item) => item.phone === courier.phone) ?? {
+                                      phone: courier.phone,
+                                      displayName: courier.name || courier.phone,
+                                      fullName: courier.name,
+                                      role: courier.role,
+                                      accountType: courier.accountType,
+                                      kind: 'courier' as const,
+                                      isSuspended: courier.isSuspended === true,
+                                      merchantStoreName: '',
+                                      primaryServiceId: '',
+                                      courierApproved: courier.isApproved,
+                                      updatedAt: courier.updatedAt,
+                                      createdAt: null,
+                                      hasMerchantProfile: false,
+                                      hasCourierProfile: true,
+                                      hasDriverProfile: false,
+                                    };
+                                  handleSuspendAccount(account).catch(() => undefined);
+                                }}
+                              >
+                                {activeActionKey === `suspend-account:${courier.phone}` ? (
+                                  <LoaderCircle className="spin" size={16} />
+                                ) : (
+                                  <UserX size={16} />
+                                )}
+                                <span>
+                                  {courier.isSuspended ? 'فك التعليق' : 'تعليق الحساب'}
+                                </span>
+                              </button>
+
+                              <button
+                                className="soft-button danger"
+                                disabled={approvalLoading || rejectLoading}
+                                onClick={() => {
+                                  openDeleteConfirm(
+                                    accounts.find((item) => item.phone === courier.phone) ?? {
+                                      phone: courier.phone,
+                                      displayName: courier.name || courier.phone,
+                                      fullName: courier.name,
+                                      role: courier.role,
+                                      accountType: courier.accountType,
+                                      kind: 'courier',
+                                      isSuspended: courier.isSuspended === true,
+                                      merchantStoreName: '',
+                                      primaryServiceId: '',
+                                      courierApproved: courier.isApproved,
+                                      updatedAt: courier.updatedAt,
+                                      createdAt: null,
+                                      hasMerchantProfile: false,
+                                      hasCourierProfile: true,
+                                      hasDriverProfile: false,
+                                    },
+                                  );
+                                }}
+                              >
+                                <Trash2 size={16} />
+                                <span>حذف الحساب</span>
+                              </button>
                             </div>
                           </article>
                         );
@@ -985,7 +1397,7 @@ function App() {
                       const approvalLoading =
                         activeActionKey === `merchant-approval:${merchant.phone}`;
                       const rejectLoading =
-                        activeActionKey === `reject-merchant:${merchant.phone}`;
+                        activeActionKey === `reject-account:${merchant.phone}`;
                       const isRejected = merchant.approvalStatus === 'rejected';
                       const isPending = !merchant.isApproved && !isRejected;
                       const selected = selectedMerchantPhone === merchant.phone;
@@ -1105,8 +1517,12 @@ function App() {
                                 disabled={approvalLoading || rejectLoading}
                                 onClick={(event) => {
                                   event.stopPropagation();
-                                  setRejectMerchantReasonKey('storeName');
-                                  setRejectMerchantTarget(merchant);
+                                  openRejectConfirm({
+                                    phone: merchant.phone,
+                                    displayName:
+                                      merchant.storeName || merchant.fullName || merchant.phone,
+                                    kind: 'merchant',
+                                  });
                                 }}
                               >
                                 {rejectLoading ? (
@@ -1184,6 +1600,37 @@ function App() {
                                 <span>إصلاح الظهور في البازار</span>
                               </button>
                             ) : null}
+
+                            <button
+                              className="soft-button danger"
+                              disabled={approvalLoading || rejectLoading || freezeLoading}
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                openDeleteConfirm(
+                                  accounts.find((item) => item.phone === merchant.phone) ?? {
+                                    phone: merchant.phone,
+                                    displayName:
+                                      merchant.storeName || merchant.fullName || merchant.phone,
+                                    fullName: merchant.fullName,
+                                    role: merchant.role,
+                                    accountType: '',
+                                    kind: 'merchant',
+                                    isSuspended: merchant.isFrozen,
+                                    merchantStoreName: merchant.storeName,
+                                    primaryServiceId: merchant.primaryServiceId,
+                                    courierApproved: false,
+                                    updatedAt: null,
+                                    createdAt: merchant.createdAt,
+                                    hasMerchantProfile: true,
+                                    hasCourierProfile: false,
+                                    hasDriverProfile: false,
+                                  },
+                                );
+                              }}
+                            >
+                              <Trash2 size={16} />
+                              <span>حذف الحساب</span>
+                            </button>
                           </div>
                         </article>
                       );
@@ -1203,7 +1650,7 @@ function App() {
                   )}
                 </div>
 
-                {view === 'couriers' ? null : (
+                {view === 'couriers' || view === 'accounts' ? null : (
                 <div className="panel details">
                   <div className="panel-header">
                     <div>
@@ -1380,11 +1827,75 @@ function App() {
         </section>
       </section>
 
-      {rejectMerchantTarget ? (
+      {deleteTarget ? (
         <div
           className="modal-backdrop"
           role="presentation"
-          onClick={() => setRejectMerchantTarget(null)}
+          onClick={() => setDeleteTarget(null)}
+        >
+          <div
+            className="modal-card danger-modal"
+            role="dialog"
+            aria-modal="true"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="panel-header">
+              <div>
+                <h3>تأكيد حذف الحساب</h3>
+                <p>
+                  هل أنت متأكد من حذف حساب{' '}
+                  <strong>{deleteTarget.displayName || deleteTarget.phone}</strong>؟
+                  <br />
+                  النوع: {accountKindLabel(deleteTarget.kind)} ·{' '}
+                  <span dir="ltr">{deleteTarget.phone}</span>
+                </p>
+              </div>
+            </div>
+
+            <div className="delete-warning-box">
+              <AlertTriangle size={20} />
+              <p>
+                هذا الإجراء نهائي. سيتم حذف بيانات الحساب وملفه من النظام ولا يمكن
+                التراجع عنه بسهولة.
+              </p>
+            </div>
+
+            <div className="modal-actions">
+              <button
+                className="ghost-button"
+                type="button"
+                onClick={() => setDeleteTarget(null)}
+              >
+                إلغاء
+              </button>
+              <button
+                className="soft-button danger"
+                type="button"
+                disabled={activeActionKey === `delete-account:${deleteTarget.phone}`}
+                onClick={() => {
+                  handleDeleteAccount().catch(() => undefined);
+                }}
+              >
+                {activeActionKey === `delete-account:${deleteTarget.phone}` ? (
+                  <LoaderCircle className="spin" size={16} />
+                ) : (
+                  <Trash2 size={16} />
+                )}
+                <span>نعم، احذف الحساب نهائياً</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {rejectAccountTarget ? (
+        <div
+          className="modal-backdrop"
+          role="presentation"
+          onClick={() => {
+            setRejectAccountTarget(null);
+            setRejectMessage('');
+          }}
         >
           <div
             className="modal-card"
@@ -1394,33 +1905,43 @@ function App() {
           >
             <div className="panel-header">
               <div>
-                <h3>رفض طلب التاجر</h3>
+                <h3>رفض الطلب مع سبب واضح</h3>
                 <p>
-                  اختر سبب الرفض. سيصل إشعار للتاجر{' '}
-                  {rejectMerchantTarget.storeName || rejectMerchantTarget.phone}{' '}
-                  ليقوم بتعديل بياناته وإعادة الإرسال.
+                  اكتب سبب الرفض لحساب{' '}
+                  <strong>
+                    {rejectAccountTarget.displayName || rejectAccountTarget.phone}
+                  </strong>{' '}
+                  ({accountKindLabel(rejectAccountTarget.kind)}). سيظهر السبب للمستخدم في
+                  التطبيق ليتمكن من تصحيح بياناته.
                 </p>
               </div>
             </div>
 
-            <div className="reject-reason-list">
-              {MERCHANT_REJECTION_REASONS.map((reason) => (
-                <label
+            <label className="reject-message-field">
+              <span>سبب الرفض</span>
+              <textarea
+                rows={5}
+                value={rejectMessage}
+                placeholder="مثال: صورة الدراجة غير واضحة، يرجى رفع صورة أوضح مع إظهار اللوحة."
+                onChange={(event) => setRejectMessage(event.target.value)}
+              />
+            </label>
+
+            <div className="reject-quick-fill">
+              {(rejectAccountTarget.kind === 'merchant'
+                ? MERCHANT_REJECTION_REASONS
+                : rejectAccountTarget.kind === 'courier'
+                  ? COURIER_REJECTION_REASONS
+                  : []
+              ).map((reason) => (
+                <button
                   key={reason.key}
-                  className={
-                    rejectMerchantReasonKey === reason.key
-                      ? 'reject-reason-option active'
-                      : 'reject-reason-option'
-                  }
+                  type="button"
+                  className="account-filter-chip"
+                  onClick={() => setRejectMessage(reason.label)}
                 >
-                  <input
-                    type="radio"
-                    name="merchant-reject-reason"
-                    checked={rejectMerchantReasonKey === reason.key}
-                    onChange={() => setRejectMerchantReasonKey(reason.key)}
-                  />
-                  <span>{reason.label}</span>
-                </label>
+                  {reason.label}
+                </button>
               ))}
             </div>
 
@@ -1428,7 +1949,10 @@ function App() {
               <button
                 className="ghost-button"
                 type="button"
-                onClick={() => setRejectMerchantTarget(null)}
+                onClick={() => {
+                  setRejectAccountTarget(null);
+                  setRejectMessage('');
+                }}
               >
                 إلغاء
               </button>
@@ -1436,89 +1960,19 @@ function App() {
                 className="soft-button danger"
                 type="button"
                 disabled={
-                  activeActionKey === `reject-merchant:${rejectMerchantTarget.phone}`
+                  !rejectMessage.trim() ||
+                  activeActionKey === `reject-account:${rejectAccountTarget.phone}`
                 }
                 onClick={() => {
-                  handleMerchantRejection().catch(() => undefined);
+                  handleRejectAccount().catch(() => undefined);
                 }}
               >
-                {activeActionKey === `reject-merchant:${rejectMerchantTarget.phone}` ? (
+                {activeActionKey === `reject-account:${rejectAccountTarget.phone}` ? (
                   <LoaderCircle className="spin" size={16} />
                 ) : (
                   <XCircle size={16} />
                 )}
-                <span>تأكيد الرفض وإرسال الإشعار</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
-
-      {rejectTarget ? (
-        <div
-          className="modal-backdrop"
-          role="presentation"
-          onClick={() => setRejectTarget(null)}
-        >
-          <div
-            className="modal-card"
-            role="dialog"
-            aria-modal="true"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <div className="panel-header">
-              <div>
-                <h3>رفض طلب المندوب</h3>
-                <p>
-                  اختر سبب الرفض. سيصل إشعار للمندوب {rejectTarget.name || rejectTarget.phone}{' '}
-                  ليقوم بتعديل بياناته وإعادة الإرسال.
-                </p>
-              </div>
-            </div>
-
-            <div className="reject-reason-list">
-              {COURIER_REJECTION_REASONS.map((reason) => (
-                <label
-                  key={reason.key}
-                  className={
-                    rejectReasonKey === reason.key
-                      ? 'reject-reason-option active'
-                      : 'reject-reason-option'
-                  }
-                >
-                  <input
-                    type="radio"
-                    name="courier-reject-reason"
-                    checked={rejectReasonKey === reason.key}
-                    onChange={() => setRejectReasonKey(reason.key)}
-                  />
-                  <span>{reason.label}</span>
-                </label>
-              ))}
-            </div>
-
-            <div className="modal-actions">
-              <button
-                className="ghost-button"
-                type="button"
-                onClick={() => setRejectTarget(null)}
-              >
-                إلغاء
-              </button>
-              <button
-                className="soft-button danger"
-                type="button"
-                disabled={activeActionKey === `reject:${rejectTarget.phone}`}
-                onClick={() => {
-                  handleCourierRejection().catch(() => undefined);
-                }}
-              >
-                {activeActionKey === `reject:${rejectTarget.phone}` ? (
-                  <LoaderCircle className="spin" size={16} />
-                ) : (
-                  <XCircle size={16} />
-                )}
-                <span>تأكيد الرفض وإرسال الإشعار</span>
+                <span>تأكيد الرفض وإرسال السبب</span>
               </button>
             </div>
           </div>
