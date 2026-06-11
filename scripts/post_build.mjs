@@ -48,6 +48,16 @@ try {
     fs.copyFileSync(websiteIndex, distIndex);
   }
 
+  const builtAdminDir = path.join(distDir, 'admin');
+  const websiteAdminDir = path.join(websiteDir, 'admin');
+  if (fs.existsSync(builtAdminDir)) {
+    console.log('Syncing built admin panel to website/admin...');
+    if (fs.existsSync(websiteAdminDir)) {
+      fs.rmSync(websiteAdminDir, { recursive: true, force: true });
+    }
+    copyRecursiveSync(builtAdminDir, websiteAdminDir);
+  }
+
   console.log('Post-build completed successfully.');
 } catch (err) {
   console.error('Post-build failed:', err);
