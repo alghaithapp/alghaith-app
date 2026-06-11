@@ -216,16 +216,28 @@ function App() {
     setIsLoadingData(true);
     setBootError('');
     try {
-      const [nextReports, nextMerchants, nextCouriers, nextAccounts] = await Promise.all([
+      const [nextReports, nextMerchants, nextCouriers] = await Promise.all([
         loadAdminReports(authToken),
         loadMerchants(authToken),
         loadCouriers(authToken),
-        loadAdminAccounts(authToken),
       ]);
       setReports(nextReports);
       setMerchants(nextMerchants);
       setCouriers(nextCouriers);
-      setAccounts(nextAccounts);
+
+      try {
+        const nextAccounts = await loadAdminAccounts(authToken);
+        setAccounts(nextAccounts);
+      } catch (accountsError) {
+        setAccounts([]);
+        const accountsMessage =
+          accountsError instanceof Error
+            ? accountsError.message
+            : 'تعذر تحميل قائمة الحسابات.';
+        setActionError(
+          `تعذر تحميل تبويب إدارة الحسابات: ${accountsMessage}`,
+        );
+      }
 
       const merchantPhone =
         preferredMerchantPhone ||

@@ -1581,6 +1581,14 @@ app.delete('/db/admin/account', async (req, res) => {
   }
 });
 
+app.use('/db', (req, res) => {
+  return res.status(404).json({ message: `Unknown database route: ${req.method} ${req.path}` });
+});
+
+app.use((req, res) => {
+  return res.status(404).json({ message: `Unknown route: ${req.method} ${req.path}` });
+});
+
 app.listen(port, () => {
   console.log(`Auth backend listening on port ${port}`);
   if (isPushConfigured()) {

@@ -17,11 +17,20 @@ function normalizeBaseUrl(input: string | undefined, fallback: string) {
   return raw.replace(/\/+$/, '');
 }
 
-export const DATABASE_API_BASE_URL = normalizeBaseUrl(
+function resolveApiBaseUrl(envValue: string | undefined, fallback: string) {
+  // In production always use the known Railway/Worker URLs so a misconfigured
+  // Vercel env var cannot point the admin panel at the static website (HTML).
+  if (!import.meta.env.DEV) {
+    return fallback;
+  }
+  return normalizeBaseUrl(envValue, fallback);
+}
+
+export const DATABASE_API_BASE_URL = resolveApiBaseUrl(
   import.meta.env.VITE_BACKEND_URL,
   DEFAULT_DATABASE_API_BASE,
 );
-export const PHONE_AUTH_BASE_URL = normalizeBaseUrl(
+export const PHONE_AUTH_BASE_URL = resolveApiBaseUrl(
   import.meta.env.VITE_PHONE_AUTH_URL,
   DEFAULT_PHONE_AUTH_BASE,
 );
@@ -43,12 +52,29 @@ async function request<T>(
   });
 
   const text = await response.text();
-  const payload = text ? JSON.parse(text) : null;
+  let payload: unknown = null;
+  if (text) {
+    try {
+      payload = JSON.parse(text);
+    } catch {
+      const looksLikeHtml = /^\s*</.test(text);
+      if (looksLikeHtml) {
+        throw new Error(
+          'الخادم أعاد صفحة HTML بدل JSON. تأكد أن لوحة الإدارة تتصل بخادم Railway وليس بموقع alghaithst.com.',
+        );
+      }
+      throw new Error('استجابة غير متوقعة من الخادم.');
+    }
+  }
 
   if (!response.ok) {
     const message =
-      payload && typeof payload.message === 'string'
-        ? payload.message
+      payload &&
+      typeof payload === 'object' &&
+      payload !== null &&
+      'message' in payload &&
+      typeof (payload as { message?: unknown }).message === 'string'
+        ? (payload as { message: string }).message
         : `Request failed (${response.status})`;
     throw new Error(message);
   }
