@@ -4,6 +4,8 @@ import 'package:provider/provider.dart';
 
 import '../models/app_notification.dart';
 import '../providers/app_provider.dart';
+import '../core/ui/app_spacing.dart';
+import '../widgets/app_state_views.dart';
 
 class NotificationsScreen extends StatelessWidget {
   const NotificationsScreen({super.key});
@@ -42,22 +44,24 @@ class NotificationsScreen extends StatelessWidget {
               )
             : null,
       ),
-      child: SafeArea(
-        child: items.isEmpty
-            ? const Center(
-                child: Text(
-                  'لا توجد إشعارات',
-                  style: TextStyle(fontFamily: 'Cairo'),
+      child: Material(
+        type: MaterialType.transparency,
+        child: SafeArea(
+          child: items.isEmpty
+              ? const EmptyStateView(
+                  icon: CupertinoIcons.bell,
+                  title: 'لا توجد إشعارات',
+                  message: 'ستظهر هنا تحديثات طلباتك وإشعارات حسابك.',
+                )
+              : ListView.builder(
+                  padding: const EdgeInsets.all(16),
+                  itemCount: items.length,
+                  itemBuilder: (context, index) {
+                    final note = items[index];
+                    return _NotificationTile(item: note);
+                  },
                 ),
-              )
-            : ListView.builder(
-                padding: const EdgeInsets.all(16),
-                itemCount: items.length,
-                itemBuilder: (context, index) {
-                  final note = items[index];
-                  return _NotificationTile(item: note);
-                },
-              ),
+        ),
       ),
     );
   }
@@ -76,11 +80,11 @@ class _NotificationTile extends StatelessWidget {
         if (!item.read) provider.markNotificationRead(item.id);
       },
       child: Container(
-        margin: const EdgeInsets.only(bottom: 12),
-        padding: const EdgeInsets.all(16),
+        margin: const EdgeInsets.only(bottom: AppSpacing.md),
+        padding: const EdgeInsets.all(AppSpacing.lg),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: AppRadius.card,
           border: Border.all(
             color: item.read
                 ? Colors.transparent

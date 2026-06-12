@@ -14,7 +14,9 @@ import '../data/models/account_snapshot.dart';
 import '../data/repositories/account_repository.dart';
 import '../models/app_models.dart';
 import '../models/app_notification.dart';
+import '../models/app_user_view.dart';
 import '../models/merchant_models.dart';
+import '../models/merchant_store_view.dart';
 import '../services/supabase_service.dart';
 import '../services/image_storage_service.dart';
 import '../utils/merchant_service_labels.dart';
@@ -180,19 +182,15 @@ class AppProvider extends ChangeNotifier {
     return _authPhone?.trim() ?? '';
   }
 
+  AppUserView get appUserView => AppUserView(_appUserRecord);
+
   bool get hasCompletedCustomerProfile {
     if (_effectiveCustomerPhone.isEmpty) return false;
     if (_customerName.trim().isNotEmpty) return true;
     if (hasCompletedMerchantProfile) return true;
 
-    final fullName = _trimmedOrNull(_appUserRecord?['full_name']?.toString());
-    if (fullName != null) return true;
-
-    final email = _trimmedOrNull(
-      _appUserRecord?['email']?.toString() ??
-          _appUserRecord?['customer_email']?.toString(),
-    );
-    if (email != null) return true;
+    if (appUserView.fullName != null) return true;
+    if (appUserView.email != null) return true;
 
     return false;
   }
@@ -224,11 +222,10 @@ class AppProvider extends ChangeNotifier {
       MerchantProfileFields.isApproved(_merchantStore);
   bool get canUseMerchantAccount =>
       hasCompletedMerchantProfile && isMerchantApproved;
-  bool get isMerchantStoreOpen => (_merchantStore?['isOpen'] as bool?) ?? true;
-  bool get isBazaarApproved =>
-      (_merchantStore?['isBazaarMember'] as bool?) ??
-      (_merchantStore?['is_bazaar_member'] as bool?) ??
-      false;
+  /// عرض مُنمذج وآمن لبيانات المتجر (قراءة فقط).
+  MerchantStoreView get merchantStoreView => MerchantStoreView(_merchantStore);
+  bool get isMerchantStoreOpen => merchantStoreView.isOpen;
+  bool get isBazaarApproved => merchantStoreView.isBazaarMember;
   String get merchantStoreName =>
       (_merchantStore?['name'] as String?)?.trim() ?? '';
   String get merchantCategoryId =>
@@ -338,7 +335,7 @@ class AppProvider extends ChangeNotifier {
       ? 0
       : merchantActiveServiceId == 'restaurant'
           ? 0
-          : (_merchantStore?['deliveryFee'] as int?) ?? 0;
+          : merchantStoreView.deliveryFee;
   String get merchantDeliveryAreas =>
       (_merchantStore?['deliveryAreas'] as String?)?.trim() ?? '';
   double get merchantRating =>
@@ -490,7 +487,8 @@ class AppProvider extends ChangeNotifier {
     return _authPhone ?? _customerPhone;
   }
 
-  bool get isCourierAvailable => _courierProfile?['available'] as bool? ?? true;
+  bool get isCourierAvailable =>
+      MerchantProfileFields.boolValue(_courierProfile?['available'], fallback: true);
 
   bool get isGuestMode => _isGuestMode;
 
@@ -624,11 +622,8 @@ class AppProvider extends ChangeNotifier {
     }
     if (_customerName.trim().isNotEmpty) return;
 
-    _customerName = _trimmedOrNull(_appUserRecord?['full_name']?.toString()) ??
-        _trimmedOrNull(
-          _appUserRecord?['email']?.toString() ??
-              _appUserRecord?['customer_email']?.toString(),
-        ) ??
+    _customerName = appUserView.fullName ??
+        appUserView.email ??
         (hasCompletedMerchantProfile ? merchantStoreName : null) ??
         _customerName;
   }
@@ -1024,16 +1019,13 @@ class AppProvider extends ChangeNotifier {
   void _inferAccountTypeFromLegacyData() {
     if (_accountType != null) return;
 
-    final fromUser = _trimmedOrNull(
-      _appUserRecord?['account_type']?.toString() ??
-          _appUserRecord?['accountType']?.toString(),
-    );
+    final fromUser = appUserView.accountType;
     if (fromUser != null) {
       _accountType = fromUser;
       return;
     }
 
-    final storedRole = _trimmedOrNull(_appUserRecord?['role']?.toString());
+    final storedRole = appUserView.role;
     if (storedRole == 'delivery') {
       _accountType = 'delivery';
       return;
@@ -1095,7 +1087,7 @@ class AppProvider extends ChangeNotifier {
       return;
     }
 
-    final storedRole = _trimmedOrNull(_appUserRecord?['role']?.toString());
+    final storedRole = appUserView.role;
     if (storedRole == 'admin') {
       _userRole = 'customer';
       _hasAdminAccess = true;

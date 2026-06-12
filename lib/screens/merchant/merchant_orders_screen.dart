@@ -116,7 +116,7 @@ class _MerchantOrdersScreenState extends State<MerchantOrdersScreen> {
               child: _PremiumHeader(
                 pendingCount: pendingCount,
                 showBack: canPop,
-                showHome: !canPop && widget.onNavigateHome != null,
+                showHome: false,
                 onBack: canPop ? () => Navigator.pop(context) : null,
                 onHome: widget.onNavigateHome,
                 onSearch: () => _openSearchSheet(context),

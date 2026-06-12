@@ -3,6 +3,8 @@ import 'package:provider/provider.dart';
 
 import '../../models/app_notification.dart';
 import '../../providers/app_provider.dart';
+import '../../core/ui/app_spacing.dart';
+import '../../widgets/app_state_views.dart';
 
 class MerchantNotificationsScreen extends StatelessWidget {
   const MerchantNotificationsScreen({super.key});
@@ -49,15 +51,12 @@ class MerchantNotificationsScreen extends StatelessWidget {
         padding: const EdgeInsets.all(16),
         children: [
           if (items.isEmpty)
-            Container(
-              padding: const EdgeInsets.all(18),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(24),
-              ),
-              child: const Text(
-                'لا توجد إشعارات بعد.',
-                style: TextStyle(fontFamily: 'Cairo'),
+            const Padding(
+              padding: EdgeInsets.only(top: 80),
+              child: EmptyStateView(
+                icon: Icons.notifications_none_rounded,
+                title: 'لا توجد إشعارات بعد',
+                message: 'ستظهر هنا إشعارات الطلبات وتحديثات متجرك.',
               ),
             )
           else
@@ -81,11 +80,11 @@ class _MerchantNotificationTile extends StatelessWidget {
         if (!item.read) provider.markNotificationRead(item.id);
       },
       child: Container(
-        margin: const EdgeInsets.only(bottom: 12),
-        padding: const EdgeInsets.all(16),
+        margin: const EdgeInsets.only(bottom: AppSpacing.md),
+        padding: const EdgeInsets.all(AppSpacing.lg),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(24),
+          borderRadius: AppRadius.card,
           border: Border.all(
             color: item.read
                 ? Colors.transparent

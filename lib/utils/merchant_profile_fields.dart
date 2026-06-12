@@ -132,6 +132,19 @@ class MerchantProfileFields {
     return fallback;
   }
 
+  /// قراءة منطقية آمنة من قيمة قد تأتي bool أو String أو رقم من السيرفر.
+  static bool boolValue(dynamic value, {bool fallback = false}) =>
+      _boolFromDynamic(value, fallback: fallback);
+
+  /// قراءة عدد صحيح آمنة من قيمة قد تأتي int أو double أو String.
+  static int intValue(dynamic value, {int fallback = 0}) {
+    if (value is int) return value;
+    if (value is double) return value.round();
+    if (value is num) return value.toInt();
+    final parsed = num.tryParse(value?.toString().trim() ?? '');
+    return parsed?.toInt() ?? fallback;
+  }
+
   static Map<String, dynamic> _contactVisibilityMap(Map<String, dynamic>? map) {
     if (map == null) return const {};
     final info = map['professional_info'] ?? map['professionalInfo'];

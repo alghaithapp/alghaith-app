@@ -36,6 +36,7 @@ import 'widgets/app_logo.dart';
 import 'utils/role_switch_notifications.dart';
 import 'widgets/customer_order_notifications.dart';
 import 'widgets/exit_confirm_scope.dart';
+import 'widgets/merchant_order_cross_role_alert.dart';
 import 'widgets/safe_bottom_bar.dart';
 import 'widgets/app_update_gate.dart';
 Future<void> main() async {
@@ -291,7 +292,9 @@ class AlGhaithApp extends StatelessWidget {
         return const ExitConfirmScope(child: CustomerSetupScreen());
       }
 
-      return const ExitConfirmScope(child: MainShell());
+      return const ExitConfirmScope(
+        child: MerchantOrderCrossRoleAlert(child: MainShell()),
+      );
     }
 
     return PushNotificationLifecycleScope(
@@ -309,7 +312,12 @@ class AlGhaithApp extends StatelessWidget {
               textDirection: TextDirection.rtl,
               child: ColoredBox(
                 color: Theme.of(context).scaffoldBackgroundColor,
-                child: child!,
+                // طبقة Material جذرية تمنع ظهور النص بخط أصفر في الشاشات
+                // المبنية على Cupertino دون Material أب.
+                child: Material(
+                  type: MaterialType.transparency,
+                  child: child!,
+                ),
               ),
             ),
           );

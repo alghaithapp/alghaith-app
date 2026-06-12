@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import '../../core/theme/app_colors.dart';
 import '../../providers/app_provider.dart';
 import '../../utils/role_switch_notifications.dart';
+import '../../widgets/in_app_notification_banner.dart';
 import '../../widgets/safe_bottom_bar.dart';
 import 'merchant_dashboard_screen.dart';
 import 'merchant_earnings_screen.dart';
@@ -23,10 +24,9 @@ class MerchantShell extends StatefulWidget {
 class _MerchantShellState extends State<MerchantShell> {
   int _currentIndex = 0;
   Timer? _refreshTimer;
-  int _lastPendingCount = 0;
   // تتبع حالة كل طلب لاكتشاف التغييرات
   Map<String, String> _lastOrderStatuses = {};
-  OverlayEntry? _notificationEntry;
+  bool _bannerShowing = false;
   // قائمة الإشعارات المنتظرة (تُعرض واحداً تلو الآخر)
   final List<_BannerData> _pendingBanners = [];
 
@@ -43,7 +43,6 @@ class _MerchantShellState extends State<MerchantShell> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final provider = context.read<AppProvider>();
-      _lastPendingCount = provider.merchantPendingOrdersCount;
       // حفظ الحالات الأولية لجميع الطلبات
       _lastOrderStatuses = {
         for (final o in provider.merchantIncomingOrders) o.id: o.statusKey,
@@ -63,7 +62,6 @@ class _MerchantShellState extends State<MerchantShell> {
   @override
   void dispose() {
     _refreshTimer?.cancel();
-    _notificationEntry?.remove();
     super.dispose();
   }
 
@@ -75,7 +73,6 @@ class _MerchantShellState extends State<MerchantShell> {
     provider.tickMerchantNotificationTimers();
 
     final orders = provider.merchantIncomingOrders;
-    final newCount = provider.merchantPendingOrdersCount;
 
     for (final order in orders) {
       final prevStatus = _lastOrderStatuses[order.id];
@@ -118,7 +115,6 @@ class _MerchantShellState extends State<MerchantShell> {
       }
     }
 
-    _lastPendingCount = newCount;
     _lastOrderStatuses = {for (final o in orders) o.id: o.statusKey};
 
     if (provider.inAppAlertsEnabled) {
@@ -132,47 +128,61 @@ class _MerchantShellState extends State<MerchantShell> {
     _pendingBanners.add(data);
   }
 
-  void _showNextBanner() {
+  Future<void> _showNextBanner() async {
+    if (_bannerShowing || !mounted) return;
     final provider = context.read<AppProvider>();
     if (!provider.inAppAlertsEnabled) {
       _pendingBanners.clear();
       return;
     }
-    if (_notificationEntry != null) return; // يوجد بانر يعرض حالياً
     if (_pendingBanners.isEmpty) return;
-    final data = _pendingBanners.removeAt(0);
-    _showBanner(data);
+
+    _bannerShowing = true;
+    while (mounted && _pendingBanners.isNotEmpty) {
+      if (!context.read<AppProvider>().inAppAlertsEnabled) {
+        _pendingBanners.clear();
+        break;
+      }
+      final data = _pendingBanners.removeAt(0);
+      final tapped = await showInAppNotificationBanner(
+        context: context,
+        title: data.title,
+        body: data.body,
+        accentColor: _bannerAccent(data.type),
+        icon: _bannerIcon(data.type),
+        autoHide: const Duration(seconds: 4),
+      );
+      if (!mounted) break;
+      if (tapped) {
+        context
+            .read<AppProvider>()
+            .markNotificationsReadForOrder(data.orderNumber, 'merchant');
+        setState(() => _currentIndex = 1);
+      }
+    }
+    _bannerShowing = false;
   }
 
-  void _showBanner(_BannerData data) {
-    if (!context.read<AppProvider>().inAppAlertsEnabled) return;
-    _notificationEntry?.remove();
-    _notificationEntry = null;
+  Color _bannerAccent(_BannerType type) {
+    switch (type) {
+      case _BannerType.newOrder:
+        return const Color(0xFFFF6B00);
+      case _BannerType.cancelRequest:
+        return const Color(0xFFD32F2F);
+      case _BannerType.timeout:
+        return const Color(0xFF455A64);
+    }
+  }
 
-    final overlay = Overlay.of(context);
-    late OverlayEntry entry;
-    entry = OverlayEntry(
-      builder: (_) => _MerchantNotificationBanner(
-        data: data,
-        onTap: () {
-          context.read<AppProvider>().markNotificationsReadForOrder(
-            data.orderNumber,
-            'merchant',
-          );
-          entry.remove();
-          _notificationEntry = null;
-          setState(() => _currentIndex = 1);
-          _showNextBanner();
-        },
-        onDismiss: () {
-          entry.remove();
-          _notificationEntry = null;
-          _showNextBanner();
-        },
-      ),
-    );
-    _notificationEntry = entry;
-    overlay.insert(entry);
+  IconData _bannerIcon(_BannerType type) {
+    switch (type) {
+      case _BannerType.newOrder:
+        return Icons.shopping_bag_rounded;
+      case _BannerType.cancelRequest:
+        return Icons.cancel_rounded;
+      case _BannerType.timeout:
+        return Icons.timer_off_rounded;
+    }
   }
 
   @override
@@ -217,8 +227,6 @@ class _MerchantShellState extends State<MerchantShell> {
       ),
     ];
 
-    final hideBottomNav = _currentIndex == 1;
-
     return Scaffold(
       backgroundColor:
           isDark ? const Color(0xFF101010) : const Color(0xFFF2F2F7),
@@ -226,9 +234,7 @@ class _MerchantShellState extends State<MerchantShell> {
         bottom: false,
         child: _screens[_currentIndex],
       ),
-      bottomNavigationBar: hideBottomNav
-          ? null
-          : SafeBottomBar(
+      bottomNavigationBar: SafeBottomBar(
         color: isDark ? const Color(0xFF171717) : Colors.white,
         boxShadow: [
           BoxShadow(
@@ -273,180 +279,4 @@ class _BannerData {
     required this.body,
     required this.orderNumber,
   });
-}
-
-// ─────────────────────────────────────────────
-// ويدجت البانر الموحد
-// ─────────────────────────────────────────────
-class _MerchantNotificationBanner extends StatefulWidget {
-  final _BannerData data;
-  final VoidCallback onTap;
-  final VoidCallback onDismiss;
-
-  const _MerchantNotificationBanner({
-    required this.data,
-    required this.onTap,
-    required this.onDismiss,
-  });
-
-  @override
-  State<_MerchantNotificationBanner> createState() =>
-      _MerchantNotificationBannerState();
-}
-
-class _MerchantNotificationBannerState
-    extends State<_MerchantNotificationBanner>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _ctrl;
-  late final Animation<Offset> _slide;
-  Timer? _autoHide;
-
-  @override
-  void initState() {
-    super.initState();
-    _ctrl = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 420),
-    );
-    _slide = Tween<Offset>(
-      begin: const Offset(0, -1),
-      end: Offset.zero,
-    ).animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOutBack));
-    _ctrl.forward();
-    // طلب إلغاء يبقى أطول (8 ثواني) لأنه يحتاج قراراً
-    const seconds = 3;
-    _autoHide = Timer(const Duration(seconds: seconds), _dismiss);
-  }
-
-  @override
-  void dispose() {
-    _autoHide?.cancel();
-    _ctrl.dispose();
-    super.dispose();
-  }
-
-  void _dismiss() {
-    if (!mounted) return;
-    _ctrl.reverse().then((_) => widget.onDismiss());
-  }
-
-  // ألوان ومؤشرات مختلفة لكل نوع
-  List<Color> get _gradientColors {
-    switch (widget.data.type) {
-      case _BannerType.newOrder:
-        return [const Color(0xFFFF6B00), const Color(0xFFFF3D00)];
-      case _BannerType.cancelRequest:
-        return [const Color(0xFFD32F2F), const Color(0xFFB71C1C)];
-      case _BannerType.timeout:
-        return [const Color(0xFF455A64), const Color(0xFF263238)];
-    }
-  }
-
-  Color get _shadowColor {
-    switch (widget.data.type) {
-      case _BannerType.newOrder:
-        return Colors.orange;
-      case _BannerType.cancelRequest:
-        return Colors.red;
-      case _BannerType.timeout:
-        return Colors.blueGrey;
-    }
-  }
-
-  IconData get _icon {
-    switch (widget.data.type) {
-      case _BannerType.newOrder:
-        return Icons.shopping_bag_rounded;
-      case _BannerType.cancelRequest:
-        return Icons.cancel_rounded;
-      case _BannerType.timeout:
-        return Icons.timer_off_rounded;
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final top = MediaQuery.of(context).padding.top + 12;
-    return Positioned(
-      top: top,
-      left: 16,
-      right: 16,
-      child: SlideTransition(
-        position: _slide,
-        child: Material(
-          color: Colors.transparent,
-          child: GestureDetector(
-            onTap: widget.onTap,
-            child: Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: _gradientColors,
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                borderRadius: BorderRadius.circular(20),
-                boxShadow: [
-                  BoxShadow(
-                    color: _shadowColor.withValues(alpha: 0.45),
-                    blurRadius: 20,
-                    offset: const Offset(0, 8),
-                  ),
-                ],
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    width: 46,
-                    height: 46,
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.22),
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    child: Icon(_icon, color: Colors.white, size: 26),
-                  ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          widget.data.title,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w800,
-                            fontSize: 15,
-                            fontFamily: 'Cairo',
-                          ),
-                        ),
-                        const SizedBox(height: 3),
-                        Text(
-                          widget.data.body,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: Colors.white70,
-                            fontSize: 12,
-                            fontFamily: 'Cairo',
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  GestureDetector(
-                    onTap: _dismiss,
-                    child: const Icon(Icons.close_rounded,
-                        color: Colors.white70, size: 20),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
 }

@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../providers/app_provider.dart';
 import '../utils/extensions.dart';
 import '../widgets/app_image.dart';
+import '../widgets/app_state_views.dart';
 
 class FavoritesScreen extends StatelessWidget {
   const FavoritesScreen({super.key});
@@ -22,18 +23,10 @@ class FavoritesScreen extends StatelessWidget {
       ),
       child: SafeArea(
         child: favoriteItems.isEmpty
-            ? Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Icon(CupertinoIcons.heart_slash, size: 60, color: CupertinoColors.systemGrey4),
-                    const SizedBox(height: 16),
-                    Text(
-                      "قائمة المفضلة فارغة",
-                      style: const TextStyle(color: CupertinoColors.systemGrey, fontFamily: 'Cairo'),
-                    ),
-                  ],
-                ),
+            ? const EmptyStateView(
+                icon: CupertinoIcons.heart_slash,
+                title: 'قائمة المفضلة فارغة',
+                message: 'أضف المنتجات التي تعجبك لتجدها هنا بسهولة.',
               )
             : ListView.builder(
                 padding: const EdgeInsets.all(16),
