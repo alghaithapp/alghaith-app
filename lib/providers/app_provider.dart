@@ -1624,10 +1624,16 @@ class AppProvider extends ChangeNotifier {
       'deliveryFee':
           row['delivery_fee'] is num ? (row['delivery_fee'] as num).toInt() : 0,
       'deliveryAreas': row['delivery_areas']?.toString() ?? '',
-      'isOpen': row['is_open'] as bool? ?? true,
-      'isFrozen': row['is_frozen'] as bool? ?? false,
-      'isBazaarMember': row['is_bazaar_member'] as bool? ?? false,
-      'isApproved': row['is_approved'] as bool? ?? row['isApproved'] as bool?,
+      'isOpen': MerchantProfileFields.boolValue(row['is_open'], fallback: true),
+      'isFrozen': MerchantProfileFields.boolValue(row['is_frozen'], fallback: false),
+      'isBazaarMember':
+          MerchantProfileFields.boolValue(row['is_bazaar_member'], fallback: false),
+      'isApproved': (row['is_approved'] ?? row['isApproved']) == null
+          ? null
+          : MerchantProfileFields.boolValue(
+              row['is_approved'] ?? row['isApproved'],
+              fallback: false,
+            ),
       'approvalStatus':
           row['approval_status']?.toString() ?? row['approvalStatus']?.toString(),
       'rejectionReasonKey': row['rejection_reason_key']?.toString() ??
