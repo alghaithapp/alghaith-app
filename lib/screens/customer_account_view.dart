@@ -8,6 +8,7 @@ import '../core/ui/account_ui.dart';
 import '../core/theme/app_colors.dart';
 import '../providers/app_provider.dart';
 import '../utils/account_role_switch.dart';
+import '../utils/app_update_checker.dart';
 import '../utils/helpers.dart';
 import '../widgets/account/account_page_header.dart';
 import '../widgets/app_image.dart';
@@ -380,6 +381,12 @@ class _SettingsListCard extends StatelessWidget {
         onTap: () => Navigator.of(context, rootNavigator: true).push(
           CupertinoPageRoute(builder: (_) => const OrdersScreen()),
         ),
+      ),
+      _SettingsItemData(
+        icon: CupertinoIcons.arrow_2_circlepath,
+        color: const Color(0xFFE84A3A),
+        title: 'التحقق من تحديث التطبيق',
+        onTap: () => AppUpdateChecker.checkAndPrompt(context),
       ),
       _SettingsItemData(
         icon: CupertinoIcons.settings,

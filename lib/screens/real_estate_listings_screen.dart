@@ -6,6 +6,7 @@ import '../utils/dummy_data.dart';
 import '../utils/extensions.dart';
 import '../utils/guest_gate.dart';
 import '../utils/helpers.dart';
+import '../utils/merchant_profile_fields.dart';
 import '../widgets/app_image.dart';
 import '../widgets/service_navigation_buttons.dart';
 
@@ -192,7 +193,7 @@ class _PropertyCard extends StatelessWidget {
     );
 
     final merchantName = merchant['store_name']?.toString().trim();
-    final phone = merchant['phone']?.toString().trim();
+    final whatsapp = MerchantProfileFields.customerVisibleWhatsApp(merchant).trim();
 
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
@@ -295,7 +296,7 @@ class _PropertyCard extends StatelessWidget {
                       ),
                     ),
                     FilledButton.icon(
-                      onPressed: phone == null || phone.isEmpty
+                      onPressed: whatsapp.isEmpty
                           ? null
                           : () {
                               if (!GuestGate.requireAccount(
@@ -305,7 +306,7 @@ class _PropertyCard extends StatelessWidget {
                                 return;
                               }
                               AppHelpers.launchWhatsApp(
-                                phone,
+                                whatsapp,
                                 'مرحبًا، أريد الاستفسار عن العقار ${product['name_ar'] ?? ''}',
                               );
                             },

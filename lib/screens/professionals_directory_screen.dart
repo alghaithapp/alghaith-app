@@ -5,6 +5,7 @@ import '../models/app_models.dart';
 import '../services/supabase_service.dart';
 import '../utils/guest_gate.dart';
 import '../utils/helpers.dart';
+import '../utils/merchant_profile_fields.dart';
 import '../widgets/app_image.dart';
 import '../widgets/service_navigation_buttons.dart';
 
@@ -91,25 +92,11 @@ class _ProfessionalsDirectoryScreenState
   }
 
   String _profileWhatsapp(Map<String, dynamic> profile) {
-    final whatsapp = profile['whatsapp']?.toString().trim();
-    if (whatsapp != null && whatsapp.isNotEmpty) return whatsapp;
-    final info = profile['professional_info'];
-    if (info is Map) {
-      final value = info['whatsapp']?.toString().trim();
-      if (value != null && value.isNotEmpty) return value;
-    }
-    return AppHelpers.supportWhatsAppNumber;
+    return MerchantProfileFields.customerVisibleWhatsApp(profile).trim();
   }
 
   String _profilePhone(Map<String, dynamic> profile) {
-    final phone = profile['phone']?.toString().trim();
-    if (phone != null && phone.isNotEmpty) return phone;
-    final info = profile['professional_info'];
-    if (info is Map) {
-      final value = info['phone']?.toString().trim();
-      if (value != null && value.isNotEmpty) return value;
-    }
-    return _profileWhatsapp(profile);
+    return MerchantProfileFields.customerVisiblePhone(profile).trim();
   }
 
   @override
@@ -370,51 +357,61 @@ class _ProfessionalCard extends StatelessWidget {
             ),
           ],
           const SizedBox(height: 14),
-          Row(
-            children: [
-              Expanded(
-                child: FilledButton.icon(
-                  onPressed: whatsapp.trim().isEmpty
-                      ? null
-                      : () {
-                          if (!GuestGate.requireAccount(
-                            context,
-                            message: 'سجّل دخولك للتواصل مع مزوّد الخدمة.',
-                          )) {
-                            return;
-                          }
-                          AppHelpers.launchWhatsApp(
-                            whatsapp,
-                            'مرحبًا، أريد الاستفسار عن الخدمة',
-                          );
-                        },
-                  icon: const Icon(Icons.chat_outlined),
-                  label: const Text(
-                    'واتساب',
-                    style: TextStyle(fontFamily: 'Cairo'),
-                  ),
-                ),
+          if (whatsapp.trim().isEmpty && phone.trim().isEmpty)
+            const Text(
+              'مزوّد الخدمة أخفى وسائل التواصل حالياً.',
+              style: TextStyle(
+                fontFamily: 'Cairo',
+                color: Colors.grey,
+                fontSize: 12,
               ),
-              const SizedBox(width: 8),
-              if (phone.trim().isNotEmpty)
-                OutlinedButton.icon(
-                  onPressed: () {
-                    if (!GuestGate.requireAccount(
-                      context,
-                      message: 'سجّل دخولك للتواصل مع مزوّد الخدمة.',
-                    )) {
-                      return;
-                    }
-                    AppHelpers.makePhoneCall(phone);
-                  },
-                  icon: const Icon(Icons.call_outlined),
-                  label: const Text(
-                    'اتصال',
-                    style: TextStyle(fontFamily: 'Cairo'),
+            )
+          else
+            Row(
+              children: [
+                if (whatsapp.trim().isNotEmpty)
+                  Expanded(
+                    child: FilledButton.icon(
+                      onPressed: () {
+                        if (!GuestGate.requireAccount(
+                          context,
+                          message: 'سجّل دخولك للتواصل مع مزوّد الخدمة.',
+                        )) {
+                          return;
+                        }
+                        AppHelpers.launchWhatsApp(
+                          whatsapp,
+                          'مرحبًا، أريد الاستفسار عن الخدمة',
+                        );
+                      },
+                      icon: const Icon(Icons.chat_outlined),
+                      label: const Text(
+                        'واتساب',
+                        style: TextStyle(fontFamily: 'Cairo'),
+                      ),
+                    ),
                   ),
-                ),
-            ],
-          ),
+                if (whatsapp.trim().isNotEmpty && phone.trim().isNotEmpty)
+                  const SizedBox(width: 8),
+                if (phone.trim().isNotEmpty)
+                  OutlinedButton.icon(
+                    onPressed: () {
+                      if (!GuestGate.requireAccount(
+                        context,
+                        message: 'سجّل دخولك للتواصل مع مزوّد الخدمة.',
+                      )) {
+                        return;
+                      }
+                      AppHelpers.makePhoneCall(phone);
+                    },
+                    icon: const Icon(Icons.call_outlined),
+                    label: const Text(
+                      'اتصال',
+                      style: TextStyle(fontFamily: 'Cairo'),
+                    ),
+                  ),
+              ],
+            ),
         ],
       ),
     );

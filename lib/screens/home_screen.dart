@@ -74,6 +74,19 @@ class _HomeScreenState extends State<HomeScreen> {
                     child: Image.asset(
                       'assets/images/bazar_ghaith_banner.png',
                       fit: BoxFit.fill, // تم التغيير من cover إلى fill لمنع قص الجوانب
+                      errorBuilder: (context, error, stackTrace) => Container(
+                        color: AppColors.primary,
+                        alignment: Alignment.center,
+                        child: const Text(
+                          'بازار ومطاعم الغيث',
+                          style: TextStyle(
+                            fontFamily: 'Cairo',
+                            fontWeight: FontWeight.w900,
+                            fontSize: 20,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
                     ),
                   ),
                 ),

@@ -83,7 +83,9 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
         : availableServiceIds.first;
     final showServicePicker = appProvider.merchantHasMultipleServices;
     final labels = merchantServiceLabels(serviceId);
-    final showShoppingSubCategoryPicker = serviceId == 'product';
+    final isBazaarChannel = serviceId == 'bazar_ghaith';
+    final showShoppingSubCategoryPicker =
+        serviceId == 'product' || isBazaarChannel;
     final showCarsSubCategoryPicker = serviceId == 'cars';
     final showRestaurantSectionPicker = serviceId == 'restaurant';
     final showSubCategoryPicker =
@@ -597,7 +599,9 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
       );
       return;
     }
-    if ((serviceId == 'product' || serviceId == 'restaurant') &&
+    if ((serviceId == 'product' ||
+            serviceId == 'restaurant' ||
+            serviceId == 'bazar_ghaith') &&
         provider.merchantProductSections.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -625,13 +629,20 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
       price: price,
       rating: widget.item?.rating ?? 4.8,
       category: serviceId,
-      subCategory: (serviceId == 'product' || serviceId == 'cars')
+      subCategory:
+          (serviceId == 'product' ||
+                  serviceId == 'cars' ||
+                  serviceId == 'bazar_ghaith')
           ? (_selectedSubCategoryId ?? widget.item?.subCategory)
           : widget.item?.subCategory,
-      sectionId: (serviceId == 'product' || serviceId == 'restaurant')
+      sectionId: (serviceId == 'product' ||
+              serviceId == 'restaurant' ||
+              serviceId == 'bazar_ghaith')
           ? _selectedSectionId
           : widget.item?.sectionId,
-      categoryLabelAr: (serviceId == 'product' || serviceId == 'restaurant') &&
+      categoryLabelAr: (serviceId == 'product' ||
+                  serviceId == 'restaurant' ||
+                  serviceId == 'bazar_ghaith') &&
               _selectedSectionId != null &&
               _selectedSectionId!.isNotEmpty
           ? (provider.merchantProductSectionName(_selectedSectionId) ??
@@ -673,15 +684,26 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
     } catch (error) {
       if (!context.mounted) return;
       final raw = error.toString();
-      final message = raw.contains('Missing authorization token') ||
-              raw.contains('Invalid authorization token') ||
-              raw.contains('401')
-          ? 'انتهت جلسة الدخول. سجل الخروج ثم ادخل مرة أخرى.'
-          : raw.contains('يرجى تحديد موقع المتجر على الخريطة')
-              ? 'حدد موقع المتجر على الخريطة أولاً، ثم أعد نشر المنتج.'
-          : raw.contains('Network error')
-              ? 'فشل الاتصال بالإنترنت أو بالخادم. حاول مرة أخرى.'
-              : 'تعذر حفظ المنتج في السحابة. تحقق من الاتصال وحاول مرة أخرى.';
+      late final String message;
+      if (raw.contains('Missing authorization token') ||
+          raw.contains('Invalid authorization token') ||
+          raw.contains('401')) {
+        message = 'انتهت جلسة الدخول. سجل الخروج ثم ادخل مرة أخرى.';
+      } else if (raw.contains('SECTION_SETUP_REQUIRED')) {
+        message = 'أنشئ قسماً داخل المتجر/المطعم أولاً من «إدارة الأقسام».';
+      } else if (raw.contains('SECTION_REQUIRED')) {
+        message = 'اختر قسماً للمنتج قبل الحفظ.';
+      } else if (raw.contains('SECTION_NOT_FOUND')) {
+        message = 'القسم المختار غير موجود. أعد اختيار القسم.';
+      } else if (raw.contains('SUB_CATEGORY_REQUIRED')) {
+        message = 'اختر قسماً من أقسام التسوق قبل الحفظ.';
+      } else if (raw.contains('يرجى تحديد موقع المتجر على الخريطة')) {
+        message = 'حدد موقع المتجر على الخريطة أولاً، ثم أعد نشر المنتج.';
+      } else if (raw.contains('Network error')) {
+        message = 'فشل الاتصال بالإنترنت أو بالخادم. حاول مرة أخرى.';
+      } else {
+        message = 'تعذر حفظ المنتج في السحابة. تحقق من الاتصال وحاول مرة أخرى.';
+      }
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(message),

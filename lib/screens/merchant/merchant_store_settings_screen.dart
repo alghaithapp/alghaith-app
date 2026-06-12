@@ -37,6 +37,9 @@ class _MerchantStoreSettingsScreenState
   late final TextEditingController _deliveryAreasController;
   late final TextEditingController _deliveryFeeController;
   bool _isOpen = true;
+  bool _showPhoneToCustomers = true;
+  bool _showWhatsAppToCustomers = true;
+  bool _contactVisibilityInitialized = false;
   String? _coverImageBase64;
   String? _logoImageBase64;
   String? _profileImageBase64;
@@ -73,6 +76,11 @@ class _MerchantStoreSettingsScreenState
     _deliveryAreasController.text = provider.merchantDeliveryAreas;
     _deliveryFeeController.text = provider.merchantDeliveryFee.toString();
     _isOpen = provider.isMerchantStoreOpen;
+    if (!_contactVisibilityInitialized) {
+      _showPhoneToCustomers = provider.merchantShowPhoneToCustomers;
+      _showWhatsAppToCustomers = provider.merchantShowWhatsAppToCustomers;
+      _contactVisibilityInitialized = true;
+    }
     _coverImageBase64 ??=
         ImageStorageService.merchantUploadedImageRef(provider.merchantCoverImage);
     _logoImageBase64 ??=
@@ -121,8 +129,6 @@ class _MerchantStoreSettingsScreenState
     final availableToAdd = DummyData.categories
         .where((category) => !serviceIds.contains(category.id))
         .toList();
-    final hideFee = provider.merchantActiveServiceId == 'professionals' ||
-        provider.merchantActiveServiceId == 'restaurant';
     final isProfessional = provider.merchantActiveServiceId == 'professionals';
     final requiresStoreLocation =
         serviceIds.contains('restaurant') || serviceIds.contains('product');
@@ -209,6 +215,10 @@ class _MerchantStoreSettingsScreenState
                     runSpacing: 8,
                     children: availableToAdd.map((category) {
                       return ActionChip(
+                        backgroundColor: AppColors.accent.withValues(alpha: 0.08),
+                        side: BorderSide(
+                          color: AppColors.accent.withValues(alpha: 0.35),
+                        ),
                         avatar: const Icon(
                           Icons.add_circle_outline_rounded,
                           size: 18,
@@ -216,7 +226,11 @@ class _MerchantStoreSettingsScreenState
                         ),
                         label: Text(
                           category.titleAr,
-                          style: const TextStyle(fontFamily: 'Cairo'),
+                          style: const TextStyle(
+                            fontFamily: 'Cairo',
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF1A1A1A),
+                          ),
                         ),
                         onPressed: () async {
                           await provider.addMerchantService(category.id);
@@ -318,6 +332,34 @@ class _MerchantStoreSettingsScreenState
             hintText: 'اختياري — اتركه فارغاً لاستخدام نفس رقم الهاتف',
             keyboardType: TextInputType.phone,
           ),
+          SwitchListTile(
+            value: _showPhoneToCustomers,
+            onChanged: (value) => setState(() => _showPhoneToCustomers = value),
+            title: const Text(
+              'إظهار رقم الهاتف للزبائن',
+              style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w800),
+            ),
+            subtitle: Text(
+              _showPhoneToCustomers
+                  ? 'سيظهر زر الاتصال للزبائن'
+                  : 'سيتم إخفاء زر الاتصال عن الزبائن',
+              style: const TextStyle(fontFamily: 'Cairo'),
+            ),
+          ),
+          SwitchListTile(
+            value: _showWhatsAppToCustomers,
+            onChanged: (value) => setState(() => _showWhatsAppToCustomers = value),
+            title: const Text(
+              'إظهار رقم واتساب للزبائن',
+              style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w800),
+            ),
+            subtitle: Text(
+              _showWhatsAppToCustomers
+                  ? 'سيظهر زر واتساب للزبائن'
+                  : 'سيتم إخفاء زر واتساب عن الزبائن',
+              style: const TextStyle(fontFamily: 'Cairo'),
+            ),
+          ),
           _Field(
               label: 'العنوان',
               controller: _addressController),
@@ -394,24 +436,6 @@ class _MerchantStoreSettingsScreenState
               label: labels.deliveryAreasLabelAr,
               controller: _deliveryAreasController,
               maxLines: 2),
-          if (!hideFee)
-            _Field(
-                label: labels.deliveryFeeLabelAr,
-                controller: _deliveryFeeController,
-                keyboardType: TextInputType.number)
-          else
-            Container(
-              margin: const EdgeInsets.only(bottom: 12),
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: AppColors.accent.withValues(alpha: 0.08),
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Text(
-                'لا توجد رسوم مباشرة في هذا القسم.',
-                style: const TextStyle(fontFamily: 'Cairo', height: 1.4),
-              ),
-            ),
           SwitchListTile(
             value: _isOpen,
             onChanged: (value) => setState(() => _isOpen = value),
@@ -452,21 +476,63 @@ class _MerchantStoreSettingsScreenState
                 );
                 return;
               }
+              final contactVisibility = <String, dynamic>{
+                'showPhoneToCustomers': _showPhoneToCustomers,
+                'showWhatsAppToCustomers': _showWhatsAppToCustomers,
+                'show_phone_to_customers': _showPhoneToCustomers,
+                'show_whatsapp_to_customers': _showWhatsAppToCustomers,
+              };
+              final professionalInfoPayload = isProfessional
+                  ? {
+                      'name': _nameController.text.trim(),
+                      'address': _addressController.text.trim(),
+                      'latitude': _storeLatitude,
+                      'longitude': _storeLongitude,
+                      'phone': _phoneController.text.trim(),
+                      'whatsapp': _resolveWhatsAppNumber(),
+                      'openTime': _openTime,
+                      'closeTime': _closeTime,
+                      'profileImageBase64': _profileImageBase64,
+                      'workSampleImagesBase64':
+                          List<String>.from(_workSampleImagesBase64),
+                      'professionId': _selectedProfessionalCategoryId,
+                      'professionNameAr': _selectedProfessionalCategoryId == null
+                          ? null
+                          : DummyData.professionalsSubCategories
+                              .firstWhere(
+                                (item) => item.id == _selectedProfessionalCategoryId,
+                              )
+                              .titleAr,
+                      'professionNameEn': _selectedProfessionalCategoryId == null
+                          ? null
+                          : DummyData.professionalsSubCategories
+                              .firstWhere(
+                                (item) => item.id == _selectedProfessionalCategoryId,
+                              )
+                              .titleEn,
+                      'contact_visibility': contactVisibility,
+                      'contactVisibility': contactVisibility,
+                    }
+                  : {
+                      'contact_visibility': contactVisibility,
+                      'contactVisibility': contactVisibility,
+                    };
               provider.updateMerchantStore({
                 'name': _nameController.text.trim(),
                 'description': _descController.text.trim(),
                 'phone': _phoneController.text.trim(),
                 'whatsapp': _resolveWhatsAppNumber(),
+                'showPhoneToCustomers': _showPhoneToCustomers,
+                'showWhatsAppToCustomers': _showWhatsAppToCustomers,
+                'show_phone_to_customers': _showPhoneToCustomers,
+                'show_whatsapp_to_customers': _showWhatsAppToCustomers,
                 'address': _addressController.text.trim(),
                 'latitude': _storeLatitude,
                 'longitude': _storeLongitude,
                 'openTime': _openTime,
                 'closeTime': _closeTime,
                 'deliveryAreas': _deliveryAreasController.text.trim(),
-                'deliveryFee': hideFee
-                    ? 0
-                    : int.tryParse(_deliveryFeeController.text.trim()) ??
-                        provider.merchantDeliveryFee,
+                'deliveryFee': provider.merchantDeliveryFee,
                 'isOpen': _isOpen,
                 'coverImageBase64': _coverImageBase64,
                 'logoImageBase64': _logoImageBase64,
@@ -480,42 +546,7 @@ class _MerchantStoreSettingsScreenState
                         ? const []
                         : List<String>.from(_workSampleImagesBase64),
                 'professionalCategoryId': _selectedProfessionalCategoryId,
-                'professionalInfo': isProfessional
-                    ? {
-                        'name': _nameController.text.trim(),
-                        'address': _addressController.text.trim(),
-                        'latitude': _storeLatitude,
-                        'longitude': _storeLongitude,
-                        'phone': _phoneController.text.trim(),
-                        'whatsapp': _resolveWhatsAppNumber(),
-                        'openTime': _openTime,
-                        'closeTime': _closeTime,
-                        'profileImageBase64': _profileImageBase64,
-                        'workSampleImagesBase64':
-                            List<String>.from(_workSampleImagesBase64),
-                        'professionId': _selectedProfessionalCategoryId,
-                        'professionNameAr':
-                            _selectedProfessionalCategoryId == null
-                                ? null
-                                : DummyData.professionalsSubCategories
-                                    .firstWhere(
-                                      (item) =>
-                                          item.id ==
-                                          _selectedProfessionalCategoryId,
-                                    )
-                                    .titleAr,
-                        'professionNameEn':
-                            _selectedProfessionalCategoryId == null
-                                ? null
-                                : DummyData.professionalsSubCategories
-                                    .firstWhere(
-                                      (item) =>
-                                          item.id ==
-                                          _selectedProfessionalCategoryId,
-                                    )
-                                    .titleEn,
-                      }
-                    : const {},
+                'professionalInfo': professionalInfoPayload,
               });
               if (!context.mounted) return;
               ScaffoldMessenger.of(context).showSnackBar(

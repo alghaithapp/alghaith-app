@@ -85,7 +85,29 @@ class AppProvider extends ChangeNotifier {
 
   AppProvider() {
     PushNotificationInbox.onCourierStatusPush = handleCourierStatusPush;
+    _bootWatchdog = Timer(const Duration(seconds: 20), _forceBootReady);
     _loadSettings();
+  }
+
+  void _finalizeBootState() {
+    _isRestoring = false;
+    _isHydrating = false;
+    _isReady = true;
+    if (!hasPhoneSession && !_isGuestMode) {
+      _isGuestMode = true;
+      _userRole = 'customer';
+    }
+    if (hasPhoneSession && _authPhone != null && _authPhone!.isNotEmpty) {
+      unawaited(PushNotificationService.instance.bindToUser(_authPhone!));
+    }
+    notifyListeners();
+  }
+
+  void _forceBootReady() {
+    if (_isReady) return;
+    debugPrint('BOOT_WATCHDOG: forcing ready state after timeout');
+    _resolveRoleAfterAuth();
+    _finalizeBootState();
   }
 
   /// رفع صورة (رابط عام أو Base64 احتياط) ثم إرجاع المرجع للحفظ.
@@ -152,8 +174,28 @@ class AppProvider extends ChangeNotifier {
   }
 
   bool get hasSelectedRole => _userRole?.trim().isNotEmpty == true;
-  bool get hasCompletedCustomerProfile =>
-      _customerName.trim().isNotEmpty && _customerPhone.trim().isNotEmpty;
+  String get _effectiveCustomerPhone {
+    final customerPhone = _customerPhone.trim();
+    if (customerPhone.isNotEmpty) return customerPhone;
+    return _authPhone?.trim() ?? '';
+  }
+
+  bool get hasCompletedCustomerProfile {
+    if (_effectiveCustomerPhone.isEmpty) return false;
+    if (_customerName.trim().isNotEmpty) return true;
+    if (hasCompletedMerchantProfile) return true;
+
+    final fullName = _trimmedOrNull(_appUserRecord?['full_name']?.toString());
+    if (fullName != null) return true;
+
+    final email = _trimmedOrNull(
+      _appUserRecord?['email']?.toString() ??
+          _appUserRecord?['customer_email']?.toString(),
+    );
+    if (email != null) return true;
+
+    return false;
+  }
   Map<String, dynamic>? get appUserRecord => _appUserRecord;
   Map<String, dynamic>? get merchantStore => _merchantStore;
   List<MerchantOffer> get merchantOffers =>
@@ -163,6 +205,7 @@ class AppProvider extends ChangeNotifier {
   bool get darkMode => _darkMode;
   bool get inAppAlertsEnabled => _inAppAlertsEnabled;
   bool get isReady => _isReady;
+  bool get isHydrating => _isHydrating;
   String get customerName => _customerName;
   String get customerPhone => _customerPhone;
   String get customerAddress => _customerAddress;
@@ -263,6 +306,10 @@ class AppProvider extends ChangeNotifier {
     if (explicit.isNotEmpty) return explicit;
     return merchantPhone;
   }
+  bool get merchantShowPhoneToCustomers =>
+      MerchantProfileFields.showPhoneToCustomers(_merchantStore);
+  bool get merchantShowWhatsAppToCustomers =>
+      MerchantProfileFields.showWhatsAppToCustomers(_merchantStore);
   String get merchantAddress =>
       MerchantProfileFields.addressFromMap(_merchantStore);
   double? get merchantLatitude =>
@@ -470,6 +517,7 @@ class AppProvider extends ChangeNotifier {
   }
 
   Future<void> _loadSettings() async {
+    String? restoredPhone;
     try {
       final accountRepo = AccountRepository.instance;
       final stored = await accountRepo.readStoredSession();
@@ -477,36 +525,112 @@ class AppProvider extends ChangeNotifier {
         _sessionToken = stored.token;
         SupabaseService.setSessionToken(stored.token);
         _authPhone = PhoneUtils.normalize(stored.phone);
-        final restoredLocally = await _restoreLocalBackup(_authPhone!);
-        if (restoredLocally && !_isReady) {
-          _isHydrating = false;
-          _isReady = true;
-          notifyListeners();
-        }
-
+        restoredPhone = _authPhone;
         _isRestoring = true;
-        await _restoreRemoteSession(_authPhone!);
+        notifyListeners();
+        await _restoreLocalBackup(_authPhone!);
+        _resolveRoleAfterAuth();
+        _finalizeBootState();
+        _startRemoteRestore(restoredPhone!);
       }
     } catch (error) {
       debugPrint('CRITICAL: Initial load failed: $error');
     } finally {
       _bootWatchdog?.cancel();
       _bootWatchdog = null;
-      _isRestoring = false;
-      _isHydrating = false;
-      _isReady = true;
-      // أول فتح للتطبيق أو عدم وجود جلسة محفوظة: ندخل المستخدم كزائر للتصفح
-      // مباشرة دون إجباره على تسجيل الدخول. التسوق والشراء والتواصل تتطلب
-      // تسجيل الدخول لاحقاً عبر بوابة الزائر (GuestGate).
-      if (!hasPhoneSession && !_isGuestMode) {
-        _isGuestMode = true;
-        _userRole = 'customer';
+      if (!_isLoggingIn && !_isReady) {
+        _resolveRoleAfterAuth();
+        _finalizeBootState();
       }
-      if (hasPhoneSession && _authPhone != null && _authPhone!.isNotEmpty) {
-        unawaited(PushNotificationService.instance.bindToUser(_authPhone!));
-      }
-      notifyListeners();
     }
+  }
+
+  void _startRemoteRestore(String phone) {
+    unawaited(() async {
+      try {
+        await _restoreRemoteSessionWithRetry(phone).timeout(
+          const Duration(seconds: 45),
+          onTimeout: () {
+            debugPrint('BOOT_REMOTE_RESTORE_TIMEOUT for $phone');
+          },
+        );
+      } catch (error) {
+        debugPrint('BOOT_REMOTE_RESTORE_ERROR: $error');
+      }
+      if (!hasPhoneSession) return;
+      final activePhone = _trimmedOrNull(_authPhone);
+      if (activePhone == null || _normalizeStoredPhone(activePhone) != phone) {
+        return;
+      }
+      _resolveRoleAfterAuth();
+      notifyListeners();
+    }());
+  }
+
+  bool _hasMeaningfulRemoteIdentity() {
+    return _appUserRecord != null ||
+        hasCompletedMerchantProfile ||
+        hasCompletedCustomerProfile;
+  }
+
+  Future<void> _restoreRemoteSessionWithRetry(
+    String phone, {
+    int attempts = 3,
+    bool deferPostRefresh = false,
+  }) async {
+    for (var attempt = 0; attempt < attempts; attempt++) {
+      await _restoreRemoteSession(
+        phone,
+        deferPostRefresh: deferPostRefresh,
+        persistAfterRestore: !deferPostRefresh,
+      );
+      if (_hasMeaningfulRemoteIdentity()) return;
+      if (attempt < attempts - 1) {
+        await Future<void>.delayed(Duration(seconds: 1 + attempt));
+      }
+    }
+  }
+
+  Future<void> _enrichRemoteSessionInBackground(String phone) async {
+    final normalizedPhone = _normalizeStoredPhone(phone);
+    if (normalizedPhone.isEmpty || !hasPhoneSession) return;
+    final activePhone = _trimmedOrNull(_authPhone);
+    if (activePhone == null ||
+        _normalizeStoredPhone(activePhone) != normalizedPhone) {
+      return;
+    }
+
+    try {
+      if (isCustomer) {
+        await refreshCustomerCatalog();
+        await refreshCustomerOrders();
+      }
+      if (isMerchant) {
+        await _refreshMerchantIncomingOrders();
+      }
+      if (isDelivery) {
+        await refreshCourierOrders();
+      }
+      await _persistLocalBackup();
+      notifyListeners();
+    } catch (error) {
+      debugPrint('ENRICH_SESSION_ERROR: $error');
+    }
+  }
+
+  void _hydrateCustomerIdentityFromRestoredData() {
+    if (_customerPhone.trim().isEmpty && _authPhone != null) {
+      _customerPhone = _authPhone!;
+    }
+    if (_customerName.trim().isNotEmpty) return;
+
+    _customerName = _trimmedOrNull(_appUserRecord?['full_name']?.toString()) ??
+        _trimmedOrNull(
+          _appUserRecord?['email']?.toString() ??
+              _appUserRecord?['customer_email']?.toString(),
+        ) ??
+        (hasCompletedMerchantProfile ? merchantStoreName : null) ??
+        _customerName;
   }
 
   List<String> _decodeStringList(dynamic value,
@@ -699,15 +823,28 @@ class AppProvider extends ChangeNotifier {
     }
   }
 
-  Future<void> _restoreRemoteSession(String phone) async {
+  Future<void> _restoreRemoteSession(
+    String phone, {
+    bool deferPostRefresh = false,
+    bool persistAfterRestore = true,
+  }) async {
     final normalizedPhone = _normalizeStoredPhone(phone);
     if (normalizedPhone.isEmpty || !AppConfig.isBackendConfigured) return;
+    final activePhone = _trimmedOrNull(_authPhone);
+    if (activePhone != null && _normalizeStoredPhone(activePhone) != normalizedPhone) {
+      return;
+    }
 
     debugPrint('RESTORE: Loading data for $normalizedPhone');
 
     try {
       final bundle =
           await AccountRepository.instance.fetchRemoteAccount(normalizedPhone);
+      final latestPhone = _trimmedOrNull(_authPhone);
+      if (latestPhone == null ||
+          _normalizeStoredPhone(latestPhone) != normalizedPhone) {
+        return;
+      }
 
       final appUser = bundle.appUser;
       final customerProfile = bundle.customerProfile;
@@ -806,20 +943,29 @@ class AppProvider extends ChangeNotifier {
       _inferAccountTypeFromLegacyData();
       _inferRoleFromRestoredData();
       _applyAccountTypeConstraints();
+      _hydrateCustomerIdentityFromRestoredData();
 
-      if (isCustomer) {
-        await refreshCustomerCatalog();
-        await refreshCustomerOrders();
-      }
-      if (isMerchant) {
-        await _refreshMerchantIncomingOrders();
-      }
-      if (isDelivery) {
-        await refreshCourierOrders();
+      if (!deferPostRefresh) {
+        try {
+          if (isCustomer) {
+            await refreshCustomerCatalog();
+            await refreshCustomerOrders();
+          }
+          if (isMerchant) {
+            await _refreshMerchantIncomingOrders();
+          }
+          if (isDelivery) {
+            await refreshCourierOrders();
+          }
+        } catch (error) {
+          debugPrint('RESTORE_POST_REFRESH_ERROR: $error');
+        }
       }
 
-      await _persistLocalBackup();
-      notifyListeners();
+      if (persistAfterRestore) {
+        await _persistLocalBackup();
+        notifyListeners();
+      }
     } catch (e) {
       debugPrint('RESTORE_ERROR: $e');
     }
@@ -1114,7 +1260,7 @@ class AppProvider extends ChangeNotifier {
   }
 
   List<ListItem> _buildLocalCatalogFallback() {
-    if (_items.isEmpty) return const [];
+    if (_items.isEmpty) return <ListItem>[];
     final fallbackPhone = _normalizeStoredPhone(
       _authPhone ?? _customerPhone ?? merchantPhone,
     );
@@ -1774,50 +1920,85 @@ class AppProvider extends ChangeNotifier {
   }
 
   Future<void> setPhoneSession(String phone, {String? sessionToken}) async {
-    // توحيد الرقم فوراً قبل أي عملية أخرى
     final normalized = _normalizeStoredPhone(phone);
     if (normalized.isEmpty) return;
+
     final normalizedToken = _trimmedOrNull(sessionToken) ?? _sessionToken;
     _sessionToken = normalizedToken;
     SupabaseService.setSessionToken(normalizedToken);
-
-    _isLoggingIn = true;
-    _isRestoring = true;
-    notifyListeners();
-
     _authPhone = normalized;
     _customerPhone = normalized;
+    _isGuestMode = false;
 
-    await AccountRepository.instance.persistSession(
-      phone: normalized,
-      token: normalizedToken,
-    );
+    _isLoggingIn = true;
+    notifyListeners();
 
     try {
-      debugPrint('==== FULL RESTORATION STARTED for $normalized ====');
-      // انتظار جلب كل شيء حرفياً من السحابة قبل الانتقال للخطوة التالية
-      await _restoreRemoteSession(normalized);
+      await AccountRepository.instance.persistSession(
+        phone: normalized,
+        token: normalizedToken,
+      );
 
-      // حماية: إذا لم يجد دوراً، لا تسمح بالمزامنة التلقائية فوراً
+      debugPrint('==== LOGIN: local-first restore for $normalized ====');
+      await _restoreLocalBackup(normalized);
+      _resolveRoleAfterAuth();
+      _hydrateCustomerIdentityFromRestoredData();
+
       if (_userRole == null) {
-        debugPrint('Restoration warning: No role found in DB.');
+        debugPrint('LOGIN: no role yet, defaulting after auth resolve.');
       } else {
-        debugPrint('Restoration success: User is $_userRole');
+        debugPrint('LOGIN: ready with role $_userRole (local-first).');
       }
     } catch (error) {
-      debugPrint('Restoration flow error: $error');
+      debugPrint('LOGIN_ERROR: $error');
+      _resolveRoleAfterAuth();
+      _hydrateCustomerIdentityFromRestoredData();
     } finally {
       _isLoggingIn = false;
       _isRestoring = false;
       _isHydrating = false;
       _isReady = true;
-      await _persistLocalBackup();
       notifyListeners();
-      if (!_isRestoring && !_isLoggingIn) {
-        _notificationHub.onLoginSuccess();
-      }
+      _notificationHub.onLoginSuccess();
+      unawaited(_completeLoginRemoteRestore(normalized));
       unawaited(PushNotificationService.instance.bindToUser(normalized));
     }
+  }
+
+  Future<void> _completeLoginRemoteRestore(String phone) async {
+    try {
+      await _restoreRemoteSessionWithRetry(
+        phone,
+        attempts: 2,
+        deferPostRefresh: true,
+      ).timeout(
+        const Duration(seconds: 35),
+        onTimeout: () {
+          debugPrint('LOGIN_REMOTE_RESTORE_TIMEOUT for $phone');
+        },
+      );
+      if (!hasPhoneSession) return;
+      _resolveRoleAfterAuth();
+      _hydrateCustomerIdentityFromRestoredData();
+      notifyListeners();
+      await _enrichRemoteSessionInBackground(phone);
+    } catch (error) {
+      debugPrint('LOGIN_REMOTE_RESTORE_ERROR: $error');
+    }
+  }
+
+  void _resolveRoleAfterAuth() {
+    if (!hasPhoneSession) return;
+    _hydrateCustomerIdentityFromRestoredData();
+    _inferAccountTypeFromLegacyData();
+    _inferRoleFromRestoredData();
+    _applyAccountTypeConstraints();
+    if (_userRole == null || _userRole!.trim().isEmpty) {
+      _userRole = _defaultRoleForAccountType(_accountType) ?? 'customer';
+    }
+    _accountType ??= _accountTypeForRole(_userRole!);
+    _accountType ??= 'marketplace';
+    _isGuestMode = false;
   }
 
   Future<void> _persistMerchantOffers() async {
@@ -1869,6 +2050,36 @@ class AppProvider extends ChangeNotifier {
         _merchantStore!['closeTime'] = closeTime;
         _merchantStore!['close_time'] = closeTime;
       }
+      final showPhoneToCustomers =
+          MerchantProfileFields.showPhoneToCustomers(_merchantStore);
+      final showWhatsAppToCustomers =
+          MerchantProfileFields.showWhatsAppToCustomers(_merchantStore);
+      final contactVisibility = <String, dynamic>{
+        'showPhoneToCustomers': showPhoneToCustomers,
+        'showWhatsAppToCustomers': showWhatsAppToCustomers,
+        'show_phone_to_customers': showPhoneToCustomers,
+        'show_whatsapp_to_customers': showWhatsAppToCustomers,
+      };
+      final professionalInfoRaw = _merchantStore?['professionalInfo'] ??
+          _merchantStore?['professional_info'];
+      final professionalInfo = professionalInfoRaw is Map
+          ? Map<String, dynamic>.from(professionalInfoRaw)
+          : <String, dynamic>{};
+      final existingVisibility = professionalInfo['contact_visibility'] ??
+          professionalInfo['contactVisibility'];
+      final visibilityMap = existingVisibility is Map
+          ? <String, dynamic>{
+              ...Map<String, dynamic>.from(existingVisibility),
+              ...contactVisibility,
+            }
+          : contactVisibility;
+      professionalInfo['contact_visibility'] = visibilityMap;
+      professionalInfo['contactVisibility'] = visibilityMap;
+      _merchantStore!['showPhoneToCustomers'] = showPhoneToCustomers;
+      _merchantStore!['showWhatsAppToCustomers'] = showWhatsAppToCustomers;
+      _merchantStore!['show_phone_to_customers'] = showPhoneToCustomers;
+      _merchantStore!['show_whatsapp_to_customers'] = showWhatsAppToCustomers;
+      _merchantStore!['professionalInfo'] = professionalInfo;
 
       await SupabaseService.saveMerchantProfile(phone, {
         'store_name': _merchantStore?['name'],
@@ -1894,7 +2105,9 @@ class AppProvider extends ChangeNotifier {
         'active_service_id': _merchantStore?['activeServiceId'],
         'restaurant_category': _merchantStore?['restaurantCategory'],
         'professional_category_id': _merchantStore?['professionalCategoryId'],
-        'professional_info': _merchantStore?['professionalInfo'],
+        'professional_info': professionalInfo,
+        'show_phone_to_customers': showPhoneToCustomers,
+        'show_whatsapp_to_customers': showWhatsAppToCustomers,
         'work_sample_images_base64':
             _merchantStore?['workSampleImagesBase64'] ??
                 _merchantStore?['work_sample_images_base64'],
@@ -2454,6 +2667,15 @@ class AppProvider extends ChangeNotifier {
     return _listItemFromProductRow(row).copyWith(
       merchantPhone:
           row['merchant_phone']?.toString() ?? row['phone']?.toString(),
+      merchantWhatsApp: row['merchant_customer_whatsapp']?.toString() ??
+          row['merchant_whatsapp']?.toString(),
+      merchantShowPhoneToCustomers: row['merchant_show_phone_to_customers'] is bool
+          ? row['merchant_show_phone_to_customers'] as bool
+          : null,
+      merchantShowWhatsAppToCustomers:
+          row['merchant_show_whatsapp_to_customers'] is bool
+              ? row['merchant_show_whatsapp_to_customers'] as bool
+              : null,
       merchantStoreName: row['merchant_store_name']?.toString() ?? '',
       address:
           row['merchant_address']?.toString() ?? row['address']?.toString(),
@@ -2640,8 +2862,17 @@ class AppProvider extends ChangeNotifier {
     Map<String, dynamic> product,
     Map<String, dynamic> profile,
   ) {
+    final visiblePhone = MerchantProfileFields.customerVisiblePhone(profile);
+    final visibleWhatsApp = MerchantProfileFields.customerVisibleWhatsApp(profile);
+    final showPhone = MerchantProfileFields.showPhoneToCustomers(profile);
+    final showWhatsApp = MerchantProfileFields.showWhatsAppToCustomers(profile);
     final row = Map<String, dynamic>.from(product)
       ..['merchant_phone'] = profile['phone']?.toString()
+      ..['merchant_whatsapp'] = visibleWhatsApp
+      ..['merchant_customer_phone'] = visiblePhone
+      ..['merchant_customer_whatsapp'] = visibleWhatsApp
+      ..['merchant_show_phone_to_customers'] = showPhone
+      ..['merchant_show_whatsapp_to_customers'] = showWhatsApp
       ..['merchant_store_name'] = profile['store_name']?.toString() ?? ''
       ..['merchant_address'] = MerchantProfileFields.addressFromMap(profile)
       ..['merchant_open_time'] =
@@ -3448,7 +3679,7 @@ class AppProvider extends ChangeNotifier {
 
   Future<void> addProduct(ListItem item) async {
     assertCanPublishForService(item.category);
-    if (item.category == 'bazaar_ghaith' && !isBazaarApproved) {
+    if (item.category == 'bazar_ghaith' && !isBazaarApproved) {
       throw StateError(
         'يلزم حصولك على موافقة الإدارة قبل النشر داخل قسم بازار ومطاعم الغيث.',
       );
@@ -3958,6 +4189,8 @@ class AppProvider extends ChangeNotifier {
 
   void resetAll() {
     _isRestoring = false;
+    _isLoggingIn = false;
+    _isHydrating = false;
     _isGuestMode = false;
     final previousPhone = _authPhone;
 
@@ -3972,17 +4205,17 @@ class AppProvider extends ChangeNotifier {
     _driverType = null;
     _driverProfile = null;
     _courierProfile = null;
-    _cart.clear();
-    _items.clear();
-    _catalogItems.clear();
-    _orders.clear();
-    _merchantIncomingOrders.clear();
-    _courierPoolOrders.clear();
-    _courierAssignedOrders.clear();
+    _cart = [];
+    _items = [];
+    _catalogItems = [];
+    _orders = [];
+    _merchantIncomingOrders = [];
+    _courierPoolOrders = [];
+    _courierAssignedOrders = [];
     _adminReports = null;
     _allCouriers = [];
-    _taxiRequests.clear();
-    _addresses.clear();
+    _taxiRequests = [];
+    _addresses = [];
     _notifications.clear();
     _customerName = '';
     _customerPhone = '';

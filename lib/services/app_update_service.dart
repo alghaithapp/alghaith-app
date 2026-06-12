@@ -27,6 +27,8 @@ class AppUpdateCheckResult {
 class AppUpdateService {
   const AppUpdateService._();
 
+  static const Duration policyTimeout = Duration(seconds: 8);
+
   static Future<AppUpdateCheckResult> evaluate() async {
     final packageInfo = await PackageInfo.fromPlatform();
     final currentBuildNumber =
@@ -46,7 +48,7 @@ class AppUpdateService {
       final uri = Uri.parse('$baseUrl/app/update-policy');
       final response = await http
           .get(uri, headers: const {'Content-Type': 'application/json'})
-          .timeout(AppConfig.apiTimeout);
+          .timeout(policyTimeout);
 
       if (response.statusCode < 200 || response.statusCode >= 300) {
         debugPrint(

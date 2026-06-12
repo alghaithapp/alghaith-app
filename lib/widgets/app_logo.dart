@@ -38,6 +38,21 @@ class AppLogo extends StatelessWidget {
           height: size,
           fit: fit,
           filterQuality: FilterQuality.high,
+          errorBuilder: (context, error, stackTrace) => Container(
+            width: size,
+            height: size,
+            color: const Color(0xFFEFE7DA),
+            alignment: Alignment.center,
+            child: Text(
+              'الغيث',
+              style: TextStyle(
+                fontFamily: 'Cairo',
+                fontWeight: FontWeight.w900,
+                fontSize: size * 0.22,
+                color: const Color(0xFF2A1A17),
+              ),
+            ),
+          ),
         ),
       ),
     );

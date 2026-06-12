@@ -62,9 +62,16 @@ class _RestaurantMenuScreenState extends State<RestaurantMenuScreen>
   }
 
   String? get _whatsappNumber {
-    final wa = widget.storeProfile['whatsapp']?.toString().trim() ?? '';
-    if (wa.isNotEmpty) return wa;
-    return _restaurant.merchantPhone?.trim();
+    final whatsapp =
+        MerchantProfileFields.customerVisibleWhatsApp(widget.storeProfile).trim();
+    if (whatsapp.isEmpty) return null;
+    return whatsapp;
+  }
+
+  String? get _storeCustomerPhone {
+    final phone = MerchantProfileFields.customerVisiblePhone(widget.storeProfile).trim();
+    if (phone.isEmpty) return null;
+    return phone;
   }
 
   double? _toDouble(dynamic value) {
@@ -323,18 +330,22 @@ class _RestaurantMenuScreenState extends State<RestaurantMenuScreen>
                           ? restaurant.address!
                           : 'العنوان غير متوفر',
                       hours: _workingHoursLabel,
-                      onCall: () {
+                      onCall: _storeCustomerPhone == null
+                          ? null
+                          : () {
                         if (!GuestGate.requireAccount(
                           context,
                           message: 'سجّل دخولك للتواصل مع المتجر.',
                         )) {
                           return;
                         }
-                        final phone = restaurant.merchantPhone?.trim();
+                        final phone = _storeCustomerPhone;
                         if (phone == null || phone.isEmpty) return;
                         AppHelpers.makePhoneCall(phone);
                       },
-                      onWhatsApp: () {
+                      onWhatsApp: _whatsappNumber == null
+                          ? null
+                          : () {
                         if (!GuestGate.requireAccount(
                           context,
                           message: 'سجّل دخولك للتواصل مع المتجر.',
@@ -649,8 +660,8 @@ class _HeroSection extends StatelessWidget {
 class _RestaurantInfoCard extends StatelessWidget {
   final String address;
   final String hours;
-  final VoidCallback onCall;
-  final VoidCallback onWhatsApp;
+  final VoidCallback? onCall;
+  final VoidCallback? onWhatsApp;
 
   const _RestaurantInfoCard({
     required this.address,
@@ -687,27 +698,39 @@ class _RestaurantInfoCard extends StatelessWidget {
             label: hours,
           ),
           const SizedBox(height: 16),
-          Row(
-            children: [
-              Expanded(
-                child: _ActionChip(
-                  label: 'اتصال',
-                  icon: Icons.phone_rounded,
-                  color: _brandRed,
-                  onTap: onCall,
-                ),
+          if (onCall == null && onWhatsApp == null)
+            const Text(
+              'المتجر أخفى وسائل التواصل حالياً.',
+              style: TextStyle(
+                fontFamily: 'Cairo',
+                color: Color(0xFF777777),
+                fontSize: 12,
               ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: _ActionChip(
-                  label: 'واتساب',
-                  icon: Icons.chat_rounded,
-                  color: const Color(0xFF25D366),
-                  onTap: onWhatsApp,
-                ),
-              ),
-            ],
-          ),
+            )
+          else
+            Row(
+              children: [
+                if (onCall != null)
+                  Expanded(
+                    child: _ActionChip(
+                      label: 'اتصال',
+                      icon: Icons.phone_rounded,
+                      color: _brandRed,
+                      onTap: onCall!,
+                    ),
+                  ),
+                if (onCall != null && onWhatsApp != null) const SizedBox(width: 10),
+                if (onWhatsApp != null)
+                  Expanded(
+                    child: _ActionChip(
+                      label: 'واتساب',
+                      icon: Icons.chat_rounded,
+                      color: const Color(0xFF25D366),
+                      onTap: onWhatsApp!,
+                    ),
+                  ),
+              ],
+            ),
         ],
       ),
     );

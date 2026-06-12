@@ -1,4 +1,3 @@
-import 'package:animate_do/animate_do.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -57,70 +56,60 @@ class RoleSelectionScreen extends StatelessWidget {
               padding: const EdgeInsets.fromLTRB(20, 24, 20, 28),
               child: Column(
                 children: [
-                  FadeInDown(
-                    child: Container(
-                      width: 98,
-                      height: 98,
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(28),
-                        color: const Color(0xFF121212),
-                        border: Border.all(
-                          color: const Color(0xFFE53935).withValues(alpha: 0.28),
+                  Container(
+                    width: 98,
+                    height: 98,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(28),
+                      color: const Color(0xFF121212),
+                      border: Border.all(
+                        color: const Color(0xFFE53935).withValues(alpha: 0.28),
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFFE53935).withValues(alpha: 0.12),
+                          blurRadius: 24,
+                          offset: const Offset(0, 10),
                         ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: const Color(0xFFE53935).withValues(alpha: 0.12),
-                            blurRadius: 24,
-                            offset: const Offset(0, 10),
-                          ),
-                        ],
-                      ),
-                      child: const Icon(
-                        CupertinoIcons.person_crop_circle_fill,
-                        color: Colors.white,
-                        size: 44,
-                      ),
+                      ],
+                    ),
+                    child: const Icon(
+                      CupertinoIcons.person_crop_circle_fill,
+                      color: Colors.white,
+                      size: 44,
                     ),
                   ),
                   const SizedBox(height: 22),
-                  FadeInDown(
-                    delay: const Duration(milliseconds: 80),
-                    child: Text(
-                      locked ? 'تأكيد نوع حسابك' : 'اختيار نوع الحساب',
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 34,
-                        height: 1.2,
-                        fontWeight: FontWeight.w900,
-                        fontFamily: 'Cairo',
-                      ),
+                  Text(
+                    locked ? 'تأكيد نوع حسابك' : 'اختيار نوع الحساب',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 34,
+                      height: 1.2,
+                      fontWeight: FontWeight.w900,
+                      fontFamily: 'Cairo',
                     ),
                   ),
                   const SizedBox(height: 8),
-                  FadeIn(
-                    delay: const Duration(milliseconds: 150),
-                    child: Text(
-                      locked
-                          ? 'هذا الرقم مربوط بنوع حساب واحد فقط ولا يمكن تغييره لاحقًا.'
-                          : 'اختر نوع حسابك الآن — القرار نهائي ولا يمكن تحويل الرقم لنوع آخر لاحقًا.',
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        color: Color(0xFFB8B8B8),
-                        fontSize: 14.5,
-                        height: 1.7,
-                        fontFamily: 'Cairo',
-                        fontWeight: FontWeight.w500,
-                      ),
+                  Text(
+                    locked
+                        ? 'هذا الرقم مربوط بنوع حساب واحد فقط ولا يمكن تغييره لاحقًا.'
+                        : 'اختر نوع حسابك الآن — القرار نهائي ولا يمكن تحويل الرقم لنوع آخر لاحقًا.',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      color: Color(0xFFB8B8B8),
+                      fontSize: 14.5,
+                      height: 1.7,
+                      fontFamily: 'Cairo',
+                      fontWeight: FontWeight.w500,
                     ),
                   ),
                   const SizedBox(height: 28),
                   if (!locked ||
                       appProvider.isMarketplaceAccount ||
                       appProvider.isDeliveryAccount) ...[
-                    FadeInRight(
-                      delay: const Duration(milliseconds: 220),
-                      child: _RoleCard(
+                    _RoleCard(
                         title: 'حساب زبون / تاجر',
                         subtitle:
                             'تسوق، طلبات، ومتجر خاص — يمكنك التبديل لاحقاً بين الزبون والتاجر والمندوب',
@@ -140,15 +129,12 @@ class RoleSelectionScreen extends StatelessWidget {
                           );
                         },
                       ),
-                    ),
                     const SizedBox(height: 14),
                   ],
                   if (!locked ||
                       appProvider.isDeliveryAccount ||
                       appProvider.isMarketplaceAccount) ...[
-                    FadeInUp(
-                      delay: const Duration(milliseconds: 380),
-                      child: _RoleCard(
+                    _RoleCard(
                         title: 'مندوب توصيل',
                         subtitle:
                             'توصيل طلبات المطاعم والتسوق — يمكنك التبديل لاحقاً بين الزبون والتاجر والمندوب',
@@ -156,19 +142,42 @@ class RoleSelectionScreen extends StatelessWidget {
                         accentColor: const Color(0xFF00A3A3),
                         onTap: () => _pickRole(context, appProvider, 'delivery'),
                       ),
+                    const SizedBox(height: 14),
+                  ],
+                  if (appProvider.isDriverAccount) ...[
+                    _RoleCard(
+                      title: 'سائق تكسي',
+                      subtitle: 'استقبال طلبات التكسي وإدارة الرحلات',
+                      icon: CupertinoIcons.car_fill,
+                      accentColor: const Color(0xFF1565C0),
+                      onTap: () => _pickRole(context, appProvider, 'driver'),
                     ),
                     const SizedBox(height: 14),
                   ],
                   if (appProvider.hasAdminAccess) ...[
-                    FadeInUp(
-                      delay: const Duration(milliseconds: 460),
-                      child: _RoleCard(
+                    _RoleCard(
                         title: 'لوحة الإدارة',
                         subtitle:
                             'تقارير المنصة — للمدير فقط ولا تغيّر نوع الحساب الأساسي',
                         icon: CupertinoIcons.chart_bar_square_fill,
                         accentColor: const Color(0xFF7B1FA2),
                         onTap: () => _pickRole(context, appProvider, 'admin'),
+                      ),
+                  ],
+                  if (locked &&
+                      !appProvider.isMarketplaceAccount &&
+                      !appProvider.isDeliveryAccount &&
+                      !appProvider.isDriverAccount &&
+                      !appProvider.hasAdminAccess) ...[
+                    const SizedBox(height: 12),
+                    const Text(
+                      'تعذر تحديد نوع حسابك تلقائياً. تواصل مع الدعم لمساعدتك.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: Color(0xFFB8B8B8),
+                        fontSize: 14,
+                        height: 1.6,
+                        fontFamily: 'Cairo',
                       ),
                     ),
                   ],

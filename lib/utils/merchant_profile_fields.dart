@@ -123,35 +123,90 @@ class MerchantProfileFields {
     return '';
   }
 
-  static bool isApproved(Map<String, dynamic>? store) {
-    if (store == null) return false;
-    if (store['isApproved'] == true || store['is_approved'] == true) return true;
-    if (approvalStatus(store) == 'approved') return true;
-    if (approvalStatus(store) == 'pending' || approvalStatus(store) == 'rejected') {
-      return false;
+  static bool _boolFromDynamic(dynamic value, {required bool fallback}) {
+    if (value is bool) return value;
+    final normalized = value?.toString().trim().toLowerCase() ?? '';
+    if (normalized.isEmpty) return fallback;
+    if (['true', '1', 'yes', 'y', 'on'].contains(normalized)) return true;
+    if (['false', '0', 'no', 'n', 'off'].contains(normalized)) return false;
+    return fallback;
+  }
+
+  static Map<String, dynamic> _contactVisibilityMap(Map<String, dynamic>? map) {
+    if (map == null) return const {};
+    final info = map['professional_info'] ?? map['professionalInfo'];
+    if (info is! Map) return const {};
+    final raw = info['contact_visibility'] ?? info['contactVisibility'];
+    if (raw is! Map) return const {};
+    return Map<String, dynamic>.from(raw);
+  }
+
+  static bool showPhoneToCustomers(Map<String, dynamic>? map) {
+    final visibility = _contactVisibilityMap(map);
+    final explicit = map?['show_phone_to_customers'] ?? map?['showPhoneToCustomers'];
+    final nested =
+        visibility['show_phone_to_customers'] ?? visibility['showPhoneToCustomers'];
+    return _boolFromDynamic(explicit ?? nested, fallback: true);
+  }
+
+  static bool showWhatsAppToCustomers(Map<String, dynamic>? map) {
+    final visibility = _contactVisibilityMap(map);
+    final explicit =
+        map?['show_whatsapp_to_customers'] ?? map?['showWhatsAppToCustomers'];
+    final nested = visibility['show_whatsapp_to_customers'] ??
+        visibility['showWhatsAppToCustomers'];
+    return _boolFromDynamic(explicit ?? nested, fallback: true);
+  }
+
+  static String customerVisiblePhone(Map<String, dynamic>? map) {
+    if (!showPhoneToCustomers(map)) return '';
+    if (map == null) return '';
+    for (final key in ['customer_phone', 'customerPhone', 'phone']) {
+      final value = map[key]?.toString().trim() ?? '';
+      if (value.isNotEmpty) return value;
+    }
+    return '';
+  }
+
+  static String customerVisibleWhatsApp(Map<String, dynamic>? map) {
+    if (!showWhatsAppToCustomers(map)) return '';
+    if (map == null) return '';
+    for (final key in ['customer_whatsapp', 'customerWhatsApp', 'whatsapp']) {
+      final value = map[key]?.toString().trim() ?? '';
+      if (value.isNotEmpty) return value;
+    }
+    final phone = map['phone']?.toString().trim() ?? '';
+    return phone;
+  }
+
+  /// مصدر واحد غير متكرر لحالة الاعتماد — يمنع التكرار اللانهائي
+  /// (StackOverflow) الذي كان يحدث عند تبادل isApproved/approvalStatus.
+  static String approvalStatus(Map<String, dynamic>? store) {
+    if (store == null) return 'pending';
+
+    final status = store['approvalStatus']?.toString().trim() ??
+        store['approval_status']?.toString().trim() ??
+        '';
+    if (status == 'approved') return 'approved';
+    if (status == 'rejected') return 'rejected';
+    if (status == 'pending') return 'pending';
+
+    if (store['isApproved'] == true || store['is_approved'] == true) {
+      return 'approved';
     }
     if (store['isApproved'] == false || store['is_approved'] == false) {
-      return false;
+      return 'pending';
     }
+
+    // احتياط للبيانات القديمة: متجر باسم فعلي يُعتبر معتمداً.
     final name = store['name']?.toString().trim() ??
         store['store_name']?.toString().trim() ??
         '';
-    return name.isNotEmpty;
+    return name.isNotEmpty ? 'approved' : 'pending';
   }
 
-  static String approvalStatus(Map<String, dynamic>? store) {
-    if (isApproved(store)) return 'approved';
-    final status =
-        store?['approvalStatus']?.toString().trim() ??
-            store?['approval_status']?.toString().trim() ??
-            '';
-    if (status == 'rejected') return 'rejected';
-    if (status == 'pending') return 'pending';
-    if (store?['isApproved'] == false || store?['is_approved'] == false) {
-      return 'pending';
-    }
-    return 'approved';
-  }
+  static bool isApproved(Map<String, dynamic>? store) =>
+      approvalStatus(store) == 'approved';
 
   static bool isRejected(Map<String, dynamic>? store) =>
       approvalStatus(store) == 'rejected';

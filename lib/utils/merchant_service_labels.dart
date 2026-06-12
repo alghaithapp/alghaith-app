@@ -90,6 +90,7 @@ String normalizeMerchantServiceId(String serviceId) {
   if (id.isEmpty) return 'product';
   switch (id) {
     case 'global_shopping':
+    case 'bazar_ghaith':
       return 'product';
     default:
       return id;

@@ -51,6 +51,9 @@ class ListItem {
   final String? merchantCloseTime;
   final bool? merchantIsOpen;
   final bool? merchantIsFrozen;
+  final String? merchantWhatsApp;
+  final bool? merchantShowPhoneToCustomers;
+  final bool? merchantShowWhatsAppToCustomers;
 
   ListItem({
     required this.id,
@@ -89,6 +92,9 @@ class ListItem {
     this.merchantCloseTime,
     this.merchantIsOpen,
     this.merchantIsFrozen,
+    this.merchantWhatsApp,
+    this.merchantShowPhoneToCustomers,
+    this.merchantShowWhatsAppToCustomers,
   });
 
   ListItem copyWith({
@@ -128,6 +134,9 @@ class ListItem {
     String? merchantCloseTime,
     bool? merchantIsOpen,
     bool? merchantIsFrozen,
+    String? merchantWhatsApp,
+    bool? merchantShowPhoneToCustomers,
+    bool? merchantShowWhatsAppToCustomers,
   }) {
     return ListItem(
       id: id ?? this.id,
@@ -166,6 +175,11 @@ class ListItem {
       merchantCloseTime: merchantCloseTime ?? this.merchantCloseTime,
       merchantIsOpen: merchantIsOpen ?? this.merchantIsOpen,
       merchantIsFrozen: merchantIsFrozen ?? this.merchantIsFrozen,
+      merchantWhatsApp: merchantWhatsApp ?? this.merchantWhatsApp,
+      merchantShowPhoneToCustomers:
+          merchantShowPhoneToCustomers ?? this.merchantShowPhoneToCustomers,
+      merchantShowWhatsAppToCustomers: merchantShowWhatsAppToCustomers ??
+          this.merchantShowWhatsAppToCustomers,
     );
   }
 
@@ -207,10 +221,22 @@ class ListItem {
       'merchantCloseTime': merchantCloseTime,
       'merchantIsOpen': merchantIsOpen,
       'merchantIsFrozen': merchantIsFrozen,
+      'merchantWhatsApp': merchantWhatsApp,
+      'merchantShowPhoneToCustomers': merchantShowPhoneToCustomers,
+      'merchantShowWhatsAppToCustomers': merchantShowWhatsAppToCustomers,
     };
   }
 
   factory ListItem.fromMap(Map<String, dynamic> map) {
+    bool? parseOptionalBool(dynamic value) {
+      if (value is bool) return value;
+      final normalized = value?.toString().trim().toLowerCase() ?? '';
+      if (normalized.isEmpty) return null;
+      if (['true', '1', 'yes', 'y', 'on'].contains(normalized)) return true;
+      if (['false', '0', 'no', 'n', 'off'].contains(normalized)) return false;
+      return null;
+    }
+
     return ListItem(
       id: (map['id'] as String?) ?? '',
       nameAr: (map['nameAr'] as String?) ?? '',
@@ -244,7 +270,9 @@ class ListItem {
       isApproved: (map['isApproved'] as bool?) ??
           (map['is_approved'] as bool?) ??
           true,
-      merchantPhone: map['merchantPhone'] as String?,
+      merchantPhone: map['merchantPhone']?.toString() ??
+          map['merchant_phone']?.toString() ??
+          map['phone']?.toString(),
       merchantStoreName: map['merchantStoreName'] as String?,
       merchantLatitude: (map['merchantLatitude'] as num?)?.toDouble(),
       merchantLongitude: (map['merchantLongitude'] as num?)?.toDouble(),
@@ -252,6 +280,17 @@ class ListItem {
       merchantCloseTime: map['merchantCloseTime'] as String?,
       merchantIsOpen: map['merchantIsOpen'] as bool?,
       merchantIsFrozen: map['merchantIsFrozen'] as bool?,
+      merchantWhatsApp: map['merchantWhatsApp']?.toString() ??
+          map['merchant_whatsapp']?.toString() ??
+          map['merchant_customer_whatsapp']?.toString(),
+      merchantShowPhoneToCustomers: parseOptionalBool(
+        map['merchantShowPhoneToCustomers'] ??
+            map['merchant_show_phone_to_customers'],
+      ),
+      merchantShowWhatsAppToCustomers: parseOptionalBool(
+        map['merchantShowWhatsAppToCustomers'] ??
+            map['merchant_show_whatsapp_to_customers'],
+      ),
     );
   }
 }

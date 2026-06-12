@@ -271,6 +271,7 @@ class MarketplaceCatalog {
     MarketplaceSubCategory(id: 'food_items', titleAr: 'مواد غذائية', titleEn: 'Food Items', image: 'assets/images/shop_food_items.png'),
     MarketplaceSubCategory(id: 'construction', titleAr: 'مواد إنشائية', titleEn: 'Construction', image: 'assets/images/shop_construction.png'),
     MarketplaceSubCategory(id: 'school', titleAr: 'لوازم مدرسية', titleEn: 'School Supplies', image: 'assets/images/shop_school.png'),
+    MarketplaceSubCategory(id: 'books_magazines', titleAr: 'الكتب والمجلات', titleEn: 'Books & Magazines', image: 'assets/images/shop_school.png'),
     MarketplaceSubCategory(id: 'bakery', titleAr: 'مخابز ومعجنات', titleEn: 'Bakeries', image: 'assets/images/shop_bakery.png'),
     MarketplaceSubCategory(id: 'meat', titleAr: 'لحوم', titleEn: 'Meat', image: 'assets/images/shop_meat.png'),
     MarketplaceSubCategory(id: 'grocery', titleAr: 'بقالة', titleEn: 'Grocery', image: 'assets/images/shop_grocery.png'),

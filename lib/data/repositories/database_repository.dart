@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart';
+
 import '../../core/config/app_config.dart';
 import '../../core/network/api_client.dart';
 import '../../core/utils/phone_utils.dart';
@@ -344,24 +346,45 @@ class DatabaseRepository {
       queryParameters: {'phone': _phone(phone)},
     );
     if (result is! List) return const [];
-    return result
-        .map((item) => ActiveOrder.fromMap(
-              Map<String, dynamic>.from(item['order_payload'] as Map),
-            ))
-        .toList();
+    final orders = <ActiveOrder>[];
+    for (final item in result) {
+      if (item is! Map) continue;
+      final payload = item['order_payload'];
+      if (payload is! Map) continue;
+      try {
+        orders.add(
+          ActiveOrder.fromMap(Map<String, dynamic>.from(payload)),
+        );
+      } catch (error) {
+        debugPrint('loadCustomerOrders skipped bad row: $error');
+      }
+    }
+    return orders;
+  }
+
+  Future<T?> _safeBundleLoad<T>(
+    String label,
+    Future<T> Function() loader,
+  ) async {
+    try {
+      return await loader();
+    } catch (error) {
+      debugPrint('loadAccountBundle/$label failed: $error');
+      return null;
+    }
   }
 
   Future<RemoteAccountBundle> loadAccountBundle(String phone) async {
     final normalized = _phone(phone);
     final results = await Future.wait([
-      loadAppUser(normalized),
-      loadCustomerProfile(normalized),
-      loadMerchantProfile(normalized),
-      loadUserState(normalized),
-      loadCustomerAddresses(normalized),
-      loadCustomerFavoriteIds(normalized),
-      loadCustomerOrders(normalized),
-      loadMerchantProducts(normalized),
+      _safeBundleLoad('appUser', () => loadAppUser(normalized)),
+      _safeBundleLoad('customerProfile', () => loadCustomerProfile(normalized)),
+      _safeBundleLoad('merchantProfile', () => loadMerchantProfile(normalized)),
+      _safeBundleLoad('userState', () => loadUserState(normalized)),
+      _safeBundleLoad('addresses', () => loadCustomerAddresses(normalized)),
+      _safeBundleLoad('favoriteIds', () => loadCustomerFavoriteIds(normalized)),
+      _safeBundleLoad('orders', () => loadCustomerOrders(normalized)),
+      _safeBundleLoad('products', () => loadMerchantProducts(normalized)),
     ]).timeout(AppConfig.restoreTimeout);
 
     return RemoteAccountBundle(
@@ -369,10 +392,10 @@ class DatabaseRepository {
       customerProfile: results[1] as Map<String, dynamic>?,
       merchantProfile: results[2] as Map<String, dynamic>?,
       userState: results[3] as Map<String, dynamic>?,
-      addresses: results[4] as List<String>,
-      favoriteIds: results[5] as List<String>,
-      orders: results[6] as List<ActiveOrder>,
-      products: results[7] as List<Map<String, dynamic>>,
+      addresses: (results[4] as List<String>?) ?? const [],
+      favoriteIds: (results[5] as List<String>?) ?? const [],
+      orders: (results[6] as List<ActiveOrder>?) ?? const [],
+      products: (results[7] as List<Map<String, dynamic>>?) ?? const [],
     );
   }
 

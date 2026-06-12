@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui' show PlatformDispatcher;
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
@@ -37,35 +38,113 @@ import 'widgets/customer_order_notifications.dart';
 import 'widgets/exit_confirm_scope.dart';
 import 'widgets/safe_bottom_bar.dart';
 import 'widgets/app_update_gate.dart';
-import 'widgets/startup_splash_screen.dart';
-
 Future<void> main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-  try {
-    AppConfig.validate(throwOnError: false);
-    await AppConfig.ensureMapboxToken();
-    if (AppConfig.isMapboxConfigured) {
-      MapboxOptions.setAccessToken(AppConfig.effectiveMapboxPublicToken);
-      MapboxMapsOptions.setLanguage('ar');
-    } else {
-      debugPrint(
-        'Mapbox: MAPBOX_PUBLIC_TOKEN غير مضبوط — أضف pk. في Codemagic أو MAPBOX_PUBLIC_TOKEN على الخادم.',
+  // معالج عام يمنع أي "شاشة رمادية" صامتة: بدل تعطّل الإطار الأول بدون أثر،
+  // نعرض واجهة بديلة مفهومة للمستخدم مع تسجيل الخطأ في سجلّات النظام.
+  ErrorWidget.builder = (FlutterErrorDetails details) {
+    FlutterError.presentError(details);
+    return AppErrorFallback(details: details);
+  };
+
+  FlutterError.onError = (FlutterErrorDetails details) {
+    FlutterError.presentError(details);
+    debugPrint('FLUTTER_ERROR: ${details.exceptionAsString()}');
+  };
+
+  runZonedGuarded<Future<void>>(
+    () async {
+      WidgetsFlutterBinding.ensureInitialized();
+
+      PlatformDispatcher.instance.onError = (error, stack) {
+        debugPrint('PLATFORM_ERROR: $error');
+        return true;
+      };
+
+      try {
+        AppConfig.validate(throwOnError: false);
+        await AppConfig.ensureMapboxToken();
+        if (AppConfig.isMapboxConfigured) {
+          MapboxOptions.setAccessToken(AppConfig.effectiveMapboxPublicToken);
+          MapboxMapsOptions.setLanguage('ar');
+        } else {
+          debugPrint(
+            'Mapbox: MAPBOX_PUBLIC_TOKEN غير مضبوط — أضف pk. في Codemagic أو MAPBOX_PUBLIC_TOKEN على الخادم.',
+          );
+        }
+        await SupabaseService.initialize();
+        await PushNotificationService.instance.initialize();
+        await configureAppSystemUi();
+      } catch (e) {
+        debugPrint('Bootstrap error: $e');
+      }
+
+      runApp(
+        MultiProvider(
+          providers: [
+            ChangeNotifierProvider(create: (_) => AppProvider()),
+          ],
+          child: const AlGhaithApp(),
+        ),
       );
-    }
-    await SupabaseService.initialize();
-    await PushNotificationService.instance.initialize();
-    await configureAppSystemUi();
-  } catch (e) {
-    debugPrint('Bootstrap error: $e');
-  }
-  runApp(
-    MultiProvider(
-      providers: [
-        ChangeNotifierProvider(create: (_) => AppProvider()),
-      ],
-      child: const AlGhaithApp(),
-    ),
+    },
+    (error, stack) {
+      debugPrint('ZONE_ERROR: $error');
+    },
   );
+}
+
+/// واجهة بديلة تُعرض إذا فشل بناء أي شاشة — بدل شاشة رمادية فارغة.
+class AppErrorFallback extends StatelessWidget {
+  final FlutterErrorDetails? details;
+
+  const AppErrorFallback({super.key, this.details});
+
+  @override
+  Widget build(BuildContext context) {
+    return Directionality(
+      textDirection: TextDirection.rtl,
+      child: Material(
+        color: AppColors.scaffold,
+        child: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: const [
+                Icon(
+                  Icons.refresh_rounded,
+                  size: 56,
+                  color: AppColors.accent,
+                ),
+                SizedBox(height: 16),
+                Text(
+                  'حدث خطأ غير متوقع',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontFamily: 'Cairo',
+                    fontSize: 18,
+                    fontWeight: FontWeight.w900,
+                    color: Color(0xFF1A1A1A),
+                  ),
+                ),
+                SizedBox(height: 8),
+                Text(
+                  'يرجى إعادة فتح التطبيق. إذا استمرت المشكلة تواصل مع الدعم.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontFamily: 'Cairo',
+                    fontSize: 14,
+                    height: 1.6,
+                    color: Color(0xFF666666),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 // StartupGate removed — splash is handled inside AlGhaithApp after MaterialApp loads.
@@ -170,10 +249,6 @@ class AlGhaithApp extends StatelessWidget {
 
     // واجهة اختيار الشاشة المناسبة بناءً على حالة الحساب
     Widget getHome() {
-      if (!appProvider.isReady || appProvider.isLoggingIn || appProvider.isRestoring) {
-        return const StartupSplashScreen();
-      }
-
       if (!appProvider.hasPhoneSession && !appProvider.isGuestMode) {
         return const ExitConfirmScope(child: PhoneLoginScreen());
       }
@@ -232,14 +307,14 @@ class AlGhaithApp extends StatelessWidget {
           return AppSystemUiScope(
             child: Directionality(
               textDirection: TextDirection.rtl,
-              child: Material(
-                type: MaterialType.transparency,
+              child: ColoredBox(
+                color: Theme.of(context).scaffoldBackgroundColor,
                 child: child!,
               ),
             ),
           );
         },
-        home: AppUpdateGate(child: getHome()),
+        home: AppUpdateGate(buildContent: getHome),
       ),
     );
   }

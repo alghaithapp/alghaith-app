@@ -1,6 +1,4 @@
-﻿import 'dart:ui';
-
-import 'package:flutter/cupertino.dart';
+﻿import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -178,6 +176,8 @@ class _PhoneLoginScreenState extends State<PhoneLoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isRestoringAccount = context.watch<AppProvider>().isLoggingIn;
+
     return Scaffold(
       resizeToAvoidBottomInset: true,
       body: Stack(
@@ -222,6 +222,33 @@ class _PhoneLoginScreenState extends State<PhoneLoginScreen> {
               },
             ),
           ),
+          if (_isSubmitting || isRestoringAccount)
+            Positioned.fill(
+              child: ColoredBox(
+                color: Colors.black.withValues(alpha: 0.28),
+                child: const Center(
+                  child: Card(
+                    child: Padding(
+                      padding: EdgeInsets.all(24),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          CupertinoActivityIndicator(radius: 14),
+                          SizedBox(height: 14),
+                          Text(
+                            'جارٍ تجهيز حسابك...',
+                            style: TextStyle(
+                              fontFamily: 'Cairo',
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
         ],
       ),
     );
@@ -273,14 +300,16 @@ class _BlurBlob extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ImageFiltered(
-      imageFilter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
-      child: Container(
-        width: size,
-        height: size,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          gradient: RadialGradient(colors: colors),
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: RadialGradient(
+          colors: [
+            colors.first.withValues(alpha: 0.42),
+            colors.last.withValues(alpha: 0.08),
+          ],
         ),
       ),
     );

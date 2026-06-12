@@ -1010,10 +1010,9 @@ class _ShoppingStoreMenuScreenState extends State<ShoppingStoreMenuScreen>
     );
     final products = _filterProducts(filteredBySection);
 
-    final whatsappText = widget.profile['whatsapp']?.toString().trim() ?? '';
-    final whatsapp = whatsappText.isNotEmpty
-        ? whatsappText
-        : AppHelpers.supportWhatsAppNumber;
+    final customerPhone = MerchantProfileFields.customerVisiblePhone(widget.profile);
+    final customerWhatsApp =
+        MerchantProfileFields.customerVisibleWhatsApp(widget.profile);
     return Scaffold(
       backgroundColor: const Color(0xFFF5F6FA),
       appBar: AppBar(
@@ -1052,7 +1051,8 @@ class _ShoppingStoreMenuScreenState extends State<ShoppingStoreMenuScreen>
             children: [
               _StoreHeader(
                 profile: widget.profile,
-                whatsapp: whatsapp,
+                visiblePhone: customerPhone,
+                visibleWhatsApp: customerWhatsApp,
               ),
               const SizedBox(height: 12),
               CupertinoSearchTextField(
@@ -1126,8 +1126,9 @@ class _ShoppingStoreMenuScreenState extends State<ShoppingStoreMenuScreen>
                       )) {
                         return;
                       }
+                      if (customerWhatsApp.trim().isEmpty) return;
                       AppHelpers.launchWhatsApp(
-                        whatsapp,
+                        customerWhatsApp,
                         'مرحبًا، أريد الاستفسار عن ${item['name_ar']?.toString() ?? ''}',
                       );
                     },
@@ -1214,17 +1215,20 @@ class _ShoppingStoreMenuScreenState extends State<ShoppingStoreMenuScreen>
 
 class _StoreHeader extends StatelessWidget {
   final Map<String, dynamic> profile;
-  final String whatsapp;
+  final String visiblePhone;
+  final String visibleWhatsApp;
 
   const _StoreHeader({
     required this.profile,
-    required this.whatsapp,
+    required this.visiblePhone,
+    required this.visibleWhatsApp,
   });
 
   @override
   Widget build(BuildContext context) {
     final address = MerchantProfileFields.addressFromMap(profile);
-    final phone = profile['phone']?.toString().trim() ?? '';
+    final hasWhatsApp = visibleWhatsApp.trim().isNotEmpty;
+    final hasPhone = visiblePhone.trim().isNotEmpty;
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -1267,62 +1271,72 @@ class _StoreHeader extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: () {
-                    if (!GuestGate.requireAccount(
-                      context,
-                      message: 'سجّل دخولك للتواصل مع المتجر.',
-                    )) {
-                      return;
-                    }
-                    AppHelpers.launchWhatsApp(
-                      whatsapp,
-                      'مرحبًا، أريد الاستفسار عن المحل.',
-                    );
-                  },
-                  icon: const Icon(Icons.chat_rounded),
-                  label: const Text('واتساب'),
-                  style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    foregroundColor: const Color(0xFFF5A01D),
-                    side: const BorderSide(color: Color(0xFFF5A01D)),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
+          if (!hasWhatsApp && !hasPhone)
+            const Text(
+              'التاجر أخفى وسائل التواصل حالياً.',
+              style: TextStyle(
+                fontFamily: 'Cairo',
+                color: Colors.grey,
+                fontSize: 12,
+              ),
+            )
+          else
+            Row(
+              children: [
+                if (hasWhatsApp)
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () {
+                        if (!GuestGate.requireAccount(
+                          context,
+                          message: 'سجّل دخولك للتواصل مع المتجر.',
+                        )) {
+                          return;
+                        }
+                        AppHelpers.launchWhatsApp(
+                          visibleWhatsApp,
+                          'مرحبًا، أريد الاستفسار عن المحل.',
+                        );
+                      },
+                      icon: const Icon(Icons.chat_rounded),
+                      label: const Text('واتساب'),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        foregroundColor: const Color(0xFFF5A01D),
+                        side: const BorderSide(color: Color(0xFFF5A01D)),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                      ),
                     ),
                   ),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: ElevatedButton.icon(
-                  onPressed: () {
-                    if (!GuestGate.requireAccount(
-                      context,
-                      message: 'سجّل دخولك للتواصل مع المتجر.',
-                    )) {
-                      return;
-                    }
-                    AppHelpers.makePhoneCall(
-                      phone.isNotEmpty ? phone : whatsapp,
-                    );
-                  },
-                  icon: const Icon(Icons.call_rounded),
-                  label: const Text('اتصال'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFF5A01D),
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
+                if (hasWhatsApp && hasPhone) const SizedBox(width: 10),
+                if (hasPhone)
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: () {
+                        if (!GuestGate.requireAccount(
+                          context,
+                          message: 'سجّل دخولك للتواصل مع المتجر.',
+                        )) {
+                          return;
+                        }
+                        AppHelpers.makePhoneCall(visiblePhone);
+                      },
+                      icon: const Icon(Icons.call_rounded),
+                      label: const Text('اتصال'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFFF5A01D),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                      ),
                     ),
                   ),
-                ),
-              ),
-            ],
-          ),
+              ],
+            ),
         ],
       ),
     );

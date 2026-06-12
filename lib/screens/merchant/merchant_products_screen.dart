@@ -260,7 +260,9 @@ class _MerchantProductsScreenState extends State<MerchantProductsScreen> {
               available: available,
               unavailable: unavailable,
             ),
-            if (serviceId == 'product' || serviceId == 'restaurant') ...[
+            if (serviceId == 'product' ||
+                serviceId == 'restaurant' ||
+                serviceId == 'bazar_ghaith') ...[
               const SizedBox(height: 14),
               if (provider.isBazaarApproved && _showBazaarApprovedNotice)
                 _BazaarApprovedBanner(
@@ -280,7 +282,9 @@ class _MerchantProductsScreenState extends State<MerchantProductsScreen> {
               onChanged: (_) => setState(() {}),
             ),
             const SizedBox(height: 18),
-            if (serviceId == 'product' || serviceId == 'restaurant') ...[
+            if (serviceId == 'product' ||
+                serviceId == 'restaurant' ||
+                serviceId == 'bazar_ghaith') ...[
               _StoreSectionsBanner(
                 isRestaurant: serviceId == 'restaurant',
                 sectionCount: provider.merchantProductSections.length,
@@ -320,7 +324,8 @@ class _MerchantProductsScreenState extends State<MerchantProductsScreen> {
                   child: _PremiumProductCard(
                     item: item,
                     sectionLabel: (serviceId == 'product' ||
-                            serviceId == 'restaurant')
+                            serviceId == 'restaurant' ||
+                            serviceId == 'bazar_ghaith')
                         ? provider.merchantProductSectionName(item.sectionId)
                         : null,
                     onToggle: () {

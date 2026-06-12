@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../core/ui/account_ui.dart';
 import '../providers/app_provider.dart';
+import '../utils/app_update_checker.dart';
 import '../utils/guest_gate.dart';
 import '../widgets/account/account_page_header.dart';
 
@@ -93,6 +94,20 @@ class _GuestMainCard extends StatelessWidget {
           ),
           const SizedBox(height: 36),
           _GuestLoginButton(onPressed: onLogin),
+          const SizedBox(height: 16),
+          CupertinoButton(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            onPressed: () => AppUpdateChecker.checkAndPrompt(context),
+            child: const Text(
+              'التحقق من تحديث التطبيق',
+              style: TextStyle(
+                fontFamily: 'Cairo',
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFFE84A3A),
+              ),
+            ),
+          ),
         ],
       ),
     );

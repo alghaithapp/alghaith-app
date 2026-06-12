@@ -247,14 +247,19 @@ class _HeroCard extends StatelessWidget {
       );
     }
     if (cover.startsWith('iVBOR') || cover.startsWith('/9j/')) {
-      return DecorationImage(
-        image: MemoryImage(base64Decode(cover)),
-        fit: BoxFit.cover,
-        colorFilter: ColorFilter.mode(
-          Colors.black.withValues(alpha: 0.55),
-          BlendMode.darken,
-        ),
-      );
+      try {
+        return DecorationImage(
+          image: MemoryImage(base64Decode(cover)),
+          fit: BoxFit.cover,
+          colorFilter: ColorFilter.mode(
+            Colors.black.withValues(alpha: 0.55),
+            BlendMode.darken,
+          ),
+        );
+      } catch (error) {
+        debugPrint('MERCHANT_COVER_DECODE_ERROR: $error');
+        return null;
+      }
     }
     return null;
   }
