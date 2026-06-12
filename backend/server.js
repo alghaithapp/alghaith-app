@@ -174,16 +174,19 @@ function isAppleReviewPhone(phone) {
   return digits.endsWith('000000000') && digits.replace(/0/g, '').length <= 2;
 }
 
+function isAllowedCorsOrigin(origin) {
+  if (!origin) return true;
+  if (corsAllowedOrigins.length === 0 || corsAllowedOrigins.includes(origin)) {
+    return true;
+  }
+  return /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/i.test(origin);
+}
+
 app.use(helmet());
 app.use(
   cors({
     origin(origin, callback) {
-      // Mobile/native clients often send no Origin header.
-      if (!origin) {
-        callback(null, true);
-        return;
-      }
-      if (corsAllowedOrigins.length === 0 || corsAllowedOrigins.includes(origin)) {
+      if (isAllowedCorsOrigin(origin)) {
         callback(null, true);
         return;
       }
