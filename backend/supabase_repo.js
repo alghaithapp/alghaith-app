@@ -110,6 +110,55 @@ function normalizeObject(value) {
   return {};
 }
 
+function parseOptionalBoolean(value) {
+  if (value === undefined || value === null) return undefined;
+  if (typeof value === 'boolean') return value;
+  const normalized = String(value).trim().toLowerCase();
+  if (!normalized) return undefined;
+  if (['true', '1', 'yes', 'y', 'on'].includes(normalized)) return true;
+  if (['false', '0', 'no', 'n', 'off'].includes(normalized)) return false;
+  return undefined;
+}
+
+function resolveMerchantContactVisibility(profile = {}) {
+  const info = normalizeObject(profile.professional_info ?? profile.professionalInfo);
+  const visibility = normalizeObject(info.contact_visibility ?? info.contactVisibility);
+  const showPhoneToCustomers =
+    parseOptionalBoolean(
+      profile.show_phone_to_customers ??
+        profile.showPhoneToCustomers ??
+        visibility.show_phone_to_customers ??
+        visibility.showPhoneToCustomers
+    ) ?? true;
+  const showWhatsAppToCustomers =
+    parseOptionalBoolean(
+      profile.show_whatsapp_to_customers ??
+        profile.showWhatsAppToCustomers ??
+        visibility.show_whatsapp_to_customers ??
+        visibility.showWhatsAppToCustomers
+    ) ?? true;
+
+  return { showPhoneToCustomers, showWhatsAppToCustomers };
+}
+
+function withMerchantCustomerContacts(profile = {}) {
+  const visibility = resolveMerchantContactVisibility(profile);
+  const phone = String(profile.phone || '').trim();
+  const whatsapp = String(profile.whatsapp || '').trim();
+  const customerPhone = visibility.showPhoneToCustomers ? phone : '';
+  const customerWhatsApp = visibility.showWhatsAppToCustomers
+    ? whatsapp || phone
+    : '';
+
+  return {
+    ...profile,
+    show_phone_to_customers: visibility.showPhoneToCustomers,
+    show_whatsapp_to_customers: visibility.showWhatsAppToCustomers,
+    customer_phone: customerPhone,
+    customer_whatsapp: customerWhatsApp,
+  };
+}
+
 function profileServiceIds(profile) {
   const serviceIds = normalizeArray(profile.service_ids).map((item) =>
     String(item).trim()
@@ -796,6 +845,12 @@ async function getMerchantProfile(phone) {
 async function saveMerchantProfile(phone, data = {}) {
   const appUser = await ensureAppUser(phone, data);
   const basePayload = { updated_at: nowIso() };
+  const showPhoneToCustomers = parseOptionalBoolean(
+    data.show_phone_to_customers ?? data.showPhoneToCustomers
+  );
+  const showWhatsAppToCustomers = parseOptionalBoolean(
+    data.show_whatsapp_to_customers ?? data.showWhatsAppToCustomers
+  );
   if (await hasColumn('merchant_profiles', 'user_id')) {
     basePayload.user_id = appUser?.id || null;
   }
@@ -847,9 +902,36 @@ async function saveMerchantProfile(phone, data = {}) {
     );
   }
   if (await hasColumn('merchant_profiles', 'professional_info')) {
-    basePayload.professional_info = normalizeObject(
-      data.professional_info ?? data.professionalInfo
-    );
+    const info = normalizeObject(data.professional_info ?? data.professionalInfo);
+    if (showPhoneToCustomers !== undefined || showWhatsAppToCustomers !== undefined) {
+      const visibility = normalizeObject(info.contact_visibility ?? info.contactVisibility);
+      if (showPhoneToCustomers !== undefined) {
+        visibility.show_phone_to_customers = showPhoneToCustomers;
+        visibility.showPhoneToCustomers = showPhoneToCustomers;
+      }
+      if (showWhatsAppToCustomers !== undefined) {
+        visibility.show_whatsapp_to_customers = showWhatsAppToCustomers;
+        visibility.showWhatsAppToCustomers = showWhatsAppToCustomers;
+      }
+      info.contact_visibility = visibility;
+      info.contactVisibility = {
+        showPhoneToCustomers:
+          visibility.showPhoneToCustomers ?? visibility.show_phone_to_customers,
+        showWhatsAppToCustomers:
+          visibility.showWhatsAppToCustomers ?? visibility.show_whatsapp_to_customers,
+      };
+    }
+    basePayload.professional_info = info;
+  }
+  if (await hasColumn('merchant_profiles', 'show_phone_to_customers')) {
+    if (showPhoneToCustomers !== undefined) {
+      basePayload.show_phone_to_customers = showPhoneToCustomers;
+    }
+  }
+  if (await hasColumn('merchant_profiles', 'show_whatsapp_to_customers')) {
+    if (showWhatsAppToCustomers !== undefined) {
+      basePayload.show_whatsapp_to_customers = showWhatsAppToCustomers;
+    }
   }
   if (await hasColumn('merchant_profiles', 'professional_category_id')) {
     assignIfDefined(
@@ -1956,7 +2038,6 @@ async function saveMerchantProduct(phone, data = {}) {
       }
     }
   }
-
   assignIfDefined(payload, 'name_ar', data.name_ar ?? data.nameAr ?? '');
   assignIfDefined(payload, 'name_en', data.name_en ?? data.nameEn ?? '');
   assignIfDefined(
@@ -2050,17 +2131,28 @@ async function deleteMerchantProduct(id, phone) {
 
 function enrichProfessionalProfileRow(row) {
   const info = normalizeObject(row.professional_info);
-  const contactPhone = String(info.phone || row.whatsapp || row.phone || '').trim();
-  const contactWhatsapp = String(
+  const visibility = resolveMerchantContactVisibility(row);
+  const rawPhone = String(info.phone || row.whatsapp || row.phone || '').trim();
+  const rawWhatsapp = String(
     row.whatsapp || info.whatsapp || info.phone || row.phone || ''
   ).trim();
+  const contactPhone = visibility.showPhoneToCustomers
+    ? rawPhone || String(row.phone || '').trim()
+    : '';
+  const contactWhatsapp = visibility.showWhatsAppToCustomers
+    ? rawWhatsapp || contactPhone || String(row.phone || '').trim()
+    : '';
   const address = String(row.address || info.address || '').trim();
   const openTime = String(row.open_time || info.openTime || '').trim();
   const closeTime = String(row.close_time || info.closeTime || '').trim();
   return {
     ...row,
-    phone: contactPhone || String(row.phone || '').trim(),
+    phone: contactPhone,
     whatsapp: contactWhatsapp,
+    show_phone_to_customers: visibility.showPhoneToCustomers,
+    show_whatsapp_to_customers: visibility.showWhatsAppToCustomers,
+    customer_phone: contactPhone,
+    customer_whatsapp: contactWhatsapp,
     address: address || row.address,
     open_time: openTime || row.open_time,
     close_time: closeTime || row.close_time,
@@ -2133,7 +2225,7 @@ async function listMerchantStoresByService({
     if (filteredProducts.length === 0) continue;
 
     result.push({
-      profile,
+      profile: withMerchantCustomerContacts(profile),
       products: filteredProducts,
     });
   }
@@ -2465,9 +2557,17 @@ async function listCatalogProducts(category = '', subCategoryId = '') {
     .map((row) => {
       const phone = String(row.phone || '').trim();
       const profile = findProfileForPhone(profileByPhone, phone);
+      const profileContacts = withMerchantCustomerContacts(profile || {});
       return {
         ...row,
         merchant_phone: phone,
+        merchant_whatsapp: profileContacts.customer_whatsapp ?? '',
+        merchant_customer_phone: profileContacts.customer_phone ?? '',
+        merchant_customer_whatsapp: profileContacts.customer_whatsapp ?? '',
+        merchant_show_phone_to_customers:
+          profileContacts.show_phone_to_customers ?? true,
+        merchant_show_whatsapp_to_customers:
+          profileContacts.show_whatsapp_to_customers ?? true,
         merchant_store_name: profile?.store_name ?? '',
         merchant_address: profile?.address ?? '',
         merchant_latitude:
@@ -2519,9 +2619,10 @@ async function listRealEstateListings(subCategoryId = '', listingMode = '') {
   return filteredProducts
     .map((product) => {
       const phone = String(product.phone || '').trim();
+      const merchant = profilesByPhone.get(phone) || null;
       return {
         product,
-        merchant: profilesByPhone.get(phone) || null,
+        merchant: merchant ? withMerchantCustomerContacts(merchant) : null,
       };
     })
     .filter(({ merchant }) => merchant && merchant.is_open !== false && !isMerchantFrozen(merchant));
