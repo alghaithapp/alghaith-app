@@ -36,6 +36,7 @@ import 'utils/role_switch_notifications.dart';
 import 'widgets/customer_order_notifications.dart';
 import 'widgets/exit_confirm_scope.dart';
 import 'widgets/safe_bottom_bar.dart';
+import 'widgets/app_update_gate.dart';
 import 'widgets/startup_splash_screen.dart';
 
 Future<void> main() async {
@@ -238,7 +239,7 @@ class AlGhaithApp extends StatelessWidget {
             ),
           );
         },
-        home: getHome(),
+        home: AppUpdateGate(child: getHome()),
       ),
     );
   }

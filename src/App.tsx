@@ -14,6 +14,7 @@ import {
   Search,
   Shield,
   ShoppingBag,
+  Smartphone,
   Store,
   Trash2,
   UserX,
@@ -26,9 +27,11 @@ import {
   deleteAdminAccount,
   loadAdminAccounts,
   loadAdminReports,
+  loadAppUpdatePolicy,
   loadCouriers,
   loadMerchantDetails,
   loadMerchants,
+  saveAppUpdatePolicy,
   rejectCourierApplication,
   rejectDriverApplication,
   rejectMerchantApplication,
@@ -46,6 +49,7 @@ import type {
   AdminAccountKind,
   AdminAccountSummary,
   AdminReports,
+  AppUpdatePolicy,
   CourierSummary,
   MerchantDetails,
   MerchantSummary,
@@ -59,7 +63,13 @@ type RejectAccountTarget = Pick<
 
 const SESSION_STORAGE_KEY = 'alghaith-admin-session-v1';
 
-type AdminView = 'dashboard' | 'accounts' | 'merchants' | 'approvals' | 'couriers';
+type AdminView =
+  | 'dashboard'
+  | 'accounts'
+  | 'merchants'
+  | 'approvals'
+  | 'couriers'
+  | 'appUpdate';
 type AccountFilter = 'all' | AdminAccountKind;
 
 const VIEW_META: Record<
@@ -95,6 +105,13 @@ const VIEW_META: Record<
     title: 'جميع حسابات المنصة',
     subtitle: 'حذف أو تعليق حسابات الزبائن، التجار، المهنيين، مندوبي التوصيل، وسائقي التكسي.',
     showSearch: true,
+  },
+  appUpdate: {
+    eyebrow: 'تحديث التطبيق',
+    title: 'التحديث الإجباري',
+    subtitle:
+      'حدّد أقل رقم بناء مسموح به. من دونه يُجبر المستخدم على التحديث من المتجر.',
+    showSearch: false,
   },
 };
 
@@ -204,6 +221,17 @@ function App() {
   const [rejectMessage, setRejectMessage] = useState('');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<AdminAccountSummary | null>(null);
+  const [appUpdatePolicy, setAppUpdatePolicy] = useState<AppUpdatePolicy | null>(null);
+  const [appUpdateDraft, setAppUpdateDraft] = useState({
+    minBuildNumber: '41',
+    minVersionName: '1.2.10',
+    messageAr:
+      'يجب تحديث التطبيق للمتابعة. الرجاء التحديث من المتجر للاستمرار في استخدام الغيث.',
+    androidStoreUrl:
+      'https://play.google.com/store/apps/details?id=com.alghaith.app',
+    iosStoreUrl: 'https://apps.apple.com/app/id6776741811',
+  });
+  const [isSavingAppUpdate, setIsSavingAppUpdate] = useState(false);
 
   useEffect(() => {
     const stored = readStoredSession();
@@ -259,6 +287,29 @@ function App() {
     if (!token) return;
     refreshCoreData(token).catch(() => undefined);
   }, [token]);
+
+  useEffect(() => {
+    if (!token || view !== 'appUpdate') return;
+    setActionError('');
+    loadAppUpdatePolicy(token)
+      .then((policy) => {
+        setAppUpdatePolicy(policy);
+        setAppUpdateDraft({
+          minBuildNumber: String(policy.minBuildNumber),
+          minVersionName: policy.minVersionName,
+          messageAr: policy.messageAr,
+          androidStoreUrl: policy.androidStoreUrl,
+          iosStoreUrl: policy.iosStoreUrl,
+        });
+      })
+      .catch((error) => {
+        const message =
+          error instanceof Error
+            ? error.message
+            : 'تعذر تحميل إعدادات التحديث الإجباري.';
+        setActionError(message);
+      });
+  }, [token, view]);
 
   useEffect(() => {
     if (!token || !selectedMerchantPhone) {
@@ -417,6 +468,39 @@ function App() {
     setView(nextView);
     setSearch('');
     setSidebarOpen(false);
+  }
+
+  async function handleSaveAppUpdatePolicy() {
+    if (!token) return;
+    const minBuildNumber = Number.parseInt(appUpdateDraft.minBuildNumber, 10);
+    if (!Number.isFinite(minBuildNumber) || minBuildNumber < 1) {
+      setActionError('أدخل رقم بناء صحيحاً (1 أو أكثر).');
+      return;
+    }
+    if (!appUpdateDraft.messageAr.trim()) {
+      setActionError('اكتب رسالة تظهر للمستخدم عند طلب التحديث.');
+      return;
+    }
+    setIsSavingAppUpdate(true);
+    setActionError('');
+    setSuccessMessage('');
+    try {
+      const result = await saveAppUpdatePolicy(token, {
+        minBuildNumber,
+        minVersionName: appUpdateDraft.minVersionName.trim() || '1.0.0',
+        messageAr: appUpdateDraft.messageAr.trim(),
+        androidStoreUrl: appUpdateDraft.androidStoreUrl.trim(),
+        iosStoreUrl: appUpdateDraft.iosStoreUrl.trim(),
+      });
+      setAppUpdatePolicy(result.policy);
+      setSuccessMessage('تم حفظ إعدادات التحديث الإجباري.');
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'تعذر حفظ إعدادات التحديث.';
+      setActionError(message);
+    } finally {
+      setIsSavingAppUpdate(false);
+    }
   }
 
   function handleLogout() {
@@ -821,6 +905,13 @@ function App() {
                 <span className="nav-badge">{pendingCourierQueue.length}</span>
               ) : null}
             </button>
+            <button
+              className={view === 'appUpdate' ? 'nav-item active' : 'nav-item'}
+              onClick={() => switchView('appUpdate')}
+            >
+              <Smartphone size={18} />
+              <span>تحديث التطبيق</span>
+            </button>
           </nav>
 
           <button className="ghost-button logout" onClick={handleLogout}>
@@ -964,7 +1055,118 @@ function App() {
                 </>
               ) : null}
 
-              {view === 'dashboard' ? null : (
+              {view === 'appUpdate' ? (
+                <section className="panel app-update-panel">
+                  <div className="panel-header">
+                    <div>
+                      <h3>إعدادات التحديث الإجباري</h3>
+                      <p>
+                        من دون رقم البناء المحدد يظهر للمستخدم شاشة تحديث بدون تخطي.
+                        عند رفع نسخة جديدة للمتجر، زِد رقم البناء هنا.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="app-update-form">
+                    <label className="app-update-field">
+                      <span>أقل رقم بناء مسموح</span>
+                      <input
+                        dir="ltr"
+                        type="number"
+                        min={1}
+                        value={appUpdateDraft.minBuildNumber}
+                        onChange={(event) =>
+                          setAppUpdateDraft((current) => ({
+                            ...current,
+                            minBuildNumber: event.target.value,
+                          }))
+                        }
+                      />
+                      <small>مثال: 41 من pubspec.yaml → version: 1.2.10+41</small>
+                    </label>
+
+                    <label className="app-update-field">
+                      <span>اسم الإصدار المرافق (اختياري للعرض)</span>
+                      <input
+                        dir="ltr"
+                        value={appUpdateDraft.minVersionName}
+                        onChange={(event) =>
+                          setAppUpdateDraft((current) => ({
+                            ...current,
+                            minVersionName: event.target.value,
+                          }))
+                        }
+                      />
+                    </label>
+
+                    <label className="app-update-field">
+                      <span>الرسالة للمستخدم</span>
+                      <textarea
+                        rows={4}
+                        value={appUpdateDraft.messageAr}
+                        onChange={(event) =>
+                          setAppUpdateDraft((current) => ({
+                            ...current,
+                            messageAr: event.target.value,
+                          }))
+                        }
+                      />
+                    </label>
+
+                    <label className="app-update-field">
+                      <span>رابط Google Play</span>
+                      <input
+                        dir="ltr"
+                        value={appUpdateDraft.androidStoreUrl}
+                        onChange={(event) =>
+                          setAppUpdateDraft((current) => ({
+                            ...current,
+                            androidStoreUrl: event.target.value,
+                          }))
+                        }
+                      />
+                    </label>
+
+                    <label className="app-update-field">
+                      <span>رابط App Store</span>
+                      <input
+                        dir="ltr"
+                        value={appUpdateDraft.iosStoreUrl}
+                        onChange={(event) =>
+                          setAppUpdateDraft((current) => ({
+                            ...current,
+                            iosStoreUrl: event.target.value,
+                          }))
+                        }
+                      />
+                    </label>
+
+                    {appUpdatePolicy?.updatedAt ? (
+                      <p className="app-update-meta">
+                        آخر تحديث للإعدادات: {formatDate(appUpdatePolicy.updatedAt)}
+                      </p>
+                    ) : null}
+
+                    <button
+                      className="soft-button success"
+                      type="button"
+                      disabled={isSavingAppUpdate}
+                      onClick={() => {
+                        handleSaveAppUpdatePolicy().catch(() => undefined);
+                      }}
+                    >
+                      {isSavingAppUpdate ? (
+                        <LoaderCircle className="spin" size={16} />
+                      ) : (
+                        <BadgeCheck size={16} />
+                      )}
+                      <span>حفظ الإعدادات</span>
+                    </button>
+                  </div>
+                </section>
+              ) : null}
+
+              {view === 'dashboard' || view === 'appUpdate' ? null : (
               <section
                 className={
                   view === 'couriers' || view === 'approvals' || view === 'accounts'

@@ -3,6 +3,15 @@ export interface AdminSession {
   phoneNumber: string;
 }
 
+export interface AppUpdatePolicy {
+  minBuildNumber: number;
+  minVersionName: string;
+  messageAr: string;
+  androidStoreUrl: string;
+  iosStoreUrl: string;
+  updatedAt: string | null;
+}
+
 export interface AdminReports {
   totalOrders: number;
   completedOrders: number;

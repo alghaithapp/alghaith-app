@@ -3743,6 +3743,91 @@ async function adminSuspendAccount(adminPhone, targetPhone, isSuspended) {
   };
 }
 
+const PLATFORM_SETTINGS_PHONE = '__platform_settings__';
+const DEFAULT_APP_UPDATE_POLICY = {
+  minBuildNumber: 41,
+  minVersionName: '1.2.10',
+  messageAr:
+    'يجب تحديث التطبيق للمتابعة. الرجاء التحديث من المتجر للاستمرار في استخدام الغيث.',
+  androidStoreUrl:
+    'https://play.google.com/store/apps/details?id=com.alghaith.app',
+  iosStoreUrl: 'https://apps.apple.com/app/id6776741811',
+};
+
+function normalizeAppUpdatePolicy(raw = {}) {
+  const minBuildNumber = Math.max(
+    1,
+    Number.parseInt(
+      String(
+        raw.minBuildNumber ??
+          raw.min_build_number ??
+          DEFAULT_APP_UPDATE_POLICY.minBuildNumber
+      ),
+      10
+    ) || DEFAULT_APP_UPDATE_POLICY.minBuildNumber
+  );
+  const minVersionName = String(
+    raw.minVersionName ??
+      raw.min_version_name ??
+      DEFAULT_APP_UPDATE_POLICY.minVersionName
+  ).trim() || DEFAULT_APP_UPDATE_POLICY.minVersionName;
+  const messageAr = String(
+    raw.messageAr ?? raw.message_ar ?? DEFAULT_APP_UPDATE_POLICY.messageAr
+  ).trim() || DEFAULT_APP_UPDATE_POLICY.messageAr;
+  const androidStoreUrl = String(
+    raw.androidStoreUrl ??
+      raw.android_store_url ??
+      DEFAULT_APP_UPDATE_POLICY.androidStoreUrl
+  ).trim() || DEFAULT_APP_UPDATE_POLICY.androidStoreUrl;
+  const iosStoreUrl = String(
+    raw.iosStoreUrl ??
+      raw.ios_store_url ??
+      DEFAULT_APP_UPDATE_POLICY.iosStoreUrl
+  ).trim() || DEFAULT_APP_UPDATE_POLICY.iosStoreUrl;
+  const updatedAt = String(raw.updatedAt ?? raw.updated_at ?? '').trim() || null;
+
+  return {
+    minBuildNumber,
+    minVersionName,
+    messageAr,
+    androidStoreUrl,
+    iosStoreUrl,
+    updatedAt,
+  };
+}
+
+async function loadRawAppUpdatePolicyState() {
+  const state = await getUserState(PLATFORM_SETTINGS_PHONE);
+  if (!state || typeof state !== 'object') return null;
+  return state.appUpdatePolicy || state.app_update_policy || null;
+}
+
+async function getAppUpdatePolicy() {
+  const saved = await loadRawAppUpdatePolicyState();
+  return normalizeAppUpdatePolicy(saved || {});
+}
+
+async function saveAdminAppUpdatePolicy(adminPhone, patch = {}) {
+  await assertAdminAccess(adminPhone);
+  const current = await getAppUpdatePolicy();
+  const next = normalizeAppUpdatePolicy({
+    ...current,
+    ...patch,
+    updatedAt: nowIso(),
+  });
+  await ensureAppUser(PLATFORM_SETTINGS_PHONE, {
+    role: 'system',
+    full_name: 'Platform Settings',
+    account_type: 'system',
+  });
+  const existingState = (await getUserState(PLATFORM_SETTINGS_PHONE)) || {};
+  await saveUserState(PLATFORM_SETTINGS_PHONE, {
+    ...existingState,
+    appUpdatePolicy: next,
+  });
+  return next;
+}
+
 module.exports = {
   isConfigured,
   supabaseKeyRole,
@@ -3815,4 +3900,6 @@ module.exports = {
   markPushInboxOpened,
   markPushInboxReminderSent,
   listPushInboxStatesNeedingReminder,
+  getAppUpdatePolicy,
+  saveAdminAppUpdatePolicy,
 };

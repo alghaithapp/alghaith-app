@@ -1100,6 +1100,45 @@ tbody tr:hover {
   }
 }
 
+.app-update-panel {
+  max-width: 760px;
+}
+
+.app-update-form {
+  display: grid;
+  gap: 16px;
+}
+
+.app-update-field {
+  display: grid;
+  gap: 8px;
+}
+
+.app-update-field span {
+  font-weight: 700;
+  color: #1f2937;
+}
+
+.app-update-field input,
+.app-update-field textarea {
+  width: 100%;
+  border: 1px solid #d8dee8;
+  border-radius: 12px;
+  padding: 12px 14px;
+  font: inherit;
+  background: #fff;
+}
+
+.app-update-field small {
+  color: #6b7280;
+  font-size: 12px;
+}
+
+.app-update-meta {
+  color: #6b7280;
+  font-size: 13px;
+}
+
 @media (max-width: 720px) {
   .metrics-grid,
   .quick-actions-grid,

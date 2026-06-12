@@ -486,14 +486,41 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
     );
   }
 
+  Future<void> _showSuccessDialog(BuildContext context, String message) async {
+    await showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text(
+          'تم بنجاح',
+          style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold),
+        ),
+        content: Text(
+          message,
+          style: const TextStyle(fontFamily: 'Cairo'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(ctx); // إغلاق الدايلوج
+              Navigator.pop(context); // إغلاق الشاشة
+            },
+            child: const Text('موافق', style: TextStyle(fontFamily: 'Cairo')),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _pickImage() async {
     final picked = await AppHelpers.pickImage(context);
     if (picked == null) return;
-    
+
     // رفع صورة المنتج للسحابة فوراً
     final provider = context.read<AppProvider>();
     final url = await provider.uploadImage(File(picked.path));
-    
+
     if (url != null) {
       setState(() {
         _imageBase64 = url; // تخزين الرابط (URL) في المتغير المخصص للصور
@@ -637,7 +664,12 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
         await provider.addProduct(item);
       }
       if (!context.mounted) return;
-      Navigator.pop(context);
+
+      if (!isEdit && serviceId == 'used') {
+        _showSuccessDialog(context, 'تم استلام طلب النشر. سيظهر الإعلان للزبائن بعد مراجعة الإدارة والموافقة عليه.');
+      } else {
+        Navigator.pop(context);
+      }
     } catch (error) {
       if (!context.mounted) return;
       final raw = error.toString();

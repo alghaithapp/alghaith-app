@@ -1067,7 +1067,11 @@ class AppProvider extends ChangeNotifier {
     try {
       final rows = await SupabaseService.loadCatalog();
       if (rows.isNotEmpty) {
-        _catalogItems = rows.map(_listItemFromCatalogRow).toList();
+        _catalogItems = rows
+            .map(_listItemFromCatalogRow)
+            .where((item) =>
+                item.category != 'used' || item.isApproved) // تصفية المستعمل غير الموافق عليه
+            .toList();
       } else {
         _catalogItems = _buildLocalCatalogFallback();
       }
@@ -2442,6 +2446,7 @@ class AppProvider extends ChangeNotifier {
       'listing_mode': item.listingMode,
       'prep_minutes': item.prepMinutes,
       'is_available': item.isAvailable,
+      'is_approved': item.isApproved,
     };
   }
 
@@ -2507,6 +2512,7 @@ class AppProvider extends ChangeNotifier {
       listingMode: row['listing_mode']?.toString(),
       prepMinutes: (row['prep_minutes'] as num?)?.toInt(),
       isAvailable: row['is_available'] as bool? ?? true,
+      isApproved: (row['is_approved'] as bool?) ?? true,
     );
   }
 
@@ -3442,12 +3448,19 @@ class AppProvider extends ChangeNotifier {
 
   Future<void> addProduct(ListItem item) async {
     assertCanPublishForService(item.category);
-    if (item.category == 'bazar_ghaith' && !isBazaarApproved) {
+    if (item.category == 'bazaar_ghaith' && !isBazaarApproved) {
       throw StateError(
         'يلزم حصولك على موافقة الإدارة قبل النشر داخل قسم بازار ومطاعم الغيث.',
       );
     }
-    _items.insert(0, item);
+
+    var finalItem = item;
+    if (item.category == 'used') {
+      // المنتجات المستعملة تحتاج موافقة الإدارة
+      finalItem = item.copyWith(isApproved: false);
+    }
+
+    _items.insert(0, finalItem);
     notifyListeners();
     final phone = _normalizeStoredPhone(_authPhone ?? merchantPhone);
     if (phone.isEmpty) return;
@@ -3459,7 +3472,7 @@ class AppProvider extends ChangeNotifier {
       }
       await SupabaseService.saveMerchantProduct(
         phone,
-        _productRowFromListItem(item),
+        _productRowFromListItem(finalItem),
       );
       final statePhone =
           _trimmedOrNull(_authPhone) ?? _trimmedOrNull(_customerPhone);

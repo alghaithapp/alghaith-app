@@ -1065,6 +1065,26 @@ class _PremiumProductCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                if (!item.isApproved)
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 6),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFF3E0),
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: const Color(0xFFFFB74D)),
+                    ),
+                    child: const Text(
+                      'بانتظار موافقة الإدارة',
+                      style: TextStyle(
+                        fontFamily: 'Cairo',
+                        fontSize: 10,
+                        fontWeight: FontWeight.w800,
+                        color: Color(0xFFE65100),
+                      ),
+                    ),
+                  ),
                 Text(
                   item.nameAr,
                   maxLines: 1,

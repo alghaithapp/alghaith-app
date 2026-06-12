@@ -42,6 +42,7 @@ class ListItem {
   final String? listingMode;
   final int? prepMinutes;
   bool isAvailable;
+  bool isApproved;
   final String? merchantPhone;
   final String? merchantStoreName;
   final double? merchantLatitude;
@@ -79,6 +80,7 @@ class ListItem {
     this.listingMode,
     this.prepMinutes,
     this.isAvailable = true,
+    this.isApproved = true,
     this.merchantPhone,
     this.merchantStoreName,
     this.merchantLatitude,
@@ -117,6 +119,7 @@ class ListItem {
     String? listingMode,
     int? prepMinutes,
     bool? isAvailable,
+    bool? isApproved,
     String? merchantPhone,
     String? merchantStoreName,
     double? merchantLatitude,
@@ -154,6 +157,7 @@ class ListItem {
       listingMode: listingMode ?? this.listingMode,
       prepMinutes: prepMinutes ?? this.prepMinutes,
       isAvailable: isAvailable ?? this.isAvailable,
+      isApproved: isApproved ?? this.isApproved,
       merchantPhone: merchantPhone ?? this.merchantPhone,
       merchantStoreName: merchantStoreName ?? this.merchantStoreName,
       merchantLatitude: merchantLatitude ?? this.merchantLatitude,
@@ -194,6 +198,7 @@ class ListItem {
       'listingMode': listingMode,
       'prepMinutes': prepMinutes,
       'isAvailable': isAvailable,
+      'isApproved': isApproved,
       'merchantPhone': merchantPhone,
       'merchantStoreName': merchantStoreName,
       'merchantLatitude': merchantLatitude,
@@ -236,6 +241,9 @@ class ListItem {
       listingMode: map['listingMode'] as String?,
       prepMinutes: (map['prepMinutes'] as num?)?.toInt(),
       isAvailable: (map['isAvailable'] as bool?) ?? true,
+      isApproved: (map['isApproved'] as bool?) ??
+          (map['is_approved'] as bool?) ??
+          true,
       merchantPhone: map['merchantPhone'] as String?,
       merchantStoreName: map['merchantStoreName'] as String?,
       merchantLatitude: (map['merchantLatitude'] as num?)?.toDouble(),

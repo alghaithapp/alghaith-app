@@ -24,8 +24,12 @@ class _DeliverySetupScreenState extends State<DeliverySetupScreen> {
   late final TextEditingController _nameController;
   late final TextEditingController _phoneController;
   late final TextEditingController _homeAddressController;
+  late final TextEditingController _mukhtarNameController;
   String? _profileImageRef;
   String? _vehicleImageRef;
+  String? _residenceCardImageRef;
+  String? _idFrontImageRef;
+  String? _idBackImageRef;
   bool _isUploadingImage = false;
   bool _isSaving = false;
 
@@ -44,11 +48,24 @@ class _DeliverySetupScreenState extends State<DeliverySetupScreen> {
     _homeAddressController = TextEditingController(
       text: CourierProfileFields.homeAddress(profile),
     );
+    _mukhtarNameController = TextEditingController(
+      text: CourierProfileFields.mukhtarName(profile),
+    );
     _profileImageRef = CourierProfileFields.profileImage(profile).isNotEmpty
         ? CourierProfileFields.profileImage(profile)
         : null;
     _vehicleImageRef = CourierProfileFields.vehicleImage(profile).isNotEmpty
         ? CourierProfileFields.vehicleImage(profile)
+        : null;
+    _residenceCardImageRef =
+        CourierProfileFields.residenceCardImage(profile).isNotEmpty
+            ? CourierProfileFields.residenceCardImage(profile)
+            : null;
+    _idFrontImageRef = CourierProfileFields.idFrontImage(profile).isNotEmpty
+        ? CourierProfileFields.idFrontImage(profile)
+        : null;
+    _idBackImageRef = CourierProfileFields.idBackImage(profile).isNotEmpty
+        ? CourierProfileFields.idBackImage(profile)
         : null;
   }
 
@@ -57,6 +74,7 @@ class _DeliverySetupScreenState extends State<DeliverySetupScreen> {
     _nameController.dispose();
     _phoneController.dispose();
     _homeAddressController.dispose();
+    _mukhtarNameController.dispose();
     super.dispose();
   }
 
@@ -97,6 +115,63 @@ class _DeliverySetupScreenState extends State<DeliverySetupScreen> {
     }
   }
 
+  Future<void> _pickResidenceCardImage() async {
+    final picked = await AppHelpers.pickImage(context);
+    if (picked == null || !mounted) return;
+
+    setState(() => _isUploadingImage = true);
+    try {
+      final url =
+          await context.read<AppProvider>().uploadImage(File(picked.path));
+      if (!mounted) return;
+      if (url == null || url.trim().isEmpty) {
+        _showMessage('تعذر رفع صورة بطاقة السكن، حاول مرة أخرى');
+        return;
+      }
+      setState(() => _residenceCardImageRef = url.trim());
+    } finally {
+      if (mounted) setState(() => _isUploadingImage = false);
+    }
+  }
+
+  Future<void> _pickIdFrontImage() async {
+    final picked = await AppHelpers.pickImage(context);
+    if (picked == null || !mounted) return;
+
+    setState(() => _isUploadingImage = true);
+    try {
+      final url =
+          await context.read<AppProvider>().uploadImage(File(picked.path));
+      if (!mounted) return;
+      if (url == null || url.trim().isEmpty) {
+        _showMessage('تعذر رفع صورة البطاقة الموحدة (الوجه)، حاول مرة أخرى');
+        return;
+      }
+      setState(() => _idFrontImageRef = url.trim());
+    } finally {
+      if (mounted) setState(() => _isUploadingImage = false);
+    }
+  }
+
+  Future<void> _pickIdBackImage() async {
+    final picked = await AppHelpers.pickImage(context);
+    if (picked == null || !mounted) return;
+
+    setState(() => _isUploadingImage = true);
+    try {
+      final url =
+          await context.read<AppProvider>().uploadImage(File(picked.path));
+      if (!mounted) return;
+      if (url == null || url.trim().isEmpty) {
+        _showMessage('تعذر رفع صورة البطاقة الموحدة (الظهر)، حاول مرة أخرى');
+        return;
+      }
+      setState(() => _idBackImageRef = url.trim());
+    } finally {
+      if (mounted) setState(() => _isUploadingImage = false);
+    }
+  }
+
   void _showMessage(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -109,8 +184,12 @@ class _DeliverySetupScreenState extends State<DeliverySetupScreen> {
     final name = _nameController.text.trim();
     final phone = PhoneUtils.digitsOnly(_phoneController.text);
     final homeAddress = _homeAddressController.text.trim();
+    final mukhtarName = _mukhtarNameController.text.trim();
     final profileImage = _profileImageRef?.trim() ?? '';
     final vehicleImage = _vehicleImageRef?.trim() ?? '';
+    final residenceCardImage = _residenceCardImageRef?.trim() ?? '';
+    final idFrontImage = _idFrontImageRef?.trim() ?? '';
+    final idBackImage = _idBackImageRef?.trim() ?? '';
 
     if (!CourierProfileFields.isTripleName(name)) {
       _showMessage('أدخل الاسم الثلاثي (الاسم الأول + الأب + العائلة)');
@@ -124,12 +203,28 @@ class _DeliverySetupScreenState extends State<DeliverySetupScreen> {
       _showMessage('أدخل عنوان السكن');
       return;
     }
+    if (mukhtarName.isEmpty) {
+      _showMessage('أدخل اسم المختار');
+      return;
+    }
     if (profileImage.isEmpty) {
       _showMessage('أضف صورتك الشخصية');
       return;
     }
     if (vehicleImage.isEmpty) {
       _showMessage('أضف صورة للدراجة');
+      return;
+    }
+    if (residenceCardImage.isEmpty) {
+      _showMessage('أضف صورة بطاقة السكن');
+      return;
+    }
+    if (idFrontImage.isEmpty) {
+      _showMessage('أضف صورة البطاقة الموحدة (الوجه)');
+      return;
+    }
+    if (idBackImage.isEmpty) {
+      _showMessage('أضف صورة البطاقة الموحدة (الظهر)');
       return;
     }
 
@@ -139,8 +234,12 @@ class _DeliverySetupScreenState extends State<DeliverySetupScreen> {
         'name': name,
         'phone': phone,
         'homeAddress': homeAddress,
+        'mukhtarName': mukhtarName,
         'profileImage': profileImage,
         'vehicleImage': vehicleImage,
+        'residenceCardImage': residenceCardImage,
+        'idFrontImage': idFrontImage,
+        'idBackImage': idBackImage,
         'available': provider.courierProfile?['available'] as bool? ?? true,
       });
       if (!mounted) return;
@@ -155,6 +254,28 @@ class _DeliverySetupScreenState extends State<DeliverySetupScreen> {
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }
+  }
+
+  Widget _previewThumb(String ref, String label) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 10),
+      child: Column(
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: AppImage(
+              imageData: ref,
+              width: 70,
+              height: 70,
+              fit: BoxFit.cover,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(label,
+              style: const TextStyle(fontSize: 10, fontFamily: 'Cairo')),
+        ],
+      ),
+    );
   }
 
   @override
@@ -214,7 +335,7 @@ class _DeliverySetupScreenState extends State<DeliverySetupScreen> {
                       ),
                       SizedBox(height: 4),
                       Text(
-                        'الاسم الثلاثي، الهاتف، عنوان السكن، وصورة الدراجة والصورة الشخصية مطلوبة للتفعيل.',
+                        'الاسم الثلاثي، الهاتف، عنوان السكن، اسم المختار، والصور الثبوتية مطلوبة للتفعيل.',
                         style: TextStyle(
                           color: Colors.white70,
                           fontSize: 12,
@@ -247,6 +368,11 @@ class _DeliverySetupScreenState extends State<DeliverySetupScreen> {
             controller: _homeAddressController,
             maxLines: 2,
           ),
+          _Field(
+            label: 'اسم المختار',
+            hintText: 'أدخل اسم مختار المنطقة',
+            controller: _mukhtarNameController,
+          ),
           const SizedBox(height: 4),
           Row(
             children: [
@@ -271,45 +397,75 @@ class _DeliverySetupScreenState extends State<DeliverySetupScreen> {
               ),
             ],
           ),
+          const SizedBox(height: 10),
+          MerchantImageUploadSlot(
+            title: 'بطاقة السكن',
+            subtitle: 'صورة واضحة لبطاقة السكن',
+            imageRef: _residenceCardImageRef,
+            icon: Icons.home_work_rounded,
+            onTap: _isUploadingImage ? () {} : _pickResidenceCardImage,
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: MerchantImageUploadSlot(
+                  title: 'الموحدة (الوجه)',
+                  subtitle: 'الوجه الأمامي',
+                  imageRef: _idFrontImageRef,
+                  icon: Icons.badge_rounded,
+                  onTap: _isUploadingImage ? () {} : _pickIdFrontImage,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: MerchantImageUploadSlot(
+                  title: 'الموحدة (الظهر)',
+                  subtitle: 'الوجه الخلفي',
+                  imageRef: _idBackImageRef,
+                  icon: Icons.badge_rounded,
+                  onTap: _isUploadingImage ? () {} : _pickIdBackImage,
+                ),
+              ),
+            ],
+          ),
           if (_isUploadingImage) ...[
             const SizedBox(height: 8),
             const Center(child: CupertinoActivityIndicator()),
           ],
           if ((_profileImageRef != null && _profileImageRef!.isNotEmpty) ||
-              (_vehicleImageRef != null && _vehicleImageRef!.isNotEmpty)) ...[
+              (_vehicleImageRef != null && _vehicleImageRef!.isNotEmpty) ||
+              (_residenceCardImageRef != null &&
+                  _residenceCardImageRef!.isNotEmpty) ||
+              (_idFrontImageRef != null && _idFrontImageRef!.isNotEmpty) ||
+              (_idBackImageRef != null && _idBackImageRef!.isNotEmpty)) ...[
+            const SizedBox(height: 16),
+            const Text(
+              'معاينة الصور المرفوعة:',
+              style: TextStyle(
+                fontFamily: 'Cairo',
+                fontWeight: FontWeight.w800,
+                fontSize: 13,
+              ),
+            ),
             const SizedBox(height: 10),
-            Row(
-              children: [
-                if (_profileImageRef != null && _profileImageRef!.isNotEmpty)
-                  Expanded(
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(16),
-                      child: AppImage(
-                        imageData: _profileImageRef,
-                        height: 140,
-                        width: double.infinity,
-                        fit: BoxFit.cover,
-                      ),
-                    ),
-                  ),
-                if (_profileImageRef != null &&
-                    _profileImageRef!.isNotEmpty &&
-                    _vehicleImageRef != null &&
-                    _vehicleImageRef!.isNotEmpty)
-                  const SizedBox(width: 10),
-                if (_vehicleImageRef != null && _vehicleImageRef!.isNotEmpty)
-                  Expanded(
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(16),
-                      child: AppImage(
-                        imageData: _vehicleImageRef,
-                        height: 140,
-                        width: double.infinity,
-                        fit: BoxFit.cover,
-                      ),
-                    ),
-                  ),
-              ],
+            SizedBox(
+              height: 100,
+              child: ListView(
+                scrollDirection: Axis.horizontal,
+                children: [
+                  if (_profileImageRef != null)
+                    _previewThumb(_profileImageRef!, 'شخصية'),
+                  if (_vehicleImageRef != null)
+                    _previewThumb(_vehicleImageRef!, 'دراجة'),
+                  if (_residenceCardImageRef != null)
+                    _previewThumb(_residenceCardImageRef!, 'سكن'),
+                  if (_idFrontImageRef != null)
+                    _previewThumb(_idFrontImageRef!, 'موحدة-1'),
+                  if (_idBackImageRef != null)
+                    _previewThumb(_idBackImageRef!, 'موحدة-2'),
+                ],
+              ),
             ),
           ],
           if (!isEditing) ...[
@@ -382,6 +538,28 @@ class _Field extends StatelessWidget {
     this.keyboardType = TextInputType.text,
     this.inputFormatters = const [],
   });
+
+  Widget _previewThumb(String ref, String label) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 10),
+      child: Column(
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: AppImage(
+              imageData: ref,
+              width: 70,
+              height: 70,
+              fit: BoxFit.cover,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(label,
+              style: const TextStyle(fontSize: 10, fontFamily: 'Cairo')),
+        ],
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {

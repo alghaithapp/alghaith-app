@@ -25,6 +25,18 @@ class CourierProfileFields {
     return raw?.toString().trim() ?? '';
   }
 
+  static String residenceCardImage(Map<String, dynamic>? profile) =>
+      profile?['residenceCardImage']?.toString().trim() ?? '';
+
+  static String idFrontImage(Map<String, dynamic>? profile) =>
+      profile?['idFrontImage']?.toString().trim() ?? '';
+
+  static String idBackImage(Map<String, dynamic>? profile) =>
+      profile?['idBackImage']?.toString().trim() ?? '';
+
+  static String mukhtarName(Map<String, dynamic>? profile) =>
+      profile?['mukhtarName']?.toString().trim() ?? '';
+
   static bool isTripleName(String name) {
     final parts =
         name.trim().split(RegExp(r'\s+')).where((part) => part.isNotEmpty);
@@ -36,7 +48,11 @@ class CourierProfileFields {
         phone(profile).isNotEmpty &&
         homeAddress(profile).isNotEmpty &&
         vehicleImage(profile).isNotEmpty &&
-        profileImage(profile).isNotEmpty;
+        profileImage(profile).isNotEmpty &&
+        residenceCardImage(profile).isNotEmpty &&
+        idFrontImage(profile).isNotEmpty &&
+        idBackImage(profile).isNotEmpty &&
+        mukhtarName(profile).isNotEmpty;
   }
 
   static bool isApproved(Map<String, dynamic>? profile) =>

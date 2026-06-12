@@ -2,6 +2,7 @@ import type {
   AdminAccountSummary,
   AdminReports,
   AdminSession,
+  AppUpdatePolicy,
   CourierSummary,
   MerchantDetails,
   MerchantSummary,
@@ -263,6 +264,30 @@ export async function toggleMerchantBazaar(
       method: 'PUT',
       token,
       body: JSON.stringify({ merchantPhone, isBazaarMember }),
+    },
+  );
+}
+
+export async function loadAppUpdatePolicy(token: string): Promise<AppUpdatePolicy> {
+  return request<AppUpdatePolicy>(DATABASE_API_BASE_URL, '/db/admin/app-update-policy', {
+    token,
+  });
+}
+
+export async function saveAppUpdatePolicy(
+  token: string,
+  policy: Pick<
+    AppUpdatePolicy,
+    'minBuildNumber' | 'minVersionName' | 'messageAr' | 'androidStoreUrl' | 'iosStoreUrl'
+  >,
+) {
+  return request<{ success: boolean; policy: AppUpdatePolicy }>(
+    DATABASE_API_BASE_URL,
+    '/db/admin/app-update-policy',
+    {
+      method: 'PUT',
+      token,
+      body: JSON.stringify(policy),
     },
   );
 }

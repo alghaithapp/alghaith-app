@@ -69,6 +69,8 @@ const {
   saveDeviceToken,
   deleteDeviceToken,
   markPushInboxOpened,
+  getAppUpdatePolicy,
+  saveAdminAppUpdatePolicy,
 } = require('./supabase_repo');
 const { validatePromoCode } = require('./promo_codes');
 const { isPushConfigured } = require('./push_notifications');
@@ -388,6 +390,21 @@ app.get('/maps/public-token', (_, res) => {
     });
   }
   return res.json({ publicToken: token });
+});
+
+app.get('/app/update-policy', async (_req, res) => {
+  try {
+    const policy = await getAppUpdatePolicy();
+    return res.json({
+      ...policy,
+      forceUpdate: true,
+    });
+  } catch (error) {
+    console.error('app update policy error:', error);
+    return res.status(500).json({
+      message: error?.message || 'Failed to load app update policy.',
+    });
+  }
 });
 
 async function geocodeAddressWithMapbox(addressText) {
@@ -1515,6 +1532,40 @@ app.put('/db/admin/merchant-freeze', async (req, res) => {
   } catch (error) {
     console.error('toggle freeze error:', error);
     const message = error?.message || 'Failed to toggle freeze status.';
+    const status = message.includes('Admin access') ? 403 : 500;
+    return res.status(status).json({ message });
+  }
+});
+
+app.get('/db/admin/app-update-policy', async (req, res) => {
+  try {
+    const phone = requireAuthorizedPhone(req, res, { allowMissing: true });
+    if (!phone) return;
+    const policy = await getAppUpdatePolicy();
+    return res.json(policy);
+  } catch (error) {
+    console.error('admin app update policy read error:', error);
+    const message = error?.message || 'Failed to load app update policy.';
+    const status = message.includes('Admin access') ? 403 : 500;
+    return res.status(status).json({ message });
+  }
+});
+
+app.put('/db/admin/app-update-policy', async (req, res) => {
+  try {
+    const phone = requireAuthorizedPhone(req, res, { allowMissing: true });
+    if (!phone) return;
+    const policy = await saveAdminAppUpdatePolicy(phone, {
+      minBuildNumber: req.body?.minBuildNumber ?? req.body?.min_build_number,
+      minVersionName: req.body?.minVersionName ?? req.body?.min_version_name,
+      messageAr: req.body?.messageAr ?? req.body?.message_ar,
+      androidStoreUrl: req.body?.androidStoreUrl ?? req.body?.android_store_url,
+      iosStoreUrl: req.body?.iosStoreUrl ?? req.body?.ios_store_url,
+    });
+    return res.json({ success: true, policy });
+  } catch (error) {
+    console.error('admin app update policy save error:', error);
+    const message = error?.message || 'Failed to save app update policy.';
     const status = message.includes('Admin access') ? 403 : 500;
     return res.status(status).json({ message });
   }
