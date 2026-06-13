@@ -249,7 +249,7 @@ function App() {
   const [couriers, setCouriers] = useState<CourierSummary[]>([]);
   const [accounts, setAccounts] = useState<AdminAccountSummary[]>([]);
   const [accountFilter, setAccountFilter] = useState<AccountFilter>('all');
-  const [merchantFilter, setMerchantFilter] = useState<MerchantFilter>('all');
+  const [merchantFilter, setMerchantFilter] = useState<MerchantFilter>('pending');
   const [selectedMerchantPhone, setSelectedMerchantPhone] = useState('');
   const [merchantDetails, setMerchantDetails] = useState<MerchantDetails | null>(
     null,
@@ -1872,28 +1872,28 @@ function App() {
                   ) : (
                   <>
                   {view === 'merchants' ? (
-                    <div className="account-filter-row">
-                      {(
-                        [
-                          ['all', 'الكل'],
-                          ['pending', `بانتظار الموافقة (${pendingMerchantQueue.length})`],
-                          ['professionals', 'المهنيون'],
-                        ] as Array<[MerchantFilter, string]>
-                      ).map(([filter, label]) => (
-                        <button
-                          key={filter}
-                          type="button"
-                          className={
-                            merchantFilter === filter
-                              ? 'filter-chip active'
-                              : 'filter-chip'
-                          }
-                          onClick={() => setMerchantFilter(filter)}
-                        >
-                          {label}
-                        </button>
-                      ))}
-                    </div>
+                      <div className="account-filter-row">
+                        {(
+                          [
+                            ['pending', `طلبات الموافقة (${pendingMerchantQueue.length})`],
+                            ['all', 'المسجلين حالياً'],
+                            ['professionals', 'المهنيون'],
+                          ] as Array<[MerchantFilter, string]>
+                        ).map(([filter, label]) => (
+                          <button
+                            key={filter}
+                            type="button"
+                            className={
+                              merchantFilter === filter
+                                ? 'filter-chip active'
+                                : 'filter-chip'
+                            }
+                            onClick={() => setMerchantFilter(filter)}
+                          >
+                            {label}
+                          </button>
+                        ))}
+                      </div>
                   ) : null}
                   <div className="merchant-list">
                     {(view === 'approvals' ? approvalQueue : filteredMerchants).map((merchant) => {
