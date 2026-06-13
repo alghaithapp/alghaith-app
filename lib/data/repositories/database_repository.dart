@@ -4,6 +4,7 @@ import '../../core/config/app_config.dart';
 import '../../core/network/api_client.dart';
 import '../../core/utils/phone_utils.dart';
 import '../../models/app_models.dart';
+import '../../models/home_category_platform_override.dart';
 import '../../services/image_storage_service.dart';
 import '../models/account_snapshot.dart';
 
@@ -534,6 +535,52 @@ class DatabaseRepository {
         .whereType<Map>()
         .map((item) => Map<String, dynamic>.from(item))
         .toList();
+  }
+
+  Future<Map<String, HomeCategoryPlatformOverride>> loadHomeCategoriesConfig() async {
+    final result = await ApiClient.instance.get('/app/home-categories');
+    final overrides = <String, HomeCategoryPlatformOverride>{};
+    if (result is Map) {
+      final raw = result['overrides'];
+      if (raw is Map) {
+        raw.forEach((key, value) {
+          final id = key?.toString().trim() ?? '';
+          final parsed = HomeCategoryPlatformOverride.fromDynamic(value);
+          if (id.isNotEmpty && parsed != null) {
+            overrides[id] = parsed;
+          }
+        });
+      }
+    }
+    return overrides;
+  }
+
+  Future<Map<String, HomeCategoryPlatformOverride>> saveHomeCategoriesConfig({
+    required String phone,
+    required Map<String, HomeCategoryPlatformOverride> overrides,
+  }) async {
+    final payload = <String, Map<String, bool>>{};
+    overrides.forEach((id, value) {
+      payload[id] = value.toJson();
+    });
+    final result = await ApiClient.instance.put(
+      '/db/admin/home-categories',
+      body: {
+        'phone': _phone(phone),
+        'overrides': payload,
+      },
+    );
+    final saved = <String, HomeCategoryPlatformOverride>{};
+    if (result is Map && result['overrides'] is Map) {
+      (result['overrides'] as Map).forEach((key, value) {
+        final id = key?.toString().trim() ?? '';
+        final parsed = HomeCategoryPlatformOverride.fromDynamic(value);
+        if (id.isNotEmpty && parsed != null) {
+          saved[id] = parsed;
+        }
+      });
+    }
+    return saved;
   }
 
   Future<Map<String, dynamic>> toggleMerchantBazaarStatus({

@@ -3929,6 +3929,74 @@ async function saveAdminAppUpdatePolicy(adminPhone, patch = {}) {
   return next;
 }
 
+// ── إعداد أقسام الصفحة الرئيسية (يتحكّم فيه الأدمن عن بُعد) ──────────────
+const HOME_CATEGORY_PLATFORMS = ['default', 'android', 'ios', 'web'];
+
+function normalizeCategoryOverride(value) {
+  if (value === true || value === false) {
+    return { default: value };
+  }
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return {};
+  }
+  const out = {};
+  for (const key of HOME_CATEGORY_PLATFORMS) {
+    if (value[key] === true || value[key] === false) {
+      out[key] = value[key];
+    }
+  }
+  return out;
+}
+
+async function getHomeCategoriesConfig() {
+  const state = await getUserState(PLATFORM_SETTINGS_PHONE);
+  const raw =
+    (state && (state.homeCategories || state.home_categories)) || null;
+  const overrides = {};
+  if (raw && typeof raw === 'object' && raw.overrides &&
+      typeof raw.overrides === 'object') {
+    for (const [key, value] of Object.entries(raw.overrides)) {
+      const id = String(key).trim();
+      if (!id) continue;
+      const normalized = normalizeCategoryOverride(value);
+      if (Object.keys(normalized).length > 0) {
+        overrides[id] = normalized;
+      }
+    }
+  }
+  return {
+    overrides,
+    updatedAt: (raw && (raw.updatedAt || raw.updated_at)) || null,
+  };
+}
+
+async function saveAdminHomeCategoriesConfig(adminPhone, overrides = {}) {
+  await assertAdminAccess(adminPhone);
+  const clean = {};
+  if (overrides && typeof overrides === 'object') {
+    for (const [key, value] of Object.entries(overrides)) {
+      const id = String(key).trim();
+      if (!id) continue;
+      const normalized = normalizeCategoryOverride(value);
+      if (Object.keys(normalized).length > 0) {
+        clean[id] = normalized;
+      }
+    }
+  }
+  await ensureAppUser(PLATFORM_SETTINGS_PHONE, {
+    role: 'system',
+    full_name: 'Platform Settings',
+    account_type: 'system',
+  });
+  const existingState = (await getUserState(PLATFORM_SETTINGS_PHONE)) || {};
+  const next = { overrides: clean, updatedAt: nowIso() };
+  await saveUserState(PLATFORM_SETTINGS_PHONE, {
+    ...existingState,
+    homeCategories: next,
+  });
+  return next;
+}
+
 module.exports = {
   isConfigured,
   supabaseKeyRole,
@@ -4003,4 +4071,6 @@ module.exports = {
   listPushInboxStatesNeedingReminder,
   getAppUpdatePolicy,
   saveAdminAppUpdatePolicy,
+  getHomeCategoriesConfig,
+  saveAdminHomeCategoriesConfig,
 };

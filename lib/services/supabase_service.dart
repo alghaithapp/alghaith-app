@@ -4,6 +4,7 @@ import '../core/config/app_config.dart';
 import '../core/network/api_client.dart';
 import '../data/repositories/database_repository.dart';
 import '../models/app_models.dart';
+import '../models/home_category_platform_override.dart';
 
 /// واجهة توافقية — كل عمليات قاعدة البيانات تمر عبر Railway backend.
 class SupabaseService {
@@ -151,6 +152,15 @@ class SupabaseService {
 
   static Future<Map<String, dynamic>> loadAdminReports(String phone) =>
       _db.loadAdminReports(phone);
+
+  static Future<Map<String, HomeCategoryPlatformOverride>> loadHomeCategoriesConfig() =>
+      _db.loadHomeCategoriesConfig();
+
+  static Future<Map<String, HomeCategoryPlatformOverride>> saveHomeCategoriesConfig({
+    required String phone,
+    required Map<String, HomeCategoryPlatformOverride> overrides,
+  }) =>
+      _db.saveHomeCategoriesConfig(phone: phone, overrides: overrides);
 
   static Future<List<Map<String, dynamic>>> loadRealEstateListings({
     String? subCategoryId,

@@ -4,7 +4,9 @@ import 'package:provider/provider.dart';
 
 import '../../core/ui/account_ui.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/catalog/marketplace_catalog.dart';
 import '../../providers/app_provider.dart';
+import '../../utils/platform_key.dart';
 import '../../utils/extensions.dart';
 import '../../widgets/app_image.dart';
 import '../../widgets/app_logo.dart';
@@ -23,12 +25,13 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(length: 4, vsync: this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final provider = context.read<AppProvider>();
       provider.refreshAdminReports();
       provider.refreshAllMerchants();
       provider.refreshAllCouriers();
+      provider.refreshHomeCategoriesConfig();
     });
   }
 
@@ -77,10 +80,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
             fontWeight: FontWeight.w700,
             fontSize: 12,
           ),
+          isScrollable: true,
           tabs: const [
             Tab(text: 'التقارير', icon: Icon(Icons.bar_chart_rounded, size: 20)),
             Tab(text: 'إدارة التجار', icon: Icon(Icons.store_rounded, size: 20)),
             Tab(text: 'المندوبين', icon: Icon(Icons.delivery_dining_rounded, size: 20)),
+            Tab(text: 'الأقسام', icon: Icon(Icons.grid_view_rounded, size: 20)),
           ],
         ),
         actions: [
@@ -100,6 +105,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
           _ReportsTab(reports: reports),
           const _MerchantManagementTab(),
           const _CourierManagementTab(),
+          const _HomeCategoriesTab(),
         ],
       ),
     );
@@ -1299,6 +1305,180 @@ class _CourierCard extends StatelessWidget {
             ],
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _HomeCategoriesTab extends StatelessWidget {
+  const _HomeCategoriesTab();
+
+  @override
+  Widget build(BuildContext context) {
+    final provider = context.watch<AppProvider>();
+    final categories = MarketplaceCatalog.toggleableHomeCategories;
+
+    return RefreshIndicator(
+      onRefresh: () => provider.refreshHomeCategoriesConfig(),
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(14, 16, 14, 28),
+        children: [
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: accountBrandRed.withValues(alpha: 0.06),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color: accountBrandRed.withValues(alpha: 0.18),
+              ),
+            ),
+            child: const Text(
+              'تحكّم بالأقسام الظاهرة للزبون في الصفحة الرئيسية لكل منصة '
+              '(أندرويد / آيفون). التغييرات تُطبّق فور الحفظ.',
+              style: TextStyle(
+                fontFamily: 'Cairo',
+                fontWeight: FontWeight.w700,
+                height: 1.6,
+                color: accountHeadline,
+              ),
+            ),
+          ),
+          const SizedBox(height: 14),
+          ...categories.map((category) {
+            return _HomeCategoryPlatformCard(categoryId: category.id, titleAr: category.titleAr);
+          }),
+        ],
+      ),
+    );
+  }
+}
+
+class _HomeCategoryPlatformCard extends StatelessWidget {
+  const _HomeCategoryPlatformCard({
+    required this.categoryId,
+    required this.titleAr,
+  });
+
+  final String categoryId;
+  final String titleAr;
+
+  @override
+  Widget build(BuildContext context) {
+    final provider = context.watch<AppProvider>();
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 8),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFE5E5EA)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            titleAr,
+            style: const TextStyle(
+              fontFamily: 'Cairo',
+              fontWeight: FontWeight.w800,
+              fontSize: 16,
+              color: accountHeadline,
+            ),
+          ),
+          const SizedBox(height: 8),
+          _PlatformToggleRow(
+            label: 'أندرويد',
+            icon: Icons.android_rounded,
+            enabled: provider.homeCategoryEnabledOnPlatform(
+              categoryId,
+              PlatformKey.android,
+            ),
+            onChanged: (value) => _savePlatformToggle(
+              context,
+              provider,
+              PlatformKey.android,
+              value,
+            ),
+          ),
+          _PlatformToggleRow(
+            label: 'آيفون',
+            icon: Icons.phone_iphone_rounded,
+            enabled: provider.homeCategoryEnabledOnPlatform(
+              categoryId,
+              PlatformKey.ios,
+            ),
+            onChanged: (value) => _savePlatformToggle(
+              context,
+              provider,
+              PlatformKey.ios,
+              value,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _savePlatformToggle(
+    BuildContext context,
+    AppProvider provider,
+    String platform,
+    bool value,
+  ) async {
+    final ok = await provider.setHomeCategoryPlatformEnabled(
+      categoryId,
+      platform,
+      value,
+    );
+    if (!ok && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'تعذّر حفظ التغيير، تحقق من الاتصال وحاول مجدداً.',
+            style: TextStyle(fontFamily: 'Cairo'),
+          ),
+        ),
+      );
+    }
+  }
+}
+
+class _PlatformToggleRow extends StatelessWidget {
+  const _PlatformToggleRow({
+    required this.label,
+    required this.icon,
+    required this.enabled,
+    required this.onChanged,
+  });
+
+  final String label;
+  final IconData icon;
+  final bool enabled;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return SwitchListTile.adaptive(
+      contentPadding: EdgeInsets.zero,
+      secondary: Icon(icon, color: accountHeadline, size: 22),
+      value: enabled,
+      onChanged: onChanged,
+      title: Text(
+        label,
+        style: const TextStyle(
+          fontFamily: 'Cairo',
+          fontWeight: FontWeight.w700,
+          color: accountHeadline,
+        ),
+      ),
+      subtitle: Text(
+        enabled ? 'ظاهر' : 'مخفي',
+        style: TextStyle(
+          fontFamily: 'Cairo',
+          fontWeight: FontWeight.w600,
+          color: enabled ? Colors.green.shade700 : accountBodyGray,
+        ),
       ),
     );
   }

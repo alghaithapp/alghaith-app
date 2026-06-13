@@ -22,6 +22,7 @@ class _HomeScreenState extends State<HomeScreen> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final provider = context.read<AppProvider>();
+      provider.refreshHomeCategoriesConfig();
       if (provider.isCustomer) {
         provider.refreshCustomerCatalog();
         provider.refreshMarketplaceStats(force: true);
@@ -32,7 +33,7 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     final appProvider = Provider.of<AppProvider>(context);
-    final categories = MarketplaceCatalog.homeCategories;
+    final categories = appProvider.visibleHomeCategories;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF2F2F7),

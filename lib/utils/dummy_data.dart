@@ -40,31 +40,30 @@ class DummyData {
     ),
   ];
 
-  /// أنواع «طلب سيارة» — النص على الصورة في التصميم.
   static final List<ServiceCategory> carRequestVehicleTypes = [
     ServiceCategory(
       id: 'car_4seat',
-      titleAr: 'سيارة 4 راكب',
-      titleEn: '4-Seat Car',
+      titleAr: 'طلب سيارة 4 راكب',
+      titleEn: '4-Seat Car Request',
       image: 'assets/images/car_req_4seat.png',
     ),
     ServiceCategory(
+      id: 'car_starx11',
+      titleAr: 'طلب سيارة 11 راكب',
+      titleEn: '11-Seat Car Request',
+      image: 'assets/images/car_starx11.png',
+    ),
+    ServiceCategory(
       id: 'car_truck',
-      titleAr: 'سيارة حمل',
-      titleEn: 'Truck',
-      image: 'assets/images/car_req_truck.png',
+      titleAr: 'طلب سيارة حمل',
+      titleEn: 'Truck Request',
+      image: 'assets/images/car_truck.png',
     ),
     ServiceCategory(
       id: 'car_bus',
-      titleAr: 'سيارة باص',
-      titleEn: 'Bus',
-      image: 'assets/images/car_req_bus.png',
-    ),
-    ServiceCategory(
-      id: 'car_starx11',
-      titleAr: 'سيارة ستاركس 11 نفر',
-      titleEn: 'Starx 11 Seats',
-      image: 'assets/images/car_req_starx11.png',
+      titleAr: 'طلب سيارة باص',
+      titleEn: 'Bus Request',
+      image: 'assets/images/car_bus.png',
     ),
   ];
 

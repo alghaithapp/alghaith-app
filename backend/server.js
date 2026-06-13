@@ -71,6 +71,8 @@ const {
   markPushInboxOpened,
   getAppUpdatePolicy,
   saveAdminAppUpdatePolicy,
+  getHomeCategoriesConfig,
+  saveAdminHomeCategoriesConfig,
 } = require('./supabase_repo');
 const { validatePromoCode } = require('./promo_codes');
 const { isPushConfigured } = require('./push_notifications');
@@ -406,6 +408,18 @@ app.get('/app/update-policy', async (_req, res) => {
     console.error('app update policy error:', error);
     return res.status(500).json({
       message: error?.message || 'Failed to load app update policy.',
+    });
+  }
+});
+
+app.get('/app/home-categories', async (_req, res) => {
+  try {
+    const config = await getHomeCategoriesConfig();
+    return res.json(config);
+  } catch (error) {
+    console.error('home categories config error:', error);
+    return res.status(500).json({
+      message: error?.message || 'Failed to load home categories config.',
     });
   }
 });
@@ -1327,6 +1341,24 @@ app.put('/db/admin/merchant-bazaar', async (req, res) => {
   } catch (error) {
     console.error('toggle bazaar error:', error);
     const message = error?.message || 'Failed to toggle bazaar status.';
+    const status = message.includes('Admin access') ? 403 : 500;
+    return res.status(status).json({ message });
+  }
+});
+
+app.put('/db/admin/home-categories', async (req, res) => {
+  try {
+    const phone = requireAuthorizedPhone(req, res, { allowMissing: true });
+    if (!phone) return;
+    const overrides = req.body?.overrides;
+    if (!overrides || typeof overrides !== 'object') {
+      return res.status(400).json({ message: 'overrides object is required.' });
+    }
+    const result = await saveAdminHomeCategoriesConfig(phone, overrides);
+    return res.json(result);
+  } catch (error) {
+    console.error('save home categories error:', error);
+    const message = error?.message || 'Failed to save home categories.';
     const status = message.includes('Admin access') ? 403 : 500;
     return res.status(status).json({ message });
   }

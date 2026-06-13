@@ -15,11 +15,13 @@ import '../data/repositories/account_repository.dart';
 import '../models/app_models.dart';
 import '../models/app_notification.dart';
 import '../models/app_user_view.dart';
+import '../models/home_category_platform_override.dart';
 import '../models/merchant_models.dart';
 import '../models/merchant_store_view.dart';
 import '../services/supabase_service.dart';
 import '../services/image_storage_service.dart';
 import '../utils/merchant_service_labels.dart';
+import '../utils/platform_key.dart';
 import '../models/merchant_product_section.dart';
 import '../utils/merchant_product_sections.dart';
 import '../utils/courier_profile_fields.dart';
@@ -4684,6 +4686,85 @@ class AppProvider extends ChangeNotifier {
       notifyListeners();
     } catch (error) {
       debugPrint('ADMIN_REPORTS_ERROR: $error');
+    }
+  }
+
+  // ── إعداد أقسام الصفحة الرئيسية (يتحكّم فيه الأدمن عن بُعد) ──────────────
+  Map<String, HomeCategoryPlatformOverride> _homeCategoryOverrides = {};
+
+  Map<String, HomeCategoryPlatformOverride> get homeCategoryOverrides =>
+      Map<String, HomeCategoryPlatformOverride>.unmodifiable(
+        _homeCategoryOverrides,
+      );
+
+  /// الأقسام الظاهرة للزبون على المنصة الحالية.
+  List<ServiceCategory> get visibleHomeCategories =>
+      MarketplaceCatalog.homeCategoriesWithOverrides(
+        _homeCategoryOverrides,
+        platform: PlatformKey.current,
+      );
+
+  /// هل القسم مفعّل على المنصة الحالية (للزبون).
+  bool isHomeCategoryEnabled(String categoryId) =>
+      MarketplaceCatalog.isHomeCategoryEnabled(
+        categoryId,
+        overrides: _homeCategoryOverrides,
+        platform: PlatformKey.current,
+      );
+
+  /// قيمة القسم على منصة محددة (للوحة الأدمن).
+  bool homeCategoryEnabledOnPlatform(String categoryId, String platform) {
+    final override = _homeCategoryOverrides[categoryId];
+    if (override != null) {
+      final value = override.isEnabledOn(platform);
+      if (value != null) return value;
+    }
+    return MarketplaceCatalog.customerHomeCategoryIds.contains(categoryId);
+  }
+
+  Future<void> refreshHomeCategoriesConfig() async {
+    if (!SupabaseService.isConfigured) return;
+    try {
+      final overrides = await SupabaseService.loadHomeCategoriesConfig();
+      _homeCategoryOverrides = overrides;
+      notifyListeners();
+    } catch (error) {
+      debugPrint('HOME_CATEGORIES_CONFIG_ERROR: $error');
+    }
+  }
+
+  /// حفظ تفعيل/إطفاء قسم لمنصة محددة من لوحة الأدمن.
+  Future<bool> setHomeCategoryPlatformEnabled(
+    String categoryId,
+    String platform,
+    bool enabled,
+  ) async {
+    final phone = _trimmedOrNull(_authPhone) ?? _trimmedOrNull(_customerPhone);
+    if (phone == null) return false;
+
+    final previous =
+        Map<String, HomeCategoryPlatformOverride>.from(_homeCategoryOverrides);
+    final current = _homeCategoryOverrides[categoryId] ??
+        const HomeCategoryPlatformOverride();
+    final next = Map<String, HomeCategoryPlatformOverride>.from(
+      _homeCategoryOverrides,
+    )..[categoryId] = current.withPlatform(platform, enabled);
+    _homeCategoryOverrides = next;
+    notifyListeners();
+
+    try {
+      final saved = await SupabaseService.saveHomeCategoriesConfig(
+        phone: phone,
+        overrides: next,
+      );
+      _homeCategoryOverrides = saved;
+      notifyListeners();
+      return true;
+    } catch (error) {
+      debugPrint('HOME_CATEGORIES_SAVE_ERROR: $error');
+      _homeCategoryOverrides = previous;
+      notifyListeners();
+      return false;
     }
   }
 
