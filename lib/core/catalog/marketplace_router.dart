@@ -60,18 +60,18 @@ class MarketplaceRouter {
     MarketplaceSubCategory sub,
   ) {
     if (category.id == 'cars') {
-      if (sub.id == 'car_request') {
+      if (sub.id == 'taxi_request') {
         Navigator.of(context).push(
           CupertinoPageRoute(
-            builder: (_) => const CarRequestHubScreen(),
+            builder: (_) => const TaxiRequestScreen(),
           ),
         );
         return;
       }
-      if (MarketplaceCatalog.carServiceSubCategoryIds.contains(sub.id)) {
+      if (sub.id == 'car_request') {
         Navigator.of(context).push(
           CupertinoPageRoute(
-            builder: (_) => TaxiRequestScreen(initialVehicleTypeId: sub.id),
+            builder: (_) => const CarRequestHubScreen(),
           ),
         );
         return;

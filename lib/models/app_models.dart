@@ -43,6 +43,9 @@ class ListItem {
   final int? prepMinutes;
   bool isAvailable;
   bool isApproved;
+  final int? carYear;
+  final String? carColor;
+  final String? paymentMethod;
   final String? merchantPhone;
   final String? merchantStoreName;
   final double? merchantLatitude;
@@ -84,6 +87,9 @@ class ListItem {
     this.prepMinutes,
     this.isAvailable = true,
     this.isApproved = true,
+    this.carYear,
+    this.carColor,
+    this.paymentMethod,
     this.merchantPhone,
     this.merchantStoreName,
     this.merchantLatitude,
@@ -126,6 +132,9 @@ class ListItem {
     int? prepMinutes,
     bool? isAvailable,
     bool? isApproved,
+    int? carYear,
+    String? carColor,
+    String? paymentMethod,
     String? merchantPhone,
     String? merchantStoreName,
     double? merchantLatitude,
@@ -167,6 +176,9 @@ class ListItem {
       prepMinutes: prepMinutes ?? this.prepMinutes,
       isAvailable: isAvailable ?? this.isAvailable,
       isApproved: isApproved ?? this.isApproved,
+      carYear: carYear ?? this.carYear,
+      carColor: carColor ?? this.carColor,
+      paymentMethod: paymentMethod ?? this.paymentMethod,
       merchantPhone: merchantPhone ?? this.merchantPhone,
       merchantStoreName: merchantStoreName ?? this.merchantStoreName,
       merchantLatitude: merchantLatitude ?? this.merchantLatitude,
@@ -213,6 +225,9 @@ class ListItem {
       'prepMinutes': prepMinutes,
       'isAvailable': isAvailable,
       'isApproved': isApproved,
+      'carYear': carYear,
+      'carColor': carColor,
+      'paymentMethod': paymentMethod,
       'merchantPhone': merchantPhone,
       'merchantStoreName': merchantStoreName,
       'merchantLatitude': merchantLatitude,
@@ -270,6 +285,9 @@ class ListItem {
       isApproved: (map['isApproved'] as bool?) ??
           (map['is_approved'] as bool?) ??
           true,
+      carYear: (map['carYear'] as num?)?.toInt() ?? (map['car_year'] as num?)?.toInt(),
+      carColor: map['carColor'] as String? ?? map['car_color'] as String?,
+      paymentMethod: map['paymentMethod'] as String? ?? map['payment_method'] as String?,
       merchantPhone: map['merchantPhone']?.toString() ??
           map['merchant_phone']?.toString() ??
           map['phone']?.toString(),
@@ -363,6 +381,9 @@ class CartItem {
   final String category;
   final String? descriptionAr;
   final String? descriptionEn;
+  final int? carYear;
+  final String? carColor;
+  final String? paymentMethod;
   final String? merchantPhone;
   final String? merchantStoreName;
   final String? merchantAddress;
@@ -428,6 +449,9 @@ class ActiveOrder {
   final String? deliveryStatusEn;
   final String? assignedCourierName;
   final bool isRestaurantOrder;
+  final int? carYear;
+  final String? carColor;
+  final String? paymentMethod;
   final String? merchantPhone;
   final String? merchantStoreName;
   final bool requiresDelivery;

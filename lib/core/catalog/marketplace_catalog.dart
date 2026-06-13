@@ -320,15 +320,12 @@ class MarketplaceCatalog {
     MarketplaceSubCategory(id: 'gifts', titleAr: 'زهور وهدايا', titleEn: 'Flowers & Gifts', image: 'assets/images/shop_gifts.png'),
   ];
 
-  static const List<MarketplaceSubCategory> _carRequestSubCategories = [
-    MarketplaceSubCategory(id: 'car_4seat', titleAr: 'طلب سيارة 4 راكب', titleEn: '4-Seat Car Request', image: 'assets/images/car_req_4seat.png', browseMode: SubCategoryBrowseMode.catalog),
-    MarketplaceSubCategory(id: 'car_starx11', titleAr: 'طلب سيارة 11 راكب', titleEn: '11-Seat Car Request', image: 'assets/images/car_starx11.png', browseMode: SubCategoryBrowseMode.catalog),
-    MarketplaceSubCategory(id: 'car_truck', titleAr: 'طلب سيارة حمل', titleEn: 'Truck Request', image: 'assets/images/car_truck.png', browseMode: SubCategoryBrowseMode.catalog),
-    MarketplaceSubCategory(id: 'car_bus', titleAr: 'طلب سيارة باص', titleEn: 'Bus Request', image: 'assets/images/car_bus.png', browseMode: SubCategoryBrowseMode.catalog),
+  static const List<MarketplaceSubCategory> _carsSubCategories = [
+    MarketplaceSubCategory(id: 'taxi_request', titleAr: 'طلب تكسي', titleEn: 'Taxi Request', image: 'assets/images/taxi_request.png', browseMode: SubCategoryBrowseMode.catalog),
+    MarketplaceSubCategory(id: 'car_request', titleAr: 'طلب سيارة', titleEn: 'Request Car', image: 'assets/images/car_request.png', browseMode: SubCategoryBrowseMode.catalog),
+    MarketplaceSubCategory(id: 'car_buy', titleAr: 'شراء سيارة', titleEn: 'Buy Car', image: 'assets/images/car_buy.png', browseMode: SubCategoryBrowseMode.catalog),
+    MarketplaceSubCategory(id: 'car_sell', titleAr: 'بيع سيارة', titleEn: 'Sell Car', image: 'assets/images/car_sell.png', browseMode: SubCategoryBrowseMode.catalog),
   ];
-
-  static const List<MarketplaceSubCategory> _carsSubCategories =
-      _carRequestSubCategories;
 
   static const List<MarketplaceSubCategory> _tourismSubCategories = [
     MarketplaceSubCategory(id: 'groups', titleAr: 'كروبات سياحية', titleEn: 'Tour Groups', image: 'assets/images/tour_groups.png', browseMode: SubCategoryBrowseMode.catalog),
@@ -377,10 +374,16 @@ class MarketplaceCatalog {
   ];
 
   static const List<MarketplaceSubCategory> _usedSubCategories = [
-    MarketplaceSubCategory(id: 'used_electronics', titleAr: 'إلكترونيات', titleEn: 'Electronics', image: 'assets/images/shop_electronics.png', browseMode: SubCategoryBrowseMode.catalog),
-    MarketplaceSubCategory(id: 'used_furniture', titleAr: 'أثاث', titleEn: 'Furniture', image: 'assets/images/shop_home_goods.png', browseMode: SubCategoryBrowseMode.catalog),
-    MarketplaceSubCategory(id: 'used_clothing', titleAr: 'ملابس', titleEn: 'Clothing', image: 'assets/images/shop_women_clothing.png', browseMode: SubCategoryBrowseMode.catalog),
-    MarketplaceSubCategory(id: 'used_other', titleAr: 'متنوعات', titleEn: 'Other', image: 'assets/images/cat_used.png', browseMode: SubCategoryBrowseMode.catalog),
+    MarketplaceSubCategory(id: 'used_home_goods', titleAr: 'مواد منزلية مستعملة', titleEn: 'Used Home Goods', image: 'assets/images/shop_home_goods.png', browseMode: SubCategoryBrowseMode.catalog),
+    MarketplaceSubCategory(id: 'used_electrical_appliances', titleAr: 'أجهزة كهربائية مستعملة', titleEn: 'Used Electrical Appliances', image: 'assets/images/shop_electronics.png', browseMode: SubCategoryBrowseMode.catalog),
+    MarketplaceSubCategory(id: 'used_construction', titleAr: 'مواد إنشائية مستعملة', titleEn: 'Used Construction', image: 'assets/images/shop_construction.png', browseMode: SubCategoryBrowseMode.catalog),
+    MarketplaceSubCategory(id: 'used_school', titleAr: 'لوازم مدرسية مستعملة', titleEn: 'Used School Supplies', image: 'assets/images/shop_school.png', browseMode: SubCategoryBrowseMode.catalog),
+    MarketplaceSubCategory(id: 'used_books_magazines', titleAr: 'كتب ومجلات مستعملة', titleEn: 'Used Books & Magazines', image: 'assets/images/shop_school.png', browseMode: SubCategoryBrowseMode.catalog),
+    MarketplaceSubCategory(id: 'used_shoes_bags', titleAr: 'أحذية وحقائب مستعملة', titleEn: 'Used Shoes & Bags', image: 'assets/images/shop_shoes_bags.png', browseMode: SubCategoryBrowseMode.catalog),
+    MarketplaceSubCategory(id: 'used_kids_clothing', titleAr: 'ملابس أطفال مستعملة', titleEn: 'Used Kids Clothing', image: 'assets/images/shop_kids_clothing.png', browseMode: SubCategoryBrowseMode.catalog),
+    MarketplaceSubCategory(id: 'used_women_clothing', titleAr: 'ملابس نسائية مستعملة', titleEn: 'Used Women Clothing', image: 'assets/images/shop_women_clothing.png', browseMode: SubCategoryBrowseMode.catalog),
+    MarketplaceSubCategory(id: 'used_men_clothing', titleAr: 'ملابس رجالية مستعملة', titleEn: 'Used Men Clothing', image: 'assets/images/shop_men_clothing.png', browseMode: SubCategoryBrowseMode.catalog),
+    MarketplaceSubCategory(id: 'used_other', titleAr: 'متنوعات مستعملة', titleEn: 'Other Used Items', image: 'assets/images/cat_used.png', browseMode: SubCategoryBrowseMode.catalog),
   ];
 
   /// الخدمات التي تدعم الطلب عبر السلة (مطاعم + تسوق فقط).

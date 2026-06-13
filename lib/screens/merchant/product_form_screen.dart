@@ -35,6 +35,9 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
   final _nameController = TextEditingController();
   final _priceController = TextEditingController();
   final _descController = TextEditingController();
+  final _carYearController = TextEditingController();
+  final _carColorController = TextEditingController();
+  final _carLocationController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
 
   String? _imageBase64;
@@ -43,6 +46,7 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
   String? _selectedServiceId;
   String? _selectedSubCategoryId;
   String? _selectedSectionId;
+  String _selectedPaymentMethod = 'نقداً';
 
   @override
   void initState() {
@@ -51,6 +55,9 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
     _nameController.text = item?.nameAr ?? '';
     _priceController.text = item?.price.toString() ?? '';
     _descController.text = item?.descriptionAr ?? '';
+    _carYearController.text = item?.carYear?.toString() ?? '';
+    _carColorController.text = item?.carColor ?? '';
+    _carLocationController.text = item?.address ?? '';
     _imageBase64 = item?.imageBase64;
     _imageLabel = item == null ? null : 'selected';
     _isAvailable = item?.isAvailable ?? true;
@@ -58,6 +65,7 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
     _selectedSubCategoryId =
         item?.subCategory ?? widget.initialSubCategoryId;
     _selectedSectionId = item?.sectionId;
+    _selectedPaymentMethod = item?.paymentMethod ?? 'نقداً';
   }
 
   @override
@@ -65,6 +73,9 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
     _nameController.dispose();
     _priceController.dispose();
     _descController.dispose();
+    _carYearController.dispose();
+    _carColorController.dispose();
+    _carLocationController.dispose();
     super.dispose();
   }
 
@@ -117,6 +128,7 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
         ? 'قسم داخل مطعمك'
         : 'قسم داخل متجرك';
     final isEdit = widget.item != null;
+    final isCarService = serviceId == 'cars';
     final title = isEdit
         ? labels.editItemAr
         : labels.addItemAr;
@@ -328,7 +340,9 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                       const SizedBox(height: 16),
                     ],
                     Text(
-                      'أضف صورة لـ ${labels.itemSingularAr} لتظهر بشكل احترافي',
+                      isCarService
+                          ? 'أضف صورة للسيارة'
+                          : 'أضف صورة لـ ${labels.itemSingularAr} لتظهر بشكل احترافي',
                       style: const TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w800,
@@ -406,41 +420,175 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                       ),
                     ],
                     const SizedBox(height: 16),
-                    _buildField(
-                      label: 'اسم ${labels.itemSingularAr}',
-                      controller: _nameController,
-                      validator: (value) {
-                        if (value == null || value.trim().isEmpty) {
-                          return 'هذا الحقل مطلوب';
-                        }
-                        return null;
-                      },
+                    if (isCarService) ...[
+                      _buildField(
+                        label: 'نوع السيارة',
+                        controller: _nameController,
+                        validator: (value) =>
+                            value?.isEmpty ?? true ? 'أدخل نوع السيارة' : null,
+                      ),
+                      const SizedBox(height: 14),
+                      _buildField(
+                        label: 'مكان السيارة',
+                        controller: _carLocationController,
+                        validator: (value) =>
+                            value?.isEmpty ?? true ? 'أدخل مكان السيارة' : null,
+                      ),
+                      const SizedBox(height: 14),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _buildField(
+                              label: 'سعر السيارة (بالدولار \$)',
+                              controller: _priceController,
+                              keyboardType: TextInputType.number,
+                              validator: (value) =>
+                                  value?.isEmpty ?? true ? 'أدخل السعر' : null,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: _buildField(
+                              label: 'موديل السيارة (السنة)',
+                              controller: _carYearController,
+                              keyboardType: TextInputType.number,
+                              validator: (value) =>
+                                  value?.isEmpty ?? true ? 'أدخل الموديل' : null,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 14),
+                      _buildField(
+                        label: 'لون السيارة',
+                        controller: _carColorController,
+                        validator: (value) =>
+                            value?.isEmpty ?? true ? 'أدخل لون السيارة' : null,
+                      ),
+                      const SizedBox(height: 14),
+                      const Text(
+                        'طريقة البيع',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: Colors.grey,
+                          fontFamily: 'Cairo',
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: RadioListTile<String>(
+                              title: const Text('نقداً',
+                                  style: TextStyle(fontFamily: 'Cairo')),
+                              value: 'نقداً',
+                              groupValue: _selectedPaymentMethod,
+                              onChanged: (val) => setState(
+                                  () => _selectedPaymentMethod = val!),
+                            ),
+                          ),
+                          Expanded(
+                            child: RadioListTile<String>(
+                              title: const Text('أقساط',
+                                  style: TextStyle(fontFamily: 'Cairo')),
+                              value: 'أقساط',
+                              groupValue: _selectedPaymentMethod,
+                              onChanged: (val) => setState(
+                                  () => _selectedPaymentMethod = val!),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 14),
+                      _buildField(
+                        label: 'وصف إضافي',
+                        controller: _descController,
+                        maxLines: 4,
+                        validator: (value) => null,
+                      ),
+                    ] else ...[
+                      _buildField(
+                        label: 'اسم ${labels.itemSingularAr}',
+                        controller: _nameController,
+                        validator: (value) {
+                          if (value == null || value.trim().isEmpty) {
+                            return 'هذا الحقل مطلوب';
+                          }
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 14),
+                      _buildField(
+                        label: 'السعر',
+                        controller: _priceController,
+                        keyboardType: TextInputType.number,
+                        validator: (value) {
+                          final parsed = int.tryParse(value?.trim() ?? '');
+                          if (parsed == null || parsed <= 0) {
+                            return 'أدخل سعراً صحيحاً';
+                          }
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 14),
+                      _buildField(
+                        label: 'وصف ${labels.itemSingularAr}',
+                        controller: _descController,
+                        maxLines: 4,
+                        validator: (value) {
+                          if (value == null || value.trim().isEmpty) {
+                            return 'أدخل الوصف';
+                          }
+                          return null;
+                        },
+                      ),
+                    ],
+                    const SizedBox(height: 4),
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      value: _isAvailable,
+                      onChanged: (value) =>
+                          setState(() => _isAvailable = value),
+                      title: Text(
+                        'حالة التوفر',
+                        style: const TextStyle(
+                            fontFamily: 'Cairo', fontWeight: FontWeight.w700),
+                      ),
+                      subtitle: Text(
+                        _isAvailable
+                            ? 'متوفر'
+                            : 'غير متوفر',
+                        style: const TextStyle(fontFamily: 'Cairo'),
+                      ),
                     ),
-                    const SizedBox(height: 14),
-                    _buildField(
-                      label: 'السعر',
-                      controller: _priceController,
-                      keyboardType: TextInputType.number,
-                      validator: (value) {
-                        final parsed = int.tryParse(value?.trim() ?? '');
-                        if (parsed == null || parsed <= 0) {
-                          return 'أدخل سعراً صحيحاً';
-                        }
-                        return null;
-                      },
+                    const SizedBox(height: 22),
+                    SizedBox(
+                      width: double.infinity,
+                      child: CupertinoButton(
+                        color: Colors.orange,
+                        borderRadius: BorderRadius.circular(16),
+                        onPressed: () =>
+                            _saveItem(context, appProvider, serviceId),
+                        child: Text(
+                          isEdit
+                              ? 'حفظ التعديل'
+                              : labels.addItemAr,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontFamily: 'Cairo',
+                          ),
+                        ),
+                      ),
                     ),
-                    const SizedBox(height: 14),
-                    _buildField(
-                      label: 'وصف ${labels.itemSingularAr}',
-                      controller: _descController,
-                      maxLines: 4,
-                      validator: (value) {
-                        if (value == null || value.trim().isEmpty) {
-                          return 'أدخل الوصف';
-                        }
-                        return null;
-                      },
-                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
                     const SizedBox(height: 4),
                     SwitchListTile(
                       contentPadding: EdgeInsets.zero,
@@ -616,6 +764,7 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
     }
 
     final isEdit = widget.item != null;
+    final isCarService = serviceId == 'cars';
     final labels = merchantServiceLabels(serviceId);
     final price = int.parse(_priceController.text.trim());
     final name = _nameController.text.trim();
@@ -662,10 +811,14 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
       imageBase64: _imageBase64,
       prepMinutes: widget.item?.prepMinutes,
       isAvailable: _isAvailable,
-      avgPriceLabelAr: 'السعر',
-      avgPriceLabelEn: 'Price',
+      avgPriceLabelAr: isCarService ? 'سعر البيع' : 'السعر',
+      avgPriceLabelEn: isCarService ? 'Selling Price' : 'Price',
       actionLabelAr: labels.actionLabelAr,
       actionLabelEn: labels.actionLabelEn,
+      address: isCarService ? _carLocationController.text.trim() : null,
+      carYear: isCarService ? int.tryParse(_carYearController.text.trim()) : null,
+      carColor: isCarService ? _carColorController.text.trim() : null,
+      paymentMethod: isCarService ? _selectedPaymentMethod : null,
     );
 
     try {

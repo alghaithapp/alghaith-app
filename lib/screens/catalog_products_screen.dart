@@ -206,6 +206,9 @@ class _CatalogProductCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isCar = item.category == 'cars';
+    final priceLabel = isCar ? '\$' : 'د.ع';
+
     return Container(
       margin: const EdgeInsets.only(bottom: 14),
       decoration: BoxDecoration(
@@ -269,8 +272,38 @@ class _CatalogProductCard extends StatelessWidget {
                     ),
                   ),
                 ],
+                if (isCar) ...[
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 6,
+                    children: [
+                      if ((item.address ?? '').isNotEmpty)
+                        _CarSpecTag(
+                          icon: CupertinoIcons.location_solid,
+                          label: item.address!,
+                        ),
+                      if (item.carYear != null)
+                        _CarSpecTag(
+                          icon: CupertinoIcons.calendar,
+                          label: 'موديل ${item.carYear}',
+                        ),
+                      if ((item.carColor ?? '').isNotEmpty)
+                        _CarSpecTag(
+                          icon: CupertinoIcons.color_filter,
+                          label: item.carColor!,
+                        ),
+                      if ((item.paymentMethod ?? '').isNotEmpty)
+                        _CarSpecTag(
+                          icon: CupertinoIcons.money_dollar_circle,
+                          label: item.paymentMethod!,
+                          color: const Color(0xFF34C759),
+                        ),
+                    ],
+                  ),
+                ],
                 if (item.descriptionAr.isNotEmpty) ...[
-                  const SizedBox(height: 6),
+                  const SizedBox(height: 10),
                   Text(
                     item.descriptionAr,
                     maxLines: 2,
@@ -286,10 +319,10 @@ class _CatalogProductCard extends StatelessWidget {
                 if (contactOnly) ...[
                   if (item.price > 0)
                     Text(
-                      '${item.price.toLocaleString()} د.ع',
+                      '${item.price.toLocaleString()} $priceLabel',
                       style: const TextStyle(
                         fontWeight: FontWeight.w900,
-                        fontSize: 16,
+                        fontSize: 18,
                         color: Color(0xFFF5A01D),
                         fontFamily: 'Cairo',
                       ),
@@ -301,10 +334,10 @@ class _CatalogProductCard extends StatelessWidget {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
-                        '${item.price.toLocaleString()} د.ع',
+                        '${item.price.toLocaleString()} $priceLabel',
                         style: const TextStyle(
                           fontWeight: FontWeight.w900,
-                          fontSize: 16,
+                          fontSize: 18,
                           color: Color(0xFFF5A01D),
                           fontFamily: 'Cairo',
                         ),
@@ -328,6 +361,44 @@ class _CatalogProductCard extends StatelessWidget {
                     ],
                   ),
               ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CarSpecTag extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final Color? color;
+
+  const _CarSpecTag({required this.icon, required this.label, this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: (color ?? CupertinoColors.systemGrey6).withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: (color ?? CupertinoColors.systemGrey4).withValues(alpha: 0.2),
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 12, color: color ?? CupertinoColors.systemGrey),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: TextStyle(
+              fontFamily: 'Cairo',
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              color: color ?? CupertinoColors.label,
             ),
           ),
         ],
