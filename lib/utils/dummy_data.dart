@@ -21,6 +21,12 @@ class DummyData {
 
   static final List<ServiceCategory> carsSubCategories = [
     ServiceCategory(
+      id: 'taxi_request',
+      titleAr: 'طلب تكسي',
+      titleEn: 'Taxi Request',
+      image: 'assets/images/car_taxi.png',
+    ),
+    ServiceCategory(
       id: 'car_request',
       titleAr: 'طلب سيارة',
       titleEn: 'Request Car',

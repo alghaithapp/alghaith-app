@@ -321,10 +321,17 @@ class MarketplaceCatalog {
   ];
 
   static const List<MarketplaceSubCategory> _carsSubCategories = [
-    MarketplaceSubCategory(id: 'taxi_request', titleAr: 'طلب تكسي', titleEn: 'Taxi Request', image: 'assets/images/taxi_request.png', browseMode: SubCategoryBrowseMode.catalog),
+    MarketplaceSubCategory(id: 'taxi_request', titleAr: 'طلب تكسي', titleEn: 'Taxi Request', image: 'assets/images/car_taxi.png', browseMode: SubCategoryBrowseMode.catalog),
     MarketplaceSubCategory(id: 'car_request', titleAr: 'طلب سيارة', titleEn: 'Request Car', image: 'assets/images/car_request.png', browseMode: SubCategoryBrowseMode.catalog),
     MarketplaceSubCategory(id: 'car_buy', titleAr: 'شراء سيارة', titleEn: 'Buy Car', image: 'assets/images/car_buy.png', browseMode: SubCategoryBrowseMode.catalog),
     MarketplaceSubCategory(id: 'car_sell', titleAr: 'بيع سيارة', titleEn: 'Sell Car', image: 'assets/images/car_sell.png', browseMode: SubCategoryBrowseMode.catalog),
+  ];
+
+  static const List<MarketplaceSubCategory> _carRequestSubCategories = [
+    MarketplaceSubCategory(id: 'car_4seat', titleAr: 'طلب سيارة 4 راكب', titleEn: '4-Seat Car Request', image: 'assets/images/car_req_4seat.png', browseMode: SubCategoryBrowseMode.catalog),
+    MarketplaceSubCategory(id: 'car_starx11', titleAr: 'طلب سيارة 11 راكب', titleEn: '11-Seat Car Request', image: 'assets/images/car_starx11.png', browseMode: SubCategoryBrowseMode.catalog),
+    MarketplaceSubCategory(id: 'car_truck', titleAr: 'طلب سيارة حمل', titleEn: 'Truck Request', image: 'assets/images/car_truck.png', browseMode: SubCategoryBrowseMode.catalog),
+    MarketplaceSubCategory(id: 'car_bus', titleAr: 'طلب سيارة باص', titleEn: 'Bus Request', image: 'assets/images/car_bus.png', browseMode: SubCategoryBrowseMode.catalog),
   ];
 
   static const List<MarketplaceSubCategory> _tourismSubCategories = [

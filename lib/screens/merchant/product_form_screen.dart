@@ -1,7 +1,6 @@
-import 'dart:io'; // إضافة مكتبة الملفات
+import 'dart:io';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
 import '../../models/app_models.dart';
@@ -549,55 +548,9 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                       value: _isAvailable,
                       onChanged: (value) =>
                           setState(() => _isAvailable = value),
-                      title: Text(
+                      title: const Text(
                         'حالة التوفر',
-                        style: const TextStyle(
-                            fontFamily: 'Cairo', fontWeight: FontWeight.w700),
-                      ),
-                      subtitle: Text(
-                        _isAvailable
-                            ? 'متوفر'
-                            : 'غير متوفر',
-                        style: const TextStyle(fontFamily: 'Cairo'),
-                      ),
-                    ),
-                    const SizedBox(height: 22),
-                    SizedBox(
-                      width: double.infinity,
-                      child: CupertinoButton(
-                        color: Colors.orange,
-                        borderRadius: BorderRadius.circular(16),
-                        onPressed: () =>
-                            _saveItem(context, appProvider, serviceId),
-                        child: Text(
-                          isEdit
-                              ? 'حفظ التعديل'
-                              : labels.addItemAr,
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontFamily: 'Cairo',
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-                    const SizedBox(height: 4),
-                    SwitchListTile(
-                      contentPadding: EdgeInsets.zero,
-                      value: _isAvailable,
-                      onChanged: (value) =>
-                          setState(() => _isAvailable = value),
-                      title: Text(
-                        'حالة التوفر',
-                        style: const TextStyle(
+                        style: TextStyle(
                             fontFamily: 'Cairo', fontWeight: FontWeight.w700),
                       ),
                       subtitle: Text(
@@ -653,8 +606,8 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
         actions: [
           TextButton(
             onPressed: () {
-              Navigator.pop(ctx); // إغلاق الدايلوج
-              Navigator.pop(context); // إغلاق الشاشة
+              Navigator.pop(ctx);
+              Navigator.pop(context);
             },
             child: const Text('موافق', style: TextStyle(fontFamily: 'Cairo')),
           ),
@@ -667,13 +620,12 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
     final picked = await AppHelpers.pickImage(context);
     if (picked == null) return;
 
-    // رفع صورة المنتج للسحابة فوراً
     final provider = context.read<AppProvider>();
     final url = await provider.uploadImage(File(picked.path));
 
     if (url != null) {
       setState(() {
-        _imageBase64 = url; // تخزين الرابط (URL) في المتغير المخصص للصور
+        _imageBase64 = url;
         _imageLabel = picked.name;
       });
     }

@@ -57,7 +57,7 @@ class _CustomerSetupScreenState extends State<CustomerSetupScreen> {
       imageQuality: 85,
     );
     if (picked == null) return;
-    
+
     // استخدام دالة الرفع لضمان المعالجة الصحيحة
     final imageRef =
         await context.read<AppProvider>().uploadImage(File(picked.path));
@@ -118,7 +118,7 @@ class _CustomerSetupScreenState extends State<CustomerSetupScreen> {
         address: _addressController.text.trim(),
         avatarBase64: _avatarBase64,
       );
-      
+
       // 3. إغلاق الصفحة والعودة للرئيسية
       if (mounted) {
         Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
@@ -139,17 +139,20 @@ class _CustomerSetupScreenState extends State<CustomerSetupScreen> {
 
   @override
   Widget build(BuildContext context) {
+    const brandTeal = Color(0xFF007A7A);
+    const brandOrange = Color(0xFFF5A01D);
+
     return Scaffold(
-      backgroundColor: const Color(0xFF0F0F0F),
+      backgroundColor: const Color(0xFFF2F2F7),
       appBar: AppBar(
-        backgroundColor: const Color(0xFF0F0F0F),
+        backgroundColor: Colors.white,
         elevation: 0,
-        iconTheme: const IconThemeData(color: Colors.white),
-        title: Text(
+        iconTheme: const IconThemeData(color: brandTeal),
+        title: const Text(
           'إكمال ملف الزبون',
-          style: const TextStyle(
+          style: TextStyle(
             fontFamily: 'Cairo',
-            color: Colors.white,
+            color: brandTeal,
             fontWeight: FontWeight.w800,
           ),
         ),
@@ -159,13 +162,17 @@ class _CustomerSetupScreenState extends State<CustomerSetupScreen> {
           padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
           children: [
             Container(
-              padding: const EdgeInsets.all(18),
+              padding: const EdgeInsets.all(22),
               decoration: BoxDecoration(
-                color: const Color(0xFF1E1E1E),
-                borderRadius: BorderRadius.circular(24),
-                border: Border.all(
-                  color: const Color(0xFFE53935).withValues(alpha: 0.18),
-                ),
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(28),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.04),
+                    blurRadius: 18,
+                    offset: const Offset(0, 8),
+                  ),
+                ],
               ),
               child: Column(
                 children: [
@@ -175,101 +182,103 @@ class _CustomerSetupScreenState extends State<CustomerSetupScreen> {
                       width: 104,
                       height: 104,
                       decoration: BoxDecoration(
-                        color: const Color(0xFF121212),
-                        borderRadius: BorderRadius.circular(28),
+                        color: const Color(0xFFF8F9FB),
+                        borderRadius: BorderRadius.circular(32),
                         border: Border.all(
-                          color:
-                              const Color(0xFFE53935).withValues(alpha: 0.35),
+                          color: brandTeal.withValues(alpha: 0.15),
+                          width: 2,
                         ),
                       ),
                       child: ClipRRect(
-                        borderRadius: BorderRadius.circular(24),
+                        borderRadius: BorderRadius.circular(30),
                         child:
                             _avatarBase64 != null && _avatarBase64!.isNotEmpty
                                 ? AppImage(
                                     imageData: _avatarBase64,
                                     fit: BoxFit.cover,
                                   )
-                                : const AppLogo(size: 72, fit: BoxFit.contain),
+                                : const Icon(
+                                    CupertinoIcons.person_alt_circle_fill,
+                                    size: 72,
+                                    color: Color(0xFFD1D1D6),
+                                  ),
                       ),
                     ),
                   ),
-                  const SizedBox(height: 12),
-                  Text(
+                  const SizedBox(height: 14),
+                  const Text(
                     'الصورة الشخصية',
-                    style: const TextStyle(
-                      color: Colors.white,
+                    style: TextStyle(
+                      color: brandTeal,
                       fontFamily: 'Cairo',
-                      fontWeight: FontWeight.w700,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 16,
                     ),
                   ),
-                  const SizedBox(height: 18),
+                  const SizedBox(height: 24),
                   _Field(
                     label: 'الاسم الكامل',
                     controller: _nameController,
+                    icon: CupertinoIcons.person_fill,
                   ),
-                  const SizedBox(height: 14),
+                  const SizedBox(height: 16),
                   _Field(
                     label: 'رقم الهاتف',
                     controller: _phoneController,
                     keyboardType: TextInputType.phone,
+                    icon: CupertinoIcons.phone_fill,
                   ),
-                  const SizedBox(height: 14),
+                  const SizedBox(height: 16),
                   _Field(
-                    label: 'العنوان',
+                    label: 'العنوان السكني',
                     controller: _addressController,
                     maxLines: 2,
+                    icon: CupertinoIcons.location_solid,
                   ),
-                  const SizedBox(height: 18),
+                  const SizedBox(height: 28),
                   SizedBox(
                     width: double.infinity,
-                    child: ElevatedButton(
+                    child: CupertinoButton(
+                      padding: EdgeInsets.zero,
                       onPressed: _saving ? null : _save,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.transparent,
-                        shadowColor: Colors.transparent,
-                        padding: EdgeInsets.zero,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(18),
-                        ),
-                      ),
-                      child: Ink(
+                      child: Container(
+                        alignment: Alignment.center,
+                        height: 56,
                         decoration: BoxDecoration(
                           gradient: const LinearGradient(
-                            colors: [Color(0xFFFF8A5A), Color(0xFFE53935)],
+                            colors: [brandOrange, Color(0xFFE68A19)],
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
                           ),
                           borderRadius: BorderRadius.circular(18),
+                          boxShadow: [
+                            BoxShadow(
+                              color: brandOrange.withValues(alpha: 0.25),
+                              blurRadius: 14,
+                              offset: const Offset(0, 6),
+                            ),
+                          ],
                         ),
-                        child: Container(
-                          alignment: Alignment.center,
-                          height: 54,
-                          child: _saving
-                              ? const SizedBox(
-                                  width: 20,
-                                  height: 20,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2.2,
-                                    color: Colors.white,
-                                  ),
-                                )
-                              : Text(
-                                  'حفظ ومتابعة',
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontFamily: 'Cairo',
-                                    fontWeight: FontWeight.w800,
-                                  ),
+                        child: _saving
+                            ? const CupertinoActivityIndicator(color: Colors.white)
+                            : const Text(
+                                'حفظ ومتابعة',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontFamily: 'Cairo',
+                                  fontWeight: FontWeight.w900,
+                                  fontSize: 16,
                                 ),
-                        ),
+                              ),
                       ),
                     ),
                   ),
-                  const SizedBox(height: 10),
-                  Text(
+                  const SizedBox(height: 16),
+                  const Text(
                     'لن يظهر الحساب الكامل إلا بعد إدخال بياناتك الشخصية.',
                     textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      color: Color(0xFFB5B5B5),
+                    style: TextStyle(
+                      color: CupertinoColors.systemGrey,
                       fontFamily: 'Cairo',
                       height: 1.6,
                       fontSize: 12.5,
@@ -290,42 +299,52 @@ class _Field extends StatelessWidget {
   final TextEditingController controller;
   final TextInputType keyboardType;
   final int maxLines;
+  final IconData icon;
 
   const _Field({
     required this.label,
     required this.controller,
+    required this.icon,
     this.keyboardType = TextInputType.text,
     this.maxLines = 1,
   });
 
   @override
   Widget build(BuildContext context) {
+    const brandTeal = Color(0xFF007A7A);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          label,
-          style: const TextStyle(
-            color: Color(0xFFD7D7D7),
-            fontFamily: 'Cairo',
-            fontWeight: FontWeight.w700,
-            fontSize: 12.5,
+        Padding(
+          padding: const EdgeInsets.only(right: 4, bottom: 8),
+          child: Text(
+            label,
+            style: const TextStyle(
+              color: Color(0xFF48484A),
+              fontFamily: 'Cairo',
+              fontWeight: FontWeight.w800,
+              fontSize: 13.5,
+            ),
           ),
         ),
-        const SizedBox(height: 8),
         CupertinoTextField(
           controller: controller,
           keyboardType: keyboardType,
           maxLines: maxLines,
-          padding: const EdgeInsets.all(14),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          prefix: Padding(
+            padding: const EdgeInsets.only(right: 14),
+            child: Icon(icon, color: brandTeal.withValues(alpha: 0.6), size: 20),
+          ),
           style: const TextStyle(
-            color: Colors.white,
+            color: Color(0xFF1C1C1E),
             fontFamily: 'Cairo',
+            fontWeight: FontWeight.w600,
           ),
           decoration: BoxDecoration(
-            color: const Color(0xFF121212),
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: const Color(0xFF3B3B3B)),
+            color: const Color(0xFFF2F2F7),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: const Color(0xFFE5E5EA)),
           ),
         ),
       ],

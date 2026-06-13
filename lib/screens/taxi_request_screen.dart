@@ -440,6 +440,55 @@ class _TaxiRequestScreenState extends State<TaxiRequestScreen> {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
   }
 
+  void _selectTrip(TaxiRequest trip) {
+    setState(() {
+      _pickupController.text = trip.pickupAddressAr;
+      _dropoffController.text = trip.dropoffAddressAr;
+      // نضع المؤشر في نهاية النص
+      _pickupController.selection = TextSelection.fromPosition(
+        TextPosition(offset: _pickupController.text.length),
+      );
+      _dropoffController.selection = TextSelection.fromPosition(
+        TextPosition(offset: _dropoffController.text.length),
+      );
+    });
+    _scheduleDistanceUpdate();
+  }
+
+  void _showPreviousTripsModal(List<TaxiRequest> trips) {
+    if (trips.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('لا توجد رحلات سابقة حالياً.')),
+      );
+      return;
+    }
+
+    showCupertinoModalPopup(
+      context: context,
+      builder: (context) => CupertinoActionSheet(
+        title: const Text('الرحلات السابقة', style: TextStyle(fontFamily: 'Cairo')),
+        message: const Text('اختر رحلة لإعادة طلبها بنفس المواقع', style: TextStyle(fontFamily: 'Cairo')),
+        actions: trips.take(5).map((trip) {
+          return CupertinoActionSheetAction(
+            onPressed: () {
+              Navigator.pop(context);
+              _selectTrip(trip);
+            },
+            child: Text(
+              '${trip.pickupAddressAr} ← ${trip.dropoffAddressAr}',
+              style: const TextStyle(fontFamily: 'Cairo', fontSize: 14),
+            ),
+          );
+        }).toList(),
+        cancelButton: CupertinoActionSheetAction(
+          onPressed: () => Navigator.pop(context),
+          isDefaultAction: true,
+          child: const Text('إلغاء', style: TextStyle(fontFamily: 'Cairo')),
+        ),
+      ),
+    );
+  }
+
   int _roundTo250(int value) {
     if (value <= 0) return 250;
     return (value / 250).ceil() * 250;
@@ -478,30 +527,6 @@ class _TaxiRequestScreenState extends State<TaxiRequestScreen> {
         emoji: '🚘',
         multiplier: 1.30,
       ),
-      _VehicleOption(
-        id: 'truck',
-        name: 'سيارة حمل',
-        eta: '8 د',
-        capacity: 'حمل',
-        emoji: '🚚',
-        multiplier: 1.85,
-      ),
-      _VehicleOption(
-        id: 'bus',
-        name: 'سيارة باص',
-        eta: '10 د',
-        capacity: 'باص',
-        emoji: '🚌',
-        multiplier: 2.1,
-      ),
-      _VehicleOption(
-        id: 'starx11',
-        name: 'ستاركس 11 نفر',
-        eta: '6 د',
-        capacity: '11 راكب',
-        emoji: '🚐',
-        multiplier: 1.75,
-      ),
     ];
   }
 
@@ -517,12 +542,14 @@ class _TaxiRequestScreenState extends State<TaxiRequestScreen> {
     final estimatedFare = _roundTo250((baseFare * selectedVehicle.multiplier).round());
     final latestTaxiRequest =
         appProvider.taxiRequests.isNotEmpty ? appProvider.taxiRequests.first : null;
+    final hasLocations = _pickupController.text.trim().isNotEmpty &&
+        _dropoffController.text.trim().isNotEmpty;
 
     return _wrapComingSoon(
       Directionality(
         textDirection: TextDirection.rtl,
         child: CupertinoPageScaffold(
-          backgroundColor: const Color(0xFF030B1A),
+          backgroundColor: const Color(0xFFF2F2F7),
           child: SafeArea(
             child: Stack(
               children: [
@@ -538,93 +565,32 @@ class _TaxiRequestScreenState extends State<TaxiRequestScreen> {
                     routePolyline: _routePolyline,
                   ),
                 ),
-              Positioned(
-                top: 8,
-                left: 14,
-                right: 14,
-                child: Row(
-                  textDirection: TextDirection.ltr,
-                  children: [
-                    _MapTopCircleButton(
-                      icon: CupertinoIcons.bars,
-                      onTap: () {
-                        if (Navigator.of(context).canPop()) {
-                          Navigator.of(context).pop();
-                        }
-                      },
-                    ),
-                  ],
+                Positioned(
+                  top: 12,
+                  left: 14,
+                  child: _MapTopCircleButton(
+                    icon: CupertinoIcons.back,
+                    onTap: () {
+                      if (Navigator.of(context).canPop()) {
+                        Navigator.of(context).pop();
+                      }
+                    },
+                  ),
                 ),
-              ),
-              Positioned(
-                top: 116,
-                right: 14,
-                child: _MapTopCircleButton(
-                  icon: CupertinoIcons.bell_fill,
-                  onTap: () {},
-                ),
-              ),
-              Positioned(
-                top: 64,
-                left: 14,
-                right: 14,
-                child: Row(
-                  textDirection: TextDirection.ltr,
-                  children: [
-                    Expanded(
-                      child: _GlassLocationCard(
-                        title: 'نقطة الانطلاق',
-                        value: _pickupController.text.trim().isEmpty
-                            ? 'اضغط لإدخال الموقع'
-                            : _pickupController.text.trim(),
-                        glowColor: const Color(0xFF00C8FF),
-                        icon: CupertinoIcons.circle_fill,
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: _GlassLocationCard(
-                        title: 'الوجهة',
-                        value: _dropoffController.text.trim().isEmpty
-                            ? 'أدخل الوجهة'
-                            : _dropoffController.text.trim(),
-                        glowColor: const Color(0xFFF5A01D),
-                        icon: CupertinoIcons.location_solid,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Positioned(
-                right: 14,
-                top: 190,
-                child: Column(
-                  children: [
-                    _MapQuickActionButton(
-                      icon: CupertinoIcons.location_fill,
-                      label: 'موقعي',
-                      onTap: _useCurrentLocation,
-                    ),
-                    const SizedBox(height: 10),
-                    _MapQuickActionButton(
-                      icon: CupertinoIcons.exclamationmark_triangle_fill,
-                      label: 'SOS',
-                      onTap: () {},
-                    ),
-                  ],
-                ),
-              ),
-              DraggableScrollableSheet(
-                initialChildSize: 0.50,
-                minChildSize: 0.44,
+                DraggableScrollableSheet(
+                initialChildSize: hasLocations ? 0.50 : 0.28,
+                minChildSize: 0.20,
                 maxChildSize: 0.82,
                 snap: true,
-                snapSizes: const [0.50, 0.66, 0.82],
+                snapSizes: const [0.28, 0.50, 0.66, 0.82],
                 builder: (context, controller) {
                   return Container(
                     decoration: const BoxDecoration(
                       color: Colors.white,
                       borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
+                      boxShadow: [
+                        BoxShadow(color: Colors.black12, blurRadius: 10, offset: Offset(0, -2))
+                      ],
                     ),
                     child: ListView(
                       controller: controller,
@@ -641,90 +607,117 @@ class _TaxiRequestScreenState extends State<TaxiRequestScreen> {
                           ),
                         ),
                         const SizedBox(height: 12),
-                        _PremiumSearchFields(
-                          pickupController: _pickupController,
-                          dropoffController: _dropoffController,
-                          onQuerySuggestions: _fetchAddressSuggestions,
-                          onPickupSuggestionSelected: (value) async {
-                            final point = await _resolveCoordinates('$value، العراق');
-                            if (point == null || !mounted) {
-                              _scheduleDistanceUpdate();
-                              return;
-                            }
-                            setState(() {
-                              _pickupPosition = Position(point.longitude, point.latitude);
-                              _mapCenter = Position(point.longitude, point.latitude);
-                              _mapRefreshSeed++;
-                            });
-                            _scheduleDistanceUpdate();
-                          },
-                          onDropoffSuggestionSelected: (value) async {
-                            final point = await _resolveCoordinates('$value، العراق');
-                            if (point == null || !mounted) {
-                              _scheduleDistanceUpdate();
-                              return;
-                            }
-                            setState(() {
-                              _dropoffPosition = Position(point.longitude, point.latitude);
-                              _mapRefreshSeed++;
-                            });
-                            _scheduleDistanceUpdate();
-                          },
+                        Row(
+                          children: [
+                            Expanded(
+                              child: _PremiumSearchFields(
+                                pickupController: _pickupController,
+                                dropoffController: _dropoffController,
+                                onQuerySuggestions: _fetchAddressSuggestions,
+                                onPickupSuggestionSelected: (value) async {
+                                  final point = await _resolveCoordinates('$value، العراق');
+                                  if (point == null || !mounted) {
+                                    _scheduleDistanceUpdate();
+                                    return;
+                                  }
+                                  setState(() {
+                                    _pickupPosition = Position(point.longitude, point.latitude);
+                                    _mapCenter = Position(point.longitude, point.latitude);
+                                    _mapRefreshSeed++;
+                                  });
+                                  _scheduleDistanceUpdate();
+                                },
+                                onDropoffSuggestionSelected: (value) async {
+                                  final point = await _resolveCoordinates('$value، العراق');
+                                  if (point == null || !mounted) {
+                                    _scheduleDistanceUpdate();
+                                    return;
+                                  }
+                                  setState(() {
+                                    _dropoffPosition = Position(point.longitude, point.latitude);
+                                    _mapRefreshSeed++;
+                                  });
+                                  _scheduleDistanceUpdate();
+                                },
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            CupertinoButton(
+                              padding: EdgeInsets.zero,
+                              onPressed: () => _showPreviousTripsModal(appProvider.taxiRequests),
+                              child: Container(
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFF5F7FC),
+                                  borderRadius: BorderRadius.circular(16),
+                                  border: Border.all(color: const Color(0xFFE8ECF5)),
+                                ),
+                                child: const Icon(CupertinoIcons.time_solid, color: Color(0xFF007A7A), size: 24),
+                              ),
+                            ),
+                          ],
                         ),
-                        const SizedBox(height: 14),
-                        _QuickActionsGrid(
-                          actions: const ['المنزل', 'العمل', 'المفضلة', 'الرحلات السابقة', 'اختر على الخريطة'],
-                        ),
-                        const SizedBox(height: 14),
-                        const Text(
-                          'اختر نوع المركبة',
-                          style: TextStyle(
-                            fontFamily: 'Cairo',
-                            fontWeight: FontWeight.w900,
-                            fontSize: 15,
+                        if (hasLocations) ...[
+                          const SizedBox(height: 14),
+                          const Text(
+                            'اختر نوع المركبة',
+                            style: TextStyle(
+                              fontFamily: 'Cairo',
+                              fontWeight: FontWeight.w900,
+                              fontSize: 15,
+                            ),
                           ),
-                        ),
-                        const SizedBox(height: 10),
-                        SizedBox(
-                          height: 146,
-                          child: ListView.separated(
-                            scrollDirection: Axis.horizontal,
-                            itemCount: vehicles.length,
-                            separatorBuilder: (_, __) => const SizedBox(width: 10),
-                            itemBuilder: (context, index) {
-                              final vehicle = vehicles[index];
-                              final isSelected = vehicle.id == _selectedVehicleId;
-                              final vehicleFare = _roundTo250((baseFare * vehicle.multiplier).round());
-                              return _VehicleCard(
-                                option: vehicle,
-                                fare: vehicleFare,
-                                selected: isSelected,
-                                onTap: () => setState(() => _selectedVehicleId = vehicle.id),
-                              );
-                            },
+                          const SizedBox(height: 10),
+                          SizedBox(
+                            height: 146,
+                            child: ListView.separated(
+                              scrollDirection: Axis.horizontal,
+                              itemCount: vehicles.length,
+                              separatorBuilder: (_, __) => const SizedBox(width: 10),
+                              itemBuilder: (context, index) {
+                                final vehicle = vehicles[index];
+                                final isSelected = vehicle.id == _selectedVehicleId;
+                                final vehicleFare = _roundTo250((baseFare * vehicle.multiplier).round());
+                                return _VehicleCard(
+                                  option: vehicle,
+                                  fare: vehicleFare,
+                                  selected: isSelected,
+                                  onTap: () => setState(() => _selectedVehicleId = vehicle.id),
+                                );
+                              },
+                            ),
                           ),
-                        ),
-                        const SizedBox(height: 14),
-                        _TripInfoPanel(
-                          isCalculatingDistance: _isCalculatingDistance,
-                          distanceKm: _estimatedDistanceKm,
-                          etaLabel: _estimatedArrivalLabel(_estimatedDistanceKm),
-                          fareIqd: estimatedFare,
-                        ),
-                        const SizedBox(height: 14),
-                        _ExtraOptionsPanel(
-                          selectedPayment: _selectedPayment,
-                          showDrivers: _showDrivers,
-                          shareWithFamily: _shareWithFamily,
-                          scheduleRide: _scheduleRide,
-                          onPaymentSelected: (value) => setState(() => _selectedPayment = value),
-                          onShowDriversChanged: (value) => setState(() => _showDrivers = value),
-                          onShareWithFamilyChanged: (value) =>
-                              setState(() => _shareWithFamily = value),
-                          onScheduleRideChanged: (value) =>
-                              setState(() => _scheduleRide = value),
-                          noteController: _noteController,
-                        ),
+                          const SizedBox(height: 14),
+                          _TripInfoPanel(
+                            isCalculatingDistance: _isCalculatingDistance,
+                            distanceKm: _estimatedDistanceKm,
+                            etaLabel: _estimatedArrivalLabel(_estimatedDistanceKm),
+                            fareIqd: estimatedFare,
+                          ),
+                          const SizedBox(height: 14),
+                          CupertinoTextField(
+                            controller: _noteController,
+                            maxLines: 2,
+                            textDirection: TextDirection.rtl,
+                            placeholder: 'ملاحظة للسائق (اختياري)',
+                            placeholderStyle: const TextStyle(fontFamily: 'Cairo', fontSize: 12),
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF7F9FF),
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(color: const Color(0xFFE6EAF3)),
+                            ),
+                          ),
+                          const SizedBox(height: 20),
+                          _PremiumRequestButton(
+                            onPressed: () => _submitTaxiRequest(
+                              context: context,
+                              appProvider: appProvider,
+                              selectedVehicle: selectedVehicle,
+                              estimatedFare: estimatedFare,
+                            ),
+                          ),
+                        ],
                         if (latestTaxiRequest != null) ...[
                           const SizedBox(height: 14),
                           _LiveStatusBanner(request: latestTaxiRequest),
@@ -740,20 +733,18 @@ class _TaxiRequestScreenState extends State<TaxiRequestScreen> {
                             ),
                           ),
                         ],
-                        const SizedBox(height: 16),
-                        _PremiumRequestButton(
-                          onPressed: () => _submitTaxiRequest(
-                            context: context,
-                            appProvider: appProvider,
-                            selectedVehicle: selectedVehicle,
-                            estimatedFare: estimatedFare,
-                          ),
-                        ),
                       ],
                     ),
                   );
                 },
               ),
+            ],
+          ),
+        ),
+      ),
+    ),
+    );
+  }
             ],
           ),
         ),
@@ -1037,8 +1028,8 @@ class _TaxiMapBackdropState extends State<_TaxiMapBackdrop> {
         CameraOptions(
           center: Point(coordinates: widget.mapCenter),
           zoom: 13.2,
-          pitch: 55,
-          bearing: 18,
+          pitch: 0,
+          bearing: 0,
         ),
       );
       return;
@@ -1063,8 +1054,8 @@ class _TaxiMapBackdropState extends State<_TaxiMapBackdrop> {
       CameraOptions(
         center: Point(coordinates: center),
         zoom: zoom,
-        pitch: 52,
-        bearing: 14,
+        pitch: 0,
+        bearing: 0,
       ),
     );
   }
@@ -1151,7 +1142,7 @@ class _TaxiMapBackdropState extends State<_TaxiMapBackdrop> {
     return DecoratedBox(
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: [Colors.blueGrey.shade900, Colors.blueGrey.shade700],
+          colors: [Colors.blueGrey.shade100, Colors.blueGrey.shade50],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
@@ -1162,12 +1153,12 @@ class _TaxiMapBackdropState extends State<_TaxiMapBackdrop> {
             child: _hasMapboxToken
                 ? MapWidget(
                     key: ValueKey('taxi-live-map-${widget.mapRefreshSeed}'),
-                    styleUri: 'mapbox://styles/mapbox/navigation-night-v1',
+                    styleUri: 'mapbox://styles/mapbox/navigation-day-v1',
                     cameraOptions: CameraOptions(
                       center: Point(coordinates: widget.mapCenter),
                       zoom: 13.2,
-                      pitch: 55,
-                      bearing: 16,
+                      pitch: 0,
+                      bearing: 0,
                     ),
                     onMapCreated: _onMapCreated,
                     onStyleLoadedListener: _onStyleLoaded,
@@ -1864,29 +1855,12 @@ class _ExtraOptionsPanel extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
+          Row(
             children: [
               _SmallOptionChip(
                 label: 'الدفع كاش',
                 selected: selectedPayment == 'cash',
                 onTap: () => onPaymentSelected('cash'),
-              ),
-              _SmallOptionChip(
-                label: 'عرض السائقين',
-                selected: showDrivers,
-                onTap: () => onShowDriversChanged(!showDrivers),
-              ),
-              _SmallOptionChip(
-                label: 'مشاركة الرحلة مع العائلة',
-                selected: shareWithFamily,
-                onTap: () => onShareWithFamilyChanged(!shareWithFamily),
-              ),
-              _SmallOptionChip(
-                label: 'جدولة رحلة',
-                selected: scheduleRide,
-                onTap: () => onScheduleRideChanged(!scheduleRide),
               ),
             ],
           ),
@@ -3327,7 +3301,7 @@ class _MapPatternPainter extends CustomPainter {
     final paint = Paint()
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1
-      ..color = Colors.white.withValues(alpha: 0.08);
+      ..color = Colors.black.withValues(alpha: 0.05);
 
     for (double i = 20; i < size.width; i += 38) {
       canvas.drawLine(Offset(i, 0), Offset(i - 20, size.height), paint);

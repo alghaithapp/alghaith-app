@@ -390,7 +390,7 @@ async function sendOtpViaOtpiq(phoneNumber, verificationCode, channel = 'sms') {
 app.get('/health', (_, res) => {
   res.json({
     ok: true,
-    version: '1.1.11',
+    version: '1.1.12',
     pushConfigured: isPushConfigured(),
   });
 });

@@ -4306,8 +4306,8 @@ async function ensurePlatformAdminAccess(phone) {
 }
 
 const DEFAULT_APP_UPDATE_POLICY = {
-  minBuildNumber: 57,
-  minVersionName: '1.2.26',
+  minBuildNumber: 58,
+  minVersionName: '1.2.27',
   latestBuildNumber: 0,
   latestVersionName: '',
   messageAr:
