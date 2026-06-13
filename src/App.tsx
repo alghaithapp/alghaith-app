@@ -264,6 +264,8 @@ function App() {
   const [appUpdateDraft, setAppUpdateDraft] = useState({
     minBuildNumber: '41',
     minVersionName: '1.2.10',
+    latestBuildNumber: '0',
+    latestVersionName: '',
     messageAr:
       'يجب تحديث التطبيق للمتابعة. الرجاء التحديث من المتجر للاستمرار في استخدام الغيث.',
     androidStoreUrl:
@@ -342,6 +344,8 @@ function App() {
         setAppUpdateDraft({
           minBuildNumber: String(policy.minBuildNumber),
           minVersionName: policy.minVersionName,
+          latestBuildNumber: String(policy.latestBuildNumber ?? 0),
+          latestVersionName: policy.latestVersionName ?? '',
           messageAr: policy.messageAr,
           androidStoreUrl: policy.androidStoreUrl,
           iosStoreUrl: policy.iosStoreUrl,
@@ -544,8 +548,13 @@ function App() {
   async function handleSaveAppUpdatePolicy() {
     if (!token) return;
     const minBuildNumber = Number.parseInt(appUpdateDraft.minBuildNumber, 10);
+    const latestBuildNumber = Number.parseInt(appUpdateDraft.latestBuildNumber, 10);
     if (!Number.isFinite(minBuildNumber) || minBuildNumber < 1) {
       setActionError('أدخل رقم بناء صحيحاً (1 أو أكثر).');
+      return;
+    }
+    if (!Number.isFinite(latestBuildNumber) || latestBuildNumber < 0) {
+      setActionError('أدخل أحدث رقم بناء صحيحاً (0 أو أكثر).');
       return;
     }
     if (!appUpdateDraft.messageAr.trim()) {
@@ -559,6 +568,8 @@ function App() {
       const result = await saveAppUpdatePolicy(token, {
         minBuildNumber,
         minVersionName: appUpdateDraft.minVersionName.trim() || '1.0.0',
+        latestBuildNumber,
+        latestVersionName: appUpdateDraft.latestVersionName.trim(),
         messageAr: appUpdateDraft.messageAr.trim(),
         androidStoreUrl: appUpdateDraft.androidStoreUrl.trim(),
         iosStoreUrl: appUpdateDraft.iosStoreUrl.trim(),
@@ -1265,15 +1276,15 @@ function App() {
                     <div>
                       <h3>إعدادات التحديث الإجباري</h3>
                       <p>
-                        من دون رقم البناء المحدد يظهر للمستخدم شاشة تحديث بدون تخطي.
-                        عند رفع نسخة جديدة للمتجر، زِد رقم البناء هنا.
+                        «أقل رقم بناء» يُجبر المستخدمين القدامى على التحديث.
+                        «أحدث رقم بناء» يُستخدم عند الضغط على «التحقق من تحديث التطبيق».
                       </p>
                     </div>
                   </div>
 
                   <div className="app-update-form">
                     <label className="app-update-field">
-                      <span>أقل رقم بناء مسموح</span>
+                      <span>أقل رقم بناء مسموح (تحديث إجباري)</span>
                       <input
                         dir="ltr"
                         type="number"
@@ -1286,11 +1297,43 @@ function App() {
                           }))
                         }
                       />
-                      <small>مثال: 41 من pubspec.yaml → version: 1.2.10+41</small>
+                      <small>من دون هذا الرقم تظهر شاشة تحديث بدون تخطي.</small>
                     </label>
 
                     <label className="app-update-field">
-                      <span>اسم الإصدار المرافق (اختياري للعرض)</span>
+                      <span>أحدث رقم بناء في المتجر (للتحقق اليدوي)</span>
+                      <input
+                        dir="ltr"
+                        type="number"
+                        min={0}
+                        value={appUpdateDraft.latestBuildNumber}
+                        onChange={(event) =>
+                          setAppUpdateDraft((current) => ({
+                            ...current,
+                            latestBuildNumber: event.target.value,
+                          }))
+                        }
+                      />
+                      <small>مثال: 53 من pubspec.yaml → version: 1.2.22+53</small>
+                    </label>
+
+                    <label className="app-update-field">
+                      <span>أحدث اسم إصدار في المتجر</span>
+                      <input
+                        dir="ltr"
+                        value={appUpdateDraft.latestVersionName}
+                        onChange={(event) =>
+                          setAppUpdateDraft((current) => ({
+                            ...current,
+                            latestVersionName: event.target.value,
+                          }))
+                        }
+                      />
+                      <small>مثال: 1.2.22 — يُستخدم مع رقم البناء أو كبديل.</small>
+                    </label>
+
+                    <label className="app-update-field">
+                      <span>اسم الإصدار للحد الأدنى (اختياري للعرض)</span>
                       <input
                         dir="ltr"
                         value={appUpdateDraft.minVersionName}

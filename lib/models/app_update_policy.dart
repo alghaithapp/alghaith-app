@@ -1,6 +1,8 @@
 class AppUpdatePolicy {
   final int minBuildNumber;
   final String minVersionName;
+  final int latestBuildNumber;
+  final String latestVersionName;
   final String messageAr;
   final String androidStoreUrl;
   final String iosStoreUrl;
@@ -8,6 +10,8 @@ class AppUpdatePolicy {
   const AppUpdatePolicy({
     required this.minBuildNumber,
     required this.minVersionName,
+    required this.latestBuildNumber,
+    required this.latestVersionName,
     required this.messageAr,
     required this.androidStoreUrl,
     required this.iosStoreUrl,
@@ -20,6 +24,12 @@ class AppUpdatePolicy {
           1,
       minVersionName: map['minVersionName']?.toString() ??
           map['min_version_name']?.toString() ??
+          '',
+      latestBuildNumber: (map['latestBuildNumber'] as num?)?.toInt() ??
+          (map['latest_build_number'] as num?)?.toInt() ??
+          0,
+      latestVersionName: map['latestVersionName']?.toString() ??
+          map['latest_version_name']?.toString() ??
           '',
       messageAr: map['messageAr']?.toString() ??
           map['message_ar']?.toString() ??

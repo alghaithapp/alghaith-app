@@ -18,10 +18,15 @@ class AppUpdateChecker {
       ),
     );
 
-    final result = await AppUpdateService.evaluate();
+    final result = await AppUpdateService.evaluateForManualCheck();
 
     if (!context.mounted) return;
     Navigator.of(context, rootNavigator: true).pop();
+
+    if (result.status == AppUpdateCheckStatus.checkFailed) {
+      await _showCheckFailed(context, result);
+      return;
+    }
 
     if (result.requiresUpdate) {
       await _promptUpdate(context, result);
@@ -39,9 +44,7 @@ class AppUpdateChecker {
     final message = policy?.messageAr.trim().isNotEmpty == true
         ? policy!.messageAr
         : 'يتوفر إصدار أحدث من التطبيق. يرجى التحديث من المتجر.';
-    final minVersion = policy != null
-        ? '${policy.minVersionName} (${policy.minBuildNumber})'
-        : '';
+    final latestVersion = result.availableVersionLabel?.trim() ?? '';
     final storeUrl = result.storeUrl?.trim() ?? '';
 
     if (storeUrl.isEmpty) {
@@ -54,7 +57,9 @@ class AppUpdateChecker {
             style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w800),
           ),
           content: Text(
-            '$message\n\nتعذر فتح رابط المتجر حالياً.',
+            latestVersion.isNotEmpty
+                ? '$message\n\nالإصدار في المتجر: $latestVersion'
+                : '$message\n\nتعذر فتح رابط المتجر حالياً.',
             style: const TextStyle(fontFamily: 'Cairo', height: 1.5),
           ),
           actions: [
@@ -78,8 +83,8 @@ class AppUpdateChecker {
           style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w800),
         ),
         content: Text(
-          minVersion.isNotEmpty
-              ? '$message\n\nالإصدار المطلوب: $minVersion\nإصدارك: ${result.currentVersionName} (${result.currentBuildNumber})'
+          latestVersion.isNotEmpty
+              ? '$message\n\nالإصدار في المتجر: $latestVersion\nإصدارك: ${result.currentVersionName} (${result.currentBuildNumber})'
               : message,
           style: const TextStyle(fontFamily: 'Cairo', height: 1.5),
         ),
@@ -118,8 +123,37 @@ class AppUpdateChecker {
           style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w800),
         ),
         content: Text(
-          'أنت تستخدم أحدث إصدار متاح.\n'
+          'أنت تستخدم أحدث إصدار متاح في المتجر.\n'
           'الإصدار الحالي: ${result.currentVersionName} (${result.currentBuildNumber})',
+          style: const TextStyle(fontFamily: 'Cairo', height: 1.5),
+        ),
+        actions: [
+          CupertinoDialogAction(
+            isDefaultAction: true,
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('حسناً', style: TextStyle(fontFamily: 'Cairo')),
+          ),
+        ],
+      ),
+    );
+  }
+
+  static Future<void> _showCheckFailed(
+    BuildContext context,
+    AppUpdateCheckResult result,
+  ) async {
+    if (!context.mounted) return;
+    await showCupertinoDialog<void>(
+      context: context,
+      builder: (dialogContext) => CupertinoAlertDialog(
+        title: const Text(
+          'تعذر التحقق',
+          style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w800),
+        ),
+        content: Text(
+          'لم نتمكن من الاتصال بالمتجر أو الخادم الآن.\n'
+          'الإصدار الحالي: ${result.currentVersionName} (${result.currentBuildNumber})\n'
+          'حاول مرة أخرى لاحقاً أو افتح المتجر يدوياً.',
           style: const TextStyle(fontFamily: 'Cairo', height: 1.5),
         ),
         actions: [

@@ -280,7 +280,13 @@ export async function saveAppUpdatePolicy(
   token: string,
   policy: Pick<
     AppUpdatePolicy,
-    'minBuildNumber' | 'minVersionName' | 'messageAr' | 'androidStoreUrl' | 'iosStoreUrl'
+    | 'minBuildNumber'
+    | 'minVersionName'
+    | 'latestBuildNumber'
+    | 'latestVersionName'
+    | 'messageAr'
+    | 'androidStoreUrl'
+    | 'iosStoreUrl'
   >,
 ) {
   return request<{ success: boolean; policy: AppUpdatePolicy }>(

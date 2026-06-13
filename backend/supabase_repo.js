@@ -3937,6 +3937,8 @@ async function ensurePlatformAdminAccess(phone) {
 const DEFAULT_APP_UPDATE_POLICY = {
   minBuildNumber: 41,
   minVersionName: '1.2.10',
+  latestBuildNumber: 0,
+  latestVersionName: '',
   messageAr:
     'يجب تحديث التطبيق للمتابعة. الرجاء التحديث من المتجر للاستمرار في استخدام الغيث.',
   androidStoreUrl:
@@ -3961,6 +3963,22 @@ function normalizeAppUpdatePolicy(raw = {}) {
       raw.min_version_name ??
       DEFAULT_APP_UPDATE_POLICY.minVersionName
   ).trim() || DEFAULT_APP_UPDATE_POLICY.minVersionName;
+  const latestBuildNumber = Math.max(
+    0,
+    Number.parseInt(
+      String(
+        raw.latestBuildNumber ??
+          raw.latest_build_number ??
+          DEFAULT_APP_UPDATE_POLICY.latestBuildNumber
+      ),
+      10
+    ) || 0
+  );
+  const latestVersionName = String(
+    raw.latestVersionName ??
+      raw.latest_version_name ??
+      DEFAULT_APP_UPDATE_POLICY.latestVersionName
+  ).trim();
   const messageAr = String(
     raw.messageAr ?? raw.message_ar ?? DEFAULT_APP_UPDATE_POLICY.messageAr
   ).trim() || DEFAULT_APP_UPDATE_POLICY.messageAr;
@@ -3979,6 +3997,8 @@ function normalizeAppUpdatePolicy(raw = {}) {
   return {
     minBuildNumber,
     minVersionName,
+    latestBuildNumber,
+    latestVersionName,
     messageAr,
     androidStoreUrl,
     iosStoreUrl,

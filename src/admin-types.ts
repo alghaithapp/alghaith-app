@@ -6,6 +6,8 @@ export interface AdminSession {
 export interface AppUpdatePolicy {
   minBuildNumber: number;
   minVersionName: string;
+  latestBuildNumber: number;
+  latestVersionName: string;
   messageAr: string;
   androidStoreUrl: string;
   iosStoreUrl: string;
