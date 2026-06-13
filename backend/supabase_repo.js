@@ -3972,29 +3972,37 @@ async function getHomeCategoriesConfig() {
 
 async function saveAdminHomeCategoriesConfig(adminPhone, overrides = {}) {
   await assertAdminAccess(adminPhone);
-  const clean = {};
+  const existingConfig = await getHomeCategoriesConfig();
+  const merged = { ...(existingConfig.overrides || {}) };
+
   if (overrides && typeof overrides === 'object') {
     for (const [key, value] of Object.entries(overrides)) {
       const id = String(key).trim();
       if (!id) continue;
-      const normalized = normalizeCategoryOverride(value);
-      if (Object.keys(normalized).length > 0) {
-        clean[id] = normalized;
+      const patch = normalizeCategoryOverride(value);
+      if (Object.keys(patch).length === 0) {
+        delete merged[id];
+        continue;
       }
+      merged[id] = {
+        ...(merged[id] || {}),
+        ...patch,
+      };
     }
   }
+
   await ensureAppUser(PLATFORM_SETTINGS_PHONE, {
     role: 'system',
     full_name: 'Platform Settings',
     account_type: 'system',
   });
   const existingState = (await getUserState(PLATFORM_SETTINGS_PHONE)) || {};
-  const next = { overrides: clean, updatedAt: nowIso() };
+  const next = { overrides: merged, updatedAt: nowIso() };
   await saveUserState(PLATFORM_SETTINGS_PHONE, {
     ...existingState,
     homeCategories: next,
   });
-  return next;
+  return getHomeCategoriesConfig();
 }
 
 module.exports = {

@@ -1,4 +1,4 @@
-import { FormEvent, ReactNode, useEffect, useMemo, useState } from 'react';
+import { FormEvent, ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle,
   BadgeCheck,
@@ -6,6 +6,7 @@ import {
   Bike,
   Building2,
   ExternalLink,
+  Grid3x3,
   LoaderCircle,
   Lock,
   LogOut,
@@ -29,9 +30,11 @@ import {
   loadAdminReports,
   loadAppUpdatePolicy,
   loadCouriers,
+  loadHomeCategoriesConfig,
   loadMerchantDetails,
   loadMerchants,
   saveAppUpdatePolicy,
+  saveHomeCategoriesConfig,
   rejectCourierApplication,
   rejectDriverApplication,
   rejectMerchantApplication,
@@ -51,10 +54,16 @@ import type {
   AdminReports,
   AppUpdatePolicy,
   CourierSummary,
+  HomeCategoriesConfig,
   MerchantDetails,
   MerchantSummary,
 } from './admin-types';
-import { COURIER_REJECTION_REASONS, MERCHANT_REJECTION_REASONS } from './admin-types';
+import {
+  COURIER_REJECTION_REASONS,
+  DEFAULT_HOME_CATEGORY_IDS,
+  MERCHANT_REJECTION_REASONS,
+  TOGGLEABLE_HOME_CATEGORIES,
+} from './admin-types';
 
 type RejectAccountTarget = Pick<
   AdminAccountSummary,
@@ -69,6 +78,7 @@ type AdminView =
   | 'merchants'
   | 'approvals'
   | 'couriers'
+  | 'homeCategories'
   | 'appUpdate';
 type AccountFilter = 'all' | AdminAccountKind;
 
@@ -111,6 +121,13 @@ const VIEW_META: Record<
     title: 'التحديث الإجباري',
     subtitle:
       'حدّد أقل رقم بناء مسموح به. من دونه يُجبر المستخدم على التحديث من المتجر.',
+    showSearch: false,
+  },
+  homeCategories: {
+    eyebrow: 'أقسام الرئيسية',
+    title: 'التحكم بأقسام التطبيق',
+    subtitle:
+      'فعّل أو أطفئ كل قسم على أندرويد وآيفون بشكل منفصل. التغيير يظهر فوراً للمستخدمين.',
     showSearch: false,
   },
 };
@@ -191,6 +208,28 @@ function readStoredSession(): StoredSession | null {
   }
 }
 
+function readPlatformBool(value: unknown): boolean | null {
+  if (value === true || value === false) return value;
+  if (value === 1 || value === '1' || value === 'true') return true;
+  if (value === 0 || value === '0' || value === 'false') return false;
+  return null;
+}
+
+function isCategoryEnabledOnPlatform(
+  categoryId: string,
+  platform: 'android' | 'ios',
+  overrides: HomeCategoriesConfig['overrides'],
+) {
+  const override = overrides[categoryId];
+  if (override) {
+    const platformValue = readPlatformBool(override[platform]);
+    if (platformValue !== null) return platformValue;
+    const defaultValue = readPlatformBool(override.default);
+    if (defaultValue !== null) return defaultValue;
+  }
+  return DEFAULT_HOME_CATEGORY_IDS.has(categoryId);
+}
+
 function App() {
   const [token, setToken] = useState<string | null>(null);
   const [phoneNumber, setPhoneNumber] = useState<string>('');
@@ -232,6 +271,12 @@ function App() {
     iosStoreUrl: 'https://apps.apple.com/app/id6776741811',
   });
   const [isSavingAppUpdate, setIsSavingAppUpdate] = useState(false);
+  const [homeCategoriesConfig, setHomeCategoriesConfig] =
+    useState<HomeCategoriesConfig | null>(null);
+  const [homeCategorySavingKey, setHomeCategorySavingKey] = useState('');
+  const [isLoadingHomeCategories, setIsLoadingHomeCategories] = useState(false);
+  const homeCategoriesLoadSeq = useRef(0);
+  const homeCategoriesSaveSeq = useRef(0);
 
   useEffect(() => {
     const stored = readStoredSession();
@@ -308,6 +353,32 @@ function App() {
             ? error.message
             : 'تعذر تحميل إعدادات التحديث الإجباري.';
         setActionError(message);
+      });
+  }, [token, view]);
+
+  useEffect(() => {
+    if (!token || view !== 'homeCategories') return;
+    const seq = ++homeCategoriesLoadSeq.current;
+    setIsLoadingHomeCategories(true);
+    setActionError('');
+    loadHomeCategoriesConfig(token)
+      .then((config) => {
+        if (seq !== homeCategoriesLoadSeq.current) return;
+        if (seq <= homeCategoriesSaveSeq.current) return;
+        setHomeCategoriesConfig(config);
+      })
+      .catch((error) => {
+        if (seq !== homeCategoriesLoadSeq.current) return;
+        const message =
+          error instanceof Error
+            ? error.message
+            : 'تعذر تحميل إعدادات أقسام الصفحة الرئيسية.';
+        setActionError(message);
+      })
+      .finally(() => {
+        if (seq === homeCategoriesLoadSeq.current) {
+          setIsLoadingHomeCategories(false);
+        }
       });
   }, [token, view]);
 
@@ -503,6 +574,43 @@ function App() {
     }
   }
 
+  async function handleHomeCategoryPlatformToggle(
+    categoryId: string,
+    platform: 'android' | 'ios',
+    enabled: boolean,
+  ) {
+    if (!token) return;
+    const savingKey = `${categoryId}:${platform}`;
+    setHomeCategorySavingKey(savingKey);
+    setActionError('');
+    setSuccessMessage('');
+    const previous = homeCategoriesConfig;
+    const overrides = { ...(homeCategoriesConfig?.overrides || {}) };
+    overrides[categoryId] = {
+      ...(overrides[categoryId] || {}),
+      [platform]: enabled,
+    };
+    const saveSeq = ++homeCategoriesSaveSeq.current;
+    setHomeCategoriesConfig({
+      overrides,
+      updatedAt: homeCategoriesConfig?.updatedAt || null,
+    });
+    try {
+      const saved = await saveHomeCategoriesConfig(token, overrides);
+      if (saveSeq !== homeCategoriesSaveSeq.current) return;
+      setHomeCategoriesConfig(saved);
+      setSuccessMessage('تم حفظ إعدادات الأقسام.');
+    } catch (error) {
+      if (saveSeq !== homeCategoriesSaveSeq.current) return;
+      if (previous) setHomeCategoriesConfig(previous);
+      const message =
+        error instanceof Error ? error.message : 'تعذر حفظ إعدادات الأقسام.';
+      setActionError(message);
+    } finally {
+      setHomeCategorySavingKey('');
+    }
+  }
+
   function handleLogout() {
     window.localStorage.removeItem(SESSION_STORAGE_KEY);
     setToken(null);
@@ -516,6 +624,7 @@ function App() {
     setAccounts([]);
     setMerchantDetails(null);
     setDeleteTarget(null);
+    setHomeCategoriesConfig(null);
     setSelectedMerchantPhone('');
     setSuccessMessage('');
     setActionError('');
@@ -906,6 +1015,13 @@ function App() {
               ) : null}
             </button>
             <button
+              className={view === 'homeCategories' ? 'nav-item active' : 'nav-item'}
+              onClick={() => switchView('homeCategories')}
+            >
+              <Grid3x3 size={18} />
+              <span>أقسام الرئيسية</span>
+            </button>
+            <button
               className={view === 'appUpdate' ? 'nav-item active' : 'nav-item'}
               onClick={() => switchView('appUpdate')}
             >
@@ -1055,6 +1171,94 @@ function App() {
                 </>
               ) : null}
 
+              {view === 'homeCategories' ? (
+                <section className="panel home-categories-panel">
+                  <div className="panel-header">
+                    <div>
+                      <h3>أقسام الصفحة الرئيسية</h3>
+                      <p>
+                        مثال: فعّل «السيارات» على أندرويد وأطفئها على آيفون. الأقسام
+                        غير المحددة تستخدم الإعداد الافتراضي (المطاعم، التسوق، السيارات).
+                      </p>
+                    </div>
+                  </div>
+
+                  {isLoadingHomeCategories ? (
+                    <div className="loading-state compact">
+                      <LoaderCircle className="spin" size={22} />
+                      <span>جار تحميل إعدادات الأقسام...</span>
+                    </div>
+                  ) : (
+                  <div className="home-category-list">
+                    {TOGGLEABLE_HOME_CATEGORIES.map((category) => {
+                      const overrides = homeCategoriesConfig?.overrides || {};
+                      const androidEnabled = isCategoryEnabledOnPlatform(
+                        category.id,
+                        'android',
+                        overrides,
+                      );
+                      const iosEnabled = isCategoryEnabledOnPlatform(
+                        category.id,
+                        'ios',
+                        overrides,
+                      );
+                      const androidSaving =
+                        homeCategorySavingKey === `${category.id}:android`;
+                      const iosSaving =
+                        homeCategorySavingKey === `${category.id}:ios`;
+                      const togglesDisabled =
+                        isLoadingHomeCategories || androidSaving || iosSaving;
+                      return (
+                        <article key={category.id} className="home-category-card">
+                          <h4>{category.titleAr}</h4>
+                          <div className="home-category-toggles">
+                            <label className="platform-toggle">
+                              <span>أندرويد</span>
+                              <input
+                                type="checkbox"
+                                checked={androidEnabled}
+                                disabled={togglesDisabled}
+                                onChange={(event) => {
+                                  handleHomeCategoryPlatformToggle(
+                                    category.id,
+                                    'android',
+                                    event.target.checked,
+                                  ).catch(() => undefined);
+                                }}
+                              />
+                              <em>{androidEnabled ? 'ظاهر' : 'مخفي'}</em>
+                            </label>
+                            <label className="platform-toggle">
+                              <span>آيفون</span>
+                              <input
+                                type="checkbox"
+                                checked={iosEnabled}
+                                disabled={togglesDisabled}
+                                onChange={(event) => {
+                                  handleHomeCategoryPlatformToggle(
+                                    category.id,
+                                    'ios',
+                                    event.target.checked,
+                                  ).catch(() => undefined);
+                                }}
+                              />
+                              <em>{iosEnabled ? 'ظاهر' : 'مخفي'}</em>
+                            </label>
+                          </div>
+                        </article>
+                      );
+                    })}
+                  </div>
+                  )}
+
+                  {homeCategoriesConfig?.updatedAt ? (
+                    <p className="app-update-meta">
+                      آخر تحديث للإعدادات: {formatDate(homeCategoriesConfig.updatedAt)}
+                    </p>
+                  ) : null}
+                </section>
+              ) : null}
+
               {view === 'appUpdate' ? (
                 <section className="panel app-update-panel">
                   <div className="panel-header">
@@ -1166,7 +1370,9 @@ function App() {
                 </section>
               ) : null}
 
-              {view === 'dashboard' || view === 'appUpdate' ? null : (
+              {view === 'dashboard' ||
+              view === 'appUpdate' ||
+              view === 'homeCategories' ? null : (
               <section
                 className={
                   view === 'couriers' || view === 'approvals' || view === 'accounts'

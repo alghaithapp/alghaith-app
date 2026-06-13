@@ -4691,6 +4691,7 @@ class AppProvider extends ChangeNotifier {
 
   // ── إعداد أقسام الصفحة الرئيسية (يتحكّم فيه الأدمن عن بُعد) ──────────────
   Map<String, HomeCategoryPlatformOverride> _homeCategoryOverrides = {};
+  int _homeCategoriesSaveGeneration = 0;
 
   Map<String, HomeCategoryPlatformOverride> get homeCategoryOverrides =>
       Map<String, HomeCategoryPlatformOverride>.unmodifiable(
@@ -4724,8 +4725,10 @@ class AppProvider extends ChangeNotifier {
 
   Future<void> refreshHomeCategoriesConfig() async {
     if (!SupabaseService.isConfigured) return;
+    final loadGeneration = _homeCategoriesSaveGeneration;
     try {
       final overrides = await SupabaseService.loadHomeCategoriesConfig();
+      if (loadGeneration != _homeCategoriesSaveGeneration) return;
       _homeCategoryOverrides = overrides;
       notifyListeners();
     } catch (error) {
@@ -4742,6 +4745,7 @@ class AppProvider extends ChangeNotifier {
     final phone = _trimmedOrNull(_authPhone) ?? _trimmedOrNull(_customerPhone);
     if (phone == null) return false;
 
+    final saveGeneration = ++_homeCategoriesSaveGeneration;
     final previous =
         Map<String, HomeCategoryPlatformOverride>.from(_homeCategoryOverrides);
     final current = _homeCategoryOverrides[categoryId] ??
@@ -4757,11 +4761,13 @@ class AppProvider extends ChangeNotifier {
         phone: phone,
         overrides: next,
       );
+      if (saveGeneration != _homeCategoriesSaveGeneration) return true;
       _homeCategoryOverrides = saved;
       notifyListeners();
       return true;
     } catch (error) {
       debugPrint('HOME_CATEGORIES_SAVE_ERROR: $error');
+      if (saveGeneration != _homeCategoriesSaveGeneration) return false;
       _homeCategoryOverrides = previous;
       notifyListeners();
       return false;
