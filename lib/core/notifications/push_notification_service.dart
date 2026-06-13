@@ -35,6 +35,12 @@ class PushNotificationService {
       return;
     }
 
+    // مهلة قصيرة لمنع تعليق التطبيق (شاشة بيضاء) إذا تعذّر الحصول على التوكن
+    // أو إذن الإشعارات على iOS. بدل انتظار إلى ما لا نهاية.
+    await _initializeWithTimeout();
+  }
+
+  Future<void> _initializeWithTimeout() async {
     try {
       await Firebase.initializeApp(
         options: DefaultFirebaseOptions.currentPlatform,
@@ -54,13 +60,22 @@ class PushNotificationService {
         badge: true,
         sound: true,
         provisional: false,
+      ).timeout(
+        const Duration(seconds: 5),
+        onTimeout: () {
+          debugPrint('Push: requestPermission timed out on iOS — continuing without permission.');
+          return AuthorizationStatus.authorized;
+        },
       );
       debugPrint('Push: permission=${settings.authorizationStatus.name}');
 
       FirebaseMessaging.onMessage.listen(_handleForegroundMessage);
       FirebaseMessaging.onMessageOpenedApp.listen(_handleOpenedMessage);
 
-      final initialMessage = await messaging.getInitialMessage();
+      final initialMessage = await messaging.getInitialMessage().timeout(
+        const Duration(seconds: 3),
+        onTimeout: () => null,
+      );
       if (initialMessage != null) {
         await PushNotificationInbox.clearUnread();
       }
@@ -73,7 +88,13 @@ class PushNotificationService {
         }
       });
 
-      _currentToken = await messaging.getToken();
+      _currentToken = await messaging.getToken().timeout(
+        const Duration(seconds: 5),
+        onTimeout: () {
+          debugPrint('Push: getToken timed out on iOS — starting without token.');
+          return null;
+        },
+      );
       _initialized = true;
       debugPrint('Push: initialized token=${_currentToken != null}');
     } catch (error) {
