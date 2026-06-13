@@ -605,6 +605,9 @@ async function selectSingleByPhone(table, phone) {
 }
 
 async function resolvePhoneKey(phone) {
+  const raw = String(phone || '').trim();
+  if (!raw) return raw;
+
   const tables = ['app_users', 'customer_profiles', 'merchant_profiles', 'app_state'];
   for (const table of tables) {
     const existing = await selectSingleByPhone(table, phone);
@@ -612,7 +615,10 @@ async function resolvePhoneKey(phone) {
       return existing.phone;
     }
   }
-  return canonicalPhone(phone);
+  const canonical = canonicalPhone(phone);
+  // مفاتيح نظامية غير رقمية (مثل إعدادات المنصة) تُحفظ كما هي.
+  if (canonical) return canonical;
+  return raw;
 }
 
 async function selectSingle(table, column, value) {
