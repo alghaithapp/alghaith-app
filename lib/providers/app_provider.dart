@@ -94,7 +94,16 @@ class AppProvider extends ChangeNotifier {
   AppProvider() {
     PushNotificationInbox.onCourierStatusPush = handleCourierStatusPush;
     PushNotificationInbox.onTaxiStatusPush = handleTaxiStatusPush;
-    _bootWatchdog = Timer(const Duration(seconds: 20), _forceBootReady);
+
+    // فوراً نجهّز الواجهة — لا ننتظر SharedPreferences
+    _isHydrating = false;
+    _isReady = true;
+    _isGuestMode = true;
+    _userRole = 'customer';
+    notifyListeners();
+
+    // تحميل الجلسة والبيانات في الخلفية — لا يمنع ظهور الواجهة أبداً
+    _bootWatchdog = Timer(const Duration(seconds: 15), _forceBootReady);
     _loadSettings();
   }
 
