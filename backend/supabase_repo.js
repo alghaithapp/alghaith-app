@@ -282,8 +282,12 @@ async function updateMerchantApprovalRecord(phoneKey, patch = {}) {
     .in('phone', variants)
     .select();
 
-  if (error && !/column/i.test(error.message || '')) {
-    throw new Error(error.message);
+  if (error) {
+    if (/column/i.test(error.message || '')) {
+      console.warn(`DB_WARNING: Column missing in merchant_profiles. Ensure SQL migration is applied. Error: ${error.message}`);
+    } else {
+      throw new Error(error.message);
+    }
   }
 
   const statePatch = {
@@ -302,6 +306,12 @@ async function updateMerchantApprovalRecord(phoneKey, patch = {}) {
     if (statePatch[key] === undefined) delete statePatch[key];
   });
   await syncMerchantApprovalToState(phoneKey, statePatch);
+
+  if (error && /column/i.test(error.message || '')) {
+    // If column is missing, we still want to indicate "success" for state sync
+    // but the DB won't have the data. This helps identify the issue.
+    return { phone: phoneKey, ...patch, _columnMissing: true };
+  }
 
   return Array.isArray(data) && data.length > 0 ? data[0] : null;
 }
@@ -3210,19 +3220,19 @@ async function getAllCouriers(adminPhone) {
 
 async function getAllMerchants(adminPhone) {
   await assertAdminAccess(adminPhone);
-  
+
   const [merchants, orders, products] = await Promise.all([
     selectMany('merchant_profiles', [], { column: 'store_name', ascending: true }),
     selectMany('customer_orders', [], { column: 'updated_at', ascending: false }),
     selectMany('merchant_products', [], { column: 'created_at', ascending: false }),
   ]);
   const userPhones = merchants.map((m) => m.phone).filter(Boolean);
-  
+
   // Get app_users for these merchants
   const users = userPhones.length > 0
     ? await selectMany('app_users', [{ method: 'in', column: 'phone', value: userPhones }])
     : [];
-  
+
   const userByPhone = {};
   for (const u of users) {
     userByPhone[u.phone] = u;
@@ -3301,7 +3311,7 @@ async function getAllMerchants(adminPhone) {
       bucket.availableProducts += 1;
     }
   }
-  
+
   return merchants.map((m) => {
     const productBucket = productStatsByMerchant.get(m.phone) || {
       totalProducts: 0,
@@ -3466,16 +3476,16 @@ async function getAdminMerchantDetails(adminPhone, merchantPhone) {
 
 async function toggleBazaarMemberStatus(adminPhone, merchantPhone, isBazaarMember) {
   await assertAdminAccess(adminPhone);
-  
+
   const supabase = assertSupabaseAdmin();
   const variants = getPhoneVariants(merchantPhone);
-  
+
   const { data, error } = await supabase
     .from('merchant_profiles')
     .update({ is_bazaar_member: Boolean(isBazaarMember), updated_at: nowIso() })
     .in('phone', variants)
     .select();
-  
+
   if (error) throw new Error(error.message);
   if (!Array.isArray(data) || data.length === 0) {
     throw new Error('Merchant not found.');

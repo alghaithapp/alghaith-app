@@ -622,6 +622,46 @@ class NotificationHub {
     );
   }
 
+  void onAppBootWelcome(String? name) {
+    _notify(
+      title: name != null && name.isNotEmpty ? 'أهلاً بك يا $name' : 'أهلاً بك في الغيث',
+      body: 'نتمنى لك تجربة تسوق ممتعة اليوم.',
+      audience: 'customer',
+      category: NotificationCategory.promo,
+      priority: NotificationPriority.normal,
+      eventKey: 'app:boot:welcome:${DateTime.now().day}',
+    );
+  }
+
+  void onUnreadNotificationsPrompt(String role, int count) {
+    final roleLabel = _roleLabelAr(role);
+    _notify(
+      title: 'لديك إشعارات غير مقروءة',
+      body: 'يوجد $count إشعار${count > 1 ? 'ات' : ''} بانتظارك في وضع $roleLabel.',
+      audience: role,
+      category: NotificationCategory.system,
+      priority: NotificationPriority.urgent,
+      eventKey: 'prompt:unread:$role:${DateTime.now().hour}',
+    );
+  }
+
+  static String _roleLabelAr(String role) {
+    switch (role) {
+      case 'merchant':
+        return 'التاجر';
+      case 'customer':
+        return 'الزبون';
+      case 'delivery':
+        return 'مندوب التوصيل';
+      case 'driver':
+        return 'سائق التكسي';
+      case 'admin':
+        return 'الإدارة';
+      default:
+        return role;
+    }
+  }
+
   void onRoleSwitched(String role, String roleLabelAr) {
     final audience = notificationAudienceForRole(role) ?? 'customer';
     _notify(

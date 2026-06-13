@@ -857,6 +857,13 @@ button {
   gap: 10px;
 }
 
+.alert-stack.sticky-alerts {
+  position: sticky;
+  top: 10px;
+  z-index: 45;
+  margin-bottom: 20px;
+}
+
 /* ── Table ── */
 
 .table-wrap {

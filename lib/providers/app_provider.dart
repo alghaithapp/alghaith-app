@@ -2036,6 +2036,7 @@ class AppProvider extends ChangeNotifier {
       _isReady = true;
       notifyListeners();
       _notificationHub.onLoginSuccess();
+      _notificationHub.onAppBootWelcome(_customerName);
       unawaited(_completeLoginRemoteRestore(normalized));
       unawaited(PushNotificationService.instance.bindToUser(normalized));
     }
@@ -4261,8 +4262,12 @@ class AppProvider extends ChangeNotifier {
       final previousRole = _userRole;
       _userRole = role;
       if (previousRole != null && previousRole != role) {
-        _queueUnreadPromptForRole(role);
         _notificationHub.onRoleSwitched(role, _roleLabelAr(role));
+        final unreadCount = unreadNotificationsForRole(role).length;
+        if (unreadCount > 0) {
+          _notificationHub.onUnreadNotificationsPrompt(role, unreadCount);
+          _queueUnreadPromptForRole(role);
+        }
       }
       notifyListeners();
       await _persistLocalBackup();
@@ -4292,8 +4297,12 @@ class AppProvider extends ChangeNotifier {
     }
 
     if (previousRole != null && previousRole != role) {
-      _queueUnreadPromptForRole(role);
       _notificationHub.onRoleSwitched(role, _roleLabelAr(role));
+      final unreadCount = unreadNotificationsForRole(role).length;
+      if (unreadCount > 0) {
+        _notificationHub.onUnreadNotificationsPrompt(role, unreadCount);
+        _queueUnreadPromptForRole(role);
+      }
     }
 
     notifyListeners();

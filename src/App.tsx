@@ -1099,7 +1099,7 @@ function App() {
           </div>
 
           {bootError || actionError || successMessage ? (
-            <div className="alert-stack">
+            <div className="alert-stack sticky-alerts">
               {bootError ? <div className="message error">{bootError}</div> : null}
               {actionError ? <div className="message error">{actionError}</div> : null}
               {successMessage ? (
