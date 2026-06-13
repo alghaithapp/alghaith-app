@@ -61,23 +61,8 @@ Future<void> main() async {
         return true;
       };
 
-      try {
-        AppConfig.validate(throwOnError: false);
-        await AppConfig.ensureMapboxToken();
-        if (AppConfig.isMapboxConfigured) {
-          MapboxOptions.setAccessToken(AppConfig.effectiveMapboxPublicToken);
-          MapboxMapsOptions.setLanguage('ar');
-        } else {
-          debugPrint(
-            'Mapbox: MAPBOX_PUBLIC_TOKEN غير مضبوط — أضف pk. في Codemagic أو MAPBOX_PUBLIC_TOKEN على الخادم.',
-          );
-        }
-        await SupabaseService.initialize();
-        await PushNotificationService.instance.initialize();
-        await configureAppSystemUi();
-      } catch (e) {
-        debugPrint('Bootstrap error: $e');
-      }
+      // نبدأ التطبيق فوراً مع Splash، ونحمّل الإعدادات في الخلفية
+      // حتى لا تبقى شاشة بيضاء بسبب انتظار Mapbox/Supabase/Push.
 
       runApp(
         MultiProvider(
@@ -87,11 +72,34 @@ Future<void> main() async {
           child: const AlGhaithApp(),
         ),
       );
+
+      // bootstrap في الخلفية — لا يمنع ظهور الواجهة
+      _bootstrapAsync();
     },
     (error, stack) {
       debugPrint('ZONE_ERROR: $error');
     },
   );
+}
+
+Future<void> _bootstrapAsync() async {
+  try {
+    AppConfig.validate(throwOnError: false);
+    await AppConfig.ensureMapboxToken();
+    if (AppConfig.isMapboxConfigured) {
+      MapboxOptions.setAccessToken(AppConfig.effectiveMapboxPublicToken);
+      MapboxMapsOptions.setLanguage('ar');
+    } else {
+      debugPrint(
+        'Mapbox: MAPBOX_PUBLIC_TOKEN غير مضبوط — أضف pk. في Codemagic أو MAPBOX_PUBLIC_TOKEN على الخادم.',
+      );
+    }
+    await SupabaseService.initialize();
+    await PushNotificationService.instance.initialize();
+    await configureAppSystemUi();
+  } catch (e) {
+    debugPrint('Bootstrap error: $e');
+  }
 }
 
 /// واجهة بديلة تُعرض إذا فشل بناء أي شاشة — بدل شاشة رمادية فارغة.
