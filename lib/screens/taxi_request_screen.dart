@@ -1,7 +1,6 @@
-import 'dart:async';
+ import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
-import 'dart:ui' as ui;
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
@@ -11,10 +10,14 @@ import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
 import 'package:provider/provider.dart';
 
 import '../core/config/app_config.dart';
+import '../core/data/iraq_neighborhoods.dart';
+import '../core/theme/app_colors.dart';
 import '../models/app_models.dart';
 import '../providers/app_provider.dart';
 import '../utils/extensions.dart';
 
+/// شاشة طلب التكسي — تصميم احترافي بألوان تطبيق الغيث
+/// مع أحياء قضاء الصويرة كخيارات سريعة وزر تحديد الموقع الحالي.
 class TaxiRequestScreen extends StatefulWidget {
   final String? initialVehicleTypeId;
 
@@ -27,31 +30,38 @@ class TaxiRequestScreen extends StatefulWidget {
 }
 
 class _TaxiRequestScreenState extends State<TaxiRequestScreen> {
-  static const double _defaultDistanceKm = 0.0;
-  static final Position _defaultMapCenter = Position(44.3661, 33.3152);
+  // إحداثيات الصويرة كمركز افتراضي
+  static const double _defaultLat = 32.9250;
+  static const double _defaultLng = 44.7750;
+  static final Position _defaultMapCenter = Position(_defaultLng, _defaultLat);
+
   final TextEditingController _pickupController = TextEditingController();
   final TextEditingController _dropoffController = TextEditingController();
   final TextEditingController _noteController = TextEditingController();
+  final FocusNode _pickupFocus = FocusNode();
+  final FocusNode _dropoffFocus = FocusNode();
 
   Timer? _distanceDebounce;
-  double _estimatedDistanceKm = _defaultDistanceKm;
+  double _estimatedDistanceKm = 0.0;
   bool _isCalculatingDistance = false;
   Position _mapCenter = _defaultMapCenter;
   int _mapRefreshSeed = 0;
   Position? _pickupPosition;
   Position? _dropoffPosition;
   List<Position> _routePolyline = const [];
+  bool _isLocating = false;
 
   late String _selectedVehicleId;
-  final String _selectedPayment = 'cash';
+  bool _isPickupFocused = true; // أي حقل البحث نشط حالياً
 
   @override
   void initState() {
     super.initState();
     _selectedVehicleId = _mapInitialVehicle(widget.initialVehicleTypeId);
-    if (TaxiRequestScreen.isComingSoon) return;
     _pickupController.addListener(_scheduleDistanceUpdate);
     _dropoffController.addListener(_scheduleDistanceUpdate);
+    _pickupFocus.addListener(() => setState(() => _isPickupFocused = true));
+    _dropoffFocus.addListener(() => setState(() => _isPickupFocused = false));
     _scheduleDistanceUpdate();
   }
 
@@ -63,37 +73,32 @@ class _TaxiRequestScreenState extends State<TaxiRequestScreen> {
     _pickupController.dispose();
     _dropoffController.dispose();
     _noteController.dispose();
+    _pickupFocus.dispose();
+    _dropoffFocus.dispose();
     super.dispose();
   }
 
   void _scheduleDistanceUpdate() {
     _distanceDebounce?.cancel();
-    _distanceDebounce = Timer(
-      const Duration(milliseconds: 600),
-      _updateDistanceFromAddresses,
-    );
+    _distanceDebounce = Timer(const Duration(milliseconds: 600), _updateDistanceFromAddresses);
   }
 
   Future<void> _updateDistanceFromAddresses() async {
     final pickup = _pickupController.text.trim();
     final dropoff = _dropoffController.text.trim();
     if (pickup.isEmpty || dropoff.isEmpty) {
-      if (mounted) {
-        setState(() {
-          if (pickup.isEmpty) _pickupPosition = null;
-          if (dropoff.isEmpty) _dropoffPosition = null;
-          _routePolyline = const [];
-          _mapRefreshSeed++;
-        });
-      }
+      if (mounted) setState(() {
+        if (pickup.isEmpty) _pickupPosition = null;
+        if (dropoff.isEmpty) _dropoffPosition = null;
+        _routePolyline = const [];
+        _mapRefreshSeed++;
+      });
       return;
     }
-
     if (mounted) setState(() => _isCalculatingDistance = true);
-
     try {
-      final from = await _resolveCoordinates('$pickup، العراق');
-      final to = await _resolveCoordinates('$dropoff، العراق');
+      final from = await _resolveCoordinates('$pickup، واسط، العراق');
+      final to = await _resolveCoordinates('$dropoff، واسط، العراق');
       if (from != null && to != null && mounted) {
         final pickupPos = Position(from.longitude, from.latitude);
         final dropoffPos = Position(to.longitude, to.latitude);
@@ -110,16 +115,13 @@ class _TaxiRequestScreenState extends State<TaxiRequestScreen> {
           _mapRefreshSeed++;
         });
       }
-
       final roadDistanceKm = await _fetchRoadDistanceKmFromBackend(
-        pickupAddress: pickup,
-        dropoffAddress: dropoff,
+        pickupAddress: pickup, dropoffAddress: dropoff,
       );
-      final fallbackDistanceKm = from == null || to == null
+      final fallback = from == null || to == null
           ? null
           : _haversineDistanceKm(from.latitude, from.longitude, to.latitude, to.longitude);
-
-      final distanceKm = roadDistanceKm ?? fallbackDistanceKm;
+      final distanceKm = roadDistanceKm ?? fallback;
       if (distanceKm != null && mounted) {
         setState(() => _estimatedDistanceKm = distanceKm <= 0 ? 0.5 : distanceKm);
       }
@@ -129,138 +131,221 @@ class _TaxiRequestScreenState extends State<TaxiRequestScreen> {
   }
 
   Future<double?> _fetchRoadDistanceKmFromBackend({
-    required String pickupAddress,
-    required String dropoffAddress,
+    required String pickupAddress, required String dropoffAddress,
   }) async {
     final baseUrl = AppConfig.normalizedDatabaseUrl;
     if (baseUrl.isEmpty) return null;
     try {
       final uri = Uri.parse('$baseUrl/maps/route-distance');
-      final response = await http.post(
-        uri,
+      final response = await http.post(uri,
         headers: const {'Content-Type': 'application/json'},
         body: jsonEncode({'pickupAddress': pickupAddress, 'dropoffAddress': dropoffAddress}),
       ).timeout(AppConfig.apiTimeout);
-      if (response.statusCode < 200 || response.statusCode >= 300) return null;
-      final payload = jsonDecode(response.body);
-      return (payload['distanceKm'] as num?)?.toDouble();
-    } catch (_) { return null; }
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        final payload = jsonDecode(response.body);
+        return (payload['distanceKm'] as num?)?.toDouble();
+      }
+    } catch (_) {}
+    return null;
   }
 
   Future<_GeoPoint?> _resolveCoordinates(String query) async {
-    final uri = Uri.https('nominatim.openstreetmap.org', '/search', {'format': 'json', 'limit': '1', 'q': query});
-    final response = await http.get(uri, headers: const {'User-Agent': 'alghaith-app/1.0'});
-    if (response.statusCode < 200 || response.statusCode >= 300) return null;
-    final data = jsonDecode(response.body);
-    if (data is! List || data.isEmpty) return null;
-    final first = data.first;
-    return _GeoPoint(double.parse(first['lat']), double.parse(first['lon']));
+    try {
+      final uri = Uri.https('nominatim.openstreetmap.org', '/search', {
+        'format': 'json', 'limit': '1', 'q': query,
+      });
+      final response = await http.get(uri,
+        headers: {'User-Agent': 'alghaith-app/1.0 taxi'},
+      );
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        final data = jsonDecode(response.body);
+        if (data is List && data.isNotEmpty) {
+          final first = data.first as Map;
+          final lat = double.tryParse(first['lat']?.toString() ?? '');
+          final lon = double.tryParse(first['lon']?.toString() ?? '');
+          if (lat != null && lon != null) return _GeoPoint(lat, lon);
+        }
+      }
+    } catch (_) {}
+    return null;
   }
 
   double _haversineDistanceKm(double lat1, double lon1, double lat2, double lon2) {
     const earthRadiusKm = 6371.0;
-    final dLat = _degreesToRadians(lat2 - lat1);
-    final dLon = _degreesToRadians(lon2 - lon1);
+    final dLat = _deg2rad(lat2 - lat1);
+    final dLon = _deg2rad(lon2 - lon1);
     final a = math.sin(dLat / 2) * math.sin(dLat / 2) +
-        math.cos(_degreesToRadians(lat1)) * math.cos(_degreesToRadians(lat2)) * math.sin(dLon / 2) * math.sin(dLon / 2);
+        math.cos(_deg2rad(lat1)) * math.cos(_deg2rad(lat2)) * math.sin(dLon / 2) * math.sin(dLon / 2);
     return earthRadiusKm * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a));
   }
 
-  double _degreesToRadians(double value) => value * math.pi / 180;
+  double _deg2rad(double v) => v * math.pi / 180;
 
   Future<List<Position>> _fetchRoutePolyline({required Position from, required Position to}) async {
     final token = AppConfig.effectiveMapboxPublicToken;
     if (token.isEmpty) return [from, to];
     try {
-      final uri = Uri.parse('https://api.mapbox.com/directions/v5/mapbox/driving/${from.lng},${from.lat};${to.lng},${to.lat}?alternatives=false&overview=full&geometries=geojson&language=ar&access_token=$token');
+      final uri = Uri.parse(
+        'https://api.mapbox.com/directions/v5/mapbox/driving/'
+        '${from.lng},${from.lat};${to.lng},${to.lat}'
+        '?alternatives=false&overview=full&geometries=geojson&language=ar&access_token=$token',
+      );
       final response = await http.get(uri).timeout(AppConfig.apiTimeout);
       if (response.statusCode >= 200 && response.statusCode < 300) {
         final data = jsonDecode(response.body);
-        final coordinates = data['routes'][0]['geometry']['coordinates'] as List;
-        return coordinates.map((c) => Position(c[0].toDouble(), c[1].toDouble())).toList();
+        final routes = data['routes'] as List?;
+        if (routes != null && routes.isNotEmpty) {
+          final geometry = (routes.first as Map)['geometry'] as Map?;
+          final coords = geometry?['coordinates'] as List?;
+          if (coords != null) {
+            return coords.map((c) => Position(
+              (c[0] as num).toDouble(), (c[1] as num).toDouble(),
+            )).toList();
+          }
+        }
       }
     } catch (_) {}
     return [from, to];
   }
 
-  Future<List<String>> _fetchAddressSuggestions(String query) async {
-    final token = AppConfig.effectiveMapboxPublicToken;
-    if (token.isEmpty || query.length < 2) return const [];
-    try {
-      final uri = Uri.parse('https://api.mapbox.com/geocoding/v5/mapbox.places/${Uri.encodeComponent(query)}.json?language=ar&country=iq&limit=5&access_token=$token');
-      final response = await http.get(uri);
-      final data = jsonDecode(response.body);
-      return (data['features'] as List).map((f) => f['place_name'].toString()).toList();
-    } catch (_) { return const []; }
-  }
-
+  /// تحديد الموقع الحالي وتعيينه كنقطة انطلاق
   Future<void> _useCurrentLocation() async {
-    final permission = await geo.Geolocator.requestPermission();
-    if (permission == geo.LocationPermission.whileInUse || permission == geo.LocationPermission.always) {
-      final pos = await geo.Geolocator.getCurrentPosition();
-      setState(() {
-        _pickupController.text = 'موقعي الحالي';
-        _pickupPosition = Position(pos.longitude, pos.latitude);
-        _mapCenter = _pickupPosition!;
-        _mapRefreshSeed++;
-      });
-      _scheduleDistanceUpdate();
+    final serviceEnabled = await geo.Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) {
+      if (mounted) _showSnackBar('يرجى تفعيل خدمة الموقع في الهاتف.');
+      return;
+    }
+    var permission = await geo.Geolocator.checkPermission();
+    if (permission == geo.LocationPermission.denied) {
+      permission = await geo.Geolocator.requestPermission();
+    }
+    if (permission == geo.LocationPermission.denied ||
+        permission == geo.LocationPermission.deniedForever) {
+      if (mounted) _showSnackBar('تم رفض إذن الموقع، لا يمكن تحديد موقعك.');
+      return;
+    }
+    if (mounted) setState(() => _isLocating = true);
+    try {
+      final pos = await geo.Geolocator.getCurrentPosition(
+        locationSettings: const geo.LocationSettings(accuracy: geo.LocationAccuracy.high),
+      );
+      final address = await _resolveAddressFromCoordinates(pos.latitude, pos.longitude);
+      final label = (address != null && address.isNotEmpty)
+          ? address
+          : '${pos.latitude.toStringAsFixed(5)}, ${pos.longitude.toStringAsFixed(5)}';
+      if (mounted) {
+        setState(() {
+          _pickupController.text = label;
+          _pickupPosition = Position(pos.longitude, pos.latitude);
+          _mapCenter = Position(pos.longitude, pos.latitude);
+          _mapRefreshSeed++;
+        });
+        _scheduleDistanceUpdate();
+      }
+    } catch (_) {
+      if (mounted) _showSnackBar('تعذر قراءة موقعك الحالي حالياً.');
+    } finally {
+      if (mounted) setState(() => _isLocating = false);
     }
   }
 
-  void _selectTrip(TaxiRequest trip) {
-    setState(() {
-      _pickupController.text = trip.pickupAddressAr;
-      _dropoffController.text = trip.dropoffAddressAr;
-    });
+  Future<String?> _resolveAddressFromCoordinates(double lat, double lng) async {
+    final token = AppConfig.effectiveMapboxPublicToken;
+    if (!token.startsWith('pk.')) return null;
+    try {
+      final uri = Uri.parse(
+        'https://api.mapbox.com/geocoding/v5/mapbox.places/$lng,$lat.json'
+        '?language=ar&country=iq&limit=1&access_token=$token',
+      );
+      final response = await http.get(uri).timeout(AppConfig.apiTimeout);
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        final data = jsonDecode(response.body);
+        final features = data['features'] as List?;
+        if (features != null && features.isNotEmpty) {
+          return (features.first as Map)['place_name']?.toString().trim();
+        }
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  void _selectNeighborhood(String name) {
+    if (_isPickupFocused) {
+      _pickupController.text = 'حي $name، الصويرة';
+    } else {
+      _dropoffController.text = 'حي $name، الصويرة';
+    }
     _scheduleDistanceUpdate();
   }
 
   void _showPreviousTripsModal(List<TaxiRequest> trips) {
-    final completedTrips = trips.where((t) => t.statusKey == 'completed').toList();
-    if (completedTrips.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('لا توجد رحلات مكتملة سابقة.')));
+    final completed = trips.where((t) => t.statusKey == 'completed').toList();
+    if (completed.isEmpty) {
+      _showSnackBar('لا توجد رحلات مكتملة سابقة.');
       return;
     }
     showCupertinoModalPopup(
       context: context,
-      builder: (context) => CupertinoActionSheet(
+      builder: (ctx) => CupertinoActionSheet(
         title: const Text('الرحلات السابقة', style: TextStyle(fontFamily: 'Cairo')),
-        actions: completedTrips.take(5).map((trip) => CupertinoActionSheetAction(
-          onPressed: () { Navigator.pop(context); _selectTrip(trip); },
-          child: Text('${trip.pickupAddressAr} ← ${trip.dropoffAddressAr}', style: const TextStyle(fontFamily: 'Cairo', fontSize: 14)),
+        actions: completed.take(5).map((trip) => CupertinoActionSheetAction(
+          onPressed: () {
+            Navigator.pop(ctx);
+            setState(() {
+              _pickupController.text = trip.pickupAddressAr;
+              _dropoffController.text = trip.dropoffAddressAr;
+            });
+            _scheduleDistanceUpdate();
+          },
+          child: Text('${trip.pickupAddressAr} ← ${trip.dropoffAddressAr}',
+            style: const TextStyle(fontFamily: 'Cairo', fontSize: 14)),
         )).toList(),
-        cancelButton: CupertinoActionSheetAction(onPressed: () => Navigator.pop(context), child: const Text('إلغاء')),
+        cancelButton: CupertinoActionSheetAction(
+          onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
       ),
     );
   }
 
-  static String _mapInitialVehicle(String? id) => (id == 'car_super' || id == 'super_taxi') ? 'super_taxi' : 'economy_taxi';
+  void _showSnackBar(String msg) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+  }
+
+  static String _mapInitialVehicle(String? id) =>
+      (id == 'car_super' || id == 'super_taxi') ? 'super_taxi' : 'economy_taxi';
 
   List<_VehicleOption> _vehicleOptions() => [
-    const _VehicleOption(id: 'economy_taxi', name: 'تكسي اقتصادي', eta: '4 د', capacity: '4 مقاعد', emoji: '🚕', multiplier: 1.0),
-    const _VehicleOption(id: 'super_taxi', name: 'تكسي سوبر', eta: '3 د', capacity: '4 مقاعد', emoji: '🚘', multiplier: 1.30),
+    const _VehicleOption(id: 'economy_taxi', name: 'تكسي اقتصادي', eta: '4 د', capacity: '4 مقاعد', image: '🚕', multiplier: 1.0),
+    const _VehicleOption(id: 'super_taxi', name: 'تكسي سوبر', eta: '3 د', capacity: '4 مقاعد', image: '🚘', multiplier: 1.30),
+    const _VehicleOption(id: 'truck', name: 'سيارة حمل', eta: '8 د', capacity: 'حمل', image: '🚚', multiplier: 1.85),
+    const _VehicleOption(id: 'bus', name: 'باص ركاب', eta: '10 د', capacity: 'باص', image: '🚌', multiplier: 2.1),
+    const _VehicleOption(id: 'starx11', name: 'ستاركس 11', eta: '6 د', capacity: '11 راكب', image: '🚐', multiplier: 1.75),
   ];
 
-  int _roundTo250(int value) => (value / 250).ceil() * 250;
+  int _roundTo250(int value) => value <= 0 ? 250 : (value / 250).ceil() * 250;
 
   @override
   Widget build(BuildContext context) {
     final provider = Provider.of<AppProvider>(context);
     final baseFare = AppConfig.calculateTaxiFare(_estimatedDistanceKm);
     final vehicles = _vehicleOptions();
-    final selectedVehicle = vehicles.firstWhere((v) => v.id == _selectedVehicleId, orElse: () => vehicles.first);
+    final selectedVehicle = vehicles.firstWhere(
+      (v) => v.id == _selectedVehicleId, orElse: () => vehicles.first,
+    );
     final estimatedFare = _roundTo250((baseFare * selectedVehicle.multiplier).round());
     final hasLocations = _pickupController.text.isNotEmpty && _dropoffController.text.isNotEmpty;
     final latestRequest = provider.taxiRequests.isNotEmpty ? provider.taxiRequests.first : null;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bgColor = isDark ? const Color(0xFF0D1B2A) : AppColors.scaffold;
 
     return Directionality(
       textDirection: TextDirection.rtl,
-      child: CupertinoPageScaffold(
-        backgroundColor: const Color(0xFFF2F2F7),
-        child: SafeArea(
+      child: Scaffold(
+        backgroundColor: bgColor,
+        body: SafeArea(
+          bottom: false,
           child: Stack(
             children: [
+              // خريطة Mapbox
               Positioned.fill(
                 child: _TaxiMapBackdrop(
                   pickupAddress: _pickupController.text,
@@ -273,80 +358,180 @@ class _TaxiRequestScreenState extends State<TaxiRequestScreen> {
                   routePolyline: _routePolyline,
                 ),
               ),
+
+              // زر الرجوع في الأعلى
               Positioned(
-                top: 12, left: 14,
-                child: _MapTopCircleButton(icon: CupertinoIcons.back, onTap: () => Navigator.pop(context)),
-              ),
-              DraggableScrollableSheet(
-                initialChildSize: hasLocations ? 0.50 : 0.28,
-                minChildSize: 0.20, maxChildSize: 0.82,
-                snap: true, snapSizes: const [0.28, 0.50, 0.82],
-                builder: (context, scrollController) => Container(
-                  decoration: const BoxDecoration(
+                top: 12, right: 14,
+                child: Container(
+                  width: 44, height: 44,
+                  decoration: BoxDecoration(
                     color: Colors.white,
-                    borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
-                    boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 10)],
+                    shape: BoxShape.circle,
+                    boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.15), blurRadius: 8, offset: const Offset(0, 2))],
+                  ),
+                  child: CupertinoButton(
+                    padding: EdgeInsets.zero,
+                    onPressed: () => Navigator.pop(context),
+                    child: const Icon(CupertinoIcons.chevron_right, color: AppColors.primary, size: 22),
+                  ),
+                ),
+              ),
+
+              // زر الموقع الحالي + SOS
+              Positioned(
+                left: 14, top: 60,
+                child: Column(
+                  children: [
+                    _QuickActionButton(
+                      icon: _isLocating ? CupertinoIcons.refresh : CupertinoIcons.location_fill,
+                      label: 'موقعي',
+                      color: AppColors.primary,
+                      isLoading: _isLocating,
+                      onTap: _useCurrentLocation,
+                    ),
+                    const SizedBox(height: 10),
+                    _QuickActionButton(
+                      icon: CupertinoIcons.exclamationmark_triangle_fill,
+                      label: 'SOS',
+                      color: AppColors.error,
+                      onTap: () => _showSnackBar('سيتم الاتصال بالطوارئ قريباً'),
+                    ),
+                  ],
+                ),
+              ),
+
+              // الورقة السفلية القابلة للسحب
+              DraggableScrollableSheet(
+                initialChildSize: hasLocations ? 0.55 : 0.35,
+                minChildSize: 0.20,
+                maxChildSize: 0.85,
+                snap: true,
+                snapSizes: const [0.35, 0.55, 0.85],
+                builder: (context, scrollController) => Container(
+                  decoration: BoxDecoration(
+                    color: isDark ? const Color(0xFF1B2838) : Colors.white,
+                    borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppColors.primary.withValues(alpha: 0.08),
+                        blurRadius: 20, offset: const Offset(0, -4),
+                      ),
+                    ],
                   ),
                   child: ListView(
                     controller: scrollController,
-                    padding: const EdgeInsets.all(16),
+                    padding: const EdgeInsets.fromLTRB(18, 12, 18, 24),
                     children: [
-                      Center(child: Container(width: 40, height: 5, decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(10)))),
-                      const SizedBox(height: 12),
-                      Row(
-                        children: [
-                          Expanded(child: _PremiumSearchFields(
-                            pickupController: _pickupController,
-                            dropoffController: _dropoffController,
-                            onQuerySuggestions: _fetchAddressSuggestions,
-                            onPickupSuggestionSelected: (v) => _updateDistanceFromAddresses(),
-                            onDropoffSuggestionSelected: (v) => _updateDistanceFromAddresses(),
-                          )),
-                          const SizedBox(width: 8),
-                          CupertinoButton(
-                            padding: EdgeInsets.zero,
-                            onPressed: () => _showPreviousTripsModal(provider.taxiRequests),
-                            child: Container(
-                              padding: const EdgeInsets.all(12),
-                              decoration: BoxDecoration(color: const Color(0xFFF5F7FC), borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.grey[200]!)),
-                              child: const Icon(CupertinoIcons.time_solid, color: Color(0xFF007A7A), size: 22),
-                            ),
+                      // مقبض السحب
+                      Center(
+                        child: Container(
+                          width: 44, height: 5,
+                          decoration: BoxDecoration(
+                            color: isDark ? Colors.grey[600] : Colors.grey[300],
+                            borderRadius: BorderRadius.circular(10),
                           ),
-                        ],
+                        ),
                       ),
-                      if (hasLocations) ...[
-                        const SizedBox(height: 20),
-                        const Text('اختر نوع المركبة', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 16)),
-                        const SizedBox(height: 12),
-                        Row(
-                          children: vehicles.map((v) => Expanded(child: Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 4),
-                            child: _VehicleCard(
-                              option: v, fare: _roundTo250((baseFare * v.multiplier).round()),
-                              selected: v.id == _selectedVehicleId,
-                              onTap: () => setState(() => _selectedVehicleId = v.id),
-                            ),
-                          ))).toList(),
-                        ),
-                        const SizedBox(height: 20),
-                        _TripInfoPanel(isCalculatingDistance: _isCalculatingDistance, distanceKm: _estimatedDistanceKm, etaLabel: '${(_estimatedDistanceKm * 3).round()}', fareIqd: estimatedFare),
+                      const SizedBox(height: 16),
+
+                      // حقلي البحث — الانطلاق والوجهة
+                      _BuildAddressFields(
+                        pickupController: _pickupController,
+                        dropoffController: _dropoffController,
+                        pickupFocus: _pickupFocus,
+                        dropoffFocus: _dropoffFocus,
+                        onPickupSuggestion: _selectNeighborhood,
+                        onDropoffSuggestion: _selectNeighborhood,
+                        onPreviousTrips: () => _showPreviousTripsModal(provider.taxiRequests),
+                      ),
+
+                      // أحياء الصويرة السريعة
+                      if (!hasLocations) ...[
                         const SizedBox(height: 16),
-                        CupertinoTextField(
-                          controller: _noteController,
-                          placeholder: 'ملاحظة للسائق (اختياري)',
-                          placeholderStyle: const TextStyle(fontFamily: 'Cairo', fontSize: 13),
-                          padding: const EdgeInsets.all(14),
-                          decoration: BoxDecoration(color: const Color(0xFFF7F9FF), borderRadius: BorderRadius.circular(16)),
+                        _BuildSuwayraNeighborhoods(
+                          onSelect: _selectNeighborhood,
                         ),
-                        const SizedBox(height: 24),
-                        _PremiumRequestButton(onPressed: () => _submitTaxiRequest(context: context, appProvider: provider, selectedVehicle: selectedVehicle, estimatedFare: estimatedFare)),
                       ],
-                      if (latestRequest != null) ...[
-                        const SizedBox(height: 20),
-                        _LiveStatusBanner(request: latestRequest),
+
+                      // إذا تم إدخال الموقع — عرض المركبات والسعر
+                      if (hasLocations) ...[
+                        const SizedBox(height: 18),
+                        Row(
+                          children: [
+                            const Icon(CupertinoIcons.car_fill, color: AppColors.primary, size: 18),
+                            const SizedBox(width: 6),
+                            Text(
+                              'اختر نوع المركبة',
+                              style: TextStyle(
+                                fontFamily: 'Cairo',
+                                fontWeight: FontWeight.w900,
+                                fontSize: 15,
+                                color: isDark ? Colors.white : AppColors.textPrimary,
+                              ),
+                            ),
+                          ],
+                        ),
                         const SizedBox(height: 12),
+                        SizedBox(
+                          height: 120,
+                          child: ListView.separated(
+                            scrollDirection: Axis.horizontal,
+                            itemCount: vehicles.length,
+                            separatorBuilder: (_, __) => const SizedBox(width: 10),
+                            itemBuilder: (context, index) {
+                              final v = vehicles[index];
+                              final fare = _roundTo250((baseFare * v.multiplier).round());
+                              return _VehicleCard(
+                                option: v, fare: fare,
+                                selected: v.id == _selectedVehicleId,
+                                onTap: () => setState(() => _selectedVehicleId = v.id),
+                              );
+                            },
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+
+                        // ملخص الرحلة
+                        _BuildTripSummary(
+                          isCalculatingDistance: _isCalculatingDistance,
+                          distanceKm: _estimatedDistanceKm,
+                          fareIqd: estimatedFare,
+                          pickup: _pickupController.text,
+                          dropoff: _dropoffController.text,
+                        ),
+                        const SizedBox(height: 16),
+
+                        // ملاحظة للسائق
+                        _BuildNoteField(controller: _noteController, isDark: isDark),
+                        const SizedBox(height: 20),
+
+                        // زر طلب التكسي
+                        _PremiumRequestButton(
+                          onPressed: hasLocations
+                              ? () => _submitTaxiRequest(
+                                  context: context,
+                                  appProvider: provider,
+                                  selectedVehicle: selectedVehicle,
+                                  estimatedFare: estimatedFare,
+                                )
+                              : null,
+                          rideType: selectedVehicle.name,
+                          fare: estimatedFare,
+                        ),
+                      ],
+
+                      // عرض حالة الطلب إذا كان موجوداً
+                      if (latestRequest != null) ...[
+                        const SizedBox(height: 16),
+                        _LiveStatusBanner(request: latestRequest),
+                        const SizedBox(height: 10),
                         _TaxiStatusCard(request: latestRequest),
-                      ]
+                        const SizedBox(height: 10),
+                        _CustomerTaxiActionsCard(
+                          request: latestRequest,
+                          onCancelPressed: () => _handleCustomerCancel(context, provider, latestRequest),
+                        ),
+                      ],
                     ],
                   ),
                 ),
@@ -358,28 +543,510 @@ class _TaxiRequestScreenState extends State<TaxiRequestScreen> {
     );
   }
 
-  Future<void> _submitTaxiRequest({required BuildContext context, required AppProvider appProvider, required _VehicleOption selectedVehicle, required int estimatedFare}) async {
+  Future<void> _handleCustomerCancel(BuildContext context, AppProvider provider, TaxiRequest request) async {
+    final isPending = request.statusKey == 'pending' || request.statusKey == 'new';
+    final isAccepted = request.statusKey == 'accepted';
+    if (!isPending && !isAccepted) return;
+    final confirmed = await showCupertinoDialog<bool>(
+      context: context,
+      builder: (ctx) => CupertinoAlertDialog(
+        title: Text(isPending ? 'إلغاء الطلب' : 'طلب إلغاء الرحلة'),
+        content: Text(isPending
+            ? 'سيتم إلغاء الطلب مباشرة.'
+            : 'سيتم إرسال طلب إلغاء إلى السائق.'),
+        actions: [
+          CupertinoDialogAction(onPressed: () => Navigator.pop(ctx, false), child: const Text('تراجع')),
+          CupertinoDialogAction(isDestructiveAction: true, onPressed: () => Navigator.pop(ctx, true), child: const Text('تأكيد')),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    final result = await provider.cancelTaxiRequestByCustomer(request.id);
+    if (!context.mounted) return;
+    _showSnackBar(result == 'cancelled'
+        ? 'تم إلغاء الرحلة بنجاح.'
+        : result == 'requested'
+            ? 'تم إرسال طلب الإلغاء إلى السائق.'
+            : 'لا يمكن إلغاء الرحلة في حالتها الحالية.');
+  }
+
+  Future<void> _submitTaxiRequest({
+    required BuildContext context,
+    required AppProvider appProvider,
+    required _VehicleOption selectedVehicle,
+    required int estimatedFare,
+  }) async {
+    final pickup = _pickupController.text.trim();
+    final dropoff = _dropoffController.text.trim();
+    if (pickup.isEmpty || dropoff.isEmpty) {
+      _showSnackBar('يرجى إدخال نقطة الانطلاق والوجهة.');
+      return;
+    }
     final request = TaxiRequest(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
-      requestNumber: 'TX-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}',
+      requestNumber: 'TX-${DateTime.now().millisecondsSinceEpoch.toString().substring(6)}',
       requestedAtAr: 'اليوم، ${TimeOfDay.now().format(context)}',
       requestedAtEn: 'Today',
-      customerNameAr: appProvider.customerName, customerNameEn: appProvider.customerName,
+      customerNameAr: appProvider.customerName,
+      customerNameEn: appProvider.customerName,
       customerPhone: appProvider.customerPhone,
-      pickupAddressAr: _pickupController.text, pickupAddressEn: _pickupController.text,
-      dropoffAddressAr: _dropoffController.text, dropoffAddressEn: _dropoffController.text,
-      rideTypeId: selectedVehicle.id, rideTypeAr: selectedVehicle.name, rideTypeEn: selectedVehicle.name,
-      fare: estimatedFare, statusKey: 'pending', statusAr: 'بانتظار السائق', statusEn: 'Pending',
-      noteAr: _noteController.text, noteEn: _noteController.text,
-      paymentMethodAr: 'نقداً', paymentMethodEn: 'Cash',
+      pickupAddressAr: pickup,
+      pickupAddressEn: pickup,
+      dropoffAddressAr: dropoff,
+      dropoffAddressEn: dropoff,
+      rideTypeId: selectedVehicle.id,
+      rideTypeAr: selectedVehicle.name,
+      rideTypeEn: selectedVehicle.name,
+      fare: estimatedFare,
+      statusKey: 'pending',
+      statusAr: 'بانتظار السائق',
+      statusEn: 'Pending',
+      noteAr: _noteController.text.trim(),
+      noteEn: _noteController.text.trim(),
+      paymentMethodAr: 'نقداً',
+      paymentMethodEn: 'Cash',
     );
-    if (await appProvider.addTaxiRequest(request) && mounted) {
-      showCupertinoDialog(context: context, builder: (c) => CupertinoAlertDialog(title: const Text('تم الإرسال'), content: const Text('جارٍ البحث عن سائق...'), actions: [CupertinoDialogAction(child: const Text('حسنًا'), onPressed: () => Navigator.pop(c))]));
+    final saved = await appProvider.addTaxiRequest(request);
+    if (!context.mounted) return;
+    if (!saved) {
+      _showSnackBar('تعذّر إرسال الطلب. تحقق من الاتصال وحاول مجدداً.');
+      return;
     }
+    showCupertinoDialog(
+      context: context,
+      builder: (ctx) => CupertinoAlertDialog(
+        title: const Text('تم إرسال الطلب'),
+        content: const Text('✅ تم استلام طلبك وجارٍ البحث عن أقرب سائق.'),
+        actions: [
+          CupertinoDialogAction(
+            child: const Text('حسنًا', style: TextStyle(color: AppColors.primary)),
+            onPressed: () => Navigator.pop(ctx),
+          ),
+        ],
+      ),
+    );
   }
 }
 
-class _GeoPoint { final double latitude, longitude; const _GeoPoint(this.latitude, this.longitude); }
+// ================== المكونات البصرية ==================
+
+/// أحياء الصويرة السريعة
+class _BuildSuwayraNeighborhoods extends StatelessWidget {
+  final ValueChanged<String> onSelect;
+  const _BuildSuwayraNeighborhoods({required this.onSelect});
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Icon(Icons.location_city, color: AppColors.primary, size: 18),
+            const SizedBox(width: 6),
+            Text(
+              'أحياء قضاء الصويرة',
+              style: TextStyle(
+                fontFamily: 'Cairo',
+                fontWeight: FontWeight.w900,
+                fontSize: 13,
+                color: isDark ? Colors.white70 : AppColors.textSecondary,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        SizedBox(
+          height: 38,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            itemCount: IraqNeighborhoods.suwayraNeighborhoods.length,
+            separatorBuilder: (_, __) => const SizedBox(width: 8),
+            itemBuilder: (context, index) {
+              final name = IraqNeighborhoods.suwayraNeighborhoods[index];
+              return GestureDetector(
+                onTap: () => onSelect(name),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        AppColors.primary.withValues(alpha: 0.9),
+                        AppColors.primaryDark.withValues(alpha: 0.8),
+                      ],
+                    ),
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppColors.primary.withValues(alpha: 0.25),
+                        blurRadius: 6, offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: Text(
+                    name,
+                    style: const TextStyle(
+                      fontFamily: 'Cairo',
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+        const SizedBox(height: 10),
+        SizedBox(
+          height: 38,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            itemCount: IraqNeighborhoods.suwayraLandmarks.length,
+            separatorBuilder: (_, __) => const SizedBox(width: 8),
+            itemBuilder: (context, index) {
+              final name = IraqNeighborhoods.suwayraLandmarks[index];
+              return GestureDetector(
+                onTap: () => onSelect(name),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: AppColors.accent.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: AppColors.accent.withValues(alpha: 0.3)),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.place, color: AppColors.accent, size: 14),
+                      const SizedBox(width: 4),
+                      Text(
+                        name,
+                        style: const TextStyle(
+                          fontFamily: 'Cairo',
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.accentDark,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// حقلي الانطلاق والوجهة
+class _BuildAddressFields extends StatelessWidget {
+  final TextEditingController pickupController, dropoffController;
+  final FocusNode pickupFocus, dropoffFocus;
+  final ValueChanged<String> onPickupSuggestion, onDropoffSuggestion;
+  final VoidCallback onPreviousTrips;
+
+  const _BuildAddressFields({
+    required this.pickupController, required this.dropoffController,
+    required this.pickupFocus, required this.dropoffFocus,
+    required this.onPickupSuggestion, required this.onDropoffSuggestion,
+    required this.onPreviousTrips,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final fieldBg = isDark ? const Color(0xFF2A3A4E) : const Color(0xFFF0F4F8);
+
+    return Column(
+      children: [
+        // حقل الانطلاق
+        Row(
+          children: [
+            Expanded(
+              child: Container(
+                decoration: BoxDecoration(
+                  color: pickupFocus.hasFocus
+                      ? (isDark ? const Color(0xFF1B2838) : Colors.white)
+                      : fieldBg,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: pickupFocus.hasFocus
+                        ? AppColors.primary
+                        : Colors.transparent,
+                    width: 2,
+                  ),
+                  boxShadow: pickupFocus.hasFocus
+                      ? [BoxShadow(color: AppColors.primary.withValues(alpha: 0.1), blurRadius: 8)]
+                      : null,
+                ),
+                child: CupertinoTextField(
+                  controller: pickupController,
+                  focusNode: pickupFocus,
+                  placeholder: 'من أين ستنطلق؟',
+                  placeholderStyle: TextStyle(
+                    fontFamily: 'Cairo', fontSize: 13,
+                    color: isDark ? Colors.grey[400] : Colors.grey[500],
+                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+                  style: TextStyle(
+                    fontFamily: 'Cairo', fontSize: 14,
+                    color: isDark ? Colors.white : AppColors.textPrimary,
+                  ),
+                  prefix: Padding(
+                    padding: const EdgeInsets.only(left: 8),
+                    child: Container(
+                      width: 12, height: 12,
+                      decoration: const BoxDecoration(
+                        color: Color(0xFF2E7D32),
+                        shape: BoxShape.circle,
+                        boxShadow: [BoxShadow(color: Color(0xFF2E7D32), blurRadius: 4)],
+                      ),
+                    ),
+                  ),
+                  suffix: CupertinoButton(
+                    padding: const EdgeInsets.only(right: 4),
+                    onPressed: () => pickupController.clear(),
+                    child: Icon(CupertinoIcons.xmark_circle_fill, size: 16,
+                      color: isDark ? Colors.grey[500] : Colors.grey[400]),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+
+        // خط ربط بين الحقلين
+        Row(
+          children: [
+            Expanded(
+              child: Container(
+                height: 1,
+                color: isDark ? Colors.grey[700] : Colors.grey[200],
+              ),
+            ),
+            Container(
+              width: 24, height: 24,
+              decoration: BoxDecoration(
+                color: AppColors.accent.withValues(alpha: 0.1),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(CupertinoIcons.arrow_down, size: 12, color: AppColors.accent),
+            ),
+            Expanded(
+              child: Container(
+                height: 1,
+                color: isDark ? Colors.grey[700] : Colors.grey[200],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+
+        // حقل الوجهة
+        Row(
+          children: [
+            Expanded(
+              child: Container(
+                decoration: BoxDecoration(
+                  color: dropoffFocus.hasFocus
+                      ? (isDark ? const Color(0xFF1B2838) : Colors.white)
+                      : fieldBg,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: dropoffFocus.hasFocus
+                        ? AppColors.accent
+                        : Colors.transparent,
+                    width: 2,
+                  ),
+                  boxShadow: dropoffFocus.hasFocus
+                      ? [BoxShadow(color: AppColors.accent.withValues(alpha: 0.1), blurRadius: 8)]
+                      : null,
+                ),
+                child: CupertinoTextField(
+                  controller: dropoffController,
+                  focusNode: dropoffFocus,
+                  placeholder: 'إلى أين وجهتك؟',
+                  placeholderStyle: TextStyle(
+                    fontFamily: 'Cairo', fontSize: 13,
+                    color: isDark ? Colors.grey[400] : Colors.grey[500],
+                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+                  style: TextStyle(
+                    fontFamily: 'Cairo', fontSize: 14,
+                    color: isDark ? Colors.white : AppColors.textPrimary,
+                  ),
+                  prefix: Padding(
+                    padding: const EdgeInsets.only(left: 8),
+                    child: Icon(Icons.flag, size: 14, color: AppColors.accent),
+                  ),
+                  suffix: CupertinoButton(
+                    padding: const EdgeInsets.only(right: 4),
+                    onPressed: () => dropoffController.clear(),
+                    child: Icon(CupertinoIcons.xmark_circle_fill, size: 16,
+                      color: isDark ? Colors.grey[500] : Colors.grey[400]),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            // زر الرحلات السابقة
+            GestureDetector(
+              onTap: onPreviousTrips,
+              child: Container(
+                width: 44, height: 44,
+                decoration: BoxDecoration(
+                  color: fieldBg,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: const Icon(CupertinoIcons.clock, color: AppColors.primary, size: 20),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+/// ملخص الرحلة — المسافة + الأجرة
+class _BuildTripSummary extends StatelessWidget {
+  final bool isCalculatingDistance;
+  final double distanceKm;
+  final int fareIqd;
+  final String pickup, dropoff;
+
+  const _BuildTripSummary({
+    required this.isCalculatingDistance,
+    required this.distanceKm,
+    required this.fareIqd,
+    required this.pickup,
+    required this.dropoff,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bgColor = isDark ? const Color(0xFF2A3A4E) : const Color(0xFFF0F7FF);
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: AppColors.primary.withValues(alpha: 0.1),
+        ),
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(CupertinoIcons.map_fill, size: 14, color: AppColors.primary),
+                        const SizedBox(width: 6),
+                        const Text('المسافة', style: TextStyle(fontFamily: 'Cairo', fontSize: 11, color: Colors.grey)),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      isCalculatingDistance ? 'جاري الحساب...' : '${distanceKm.toStringAsFixed(1)} كم',
+                      style: TextStyle(
+                        fontFamily: 'Cairo',
+                        fontWeight: FontWeight.w900,
+                        fontSize: 16,
+                        color: isDark ? Colors.white : AppColors.textPrimary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Container(height: 40, width: 1, color: Colors.grey.withValues(alpha: 0.3)),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(CupertinoIcons.money_dollar_circle_fill, size: 14, color: AppColors.accent),
+                        const SizedBox(width: 6),
+                        const Text('الأجرة', style: TextStyle(fontFamily: 'Cairo', fontSize: 11, color: Colors.grey)),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '${fareIqd.toPrice()} د.ع',
+                      style: const TextStyle(
+                        fontFamily: 'Cairo',
+                        fontWeight: FontWeight.w900,
+                        fontSize: 16,
+                        color: AppColors.accent,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// حقل الملاحظة
+class _BuildNoteField extends StatelessWidget {
+  final TextEditingController controller;
+  final bool isDark;
+  const _BuildNoteField({required this.controller, required this.isDark});
+
+  @override
+  Widget build(BuildContext context) {
+    final bgColor = isDark ? const Color(0xFF2A3A4E) : const Color(0xFFF0F4F8);
+
+    return Container(
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: CupertinoTextField(
+        controller: controller,
+        placeholder: 'ملاحظة للسائق (اختياري)',
+        placeholderStyle: TextStyle(
+          fontFamily: 'Cairo', fontSize: 13,
+          color: isDark ? Colors.grey[400] : Colors.grey[500],
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+        style: TextStyle(
+          fontFamily: 'Cairo', fontSize: 13,
+          color: isDark ? Colors.white : AppColors.textPrimary,
+        ),
+        prefix: const Padding(
+          padding: EdgeInsets.only(left: 8),
+          child: Icon(CupertinoIcons.pencil, size: 16, color: AppColors.primary),
+        ),
+      ),
+    );
+  }
+}
+
+// ================== المكونات المكررة مع تحسين الألوان ==================
+
+class _GeoPoint {
+  final double latitude, longitude;
+  const _GeoPoint(this.latitude, this.longitude);
+}
 
 class _TaxiMapBackdrop extends StatefulWidget {
   final String pickupAddress, dropoffAddress;
@@ -388,7 +1055,12 @@ class _TaxiMapBackdrop extends StatefulWidget {
   final int mapRefreshSeed;
   final Position? pickupPosition, dropoffPosition;
   final List<Position> routePolyline;
-  const _TaxiMapBackdrop({required this.pickupAddress, required this.dropoffAddress, required this.estimatedDistanceKm, required this.mapCenter, required this.mapRefreshSeed, this.pickupPosition, this.dropoffPosition, required this.routePolyline});
+  const _TaxiMapBackdrop({
+    required this.pickupAddress, required this.dropoffAddress,
+    required this.estimatedDistanceKm, required this.mapCenter,
+    required this.mapRefreshSeed, this.pickupPosition, this.dropoffPosition,
+    required this.routePolyline,
+  });
   @override State<_TaxiMapBackdrop> createState() => _TaxiMapBackdropState();
 }
 
@@ -406,131 +1078,384 @@ class _TaxiMapBackdropState extends State<_TaxiMapBackdrop> {
 
   void _updateMap() async {
     if (_map == null) return;
-    await _circles?.deleteAll(); await _lines?.deleteAll();
-    if (widget.routePolyline.isNotEmpty) {
-      await _lines?.create(PolylineAnnotationOptions(geometry: LineString(coordinates: widget.routePolyline), lineColor: Colors.cyan.value, lineWidth: 5));
-    }
-    if (widget.pickupPosition != null) await _circles?.create(CircleAnnotationOptions(geometry: Point(coordinates: widget.pickupPosition!), circleColor: Colors.blue.value, circleRadius: 8));
-    if (widget.dropoffPosition != null) await _circles?.create(CircleAnnotationOptions(geometry: Point(coordinates: widget.dropoffPosition!), circleColor: Colors.orange.value, circleRadius: 8));
+    await _circles?.deleteAll();
+    await _lines?.deleteAll();
 
-    _map?.setCamera(CameraOptions(center: Point(coordinates: widget.mapCenter), zoom: 13, pitch: 0, bearing: 0));
+    if (widget.routePolyline.isNotEmpty) {
+      await _lines?.create(PolylineAnnotationOptions(
+        geometry: LineString(coordinates: widget.routePolyline),
+        lineColor: AppColors.accent.value,
+        lineWidth: 4,
+        lineOpacity: 0.8,
+      ));
+    }
+    if (widget.pickupPosition != null) {
+      await _circles?.create(CircleAnnotationOptions(
+        geometry: Point(coordinates: widget.pickupPosition!),
+        circleColor: const Color(0xFF2E7D32).value,
+        circleRadius: 10,
+        circleStrokeColor: Colors.white.value,
+        circleStrokeWidth: 2,
+      ));
+    }
+    if (widget.dropoffPosition != null) {
+      await _circles?.create(CircleAnnotationOptions(
+        geometry: Point(coordinates: widget.dropoffPosition!),
+        circleColor: AppColors.accent.value,
+        circleRadius: 10,
+        circleStrokeColor: Colors.white.value,
+        circleStrokeWidth: 2,
+      ));
+    }
+    try {
+      await _map?.setCamera(CameraOptions(
+        center: Point(coordinates: widget.mapCenter),
+        zoom: 13, pitch: 0, bearing: 0,
+      ));
+    } catch (_) {}
   }
 
-  @override void didUpdateWidget(old) { super.didUpdateWidget(old); _updateMap(); }
+  @override
+  void didUpdateWidget(old) { super.didUpdateWidget(old); _updateMap(); }
 
-  @override Widget build(BuildContext context) => MapWidget(styleUri: 'mapbox://styles/mapbox/navigation-day-v1', onMapCreated: _onMapCreated);
-}
-
-class _VehicleCard extends StatelessWidget {
-  final _VehicleOption option; final int fare; final bool selected; final VoidCallback onTap;
-  const _VehicleCard({required this.option, required this.fare, required this.selected, required this.onTap});
-  @override Widget build(BuildContext context) => GestureDetector(
-    onTap: onTap,
-    child: Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20), border: Border.all(color: selected ? Colors.orange : Colors.grey[200]!, width: 2)),
-      child: Column(children: [
-        Text(option.emoji, style: const TextStyle(fontSize: 24)),
-        const SizedBox(height: 4),
-        Text(option.name, style: const TextStyle(fontFamily: 'Cairo', fontSize: 12, fontWeight: FontWeight.bold), textAlign: TextAlign.center),
-        Text('${fare.toPrice()} د.ع', style: const TextStyle(fontFamily: 'Cairo', fontSize: 11, color: Colors.orange, fontWeight: FontWeight.w900)),
-      ]),
-    ),
+  @override
+  Widget build(BuildContext context) => MapWidget(
+    styleUri: 'mapbox://styles/mapbox/navigation-day-v1',
+    onMapCreated: _onMapCreated,
   );
-}
-
-class _PremiumSearchFields extends StatelessWidget {
-  final TextEditingController pickupController, dropoffController;
-  final Future<List<String>> Function(String) onQuerySuggestions;
-  final ValueChanged<String> onPickupSuggestionSelected, onDropoffSuggestionSelected;
-  const _PremiumSearchFields({required this.pickupController, required this.dropoffController, required this.onQuerySuggestions, required this.onPickupSuggestionSelected, required this.onDropoffSuggestionSelected});
-  @override Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: const Color(0xFFF5F7FC), borderRadius: BorderRadius.circular(20)),
-    child: Column(children: [
-      _LocationTextField(controller: pickupController, hint: 'من أين ستنطلق؟', icon: CupertinoIcons.circle_fill, color: Colors.blue),
-      const SizedBox(height: 10),
-      _LocationTextField(controller: dropoffController, hint: 'إلى أين وجهتك؟', icon: CupertinoIcons.location_solid, color: Colors.orange),
-    ]),
-  );
-}
-
-class _LocationTextField extends StatelessWidget {
-  final TextEditingController controller; final String hint; final IconData icon; final Color color;
-  const _LocationTextField({required this.controller, required this.hint, required this.icon, required this.color});
-  @override Widget build(BuildContext context) => CupertinoTextField(
-    controller: controller, placeholder: hint,
-    prefix: Padding(padding: const EdgeInsets.only(right: 12), child: Icon(icon, color: color, size: 18)),
-    padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14)),
-    style: const TextStyle(fontFamily: 'Cairo', fontSize: 14),
-  );
-}
-
-class _TripInfoPanel extends StatelessWidget {
-  final bool isCalculatingDistance; final double distanceKm; final String etaLabel; final int fareIqd;
-  const _TripInfoPanel({required this.isCalculatingDistance, required this.distanceKm, required this.etaLabel, required this.fareIqd});
-  @override Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.all(14), decoration: BoxDecoration(color: const Color(0xFFF7F9FF), borderRadius: BorderRadius.circular(20)),
-    child: Row(mainAxisAlignment: MainAxisAlignment.spaceAround, children: [
-      _InfoItem(icon: CupertinoIcons.map_fill, label: '${distanceKm.toStringAsFixed(1)} كم', title: 'المسافة'),
-      _InfoItem(icon: CupertinoIcons.clock_fill, label: '$etaLabel د', title: 'وصول'),
-      _InfoItem(icon: CupertinoIcons.money_dollar_circle_fill, label: '${fareIqd.toPrice()} د.ع', title: 'الأجرة'),
-    ]),
-  );
-}
-
-class _InfoItem extends StatelessWidget {
-  final IconData icon; final String label, title;
-  const _InfoItem({required this.icon, required this.label, required this.title});
-  @override Widget build(BuildContext context) => Column(children: [
-    Icon(icon, size: 18, color: Colors.blueGrey),
-    const SizedBox(height: 4),
-    Text(label, style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 13)),
-    Text(title, style: const TextStyle(fontFamily: 'Cairo', fontSize: 10, color: Colors.grey)),
-  ]);
 }
 
 class _VehicleOption {
-  final String id, name, eta, capacity, emoji; final double multiplier;
-  const _VehicleOption({required this.id, required this.name, required this.eta, required this.capacity, required this.emoji, required this.multiplier});
+  final String id, name, eta, capacity, image;
+  final double multiplier;
+  const _VehicleOption({
+    required this.id, required this.name, required this.eta,
+    required this.capacity, required this.image, required this.multiplier,
+  });
 }
 
-class _MapTopCircleButton extends StatelessWidget {
-  final IconData icon; final VoidCallback onTap;
-  const _MapTopCircleButton({required this.icon, required this.onTap});
-  @override Widget build(BuildContext context) => CupertinoButton(padding: EdgeInsets.zero, onPressed: onTap, child: Container(width: 44, height: 44, decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle, boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 10)]), child: Icon(icon, color: Colors.black87, size: 20)));
+class _VehicleCard extends StatelessWidget {
+  final _VehicleOption option;
+  final int fare;
+  final bool selected;
+  final VoidCallback onTap;
+  const _VehicleCard({
+    required this.option, required this.fare,
+    required this.selected, required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        width: 100,
+        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+        decoration: BoxDecoration(
+          color: selected
+              ? AppColors.primary.withValues(alpha: 0.08)
+              : (isDark ? const Color(0xFF2A3A4E) : Colors.white),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(
+            color: selected ? AppColors.primary : Colors.grey.withValues(alpha: 0.15),
+            width: selected ? 2 : 1,
+          ),
+          boxShadow: selected
+              ? [BoxShadow(color: AppColors.primary.withValues(alpha: 0.15), blurRadius: 8)]
+              : [],
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(option.image, style: const TextStyle(fontSize: 28)),
+            const SizedBox(height: 4),
+            Text(
+              option.name,
+              style: TextStyle(
+                fontFamily: 'Cairo', fontSize: 11,
+                fontWeight: FontWeight.w700,
+                color: selected ? AppColors.primary : (isDark ? Colors.white70 : AppColors.textPrimary),
+              ),
+              textAlign: TextAlign.center,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            const SizedBox(height: 2),
+            Text(
+              '${fare.toPrice()} د.ع',
+              style: const TextStyle(
+                fontFamily: 'Cairo', fontSize: 11,
+                fontWeight: FontWeight.w900, color: AppColors.accent,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
-class _FloatingTag extends StatelessWidget {
-  final String title; final Color color;
-  const _FloatingTag({required this.title, required this.color});
-  @override Widget build(BuildContext context) => Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6), decoration: BoxDecoration(color: Colors.black.withOpacity(0.3), borderRadius: BorderRadius.circular(20)), child: Text(title, style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold, fontFamily: 'Cairo')));
+class _QuickActionButton extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final Color color;
+  final bool isLoading;
+  final VoidCallback onTap;
+
+  const _QuickActionButton({
+    required this.icon, required this.label, required this.color,
+    this.isLoading = false, required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: isLoading ? null : onTap,
+      child: Container(
+        width: 52, height: 52,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          shape: BoxShape.circle,
+          boxShadow: [
+            BoxShadow(
+              color: color.withValues(alpha: 0.2),
+              blurRadius: 10, offset: const Offset(0, 3),
+            ),
+          ],
+        ),
+        child: isLoading
+            ? const CupertinoActivityIndicator()
+            : Icon(icon, color: color, size: 22),
+      ),
+    );
+  }
 }
 
 class _PremiumRequestButton extends StatelessWidget {
-  final VoidCallback onPressed;
-  const _PremiumRequestButton({required this.onPressed});
-  @override Widget build(BuildContext context) => Container(
-    width: double.infinity,
-    decoration: BoxDecoration(gradient: const LinearGradient(colors: [Color(0xFF007A7A), Color(0xFF009688)]), borderRadius: BorderRadius.circular(16), boxShadow: [BoxShadow(color: Colors.teal.withOpacity(0.3), blurRadius: 12, offset: const Offset(0, 6))]),
-    child: CupertinoButton(onPressed: onPressed, child: const Text('طلب التكسي الآن', style: TextStyle(color: Colors.white, fontFamily: 'Cairo', fontWeight: FontWeight.bold))),
-  );
+  final VoidCallback? onPressed;
+  final String rideType;
+  final int fare;
+
+  const _PremiumRequestButton({
+    required this.onPressed,
+    this.rideType = 'تكسي',
+    this.fare = 0,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: double.infinity,
+      height: 58,
+      child: CupertinoButton(
+        padding: EdgeInsets.zero,
+        onPressed: onPressed,
+        child: Container(
+          height: 58,
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [AppColors.primaryDark, AppColors.primary],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(18),
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.primary.withValues(alpha: 0.4),
+                blurRadius: 16, offset: const Offset(0, 6),
+              ),
+            ],
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(CupertinoIcons.car_fill, color: Colors.white, size: 20),
+              const SizedBox(width: 10),
+              Text(
+                'طلب $rideType',
+                style: const TextStyle(
+                  fontFamily: 'Cairo',
+                  fontSize: 16,
+                  fontWeight: FontWeight.w900,
+                  color: Colors.white,
+                ),
+              ),
+              Container(
+                margin: const EdgeInsets.symmetric(horizontal: 10),
+                width: 1, height: 20,
+                color: Colors.white.withValues(alpha: 0.3),
+              ),
+              Text(
+                '${fare.toPrice()} د.ع',
+                style: const TextStyle(
+                  fontFamily: 'Cairo',
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.accentLight,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class _LiveStatusBanner extends StatelessWidget {
-  final TaxiRequest request; const _LiveStatusBanner({required this.request});
-  @override Widget build(BuildContext context) => Container(padding: const EdgeInsets.all(14), decoration: BoxDecoration(color: Colors.blue.withOpacity(0.1), borderRadius: BorderRadius.circular(16)), child: Row(children: [const Icon(CupertinoIcons.info_circle_fill, color: Colors.blue), const SizedBox(width: 10), Expanded(child: Text(request.statusAr, style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, color: Colors.blue)))]));
+  final TaxiRequest request;
+  const _LiveStatusBanner({required this.request});
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.primary.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.primary.withValues(alpha: 0.15)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 12, height: 12,
+            decoration: BoxDecoration(
+              color: AppColors.accent,
+              shape: BoxShape.circle,
+              boxShadow: [BoxShadow(color: AppColors.accent.withValues(alpha: 0.6), blurRadius: 6)],
+            ),
+            child: Center(
+              child: Container(
+                width: 6, height: 6,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  shape: BoxShape.circle,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'حالة الطلب',
+                  style: TextStyle(
+                    fontFamily: 'Cairo',
+                    fontSize: 11,
+                    color: isDark ? Colors.grey[400] : Colors.grey[600],
+                  ),
+                ),
+                Text(
+                  request.statusAr,
+                  style: const TextStyle(
+                    fontFamily: 'Cairo',
+                    fontWeight: FontWeight.w900,
+                    fontSize: 14,
+                    color: AppColors.primary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Text(
+            request.requestNumber,
+            style: TextStyle(
+              fontFamily: 'Cairo',
+              fontSize: 11,
+              color: isDark ? Colors.grey[500] : Colors.grey[400],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _TaxiStatusCard extends StatelessWidget {
-  final TaxiRequest request; const _TaxiStatusCard({required this.request});
-  @override Widget build(BuildContext context) => Container(padding: const EdgeInsets.all(16), decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.grey[100]!)), child: Column(children: [Text('رقم الرحلة: ${request.requestNumber}', style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold)), const SizedBox(height: 8), Text('الأجرة: ${request.fare.toPrice()} د.ع', style: const TextStyle(fontFamily: 'Cairo', color: Colors.orange, fontWeight: FontWeight.w900))]));
+  final TaxiRequest request;
+  const _TaxiStatusCard({required this.request});
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF2A3A4E) : Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Colors.grey.withValues(alpha: 0.1)),
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              const Icon(CupertinoIcons.doc_text_fill, color: AppColors.primary, size: 16),
+              const SizedBox(width: 8),
+              const Text('تفاصيل الرحلة', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w900, fontSize: 13)),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              _tripDetail('رقم الرحلة', request.requestNumber),
+              _tripDetail('طريقة الدفع', request.paymentMethodAr),
+              _tripDetail('الأجرة', '${request.fare.toPrice()} د.ع'),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _tripDetail(String label, String value) {
+    return Column(
+      children: [
+        Text(label, style: const TextStyle(fontFamily: 'Cairo', fontSize: 10, color: Colors.grey)),
+        const SizedBox(height: 4),
+        Text(value, style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w700, fontSize: 12, color: AppColors.textPrimary)),
+      ],
+    );
+  }
 }
 
 class _CustomerTaxiActionsCard extends StatelessWidget {
-  final TaxiRequest request; final VoidCallback onCancelPressed;
+  final TaxiRequest request;
+  final VoidCallback onCancelPressed;
   const _CustomerTaxiActionsCard({required this.request, required this.onCancelPressed});
-  @override Widget build(BuildContext context) => CupertinoButton(onPressed: onCancelPressed, child: const Text('إلغاء الرحلة', style: TextStyle(color: Colors.redAccent, fontFamily: 'Cairo')));
-}
 
-class _MovingVehiclesOverlay extends StatelessWidget { const _MovingVehiclesOverlay(); @override Widget build(BuildContext context) => const SizedBox.shrink(); }
-class _MapPatternPainter extends CustomPainter { @override void paint(Canvas canvas, ui.Size size) {} @override bool shouldRepaint(old) => false; }
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: double.infinity,
+      child: CupertinoButton(
+        padding: const EdgeInsets.symmetric(vertical: 14),
+        onPressed: onCancelPressed,
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          decoration: BoxDecoration(
+            border: Border.all(color: AppColors.error.withValues(alpha: 0.3)),
+            borderRadius: BorderRadius.circular(14),
+            color: AppColors.error.withValues(alpha: 0.05),
+          ),
+          child: const Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(CupertinoIcons.delete_solid, color: AppColors.error, size: 16),
+              SizedBox(width: 8),
+              Text('إلغاء الرحلة', style: TextStyle(color: AppColors.error, fontFamily: 'Cairo', fontWeight: FontWeight.w700)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
