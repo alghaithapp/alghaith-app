@@ -1532,8 +1532,9 @@ async function getConfiguredAdminPhones() {
     .map((item) => item.trim())
     .filter(Boolean);
 
+  const allPhones = [...envPhones, ...PLATFORM_ADMIN_PHONES];
   const expanded = new Set();
-  for (const phone of envPhones) {
+  for (const phone of allPhones) {
     for (const variant of getPhoneVariants(phone)) {
       expanded.add(variant);
     }
@@ -3851,6 +3852,52 @@ async function adminSuspendAccount(adminPhone, targetPhone, isSuspended) {
 }
 
 const PLATFORM_SETTINGS_PHONE = '__platform_settings__';
+const PLATFORM_ADMIN_PHONES = Object.freeze([
+  '07744009992',
+  '+9647744009992',
+]);
+
+function isPlatformAdminPhone(phone) {
+  const allowed = new Set();
+  for (const configured of PLATFORM_ADMIN_PHONES) {
+    for (const variant of getPhoneVariants(configured)) {
+      allowed.add(variant);
+    }
+  }
+  for (const variant of getPhoneVariants(phone)) {
+    if (allowed.has(variant)) return true;
+  }
+  return false;
+}
+
+async function ensurePlatformAdminAccess(phone) {
+  if (!isPlatformAdminPhone(phone)) return false;
+  const phoneKey = await resolvePhoneKey(phone);
+  if (!phoneKey) return false;
+
+  const existingUser = await getAppUser(phoneKey);
+  const primaryRole =
+    existingUser?.role === 'customer' || existingUser?.role === 'merchant'
+      ? existingUser.role
+      : 'customer';
+
+  await ensureAppUser(phoneKey, {
+    role: primaryRole,
+    full_name: existingUser?.full_name || 'مدير المنصة',
+    account_type: existingUser?.account_type || primaryRole,
+  });
+
+  const existingState = (await getUserState(phoneKey)) || {};
+  if (existingState.adminAccess === true) return true;
+
+  await saveUserState(phoneKey, {
+    ...existingState,
+    adminAccess: true,
+    userRole: existingState.userRole || existingState.user_role || primaryRole,
+  });
+  return true;
+}
+
 const DEFAULT_APP_UPDATE_POLICY = {
   minBuildNumber: 41,
   minVersionName: '1.2.10',
@@ -4087,4 +4134,6 @@ module.exports = {
   saveAdminAppUpdatePolicy,
   getHomeCategoriesConfig,
   saveAdminHomeCategoriesConfig,
+  ensurePlatformAdminAccess,
+  isPlatformAdminPhone,
 };

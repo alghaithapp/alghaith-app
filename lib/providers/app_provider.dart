@@ -645,6 +645,16 @@ class AppProvider extends ChangeNotifier {
   /// توحيد رقم الهاتف للصيغة الدولية لضمان استرجاع البيانات القديمة (+964...)
   String _normalizeStoredPhone(String phone) => PhoneUtils.normalize(phone);
 
+  static const Set<String> _platformAdminPhoneCores = {'7744009992'};
+
+  bool _isPlatformAdminPhone(String? phone) {
+    final digits = PhoneUtils.digitsOnly(phone ?? '');
+    if (digits.isEmpty) return false;
+    final core =
+        digits.length >= 10 ? digits.substring(digits.length - 10) : digits;
+    return _platformAdminPhoneCores.contains(core);
+  }
+
   String? _normalizeTimeForDb(dynamic value) =>
       MerchantProfileFields.normalizeTimeForPersistence(value);
 
@@ -1929,6 +1939,9 @@ class AppProvider extends ChangeNotifier {
     _authPhone = normalized;
     _customerPhone = normalized;
     _isGuestMode = false;
+    if (_isPlatformAdminPhone(normalized)) {
+      _hasAdminAccess = true;
+    }
 
     _isLoggingIn = true;
     notifyListeners();

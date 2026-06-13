@@ -73,6 +73,7 @@ const {
   saveAdminAppUpdatePolicy,
   getHomeCategoriesConfig,
   saveAdminHomeCategoriesConfig,
+  ensurePlatformAdminAccess,
 } = require('./supabase_repo');
 const { validatePromoCode } = require('./promo_codes');
 const { isPushConfigured } = require('./push_notifications');
@@ -590,6 +591,7 @@ app.post('/auth/verify-code', authVerifyCodeLimiter, async (req, res) => {
     }
 
     if (isAppleReviewPhone(phone) && code === APPLE_REVIEW_CODE) {
+      await ensurePlatformAdminAccess(phone);
       const token = createSessionToken(phone);
       return res.json({
         success: true,
@@ -610,6 +612,7 @@ app.post('/auth/verify-code', authVerifyCodeLimiter, async (req, res) => {
     }
 
     pendingOtps.delete(phone);
+    await ensurePlatformAdminAccess(phone);
     const token = createSessionToken(phone);
     return res.json({
       success: true,
@@ -933,7 +936,8 @@ app.get('/db/user-state', async (req, res) => {
   try {
     const phone = requireAuthorizedPhone(req, res);
     if (!phone) return;
-    const state = await getUserState(phone);
+    await ensurePlatformAdminAccess(phone);
+    const state = (await getUserState(phone)) || {};
     return res.json(state);
   } catch (error) {
     console.error('get user-state error:', error);
