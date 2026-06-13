@@ -211,10 +211,11 @@ button {
 }
 
 .soft-button {
-  padding: 10px 14px;
+  padding: 8px 12px;
   background: var(--surface-muted);
   color: var(--brand-primary-dark);
   font-weight: 700;
+  font-size: 0.85rem;
   border: 1px solid var(--border);
 }
 
@@ -310,7 +311,7 @@ button {
 
 .nav-item {
   justify-content: flex-start;
-  padding: 12px 14px;
+  padding: 10px 12px;
   background: transparent;
   color: rgba(255, 255, 255, 0.82);
   font-weight: 700;
@@ -753,7 +754,7 @@ button {
 
 .merchant-actions {
   display: flex;
-  gap: 10px;
+  gap: 8px;
   align-items: center;
   flex-wrap: wrap;
 }

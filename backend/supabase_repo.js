@@ -197,12 +197,30 @@ function merchantProfileDisplayName(profile) {
 
 function isMerchantApproved(profile) {
   if (!profile) return false;
+  // إذا كان هناك قرار صريح (موافقة أو رفض) نلتزم به
   if (profile.is_approved === true || profile.isApproved === true) return true;
-  const status = String(profile.approval_status ?? profile.approvalStatus ?? '').trim();
+  if (profile.is_approved === false || profile.isApproved === false) {
+    const status = String(
+      profile.approval_status ?? profile.approvalStatus ?? ''
+    ).trim();
+    if (status === 'approved') return true;
+    return false;
+  }
+
+  const status = String(
+    profile.approval_status ?? profile.approvalStatus ?? ''
+  ).trim();
   if (status === 'approved') return true;
   if (status === 'pending' || status === 'rejected') return false;
-  if (profile.is_approved === false || profile.isApproved === false) return false;
-  if (isProfessionalMerchantProfile(profile)) return false;
+
+  // حالة انتقالية: إذا لم توجد الأعمدة في قاعدة البيانات بعد
+  // نعتبر المتاجر القديمة (التي لها اسم) واصحاب المهن الذين لديهم منتجات موافق عليهم تلقائياً
+  if (isProfessionalMerchantProfile(profile)) {
+    // المهنيين الجدد يحتاجون موافقة، لكن إذا كان لديهم بيانات قديمة نعتبرهم مفعّلين
+    const info = normalizeObject(profile.professional_info);
+    return Boolean(String(info.name ?? '').trim());
+  }
+
   const storeName = merchantProfileDisplayName(profile);
   return storeName.length > 0;
 }
