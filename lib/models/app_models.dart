@@ -301,6 +301,7 @@ class OrderLineItem {
   final int quantity;
   final int price;
   final String? image;
+  final bool isAvailable;
 
   const OrderLineItem({
     required this.nameAr,
@@ -308,7 +309,26 @@ class OrderLineItem {
     required this.quantity,
     required this.price,
     this.image,
+    this.isAvailable = true,
   });
+
+  OrderLineItem copyWith({
+    String? nameAr,
+    String? nameEn,
+    int? quantity,
+    int? price,
+    String? image,
+    bool? isAvailable,
+  }) {
+    return OrderLineItem(
+      nameAr: nameAr ?? this.nameAr,
+      nameEn: nameEn ?? this.nameEn,
+      quantity: quantity ?? this.quantity,
+      price: price ?? this.price,
+      image: image ?? this.image,
+      isAvailable: isAvailable ?? this.isAvailable,
+    );
+  }
 
   Map<String, dynamic> toMap() {
     return {
@@ -317,6 +337,7 @@ class OrderLineItem {
       'quantity': quantity,
       'price': price,
       'image': image,
+      'isAvailable': isAvailable,
     };
   }
 
@@ -327,6 +348,7 @@ class OrderLineItem {
       quantity: (map['quantity'] as num?)?.toInt() ?? 1,
       price: (map['price'] as num?)?.toInt() ?? 0,
       image: map['image'] as String?,
+      isAvailable: (map['isAvailable'] as bool?) ?? true,
     );
   }
 }
@@ -421,6 +443,10 @@ class ActiveOrder {
   final String? merchantDecisionAt;
   final bool isPriceLocked;
   final bool isRated;
+  final int? originalPrice;
+  final int? itemsSubtotalIqd;
+  final int? deliveryFeeIqd;
+  final int? promoDiscountIqd;
 
   ActiveOrder({
     required this.id,
@@ -466,7 +492,112 @@ class ActiveOrder {
     this.merchantDecisionAt,
     this.isPriceLocked = false,
     this.isRated = false,
+    this.originalPrice,
+    this.itemsSubtotalIqd,
+    this.deliveryFeeIqd,
+    this.promoDiscountIqd,
   });
+
+  ActiveOrder copyWith({
+    String? id,
+    String? orderNumber,
+    String? dateAr,
+    String? dateEn,
+    String? customerNameAr,
+    String? customerNameEn,
+    String? customerPhone,
+    String? addressAr,
+    String? addressEn,
+    String? noteAr,
+    String? noteEn,
+    String? paymentMethodAr,
+    String? paymentMethodEn,
+    String? statusKey,
+    String? statusAr,
+    String? statusEn,
+    int? price,
+    int? itemsCount,
+    String? itemsNameAr,
+    String? itemsNameEn,
+    List<OrderLineItem>? lineItems,
+    String? image,
+    String? iconName,
+    String? deliveryStatusKey,
+    String? deliveryStatusAr,
+    String? deliveryStatusEn,
+    String? assignedCourierName,
+    bool? isRestaurantOrder,
+    String? merchantPhone,
+    String? merchantStoreName,
+    bool? requiresDelivery,
+    bool? codConfirmed,
+    String? deliveredAt,
+    int? estimatedArrivalMinutes,
+    String? estimatedArrivalAt,
+    String? courierPhone,
+    double? customerLatitude,
+    double? customerLongitude,
+    String? createdAt,
+    String? merchantReadAt,
+    String? merchantDecisionAt,
+    bool? isPriceLocked,
+    bool? isRated,
+    int? originalPrice,
+    int? itemsSubtotalIqd,
+    int? deliveryFeeIqd,
+    int? promoDiscountIqd,
+  }) {
+    return ActiveOrder(
+      id: id ?? this.id,
+      orderNumber: orderNumber ?? this.orderNumber,
+      dateAr: dateAr ?? this.dateAr,
+      dateEn: dateEn ?? this.dateEn,
+      customerNameAr: customerNameAr ?? this.customerNameAr,
+      customerNameEn: customerNameEn ?? this.customerNameEn,
+      customerPhone: customerPhone ?? this.customerPhone,
+      addressAr: addressAr ?? this.addressAr,
+      addressEn: addressEn ?? this.addressEn,
+      noteAr: noteAr ?? this.noteAr,
+      noteEn: noteEn ?? this.noteEn,
+      paymentMethodAr: paymentMethodAr ?? this.paymentMethodAr,
+      paymentMethodEn: paymentMethodEn ?? this.paymentMethodEn,
+      statusKey: statusKey ?? this.statusKey,
+      statusAr: statusAr ?? this.statusAr,
+      statusEn: statusEn ?? this.statusEn,
+      price: price ?? this.price,
+      itemsCount: itemsCount ?? this.itemsCount,
+      itemsNameAr: itemsNameAr ?? this.itemsNameAr,
+      itemsNameEn: itemsNameEn ?? this.itemsNameEn,
+      lineItems: lineItems ?? this.lineItems,
+      image: image ?? this.image,
+      iconName: iconName ?? this.iconName,
+      deliveryStatusKey: deliveryStatusKey ?? this.deliveryStatusKey,
+      deliveryStatusAr: deliveryStatusAr ?? this.deliveryStatusAr,
+      deliveryStatusEn: deliveryStatusEn ?? this.deliveryStatusEn,
+      assignedCourierName: assignedCourierName ?? this.assignedCourierName,
+      isRestaurantOrder: isRestaurantOrder ?? this.isRestaurantOrder,
+      merchantPhone: merchantPhone ?? this.merchantPhone,
+      merchantStoreName: merchantStoreName ?? this.merchantStoreName,
+      requiresDelivery: requiresDelivery ?? this.requiresDelivery,
+      codConfirmed: codConfirmed ?? this.codConfirmed,
+      deliveredAt: deliveredAt ?? this.deliveredAt,
+      estimatedArrivalMinutes:
+          estimatedArrivalMinutes ?? this.estimatedArrivalMinutes,
+      estimatedArrivalAt: estimatedArrivalAt ?? this.estimatedArrivalAt,
+      courierPhone: courierPhone ?? this.courierPhone,
+      customerLatitude: customerLatitude ?? this.customerLatitude,
+      customerLongitude: customerLongitude ?? this.customerLongitude,
+      createdAt: createdAt ?? this.createdAt,
+      merchantReadAt: merchantReadAt ?? this.merchantReadAt,
+      merchantDecisionAt: merchantDecisionAt ?? this.merchantDecisionAt,
+      isPriceLocked: isPriceLocked ?? this.isPriceLocked,
+      isRated: isRated ?? this.isRated,
+      originalPrice: originalPrice ?? this.originalPrice,
+      itemsSubtotalIqd: itemsSubtotalIqd ?? this.itemsSubtotalIqd,
+      deliveryFeeIqd: deliveryFeeIqd ?? this.deliveryFeeIqd,
+      promoDiscountIqd: promoDiscountIqd ?? this.promoDiscountIqd,
+    );
+  }
 
   Map<String, dynamic> toMap() {
     return {
@@ -513,6 +644,10 @@ class ActiveOrder {
       'merchantDecisionAt': merchantDecisionAt,
       'isPriceLocked': isPriceLocked,
       'isRated': isRated,
+      'originalPrice': originalPrice,
+      'itemsSubtotalIqd': itemsSubtotalIqd,
+      'deliveryFeeIqd': deliveryFeeIqd,
+      'promoDiscountIqd': promoDiscountIqd,
     };
   }
 
@@ -570,6 +705,10 @@ class ActiveOrder {
       merchantDecisionAt: map['merchantDecisionAt'] as String?,
       isPriceLocked: (map['isPriceLocked'] as bool?) ?? false,
       isRated: (map['isRated'] as bool?) ?? false,
+      originalPrice: (map['originalPrice'] as num?)?.toInt(),
+      itemsSubtotalIqd: (map['itemsSubtotalIqd'] as num?)?.toInt(),
+      deliveryFeeIqd: (map['deliveryFeeIqd'] as num?)?.toInt(),
+      promoDiscountIqd: (map['promoDiscountIqd'] as num?)?.toInt(),
     );
   }
 }

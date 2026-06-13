@@ -15,6 +15,9 @@ enum CustomerBannerType {
   pickedUp,
   cancelApproved,
   cancelRejected,
+  adjustmentProposed,
+  adjustmentAccepted,
+  adjustmentRejected,
 }
 
 class CustomerBannerData {
@@ -55,6 +58,26 @@ CustomerBannerData? detectCustomerOrderBanner({
   final orderNo = order.orderNumber;
 
   if (prevStatus != status) {
+    if (status == 'adjustment_pending' && prevStatus == 'pending') {
+      return CustomerBannerData(
+        type: CustomerBannerType.adjustmentProposed,
+        title: 'تعديل على طلبك $orderNo',
+        body: order.merchantStoreName?.trim().isNotEmpty == true
+            ? '${order.merchantStoreName} عدّل الطلب — راجع ووافق أو ألغِ'
+            : 'التاجر عدّل الطلب — راجع التفاصيل ووافق أو ألغِ',
+        orderNumber: orderNo,
+      );
+    }
+
+    if (status == 'accepted' && prevStatus == 'adjustment_pending') {
+      return CustomerBannerData(
+        type: CustomerBannerType.adjustmentAccepted,
+        title: 'تم قبول الطلب المعدّل $orderNo',
+        body: 'وافقت على التعديل وبدأ التجهيز',
+        orderNumber: orderNo,
+      );
+    }
+
     if (status == 'accepted') {
       return CustomerBannerData(
         type: CustomerBannerType.accepted,
@@ -124,6 +147,17 @@ CustomerBannerData? detectCustomerOrderBanner({
           body: order.noteAr.trim().isNotEmpty
               ? order.noteAr
               : 'التاجر رفض الطلب',
+          orderNumber: orderNo,
+        );
+      }
+
+      if (prevStatus == 'adjustment_pending' &&
+          (order.noteAr.contains('رفض الزبون الطلب المعدّل') ||
+              order.noteEn.contains('Customer rejected adjusted order'))) {
+        return CustomerBannerData(
+          type: CustomerBannerType.adjustmentRejected,
+          title: 'ألغيت الطلب المعدّل $orderNo',
+          body: 'لم توافق على التعديل المقترح',
           orderNumber: orderNo,
         );
       }
@@ -254,6 +288,12 @@ class _CustomerOrderNotificationBannerState
         return [const Color(0xFF00838F), const Color(0xFF006064)];
       case CustomerBannerType.cancelRejected:
         return [const Color(0xFFF57C00), const Color(0xFFE65100)];
+      case CustomerBannerType.adjustmentProposed:
+        return [const Color(0xFFEF6C00), const Color(0xFFE65100)];
+      case CustomerBannerType.adjustmentAccepted:
+        return [const Color(0xFF2E7D32), const Color(0xFF43A047)];
+      case CustomerBannerType.adjustmentRejected:
+        return [const Color(0xFFC62828), const Color(0xFFB71C1C)];
     }
   }
 
@@ -276,6 +316,12 @@ class _CustomerOrderNotificationBannerState
         return Colors.teal;
       case CustomerBannerType.cancelRejected:
         return Colors.orange;
+      case CustomerBannerType.adjustmentProposed:
+        return Colors.deepOrange;
+      case CustomerBannerType.adjustmentAccepted:
+        return Colors.green;
+      case CustomerBannerType.adjustmentRejected:
+        return Colors.red;
     }
   }
 
@@ -301,6 +347,12 @@ class _CustomerOrderNotificationBannerState
         return Icons.cancel_rounded;
       case CustomerBannerType.cancelRejected:
         return Icons.info_rounded;
+      case CustomerBannerType.adjustmentProposed:
+        return Icons.edit_note_rounded;
+      case CustomerBannerType.adjustmentAccepted:
+        return Icons.check_circle_rounded;
+      case CustomerBannerType.adjustmentRejected:
+        return Icons.cancel_rounded;
     }
   }
 

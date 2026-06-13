@@ -98,6 +98,17 @@ class SupabaseService {
     String? deliveryStatusKey,
     String? deliveryStatusAr,
     String? deliveryStatusEn,
+    List<Map<String, dynamic>>? lineItems,
+    int? price,
+    int? itemsCount,
+    String? itemsNameAr,
+    String? itemsNameEn,
+    int? originalPrice,
+    int? itemsSubtotalIqd,
+    int? deliveryFeeIqd,
+    int? promoDiscountIqd,
+    String? merchantDecisionAt,
+    bool? isPriceLocked,
   }) =>
       _db.updateIncomingOrderStatus(
         merchantPhone,
@@ -110,6 +121,17 @@ class SupabaseService {
         deliveryStatusKey: deliveryStatusKey,
         deliveryStatusAr: deliveryStatusAr,
         deliveryStatusEn: deliveryStatusEn,
+        lineItems: lineItems,
+        price: price,
+        itemsCount: itemsCount,
+        itemsNameAr: itemsNameAr,
+        itemsNameEn: itemsNameEn,
+        originalPrice: originalPrice,
+        itemsSubtotalIqd: itemsSubtotalIqd,
+        deliveryFeeIqd: deliveryFeeIqd,
+        promoDiscountIqd: promoDiscountIqd,
+        merchantDecisionAt: merchantDecisionAt,
+        isPriceLocked: isPriceLocked,
       );
 
   static Future<List<ActiveOrder>> loadDeliveryPool(String phone) =>

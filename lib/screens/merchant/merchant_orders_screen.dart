@@ -55,7 +55,9 @@ class _MerchantOrdersScreenState extends State<MerchantOrdersScreen> {
       case 1:
         list = all
             .where((o) =>
-                o.statusKey == 'accepted' || o.statusKey == 'cancel_requested')
+                o.statusKey == 'accepted' ||
+                o.statusKey == 'cancel_requested' ||
+                o.statusKey == 'adjustment_pending')
             .toList();
         break;
       case 2:
@@ -93,7 +95,9 @@ class _MerchantOrdersScreenState extends State<MerchantOrdersScreen> {
     final pendingCount = provider.merchantPendingOrdersCount;
     final approvalCount = provider.merchantIncomingOrders
         .where((o) =>
-            o.statusKey == 'accepted' || o.statusKey == 'cancel_requested')
+            o.statusKey == 'accepted' ||
+            o.statusKey == 'cancel_requested' ||
+            o.statusKey == 'adjustment_pending')
         .length;
     final completedCount = provider.merchantIncomingOrders
         .where((o) => o.statusKey == 'completed')
@@ -1066,6 +1070,12 @@ class _StatusBadge extends StatelessWidget {
     switch (order.statusKey) {
       case 'accepted':
         return _BadgeStyle('مقبول', const Color(0xFFEDE7F6), const Color(0xFF7B1FA2));
+      case 'adjustment_pending':
+        return _BadgeStyle(
+          'بانتظار الزبون',
+          const Color(0xFFFFF3E0),
+          const Color(0xFFEF6C00),
+        );
       case 'cancel_requested':
         return _BadgeStyle('طلب إلغاء', const Color(0xFFF3E5F5), const Color(0xFF8E24AA));
       case 'completed':

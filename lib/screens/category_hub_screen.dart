@@ -1,49 +1,31 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 
 import '../core/catalog/marketplace_catalog.dart';
 import '../core/catalog/marketplace_router.dart';
-import '../providers/app_provider.dart';
 import '../widgets/app_image.dart';
 import '../widgets/service_navigation_buttons.dart';
 
-class CategoryHubScreen extends StatefulWidget {
+class CategoryHubScreen extends StatelessWidget {
   final MarketplaceCategoryDefinition category;
 
   const CategoryHubScreen({super.key, required this.category});
 
   @override
-  State<CategoryHubScreen> createState() => _CategoryHubScreenState();
-}
-
-class _CategoryHubScreenState extends State<CategoryHubScreen> {
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<AppProvider>().refreshMarketplaceStats();
-    });
-  }
-
-  @override
   Widget build(BuildContext context) {
-    final provider = context.watch<AppProvider>();
-    final stats = provider.marketplaceStats?.category(widget.category.id);
-    final subs = widget.category.id == 'product'
+    final subs = category.id == 'product'
         ? MarketplaceCatalog.shoppingSubCategories
-        : widget.category.subCategories;
+        : category.subCategories;
     return CupertinoPageScaffold(
       backgroundColor: const Color(0xFFF2F2F7),
       navigationBar: ServiceNavigationBar(
-        title: widget.category.hubTitleAr,
-        onRefresh: () => provider.refreshMarketplaceStats(force: true),
+        title: category.hubTitleAr,
       ),
       child: SafeArea(
         child: subs.isEmpty
             ? _EmptyHubState(
-                title: widget.category.hubTitleAr,
-                subtitle: widget.category.hubSubtitleAr,
+                title: category.hubTitleAr,
+                subtitle: category.hubSubtitleAr,
               )
             : CustomScrollView(
                 physics: const BouncingScrollPhysics(),
@@ -51,30 +33,13 @@ class _CategoryHubScreenState extends State<CategoryHubScreen> {
                   SliverToBoxAdapter(
                     child: Padding(
                       padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            widget.category.hubSubtitleAr,
-                            style: const TextStyle(
-                              fontFamily: 'Cairo',
-                              fontSize: 14,
-                              color: CupertinoColors.systemGrey,
-                            ),
-                          ),
-                          if (stats != null && stats.totalCount > 0) ...[
-                            const SizedBox(height: 8),
-                            Text(
-                              '${stats.totalCount} ${_countLabel(widget.category)}',
-                              style: const TextStyle(
-                                fontFamily: 'Cairo',
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                                color: Color(0xFFF5A01D),
-                              ),
-                            ),
-                          ],
-                        ],
+                      child: Text(
+                        category.hubSubtitleAr,
+                        style: const TextStyle(
+                          fontFamily: 'Cairo',
+                          fontSize: 14,
+                          color: CupertinoColors.systemGrey,
+                        ),
                       ),
                     ),
                   ),
@@ -90,14 +55,11 @@ class _CategoryHubScreenState extends State<CategoryHubScreen> {
                       delegate: SliverChildBuilderDelegate(
                         (context, index) {
                           final sub = subs[index];
-                          final subStats = stats?.subStats(sub.id);
-                          final count = subStats?.totalCount ?? 0;
                           return _SubCategoryCard(
                             sub: sub,
-                            count: count,
                             onTap: () => MarketplaceRouter.openSubCategory(
                               context,
-                              widget.category,
+                              category,
                               sub,
                             ),
                           );
@@ -111,23 +73,14 @@ class _CategoryHubScreenState extends State<CategoryHubScreen> {
       ),
     );
   }
-
-  String _countLabel(MarketplaceCategoryDefinition category) {
-    if (category.defaultSubBrowseMode == SubCategoryBrowseMode.stores) {
-      return 'متجر';
-    }
-    return 'عرض';
-  }
 }
 
 class _SubCategoryCard extends StatelessWidget {
   final MarketplaceSubCategory sub;
-  final int count;
   final VoidCallback onTap;
 
   const _SubCategoryCard({
     required this.sub,
-    required this.count,
     required this.onTap,
   });
 
@@ -147,43 +100,14 @@ class _SubCategoryCard extends StatelessWidget {
             ),
           ],
         ),
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(15),
-              child: AppImage(
-                imageData: sub.image,
-                width: double.infinity,
-                height: double.infinity,
-                fit: BoxFit.contain, // تغيير ليتوافق مع أسلوب الصفحة الرئيسية
-              ),
-            ),
-            if (count > 0)
-              Positioned(
-                top: 8,
-                left: 8,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 2,
-                  ),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF5A01D),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    '$count',
-                    style: const TextStyle(
-                      fontFamily: 'Cairo',
-                      fontWeight: FontWeight.bold,
-                      fontSize: 10,
-                      color: Colors.white,
-                    ),
-                  ),
-                ),
-              ),
-          ],
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(15),
+          child: AppImage(
+            imageData: sub.image,
+            width: double.infinity,
+            height: double.infinity,
+            fit: BoxFit.contain,
+          ),
         ),
       ),
     );

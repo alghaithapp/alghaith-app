@@ -225,8 +225,12 @@ class _ShoppingStoresScreenState extends State<ShoppingStoresScreen> {
                             label: 'الكل',
                             selected: _bazaarKindFilter == 'all',
                             color: primaryRed,
-                            onTap: () =>
-                                setState(() => _bazaarKindFilter = 'all'),
+                            onTap: () {
+                              setState(() {
+                                _bazaarKindFilter = 'all';
+                                _selectedFilter = 'الكل'; // ريست لفلتر المطبخ
+                              });
+                            },
                           ),
                           _BazaarKindChip(
                             label: 'مطاعم',
@@ -240,8 +244,12 @@ class _ShoppingStoresScreenState extends State<ShoppingStoresScreen> {
                             label: 'متاجر',
                             selected: _bazaarKindFilter == 'store',
                             color: primaryRed,
-                            onTap: () =>
-                                setState(() => _bazaarKindFilter = 'store'),
+                            onTap: () {
+                              setState(() {
+                                _bazaarKindFilter = 'store';
+                                _selectedFilter = 'الكل'; // ريست لفلتر المطبخ
+                              });
+                            },
                           ),
                         ],
                       ),
@@ -249,7 +257,8 @@ class _ShoppingStoresScreenState extends State<ShoppingStoresScreen> {
                   ),
 
                 // 2. Category Filters
-                if (widget.showCuisineFilters)
+                if (widget.showCuisineFilters &&
+                    (!_isBazaarChannel || _bazaarKindFilter == 'restaurant'))
                   SliverToBoxAdapter(
                     child: Container(
                       height: 55,
@@ -436,7 +445,7 @@ class _PremiumRestaurantCard extends StatelessWidget {
     final profile = Map<String, dynamic>.from(data['profile'] as Map);
     final products = (data['products'] as List).cast<Map<String, dynamic>>();
     final isOpen = profile['is_open'] as bool? ?? true;
-    
+
     // التقييم الحقيقي من قاعدة البيانات
     final dbRating = profile['rating']?.toDouble();
     final hasRating = dbRating != null && dbRating > 0;
@@ -553,8 +562,8 @@ class _PremiumRestaurantCard extends StatelessWidget {
                         ),
                         child: Row(
                           children: [
-                            Icon(CupertinoIcons.star_fill, 
-                                 color: hasRating ? Colors.amber : Colors.grey, 
+                            Icon(CupertinoIcons.star_fill,
+                                 color: hasRating ? Colors.amber : Colors.grey,
                                  size: 12),
                             const SizedBox(width: 4),
                             Text(
@@ -567,7 +576,7 @@ class _PremiumRestaurantCard extends StatelessWidget {
                     ],
                   ),
                 ),
-                
+
                 Transform.translate(
                   offset: const Offset(0, -10),
                   child: Column(
@@ -586,9 +595,9 @@ class _PremiumRestaurantCard extends StatelessWidget {
                     ],
                   ),
                 ),
-                
+
                 const SizedBox(height: 5),
-                
+
                 // Info Chips
                 Wrap(
                   spacing: 6,
@@ -951,11 +960,11 @@ class _ShoppingStoreMenuScreenState extends State<ShoppingStoreMenuScreen>
     final stackContext = _stackKey.currentContext;
     final cartContext = _cartIconKey.currentContext;
     if (stackContext == null || cartContext == null) return;
-    
+
     final stackBox = stackContext.findRenderObject() as RenderBox?;
     final sourceBox = sourceContext.findRenderObject() as RenderBox?;
     final cartBox = cartContext.findRenderObject() as RenderBox?;
-    
+
     if (stackBox == null || sourceBox == null || cartBox == null) return;
     if (!stackBox.attached || !sourceBox.attached || !cartBox.attached) return;
 
@@ -1177,10 +1186,10 @@ class _ShoppingStoreMenuScreenState extends State<ShoppingStoreMenuScreen>
                       Curves.easeOutCubic.transform(_flyController.value); // مسار أنعم
                   final x = _flyStart.dx + ((_flyEnd.dx - _flyStart.dx) * t);
                   final yBase = _flyStart.dy + ((_flyEnd.dy - _flyStart.dy) * t);
-                  
+
                   // معادلة القوس الحقيقي (Parabola)
-                  final arc = -180 * t * (1 - t); 
-                  
+                  final arc = -180 * t * (1 - t);
+
                   final scale = 1.0 - (t * 0.3);
                   return Positioned(
                     left: x - 12,

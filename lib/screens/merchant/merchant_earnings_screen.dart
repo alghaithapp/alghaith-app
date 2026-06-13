@@ -185,16 +185,7 @@ class _MerchantEarningsScreenState extends State<MerchantEarningsScreen>
         child: ListView(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
           children: [
-            _EarningsHeader(
-              notificationCount: notificationCount > 0 ? notificationCount : 0,
-              onNotifications: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => const MerchantOrdersScreen(),
-                  ),
-                );
-              },
-            ),
+            const _EarningsHeader(),
             const SizedBox(height: 18),
             GridView.count(
               shrinkWrap: true,
@@ -300,13 +291,7 @@ String _formatAmount(int value) {
 // ─────────────────────────────────────────────────────────────
 
 class _EarningsHeader extends StatelessWidget {
-  final int notificationCount;
-  final VoidCallback onNotifications;
-
-  const _EarningsHeader({
-    required this.notificationCount,
-    required this.onNotifications,
-  });
+  const _EarningsHeader();
 
   @override
   Widget build(BuildContext context) {
@@ -365,71 +350,6 @@ class _EarningsHeader extends StatelessWidget {
             ],
           ),
         ),
-        const SizedBox(width: 10),
-        _NotificationButton(
-          count: notificationCount,
-          onTap: onNotifications,
-        ),
-      ],
-    );
-  }
-}
-
-class _NotificationButton extends StatelessWidget {
-  final int count;
-  final VoidCallback onTap;
-
-  const _NotificationButton({required this.count, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return Stack(
-      clipBehavior: Clip.none,
-      children: [
-        Material(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(14),
-          child: InkWell(
-            onTap: onTap,
-            borderRadius: BorderRadius.circular(14),
-            child: Container(
-              width: 46,
-              height: 46,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(14),
-                boxShadow: _shadowSoft,
-              ),
-              child: const Icon(
-                Icons.notifications_rounded,
-                color: Color(0xFF1C1C1E),
-                size: 22,
-              ),
-            ),
-          ),
-        ),
-        if (count > 0)
-          Positioned(
-            top: -4,
-            left: -4,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-              decoration: BoxDecoration(
-                color: _brand,
-                borderRadius: BorderRadius.circular(10),
-              ),
-              constraints: const BoxConstraints(minWidth: 18),
-              child: Text(
-                count > 99 ? '99+' : '$count',
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 10,
-                  fontWeight: FontWeight.w800,
-                  fontFamily: 'Cairo',
-                ),
-              ),
-            ),
-          ),
       ],
     );
   }

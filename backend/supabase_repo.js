@@ -1703,6 +1703,42 @@ async function updateIncomingOrderStatus(merchantPhone, orderId, updates = {}) {
     nextOrder.deliveryStatusEn = updates.deliveryStatusEn;
   }
 
+  if (updates.lineItems !== undefined) {
+    nextOrder.lineItems = Array.isArray(updates.lineItems) ? updates.lineItems : [];
+  }
+  if (updates.price !== undefined) {
+    nextOrder.price = Number.parseInt(String(updates.price), 10) || 0;
+  }
+  if (updates.itemsCount !== undefined) {
+    nextOrder.itemsCount = Number.parseInt(String(updates.itemsCount), 10) || 0;
+  }
+  if (updates.itemsNameAr !== undefined) {
+    nextOrder.itemsNameAr = String(updates.itemsNameAr ?? '').trim();
+  }
+  if (updates.itemsNameEn !== undefined) {
+    nextOrder.itemsNameEn = String(updates.itemsNameEn ?? '').trim();
+  }
+  if (updates.originalPrice !== undefined) {
+    nextOrder.originalPrice = Number.parseInt(String(updates.originalPrice), 10) || 0;
+  }
+  if (updates.itemsSubtotalIqd !== undefined) {
+    nextOrder.itemsSubtotalIqd =
+      Number.parseInt(String(updates.itemsSubtotalIqd), 10) || 0;
+  }
+  if (updates.deliveryFeeIqd !== undefined) {
+    nextOrder.deliveryFeeIqd = Number.parseInt(String(updates.deliveryFeeIqd), 10) || 0;
+  }
+  if (updates.promoDiscountIqd !== undefined) {
+    nextOrder.promoDiscountIqd =
+      Number.parseInt(String(updates.promoDiscountIqd), 10) || 0;
+  }
+  if (updates.merchantDecisionAt !== undefined) {
+    nextOrder.merchantDecisionAt = String(updates.merchantDecisionAt ?? '').trim() || null;
+  }
+  if (updates.isPriceLocked !== undefined) {
+    nextOrder.isPriceLocked = Boolean(updates.isPriceLocked);
+  }
+
   if (nextOrder.statusKey === 'delivering') {
     nextOrder.deliveryStatusKey = 'waiting';
     nextOrder.deliveryStatusAr = 'بانتظار مندوب التوصيل';

@@ -165,6 +165,18 @@ class _OrdersScreenState extends State<OrdersScreen> {
                     const SizedBox(height: 2),
                     _PendingApprovalCountdown(order: order),
                   ],
+                  if (order.statusKey == 'adjustment_pending') ...[
+                    const SizedBox(height: 2),
+                    const Text(
+                      'التاجر عدّل الطلب — راجع التفاصيل أدناه',
+                      style: TextStyle(
+                        color: Colors.deepOrange,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        fontFamily: 'Cairo',
+                      ),
+                    ),
+                  ],
                 ],
               ),
               Container(
@@ -270,6 +282,49 @@ class _OrdersScreenState extends State<OrdersScreen> {
               ),
             ),
           ],
+          if (order.statusKey == 'adjustment_pending') ...[
+            const SizedBox(height: 10),
+            ...order.lineItems.map(
+              (item) => Padding(
+                padding: const EdgeInsets.only(bottom: 6),
+                child: Row(
+                  children: [
+                    Icon(
+                      item.isAvailable ? Icons.check_circle : Icons.cancel,
+                      size: 16,
+                      color: item.isAvailable ? Colors.green : Colors.red,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        '${item.nameAr} (${item.quantity} × ${item.price.toLocaleString()} د.ع)',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontFamily: 'Cairo',
+                          decoration:
+                              item.isAvailable ? null : TextDecoration.lineThrough,
+                          color: item.isAvailable ? Colors.black87 : Colors.grey,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            if ((order.originalPrice ?? 0) > 0 &&
+                order.originalPrice != order.price) ...[
+              const SizedBox(height: 4),
+              Text(
+                'السعر السابق: ${order.originalPrice!.toLocaleString()} د.ع',
+                style: const TextStyle(
+                  fontSize: 11,
+                  color: CupertinoColors.systemGrey,
+                  decoration: TextDecoration.lineThrough,
+                  fontFamily: 'Cairo',
+                ),
+              ),
+            ],
+          ],
           const Padding(
             padding: EdgeInsets.symmetric(vertical: 12.0),
             child: Divider(height: 1, color: Color(0xFFF2F2F7)),
@@ -313,6 +368,40 @@ class _OrdersScreenState extends State<OrdersScreen> {
                 runSpacing: 6,
                 alignment: WrapAlignment.end,
                 children: [
+                  if (order.statusKey == 'adjustment_pending') ...[
+                    CupertinoButton(
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      color: Colors.green,
+                      borderRadius: BorderRadius.circular(10),
+                      minimumSize: const Size(0, 35),
+                      onPressed: () => _confirmAdjustmentResponse(order, true),
+                      child: const Text(
+                        'موافقة على التعديل',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                          fontFamily: 'Cairo',
+                        ),
+                      ),
+                    ),
+                    CupertinoButton(
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      color: Colors.red,
+                      borderRadius: BorderRadius.circular(10),
+                      minimumSize: const Size(0, 35),
+                      onPressed: () => _confirmAdjustmentResponse(order, false),
+                      child: const Text(
+                        'رفض التعديل',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                          fontFamily: 'Cairo',
+                        ),
+                      ),
+                    ),
+                  ],
                   if (_canRequestCancel(order))
                     CupertinoButton(
                       padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -380,7 +469,52 @@ class _OrdersScreenState extends State<OrdersScreen> {
         order.statusKey != 'cancel_requested';
   }
 
-  bool _isPendingApproval(ActiveOrder order) => order.statusKey == 'pending';
+  bool _isPendingApproval(ActiveOrder order) =>
+      order.statusKey == 'pending' || order.statusKey == 'adjustment_pending';
+
+  Future<void> _confirmAdjustmentResponse(
+    ActiveOrder order,
+    bool approve,
+  ) async {
+    final confirmed = await showCupertinoDialog<bool>(
+      context: context,
+      builder: (dialogContext) => CupertinoAlertDialog(
+        title: Text(approve ? 'موافقة على التعديل' : 'رفض التعديل'),
+        content: Text(
+          approve
+              ? 'سيتم قبول الطلب بمبلغ ${order.price.toLocaleString()} د.ع وبدء التجهيز.'
+              : 'سيتم إلغاء الطلب بالكامل ولن يُنفَّذ.',
+        ),
+        actions: [
+          CupertinoDialogAction(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('تراجع'),
+          ),
+          CupertinoDialogAction(
+            isDestructiveAction: !approve,
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: Text(approve ? 'موافقة' : 'رفض التعديل'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    final ok = await context
+        .read<AppProvider>()
+        .respondToOrderAdjustment(order.id, approve: approve);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          ok
+              ? (approve
+                  ? 'تم قبول الطلب المعدّل.'
+                  : 'تم إلغاء الطلب.')
+              : 'تعذر تنفيذ العملية. حاول مجدداً.',
+        ),
+      ),
+    );
+  }
 
   Future<void> _confirmCancelRequest(ActiveOrder order) async {
     final isPendingApproval = _isPendingApproval(order);

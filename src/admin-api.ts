@@ -4,6 +4,8 @@ import type {
   AdminSession,
   AppUpdatePolicy,
   CourierSummary,
+  HomeCategoriesConfig,
+  HomeCategoryPlatformOverride,
   MerchantDetails,
   MerchantSummary,
   ToggleBazaarResponse,
@@ -288,6 +290,31 @@ export async function saveAppUpdatePolicy(
       method: 'PUT',
       token,
       body: JSON.stringify(policy),
+    },
+  );
+}
+
+export async function loadHomeCategoriesConfig(
+  token: string,
+): Promise<HomeCategoriesConfig> {
+  return request<HomeCategoriesConfig>(
+    DATABASE_API_BASE_URL,
+    '/app/home-categories',
+    { token },
+  );
+}
+
+export async function saveHomeCategoriesConfig(
+  token: string,
+  overrides: Record<string, HomeCategoryPlatformOverride>,
+): Promise<HomeCategoriesConfig> {
+  return request<HomeCategoriesConfig>(
+    DATABASE_API_BASE_URL,
+    '/db/admin/home-categories',
+    {
+      method: 'PUT',
+      token,
+      body: JSON.stringify({ overrides }),
     },
   );
 }

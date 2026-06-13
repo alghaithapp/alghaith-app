@@ -54,6 +54,22 @@ function isMerchantApprovedCancellation(meta) {
   );
 }
 
+function isCustomerRejectedAdjustment(meta) {
+  const { ar, en } = noteText(meta);
+  return (
+    ar.includes('رفض الزبون الطلب المعدّل') ||
+    en.includes('Customer rejected adjusted order')
+  );
+}
+
+function isCustomerApprovedAdjustment(meta) {
+  const { ar, en } = noteText(meta);
+  return (
+    ar.includes('وافق الزبون على الطلب المعدّل') ||
+    en.includes('Customer approved adjusted order')
+  );
+}
+
 function isDeliveryPool(meta) {
   return (
     meta?.statusKey === 'delivering' &&
@@ -190,7 +206,18 @@ async function onOrderSaved({ previousMeta, nextMeta, isNew }) {
       );
     }
 
-    if (nextStatus === 'accepted' && nextMeta.customerPhone) {
+    if (nextStatus === 'adjustment_pending' && nextMeta.customerPhone) {
+      await sendPushToPhone(
+        nextMeta.customerPhone,
+        buildPushPayload({
+          title: 'تعديل على طلبك',
+          body: `التاجر عدّل الطلب ${orderNumber} — راجع ووافق أو ألغِ`,
+          audience: 'customer',
+          orderId,
+          eventKey: `customer:${orderId}:adjustment_pending`,
+        })
+      );
+    } else if (nextStatus === 'accepted' && nextMeta.customerPhone) {
       await sendPushToPhone(
         nextMeta.customerPhone,
         buildPushPayload({
@@ -201,6 +228,21 @@ async function onOrderSaved({ previousMeta, nextMeta, isNew }) {
           eventKey: `customer:${orderId}:accepted`,
         })
       );
+      if (
+        previousStatus === 'adjustment_pending' &&
+        nextMeta.merchantPhone
+      ) {
+        await sendPushToPhone(
+          nextMeta.merchantPhone,
+          buildPushPayload({
+            title: 'وافق الزبون على التعديل',
+            body: `الطلب ${orderNumber} قيد التجهيز`,
+            audience: 'merchant',
+            orderId,
+            eventKey: `merchant:${orderId}:adjustment_accepted`,
+          })
+        );
+      }
     } else if (nextStatus === 'preparing' && nextMeta.customerPhone) {
       await sendPushToPhone(
         nextMeta.customerPhone,
@@ -268,6 +310,33 @@ async function onOrderSaved({ previousMeta, nextMeta, isNew }) {
             eventKey: `customer:${orderId}:rejected`,
           })
         );
+      } else if (
+        previousStatus === 'adjustment_pending' &&
+        isCustomerRejectedAdjustment(nextMeta) &&
+        nextMeta.merchantPhone
+      ) {
+        await sendPushToPhone(
+          nextMeta.merchantPhone,
+          buildPushPayload({
+            title: 'رفض الزبون التعديل',
+            body: `ألغى الزبون الطلب ${orderNumber} بعد التعديل`,
+            audience: 'merchant',
+            orderId,
+            eventKey: `merchant:${orderId}:adjustment_rejected`,
+          })
+        );
+        if (nextMeta.customerPhone) {
+          await sendPushToPhone(
+            nextMeta.customerPhone,
+            buildPushPayload({
+              title: 'تم إلغاء الطلب',
+              body: `ألغيت الطلب المعدّل ${orderNumber}`,
+              audience: 'customer',
+              orderId,
+              eventKey: `customer:${orderId}:adjustment_rejected`,
+            })
+          );
+        }
       } else if (!isMerchantApprovedCancellation(nextMeta)) {
         await sendPushToPhone(
           nextMeta.customerPhone,

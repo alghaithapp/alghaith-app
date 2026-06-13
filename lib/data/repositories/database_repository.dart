@@ -207,6 +207,17 @@ class DatabaseRepository {
     String? deliveryStatusKey,
     String? deliveryStatusAr,
     String? deliveryStatusEn,
+    List<Map<String, dynamic>>? lineItems,
+    int? price,
+    int? itemsCount,
+    String? itemsNameAr,
+    String? itemsNameEn,
+    int? originalPrice,
+    int? itemsSubtotalIqd,
+    int? deliveryFeeIqd,
+    int? promoDiscountIqd,
+    String? merchantDecisionAt,
+    bool? isPriceLocked,
   }) async {
     await ApiClient.instance.put('/db/incoming-order-status', body: {
       'phone': _phone(merchantPhone),
@@ -219,6 +230,17 @@ class DatabaseRepository {
       if (deliveryStatusKey != null) 'deliveryStatusKey': deliveryStatusKey,
       if (deliveryStatusAr != null) 'deliveryStatusAr': deliveryStatusAr,
       if (deliveryStatusEn != null) 'deliveryStatusEn': deliveryStatusEn,
+      if (lineItems != null) 'lineItems': lineItems,
+      if (price != null) 'price': price,
+      if (itemsCount != null) 'itemsCount': itemsCount,
+      if (itemsNameAr != null) 'itemsNameAr': itemsNameAr,
+      if (itemsNameEn != null) 'itemsNameEn': itemsNameEn,
+      if (originalPrice != null) 'originalPrice': originalPrice,
+      if (itemsSubtotalIqd != null) 'itemsSubtotalIqd': itemsSubtotalIqd,
+      if (deliveryFeeIqd != null) 'deliveryFeeIqd': deliveryFeeIqd,
+      if (promoDiscountIqd != null) 'promoDiscountIqd': promoDiscountIqd,
+      if (merchantDecisionAt != null) 'merchantDecisionAt': merchantDecisionAt,
+      if (isPriceLocked != null) 'isPriceLocked': isPriceLocked,
     });
   }
 

@@ -202,6 +202,20 @@ class NotificationHub {
             eventKey: 'merchant:${order.id}:cancel_requested',
           );
         case 'cancelled':
+          if (previous.statusKey == 'adjustment_pending' &&
+              (order.noteAr.contains('رفض الزبون الطلب المعدّل') ||
+                  order.noteEn.contains('Customer rejected adjusted order'))) {
+            _notify(
+              title: 'رفض الزبون التعديل $no',
+              body: 'ألغى الزبون الطلب بعد التعديل',
+              audience: 'merchant',
+              orderNumber: order.orderNumber,
+              category: NotificationCategory.order,
+              priority: NotificationPriority.urgent,
+              eventKey: 'merchant:${order.id}:adjustment_rejected',
+            );
+            break;
+          }
           _notify(
             title: 'إلغاء الطلب $no',
             body: order.noteAr.trim().isNotEmpty
@@ -223,6 +237,28 @@ class NotificationHub {
             priority: NotificationPriority.normal,
             eventKey: 'merchant:${order.id}:completed',
           );
+        case 'adjustment_pending':
+          _notify(
+            title: 'بانتظار موافقة الزبون $no',
+            body: 'أُرسل الطلب المعدّل للزبون',
+            audience: 'merchant',
+            orderNumber: order.orderNumber,
+            category: NotificationCategory.order,
+            priority: NotificationPriority.normal,
+            eventKey: 'merchant:${order.id}:adjustment_pending',
+          );
+        case 'accepted':
+          if (previous.statusKey == 'adjustment_pending') {
+            _notify(
+              title: 'وافق الزبون على التعديل $no',
+              body: 'يمكنك البدء بتجهيز الطلب',
+              audience: 'merchant',
+              orderNumber: order.orderNumber,
+              category: NotificationCategory.order,
+              priority: NotificationPriority.urgent,
+              eventKey: 'merchant:${order.id}:adjustment_accepted',
+            );
+          }
         default:
           break;
       }
@@ -235,7 +271,18 @@ class NotificationHub {
     String newStatusKey,
   ) {
     final no = displayOrderNumber(order);
-    if (newStatusKey == 'accepted' && previousStatus != 'accepted') {
+    if (newStatusKey == 'adjustment_pending' &&
+        previousStatus != 'adjustment_pending') {
+      _notify(
+        title: 'أُرسل التعديل للزبون $no',
+        body: 'بانتظار موافقة الزبون على الطلب المعدّل',
+        audience: 'merchant',
+        orderNumber: order.orderNumber,
+        category: NotificationCategory.order,
+        priority: NotificationPriority.urgent,
+        eventKey: 'merchant:${order.id}:adjustment_sent',
+      );
+    } else if (newStatusKey == 'accepted' && previousStatus != 'accepted') {
       _notify(
         title: 'قبلت الطلب $no',
         body: 'تم إرسال القبول للزبون',
@@ -256,6 +303,45 @@ class NotificationHub {
         eventKey: 'merchant:${order.id}:local_done',
       );
     }
+  }
+
+  void onOrderAdjustmentProposed(ActiveOrder order) {
+    final no = displayOrderNumber(order);
+    _notify(
+      title: 'أُرسل التعديل للزبون $no',
+      body: 'بانتظار موافقة الزبون على الطلب المعدّل',
+      audience: 'merchant',
+      orderNumber: order.orderNumber,
+      category: NotificationCategory.order,
+      priority: NotificationPriority.urgent,
+      eventKey: 'merchant:${order.id}:adjustment_proposed_local',
+    );
+  }
+
+  void onOrderAdjustmentAccepted(ActiveOrder order) {
+    final no = displayOrderNumber(order);
+    _notify(
+      title: 'وافقت على الطلب المعدّل $no',
+      body: 'بدأ التاجر بتجهيز طلبك',
+      audience: 'customer',
+      orderNumber: order.orderNumber,
+      category: NotificationCategory.order,
+      priority: NotificationPriority.urgent,
+      eventKey: 'customer:${order.id}:adjustment_accepted_local',
+    );
+  }
+
+  void onOrderAdjustmentRejected(ActiveOrder order) {
+    final no = displayOrderNumber(order);
+    _notify(
+      title: 'ألغيت الطلب المعدّل $no',
+      body: 'لم توافق على التعديل المقترح من التاجر',
+      audience: 'customer',
+      orderNumber: order.orderNumber,
+      category: NotificationCategory.order,
+      priority: NotificationPriority.normal,
+      eventKey: 'customer:${order.id}:adjustment_rejected_local',
+    );
   }
 
   void onMerchantStoreOpenChanged(bool isOpen) {

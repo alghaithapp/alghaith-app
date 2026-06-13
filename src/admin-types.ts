@@ -12,6 +12,32 @@ export interface AppUpdatePolicy {
   updatedAt: string | null;
 }
 
+export interface HomeCategoryPlatformOverride {
+  default?: boolean;
+  android?: boolean;
+  ios?: boolean;
+  web?: boolean;
+}
+
+export interface HomeCategoriesConfig {
+  overrides: Record<string, HomeCategoryPlatformOverride>;
+  updatedAt: string | null;
+}
+
+export const DEFAULT_HOME_CATEGORY_IDS = new Set(['restaurant', 'product', 'cars']);
+
+export const TOGGLEABLE_HOME_CATEGORIES = [
+  { id: 'restaurant', titleAr: 'المطاعم' },
+  { id: 'product', titleAr: 'التسوق' },
+  { id: 'cars', titleAr: 'السيارات' },
+  { id: 'professionals', titleAr: 'المهنيين' },
+  { id: 'beauty', titleAr: 'الصحة والجمال' },
+  { id: 'tourism', titleAr: 'السياحة والسفر' },
+  { id: 'real_estate', titleAr: 'العقارات' },
+  { id: 'offers', titleAr: 'العروض والخصومات' },
+  { id: 'used', titleAr: 'المنتجات المستعملة' },
+] as const;
+
 export interface AdminReports {
   totalOrders: number;
   completedOrders: number;

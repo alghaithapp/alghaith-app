@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../core/catalog/marketplace_catalog.dart';
 import '../core/catalog/marketplace_stats.dart';
 import '../core/checkout/cart_promo.dart';
+import '../core/orders/order_adjustment.dart';
 import '../core/notifications/notification_hub.dart';
 import '../core/notifications/push_notification_inbox.dart';
 import '../core/notifications/push_notification_service.dart';
@@ -3372,6 +3373,8 @@ class AppProvider extends ChangeNotifier {
         return 'ملغي';
       case 'cancel_requested':
         return 'طلب إلغاء بانتظار موافقة التاجر';
+      case 'adjustment_pending':
+        return 'بانتظار موافقة الزبون على التعديل';
       default:
         return statusKey;
     }
@@ -3389,6 +3392,8 @@ class AppProvider extends ChangeNotifier {
         return 'Cancelled';
       case 'cancel_requested':
         return 'Cancellation Requested';
+      case 'adjustment_pending':
+        return 'Awaiting customer approval';
       default:
         return statusKey;
     }
@@ -3405,7 +3410,7 @@ class AppProvider extends ChangeNotifier {
       return false;
     }
 
-    if (order.statusKey == 'pending') {
+    if (order.statusKey == 'pending' || order.statusKey == 'adjustment_pending') {
       updateOrderStatus(
         orderId,
         'cancelled',
@@ -3688,6 +3693,140 @@ class AppProvider extends ChangeNotifier {
       unawaited(_persistCustomerOrder(updated));
     }
     notifyListeners();
+  }
+
+  Future<bool> proposeMerchantOrderAdjustment(
+    String orderId,
+    List<OrderLineItem> adjustedLineItems,
+  ) async {
+    final index =
+        _merchantIncomingOrders.indexWhere((item) => item.id == orderId);
+    if (index == -1) return false;
+    final order = _merchantIncomingOrders[index];
+    if (order.statusKey != 'pending') return false;
+    if (adjustedLineItems.isEmpty) return false;
+
+    final availableCount =
+        adjustedLineItems.where((item) => item.isAvailable).length;
+    if (availableCount == 0) return false;
+
+    if (!orderHasUnavailableItems(adjustedLineItems)) {
+      updateOrderStatus(
+        orderId,
+        'accepted',
+        'تمت الموافقة',
+        'Approved',
+      );
+      return true;
+    }
+
+    final unavailable = unavailableItemNamesAr(adjustedLineItems);
+    final newPrice = computeAdjustedOrderTotal(order, adjustedLineItems);
+    final nowIso = DateTime.now().toIso8601String();
+    final noteAr = 'منتجات غير متوفرة: ${unavailable.join('، ')}';
+    final noteEn = 'Unavailable items: ${unavailable.join(', ')}';
+    final updated = order.copyWith(
+      statusKey: 'adjustment_pending',
+      statusAr: 'بانتظار موافقة الزبون',
+      statusEn: 'Awaiting customer approval',
+      lineItems: adjustedLineItems,
+      price: newPrice,
+      originalPrice: order.originalPrice ?? order.price,
+      itemsCount: orderAvailableItemsCount(adjustedLineItems),
+      itemsNameAr: orderAvailableItemsLabelAr(adjustedLineItems),
+      itemsNameEn: orderAvailableItemsLabelEn(adjustedLineItems),
+      noteAr: noteAr,
+      noteEn: noteEn,
+      merchantDecisionAt: nowIso,
+    );
+
+    _merchantIncomingOrders[index] = updated;
+    _notificationHub.onOrderAdjustmentProposed(updated);
+    notifyListeners();
+
+    final phone = _trimmedOrNull(_authPhone);
+    if (phone != null) {
+      try {
+        await SupabaseService.updateIncomingOrderStatus(
+          phone,
+          orderId,
+          statusKey: updated.statusKey,
+          statusAr: updated.statusAr,
+          statusEn: updated.statusEn,
+          noteAr: updated.noteAr,
+          noteEn: updated.noteEn,
+          lineItems: updated.lineItems.map((item) => item.toMap()).toList(),
+          price: updated.price,
+          itemsCount: updated.itemsCount,
+          itemsNameAr: updated.itemsNameAr,
+          itemsNameEn: updated.itemsNameEn,
+          originalPrice: updated.originalPrice,
+          itemsSubtotalIqd: updated.itemsSubtotalIqd,
+          deliveryFeeIqd: updated.deliveryFeeIqd,
+          promoDiscountIqd: updated.promoDiscountIqd,
+          merchantDecisionAt: updated.merchantDecisionAt,
+        );
+        await _refreshMerchantIncomingOrders();
+      } catch (error) {
+        debugPrint('PROPOSE_ORDER_ADJUSTMENT_ERROR: $error');
+      }
+    }
+    return true;
+  }
+
+  Future<bool> respondToOrderAdjustment(
+    String orderId, {
+    required bool approve,
+  }) async {
+    final index = _orders.indexWhere((item) => item.id == orderId);
+    if (index == -1) return false;
+    final order = _orders[index];
+    if (order.statusKey != 'adjustment_pending') return false;
+
+    if (approve) {
+      final availableItems =
+          order.lineItems.where((item) => item.isAvailable).toList();
+      final updated = order.copyWith(
+        statusKey: 'accepted',
+        statusAr: 'تمت الموافقة',
+        statusEn: 'Approved',
+        lineItems: availableItems,
+        itemsCount: orderAvailableItemsCount(availableItems),
+        itemsNameAr: orderAvailableItemsLabelAr(availableItems),
+        itemsNameEn: orderAvailableItemsLabelEn(availableItems),
+        isPriceLocked: true,
+        noteAr: 'وافق الزبون على الطلب المعدّل.',
+        noteEn: 'Customer approved adjusted order.',
+      );
+      _orders[index] = updated;
+      _notificationHub.onOrderAdjustmentAccepted(updated);
+      notifyListeners();
+      try {
+        await _persistCustomerOrder(updated);
+      } catch (error) {
+        debugPrint('ACCEPT_ORDER_ADJUSTMENT_ERROR: $error');
+        return false;
+      }
+      return true;
+    }
+
+    final updated = order.copyWith(
+      statusKey: 'cancelled',
+      statusAr: 'ملغي',
+      statusEn: 'Cancelled',
+      noteAr: 'رفض الزبون الطلب المعدّل.',
+      noteEn: 'Customer rejected adjusted order.',
+    );
+    _orders[index] = updated;
+    _notificationHub.onOrderAdjustmentRejected(updated);
+    notifyListeners();
+    try {
+      await _persistCustomerOrder(updated);
+    } catch (error) {
+      debugPrint('REJECT_ORDER_ADJUSTMENT_ERROR: $error');
+      return false;
+    }
+    return true;
   }
 
   Future<void> addProduct(ListItem item) async {
@@ -3973,6 +4112,10 @@ class AppProvider extends ChangeNotifier {
         merchantStoreName: merchantStoreName,
         createdAt: createdAtIso,
         isPriceLocked: false,
+        itemsSubtotalIqd: subtotal,
+        deliveryFeeIqd: orderDeliveryFee,
+        promoDiscountIqd: orderPromoDiscount,
+        originalPrice: totalPrice,
       );
 
       stagedOrders.add((order: newOrder, items: List<CartItem>.from(items)));

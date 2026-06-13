@@ -58,6 +58,7 @@ class _OrderTrackingSheetState extends State<OrderTrackingSheet> {
     final order = _liveOrder ?? widget.order;
     final steps = _buildSteps(order);
     final eta = _etaLabel(order);
+    final provider = context.read<AppProvider>();
 
     return CupertinoActionSheet(
       title: Text(
@@ -66,6 +67,100 @@ class _OrderTrackingSheetState extends State<OrderTrackingSheet> {
       ),
       message: Column(
         children: [
+          if (order.statusKey == 'adjustment_pending') ...[
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.orange.withValues(alpha: 0.10),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'التاجر عدّل الطلب',
+                    style: TextStyle(
+                      fontFamily: 'Cairo',
+                      fontWeight: FontWeight.w800,
+                      color: Color(0xFFE65100),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  ...order.lineItems.map(
+                    (item) => Text(
+                      '${item.isAvailable ? '✓' : '✗'} ${item.nameAr}',
+                      style: TextStyle(
+                        fontFamily: 'Cairo',
+                        fontSize: 12,
+                        decoration:
+                            item.isAvailable ? null : TextDecoration.lineThrough,
+                        color: item.isAvailable ? Colors.black87 : Colors.grey,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'المبلغ الجديد: ${order.price} د.ع',
+                    style: const TextStyle(
+                      fontFamily: 'Cairo',
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(
+                  child: CupertinoButton.filled(
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    onPressed: () async {
+                      final ok = await provider.respondToOrderAdjustment(
+                        order.id,
+                        approve: true,
+                      );
+                      if (!context.mounted) return;
+                      Navigator.pop(context);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            ok ? 'تم قبول الطلب المعدّل.' : 'تعذر قبول التعديل.',
+                          ),
+                        ),
+                      );
+                    },
+                    child: const Text('موافقة'),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: CupertinoButton(
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    color: CupertinoColors.systemRed,
+                    onPressed: () async {
+                      final ok = await provider.respondToOrderAdjustment(
+                        order.id,
+                        approve: false,
+                      );
+                      if (!context.mounted) return;
+                      Navigator.pop(context);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            ok ? 'تم إلغاء الطلب.' : 'تعذر رفض التعديل.',
+                          ),
+                        ),
+                      );
+                    },
+                    child: const Text('رفض'),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+          ],
           if ((order.assignedCourierName ?? '').isNotEmpty) ...[
             const SizedBox(height: 8),
             Text(

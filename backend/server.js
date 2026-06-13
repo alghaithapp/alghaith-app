@@ -1162,6 +1162,17 @@ app.put('/db/incoming-order-status', async (req, res) => {
       deliveryStatusKey: req.body?.deliveryStatusKey,
       deliveryStatusAr: req.body?.deliveryStatusAr,
       deliveryStatusEn: req.body?.deliveryStatusEn,
+      lineItems: req.body?.lineItems,
+      price: req.body?.price,
+      itemsCount: req.body?.itemsCount,
+      itemsNameAr: req.body?.itemsNameAr,
+      itemsNameEn: req.body?.itemsNameEn,
+      originalPrice: req.body?.originalPrice,
+      itemsSubtotalIqd: req.body?.itemsSubtotalIqd,
+      deliveryFeeIqd: req.body?.deliveryFeeIqd,
+      promoDiscountIqd: req.body?.promoDiscountIqd,
+      merchantDecisionAt: req.body?.merchantDecisionAt,
+      isPriceLocked: req.body?.isPriceLocked,
     });
     return res.json(row);
   } catch (error) {
