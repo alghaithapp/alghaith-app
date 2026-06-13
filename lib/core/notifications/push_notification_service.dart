@@ -60,12 +60,6 @@ class PushNotificationService {
         badge: true,
         sound: true,
         provisional: false,
-      ).timeout(
-        const Duration(seconds: 5),
-        onTimeout: () {
-          debugPrint('Push: requestPermission timed out on iOS — continuing without permission.');
-          return AuthorizationStatus.authorized;
-        },
       );
       debugPrint('Push: permission=${settings.authorizationStatus.name}');
 
