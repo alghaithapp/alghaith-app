@@ -6,6 +6,7 @@ import '../core/catalog/marketplace_catalog.dart';
 import '../core/catalog/marketplace_stats.dart';
 import '../core/checkout/cart_promo.dart';
 import '../core/orders/order_adjustment.dart';
+import '../core/storage/home_categories_cache.dart';
 import '../core/notifications/notification_hub.dart';
 import '../core/notifications/push_notification_inbox.dart';
 import '../core/notifications/push_notification_service.dart';
@@ -518,6 +519,9 @@ class AppProvider extends ChangeNotifier {
   }
 
   Future<void> _loadSettings() async {
+    await _restoreHomeCategoriesFromCache();
+    unawaited(refreshHomeCategoriesConfig());
+
     String? restoredPhone;
     try {
       final accountRepo = AccountRepository.instance;
@@ -4876,7 +4880,13 @@ class AppProvider extends ChangeNotifier {
       final value = override.isEnabledOn(platform);
       if (value != null) return value;
     }
-    return MarketplaceCatalog.customerHomeCategoryIds.contains(categoryId);
+    return true;
+  }
+
+  Future<void> _restoreHomeCategoriesFromCache() async {
+    final cached = await HomeCategoriesCache.read();
+    if (cached == null || cached.isEmpty) return;
+    _homeCategoryOverrides = cached;
   }
 
   Future<void> refreshHomeCategoriesConfig() async {
@@ -4886,6 +4896,7 @@ class AppProvider extends ChangeNotifier {
       final overrides = await SupabaseService.loadHomeCategoriesConfig();
       if (loadGeneration != _homeCategoriesSaveGeneration) return;
       _homeCategoryOverrides = overrides;
+      await HomeCategoriesCache.write(overrides);
       notifyListeners();
     } catch (error) {
       debugPrint('HOME_CATEGORIES_CONFIG_ERROR: $error');
@@ -4919,6 +4930,7 @@ class AppProvider extends ChangeNotifier {
       );
       if (saveGeneration != _homeCategoriesSaveGeneration) return true;
       _homeCategoryOverrides = saved;
+      await HomeCategoriesCache.write(saved);
       notifyListeners();
       return true;
     } catch (error) {

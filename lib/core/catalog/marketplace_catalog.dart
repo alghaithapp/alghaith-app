@@ -278,6 +278,7 @@ class MarketplaceCatalog {
           .toList();
 
   /// هل القسم مفعّل على المنصة المحددة؟
+  /// بدون إعداد من الأدمن: يُعتبر القسم ظاهراً (true) لتفادي وميض الأقسام عند التحميل.
   static bool isHomeCategoryEnabled(
     String categoryId, {
     required Map<String, HomeCategoryPlatformOverride> overrides,
@@ -288,7 +289,7 @@ class MarketplaceCatalog {
       final platformValue = override.isEnabledOn(platform);
       if (platformValue != null) return platformValue;
     }
-    return customerHomeCategoryIds.contains(categoryId);
+    return true;
   }
 
   /// الأقسام المتاحة للتجار للتسجيل فيها (باستثناء الأقسام الإدارية أو الخاصة).
