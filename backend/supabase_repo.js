@@ -175,6 +175,26 @@ function isMerchantFrozen(profile) {
   return profile?.is_frozen === true;
 }
 
+function isProfessionalMerchantProfile(profile) {
+  if (!profile) return false;
+  const primary = String(profile.primary_service_id ?? '').trim();
+  if (primary === 'professionals') return true;
+  const serviceIds = normalizeArray(profile.service_ids);
+  if (serviceIds.map((item) => String(item)).includes('professionals')) return true;
+  const info = normalizeObject(profile.professional_info);
+  if (String(info.name ?? '').trim()) return true;
+  if (String(profile.professional_category_id ?? '').trim()) return true;
+  return false;
+}
+
+function merchantProfileDisplayName(profile) {
+  if (!profile) return '';
+  const storeName = String(profile.store_name ?? profile.storeName ?? '').trim();
+  if (storeName) return storeName;
+  const info = normalizeObject(profile.professional_info);
+  return String(info.name ?? '').trim();
+}
+
 function isMerchantApproved(profile) {
   if (!profile) return false;
   if (profile.is_approved === true || profile.isApproved === true) return true;
@@ -182,9 +202,8 @@ function isMerchantApproved(profile) {
   if (status === 'approved') return true;
   if (status === 'pending' || status === 'rejected') return false;
   if (profile.is_approved === false || profile.isApproved === false) return false;
-  const storeName = String(
-    profile.store_name ?? profile.storeName ?? profile.name ?? ''
-  ).trim();
+  if (isProfessionalMerchantProfile(profile)) return false;
+  const storeName = merchantProfileDisplayName(profile);
   return storeName.length > 0;
 }
 
@@ -194,6 +213,7 @@ function merchantApprovalStatus(profile) {
   if (status === 'rejected') return 'rejected';
   if (status === 'pending') return 'pending';
   if (profile.is_approved === false || profile.isApproved === false) return 'pending';
+  if (isProfessionalMerchantProfile(profile)) return 'pending';
   return 'approved';
 }
 
@@ -998,6 +1018,22 @@ async function saveMerchantProfile(phone, data = {}) {
     assignIfDefined(basePayload, 'rejected_at', data.rejected_at ?? data.rejectedAt);
   }
   const phoneKey = await resolvePhoneKey(phone);
+  const existingProfile = await getMerchantProfile(phoneKey);
+  if (!existingProfile) {
+    if (await hasColumn('merchant_profiles', 'is_approved')) {
+      if (basePayload.is_approved === undefined && basePayload.isApproved === undefined) {
+        basePayload.is_approved = false;
+      }
+    }
+    if (await hasColumn('merchant_profiles', 'approval_status')) {
+      const incomingStatus = String(
+        data.approval_status ?? data.approvalStatus ?? ''
+      ).trim();
+      if (!incomingStatus) {
+        basePayload.approval_status = 'pending';
+      }
+    }
+  }
   return saveRow('merchant_profiles', { ...basePayload, phone: phoneKey }, 'phone');
 }
 
@@ -1524,6 +1560,307 @@ async function rejectDeliveryOrder(courierPhone, orderId) {
     merchant_phone: meta.merchantPhone || null,
     courier_phone: null,
   });
+}
+
+function readTaxiMeta(row) {
+  const payload = normalizeObject(row.request_payload);
+  return {
+    row,
+    payload,
+    id: String(row.id ?? payload.id ?? '').trim(),
+    customerPhone: String(row.phone ?? payload.customerPhone ?? '').trim(),
+    driverPhone: String(
+      row.driver_phone ?? payload.driverPhone ?? payload.assignedDriverPhone ?? ''
+    ).trim(),
+    statusKey: String(row.status_key ?? payload.statusKey ?? '').trim(),
+    rideTypeId: String(row.ride_type_id ?? payload.rideTypeId ?? '').trim(),
+  };
+}
+
+function isTaxiPoolRequest(meta) {
+  const status = meta.statusKey;
+  return (status === 'pending' || status === 'new') && !meta.driverPhone;
+}
+
+async function saveTaxiRequest(phone, data = {}, options = {}) {
+  const customerPhone = await resolvePhoneKey(phone);
+  await ensureAppUser(customerPhone, data);
+
+  const request = normalizeObject(data.request ?? data.request_payload);
+  const requestId = String(request.id ?? data.id ?? '').trim();
+  if (!requestId) {
+    throw new Error('Request id is required.');
+  }
+
+  const existingRow = await selectSingle('taxi_requests', 'id', requestId);
+  const previousMeta = existingRow ? readTaxiMeta(existingRow) : null;
+
+  const rawDriverPhone = String(
+    data.driver_phone ??
+      data.driverPhone ??
+      request.driverPhone ??
+      request.assignedDriverPhone ??
+      ''
+  ).trim();
+  const driverPhone = rawDriverPhone ? await resolvePhoneKey(rawDriverPhone) : null;
+
+  request.customerPhone = customerPhone;
+  if (driverPhone) {
+    request.driverPhone = driverPhone;
+    request.assignedDriverPhone = driverPhone;
+  }
+
+  const payload = {
+    id: requestId,
+    phone: customerPhone,
+    request_number: String(request.requestNumber ?? data.request_number ?? '').trim() || null,
+    status_key: String(request.statusKey ?? data.status_key ?? '').trim() || 'pending',
+    ride_type_id: String(request.rideTypeId ?? data.ride_type_id ?? '').trim() || null,
+    request_payload: request,
+    updated_at: nowIso(),
+  };
+
+  if (await hasColumn('taxi_requests', 'driver_phone')) {
+    payload.driver_phone = driverPhone;
+  }
+
+  const savedRow = await saveRow('taxi_requests', payload, 'id');
+  const nextMeta = readTaxiMeta(savedRow);
+
+  if (!options.skipPush) {
+    try {
+      const { onTaxiRequestSaved } = require('./push_events');
+      await onTaxiRequestSaved({
+        previousMeta,
+        nextMeta,
+        isNew: !existingRow,
+      });
+    } catch (error) {
+      console.error('push onTaxiRequestSaved error:', error?.message || error);
+    }
+  }
+
+  return savedRow;
+}
+
+async function getCustomerTaxiRequests(phone) {
+  const normalized = await resolvePhoneKey(phone);
+  const variants = getPhoneVariants(normalized);
+  if (await hasColumn('taxi_requests', 'phone')) {
+    return selectMany(
+      'taxi_requests',
+      [{ method: 'in', column: 'phone', value: variants }],
+      { column: 'updated_at', ascending: false }
+    );
+  }
+  const rows = await selectMany(
+    'taxi_requests',
+    [],
+    { column: 'updated_at', ascending: false }
+  );
+  return rows.filter((row) => phonesOverlap(normalized, readTaxiMeta(row).customerPhone));
+}
+
+async function getTaxiPoolOrders(driverPhone = '') {
+  const rows = await selectMany(
+    'taxi_requests',
+    [],
+    { column: 'updated_at', ascending: false }
+  );
+  let driverVariants = [];
+  if (driverPhone) {
+    const normalized = await resolvePhoneKey(driverPhone);
+    driverVariants = getPhoneVariants(normalized);
+  }
+  return rows.filter((row) => {
+    const meta = readTaxiMeta(row);
+    if (!isTaxiPoolRequest(meta)) return false;
+    if (!driverVariants.length) return true;
+    const rejected = Array.isArray(meta.payload.rejectedByDrivers)
+      ? meta.payload.rejectedByDrivers.map((item) => String(item).trim())
+      : [];
+    return !driverVariants.some((variant) => rejected.includes(variant));
+  });
+}
+
+async function getDriverTaxiOrders(driverPhone) {
+  const variants = getPhoneVariants(driverPhone);
+  if (await hasColumn('taxi_requests', 'driver_phone')) {
+    return selectMany(
+      'taxi_requests',
+      [{ method: 'in', column: 'driver_phone', value: variants }],
+      { column: 'updated_at', ascending: false }
+    );
+  }
+
+  const rows = await selectMany(
+    'taxi_requests',
+    [],
+    { column: 'updated_at', ascending: false }
+  );
+  return rows.filter((row) => {
+    const meta = readTaxiMeta(row);
+    return phonesOverlap(driverPhone, meta.driverPhone);
+  });
+}
+
+async function acceptTaxiRequest(driverPhone, requestId, data = {}) {
+  const normalizedDriver = await resolvePhoneKey(driverPhone);
+  const id = String(requestId || '').trim();
+  if (!id) {
+    throw new Error('Request id is required.');
+  }
+
+  const row = await selectSingle('taxi_requests', 'id', id);
+  if (!row) {
+    throw new Error('Request not found.');
+  }
+
+  const meta = readTaxiMeta(row);
+  if (!isTaxiPoolRequest(meta)) {
+    throw new Error('Request is not available for acceptance.');
+  }
+
+  const driverName =
+    String(data.driverName ?? data.driver_name ?? '').trim() || 'سائق الغيث';
+  const vehicleType = String(data.vehicleType ?? data.vehicle_type ?? '').trim();
+
+  const nextRequest = {
+    ...meta.payload,
+    statusKey: 'accepted',
+    statusAr: 'تم القبول',
+    statusEn: 'Accepted',
+    assignedDriverName: driverName,
+    driverPhone: normalizedDriver,
+    assignedDriverPhone: normalizedDriver,
+    vehicleType: vehicleType || meta.payload.vehicleType || null,
+    driverAcceptedAt: nowIso(),
+  };
+
+  return saveTaxiRequest(meta.customerPhone, {
+    request: nextRequest,
+    driver_phone: normalizedDriver,
+  });
+}
+
+async function rejectTaxiRequest(driverPhone, requestId) {
+  const normalizedDriver = await resolvePhoneKey(driverPhone);
+  const id = String(requestId || '').trim();
+  if (!id) {
+    throw new Error('Request id is required.');
+  }
+
+  const row = await selectSingle('taxi_requests', 'id', id);
+  if (!row) {
+    throw new Error('Request not found.');
+  }
+
+  const meta = readTaxiMeta(row);
+  if (!isTaxiPoolRequest(meta)) {
+    throw new Error('Request is not available for rejection.');
+  }
+
+  const rejected = Array.isArray(meta.payload.rejectedByDrivers)
+    ? meta.payload.rejectedByDrivers.map((item) => String(item).trim()).filter(Boolean)
+    : [];
+  const variants = getPhoneVariants(normalizedDriver);
+  const alreadyRejected = variants.some((variant) => rejected.includes(variant));
+  if (!alreadyRejected) {
+    rejected.push(normalizedDriver);
+  }
+
+  const nextRequest = {
+    ...meta.payload,
+    rejectedByDrivers: rejected,
+  };
+
+  return saveTaxiRequest(meta.customerPhone, {
+    request: nextRequest,
+    driver_phone: null,
+  });
+}
+
+async function updateTaxiRequestStatus(actorPhone, requestId, updates = {}) {
+  const normalizedActor = await resolvePhoneKey(actorPhone);
+  const id = String(requestId || '').trim();
+  if (!id) {
+    throw new Error('Request id is required.');
+  }
+
+  const row = await selectSingle('taxi_requests', 'id', id);
+  if (!row) {
+    throw new Error('Request not found.');
+  }
+
+  const meta = readTaxiMeta(row);
+  const isCustomer = phonesOverlap(normalizedActor, meta.customerPhone);
+  const isDriver = phonesOverlap(normalizedActor, meta.driverPhone);
+
+  if (!isCustomer && !isDriver) {
+    throw new Error('You are not authorized to update this request.');
+  }
+
+  const statusKey = String(updates.statusKey ?? meta.statusKey ?? '').trim();
+  const customerOnlyStatuses = new Set(['cancelled', 'cancel_requested']);
+  if (customerOnlyStatuses.has(statusKey) && !isCustomer) {
+    throw new Error('Only the customer can cancel this request.');
+  }
+  if (!customerOnlyStatuses.has(statusKey) && meta.driverPhone && !isDriver) {
+    throw new Error('You are not assigned to this request.');
+  }
+
+  const nextRequest = {
+    ...meta.payload,
+    statusKey,
+    statusAr: String(updates.statusAr ?? meta.payload.statusAr ?? '').trim(),
+    statusEn: String(updates.statusEn ?? meta.payload.statusEn ?? '').trim(),
+    assignedDriverName:
+      String(updates.assignedDriverName ?? meta.payload.assignedDriverName ?? '').trim() ||
+      meta.payload.assignedDriverName,
+    vehicleType:
+      String(updates.vehicleType ?? meta.payload.vehicleType ?? '').trim() ||
+      meta.payload.vehicleType,
+    driverPhone: meta.driverPhone || null,
+    assignedDriverPhone: meta.driverPhone || null,
+  };
+
+  if (statusKey === 'completed') {
+    nextRequest.statusAr = 'مكتمل';
+    nextRequest.statusEn = 'Completed';
+    nextRequest.completedAt = nowIso();
+  }
+
+  return saveTaxiRequest(meta.customerPhone, {
+    request: nextRequest,
+    driver_phone: meta.driverPhone || null,
+  });
+}
+
+async function getActiveDriverPhones() {
+  const users = await selectMany('app_users', []);
+  const phones = new Set();
+
+  for (const user of users) {
+    const phone = String(user.phone ?? '').trim();
+    if (!phone) continue;
+
+    const role = String(user.role ?? '').trim();
+    const accountType = String(user.account_type ?? '').trim();
+    const isDriverAccount = role === 'driver' || accountType === 'driver';
+    if (!isDriverAccount) continue;
+
+    const state = await getUserState(phone);
+    const profile = readDriverProfileFromState(state);
+    if (!isDriverProfileComplete(profile) || !isDriverApproved(profile)) continue;
+    if (profile?.available === false) continue;
+
+    const services = profile?.services;
+    if (services && typeof services === 'object' && services.taxi === false) continue;
+
+    phones.add(phone);
+  }
+
+  return [...phones];
 }
 
 async function getConfiguredAdminPhones() {
@@ -2991,7 +3328,8 @@ async function getAllMerchants(adminPhone) {
     visibleProductCount: bazaarVisibility.visibleProductCount,
     visibilityNotes: bazaarVisibility.visibilityNotes,
     phone: m.phone,
-    storeName: m.store_name || '',
+    storeName: merchantProfileDisplayName(m) || m.store_name || '',
+    isProfessional: isProfessionalMerchantProfile(m),
     description: (m.description || '').slice(0, 80),
     primaryServiceId: m.primary_service_id || '',
     isOpen: m.is_open !== false,
@@ -3260,7 +3598,7 @@ async function toggleMerchantApprovalStatus(adminPhone, merchantPhone, isApprove
 
   const phoneKey = await resolvePhoneKey(merchantPhone);
   const profile = await getMerchantProfile(phoneKey);
-  if (!profile || !String(profile.store_name || '').trim()) {
+  if (!profile || !merchantProfileDisplayName(profile)) {
     throw new Error('Merchant profile not found.');
   }
 
@@ -3313,7 +3651,7 @@ async function rejectMerchantApplication(
 
   const phoneKey = await resolvePhoneKey(merchantPhone);
   const profile = await getMerchantProfile(phoneKey);
-  if (!profile || !String(profile.store_name || '').trim()) {
+  if (!profile || !merchantProfileDisplayName(profile)) {
     throw new Error('Merchant profile not found.');
   }
 
@@ -3564,7 +3902,12 @@ function classifyAdminAccountKind(user, state, merchantProfile) {
 
   const storeName = String(merchantProfile?.store_name ?? '').trim();
   const merchantStoreName = String(state?.merchantStore?.name ?? '').trim();
-  if (role === 'merchant' || storeName || merchantStoreName) {
+  const professionalInfo = normalizeObject(merchantProfile?.professional_info);
+  const hasProfessionalProfile =
+    Boolean(String(professionalInfo.name ?? '').trim()) ||
+    Boolean(String(merchantProfile?.professional_category_id ?? '').trim()) ||
+    isProfessionalMerchantProfile(merchantProfile);
+  if (role === 'merchant' || storeName || merchantStoreName || hasProfessionalProfile) {
     return 'merchant';
   }
 
@@ -4158,6 +4501,14 @@ module.exports = {
   acceptDeliveryOrder,
   rejectDeliveryOrder,
   updateCourierDeliveryStatus,
+  saveTaxiRequest,
+  getCustomerTaxiRequests,
+  getTaxiPoolOrders,
+  getDriverTaxiOrders,
+  acceptTaxiRequest,
+  rejectTaxiRequest,
+  updateTaxiRequestStatus,
+  getActiveDriverPhones,
   getAdminReports,
   canonicalPhone,
   saveMerchantReview,

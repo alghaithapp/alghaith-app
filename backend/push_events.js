@@ -2,6 +2,7 @@ const {
   getDeviceTokensForPhone,
   removeDeviceTokens,
   getActiveCourierPhones,
+  getActiveDriverPhones,
   recordPushInboxDelivered,
 } = require('./supabase_repo');
 const { sendPushToTokens } = require('./push_notifications');
@@ -131,6 +132,31 @@ async function notifyActiveCouriers(payload, excludePhones = []) {
   const courierPhones = await getActiveCourierPhones();
   const targets = courierPhones.filter((phone) => !excluded.has(phone));
   await notifyPhones(targets, payload);
+}
+
+async function notifyActiveDrivers(payload, excludePhones = []) {
+  const excluded = new Set(
+    (excludePhones || []).map((item) => String(item || '').trim()).filter(Boolean)
+  );
+  const driverPhones = await getActiveDriverPhones();
+  const targets = driverPhones.filter((phone) => !excluded.has(phone));
+  await notifyPhones(targets, payload);
+}
+
+function displayTaxiRequestNumber(meta) {
+  const raw = String(
+    meta?.payload?.requestNumber ?? meta?.row?.request_number ?? ''
+  ).trim();
+  if (raw) return raw;
+  const idSeed = String(meta?.id ?? '').split('-')[0];
+  const seed = Number.parseInt(idSeed, 10);
+  if (!Number.isFinite(seed)) return raw || 'طلب تكسي';
+  return `TX-${String(seed % 1000000).padStart(6, '0')}`;
+}
+
+function isTaxiPool(meta) {
+  const status = meta?.statusKey || '';
+  return (status === 'pending' || status === 'new') && !meta?.driverPhone;
 }
 
 function buildPushPayload({ title, body, audience, orderId, eventKey, category = 'order' }) {
@@ -526,6 +552,177 @@ async function onOrderSaved({ previousMeta, nextMeta, isNew }) {
   }
 }
 
+async function onTaxiRequestSaved({ previousMeta, nextMeta, isNew }) {
+  if (!nextMeta) return;
+
+  const requestId = nextMeta.id;
+  const requestNumber = displayTaxiRequestNumber(nextMeta);
+  const previousStatus = previousMeta?.statusKey || '';
+  const nextStatus = nextMeta.statusKey || '';
+  const previousDriver = previousMeta?.driverPhone || '';
+  const nextDriver = nextMeta.driverPhone || '';
+
+  if (isNew && (nextStatus === 'pending' || nextStatus === 'new')) {
+    await notifyActiveDrivers(
+      buildPushPayload({
+        title: 'طلب تكسي جديد',
+        body: `طلب ${requestNumber} متاح للقبول الآن`,
+        audience: 'driver',
+        orderId: requestId,
+        eventKey: `driver:${requestId}:pool_new`,
+        category: 'taxi',
+      }),
+      nextMeta.payload?.rejectedByDrivers || []
+    );
+    return;
+  }
+
+  if (!previousMeta) return;
+
+  if (
+    (previousStatus === 'pending' || previousStatus === 'new') &&
+    nextStatus === 'accepted' &&
+    nextMeta.customerPhone
+  ) {
+    const driverName =
+      String(nextMeta.payload?.assignedDriverName ?? '').trim() || 'السائق';
+    await sendPushToPhone(
+      nextMeta.customerPhone,
+      buildPushPayload({
+        title: 'تم قبول طلب التكسي',
+        body: `${driverName} قبل طلبك ${requestNumber}`,
+        audience: 'customer',
+        orderId: requestId,
+        eventKey: `customer:${requestId}:accepted`,
+        category: 'taxi',
+      })
+    );
+  }
+
+  if (previousStatus !== nextStatus && nextMeta.customerPhone) {
+    if (nextStatus === 'on_way') {
+      await sendPushToPhone(
+        nextMeta.customerPhone,
+        buildPushPayload({
+          title: 'السائق في الطريق',
+          body: `السائق متجه إليك — ${requestNumber}`,
+          audience: 'customer',
+          orderId: requestId,
+          eventKey: `customer:${requestId}:on_way`,
+          category: 'taxi',
+        })
+      );
+    } else if (nextStatus === 'arrived') {
+      await sendPushToPhone(
+        nextMeta.customerPhone,
+        buildPushPayload({
+          title: 'وصل السائق',
+          body: `السائق وصل لنقطة الانطلاق — ${requestNumber}`,
+          audience: 'customer',
+          orderId: requestId,
+          eventKey: `customer:${requestId}:arrived`,
+          category: 'taxi',
+        })
+      );
+    } else if (nextStatus === 'picked_up') {
+      await sendPushToPhone(
+        nextMeta.customerPhone,
+        buildPushPayload({
+          title: 'بدأت الرحلة',
+          body: `تم استلامك — ${requestNumber}`,
+          audience: 'customer',
+          orderId: requestId,
+          eventKey: `customer:${requestId}:picked_up`,
+          category: 'taxi',
+        })
+      );
+    } else if (nextStatus === 'completed') {
+      await sendPushToPhone(
+        nextMeta.customerPhone,
+        buildPushPayload({
+          title: 'اكتملت الرحلة',
+          body: `شكراً لاستخدامك الغيث — ${requestNumber}`,
+          audience: 'customer',
+          orderId: requestId,
+          eventKey: `customer:${requestId}:completed`,
+          category: 'taxi',
+        })
+      );
+    } else if (nextStatus === 'cancel_requested' && nextDriver) {
+      await sendPushToPhone(
+        nextDriver,
+        buildPushPayload({
+          title: 'طلب إلغاء من الزبون',
+          body: `الزبون يطلب إلغاء الرحلة ${requestNumber}`,
+          audience: 'driver',
+          orderId: requestId,
+          eventKey: `driver:${requestId}:cancel_requested`,
+          category: 'taxi',
+        })
+      );
+    } else if (nextStatus === 'cancelled') {
+      await sendPushToPhone(
+        nextMeta.customerPhone,
+        buildPushPayload({
+          title: 'تم إلغاء الرحلة',
+          body: `أُلغي طلب التكسي ${requestNumber}`,
+          audience: 'customer',
+          orderId: requestId,
+          eventKey: `customer:${requestId}:cancelled`,
+          category: 'taxi',
+        })
+      );
+      if (nextDriver || previousDriver) {
+        await sendPushToPhone(
+          nextDriver || previousDriver,
+          buildPushPayload({
+            title: 'تم إلغاء الرحلة',
+            body: `أُلغي طلب التكسي ${requestNumber}`,
+            audience: 'driver',
+            orderId: requestId,
+            eventKey: `driver:${requestId}:cancelled`,
+            category: 'taxi',
+          })
+        );
+      }
+    }
+  }
+
+  const enteredPool = isTaxiPool(nextMeta) && !isTaxiPool(previousMeta);
+  if (enteredPool) {
+    await notifyActiveDrivers(
+      buildPushPayload({
+        title: 'طلب تكسي جديد',
+        body: `طلب ${requestNumber} متاح للقبول الآن`,
+        audience: 'driver',
+        orderId: requestId,
+        eventKey: `driver:${requestId}:pool_new`,
+        category: 'taxi',
+      }),
+      nextMeta.payload?.rejectedByDrivers || []
+    );
+  }
+
+  const returnedToPool =
+    isTaxiPool(nextMeta) &&
+    isTaxiPool(previousMeta) &&
+    previousDriver &&
+    !nextDriver;
+  if (returnedToPool) {
+    await notifyActiveDrivers(
+      buildPushPayload({
+        title: 'طلب تكسي عاد للقائمة',
+        body: `الطلب ${requestNumber} متاح مجدداً للسائقين`,
+        audience: 'driver',
+        orderId: requestId,
+        eventKey: `driver:${requestId}:pool_returned`,
+        category: 'taxi',
+      }),
+      nextMeta.payload?.rejectedByDrivers || []
+    );
+  }
+}
+
 async function onCourierRejected(courierPhone, message, reasonKey = '') {
   const phone = String(courierPhone || '').trim();
   const body = String(message || '').trim();
@@ -651,6 +848,7 @@ async function onMerchantFrozen(merchantPhone, isFrozen) {
 
 module.exports = {
   onOrderSaved,
+  onTaxiRequestSaved,
   onCourierApproved,
   onCourierRejected,
   onMerchantApproved,
@@ -660,6 +858,7 @@ module.exports = {
   onMerchantFrozen,
   sendPushToPhone,
   notifyActiveCouriers,
+  notifyActiveDrivers,
   buildPushPayload,
   displayOrderNumber,
 };

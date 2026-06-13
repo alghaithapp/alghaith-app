@@ -47,7 +47,7 @@ class _DriverShellState extends State<DriverShell> {
 
     return RoleNotificationPoller(
       role: 'driver',
-      onRefresh: (_) async {},
+      onRefresh: (provider) => provider.refreshDriverTaxiRequests(),
       pollBanners: (provider) => provider.pollTaxiBanners(),
       child: Scaffold(
         backgroundColor:

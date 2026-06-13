@@ -8,6 +8,7 @@ import '../../screens/professionals_directory_screen.dart';
 import '../../screens/real_estate_deal_hub_screen.dart';
 import '../../screens/shopping_stores_screen.dart';
 import '../../screens/car_request_hub_screen.dart';
+import '../../screens/taxi_request_screen.dart';
 import 'marketplace_catalog.dart';
 
 class MarketplaceRouter {
@@ -70,12 +71,7 @@ class MarketplaceRouter {
       if (MarketplaceCatalog.carServiceSubCategoryIds.contains(sub.id)) {
         Navigator.of(context).push(
           CupertinoPageRoute(
-            builder: (_) => CatalogProductsScreen(
-              category: category.apiProductCategory,
-              subCategoryId: sub.id,
-              titleAr: sub.titleAr,
-              subtitleAr: category.hubSubtitleAr,
-            ),
+            builder: (_) => TaxiRequestScreen(initialVehicleTypeId: sub.id),
           ),
         );
         return;

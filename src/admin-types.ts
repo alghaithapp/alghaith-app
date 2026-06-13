@@ -88,6 +88,7 @@ export interface MerchantSummary {
   storeName: string;
   description: string;
   primaryServiceId: string;
+  isProfessional?: boolean;
   isOpen: boolean;
   isFrozen: boolean;
   isApproved: boolean;

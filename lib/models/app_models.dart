@@ -738,6 +738,8 @@ class TaxiRequest {
   final String paymentMethodEn;
   final String? assignedDriverName;
   final String? vehicleType;
+  final String? driverPhone;
+  final String? assignedDriverPhone;
 
   const TaxiRequest({
     required this.id,
@@ -764,6 +766,8 @@ class TaxiRequest {
     required this.paymentMethodEn,
     this.assignedDriverName,
     this.vehicleType,
+    this.driverPhone,
+    this.assignedDriverPhone,
   });
 
   Map<String, dynamic> toMap() {
@@ -792,6 +796,8 @@ class TaxiRequest {
       'paymentMethodEn': paymentMethodEn,
       'assignedDriverName': assignedDriverName,
       'vehicleType': vehicleType,
+      'driverPhone': driverPhone,
+      'assignedDriverPhone': assignedDriverPhone,
     };
   }
 
@@ -821,6 +827,8 @@ class TaxiRequest {
       paymentMethodEn: (map['paymentMethodEn'] as String?) ?? 'Cash',
       assignedDriverName: map['assignedDriverName'] as String?,
       vehicleType: map['vehicleType'] as String?,
+      driverPhone: map['driverPhone'] as String?,
+      assignedDriverPhone: map['assignedDriverPhone'] as String?,
     );
   }
 }

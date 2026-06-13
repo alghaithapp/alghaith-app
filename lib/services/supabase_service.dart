@@ -172,6 +172,49 @@ class SupabaseService {
   ) =>
       _db.rejectDeliveryOrder(courierPhone, orderId);
 
+  static Future<List<TaxiRequest>> loadCustomerTaxiRequests(String phone) =>
+      _db.loadCustomerTaxiRequests(phone);
+
+  static Future<List<TaxiRequest>> loadTaxiPool(String phone) =>
+      _db.loadTaxiPool(phone);
+
+  static Future<List<TaxiRequest>> loadDriverTaxiOrders(String phone) =>
+      _db.loadDriverTaxiOrders(phone);
+
+  static Future<void> saveTaxiRequest(String phone, TaxiRequest request) =>
+      _db.saveTaxiRequest(phone, request);
+
+  static Future<void> acceptTaxiRequest(
+    String driverPhone,
+    String requestId, {
+    String? driverName,
+    String? vehicleType,
+  }) =>
+      _db.acceptTaxiRequest(
+        driverPhone,
+        requestId,
+        driverName: driverName,
+        vehicleType: vehicleType,
+      );
+
+  static Future<void> updateTaxiRequestStatus(
+    String actorPhone,
+    String requestId, {
+    required String statusKey,
+    String? statusAr,
+    String? statusEn,
+  }) =>
+      _db.updateTaxiRequestStatus(
+        actorPhone,
+        requestId,
+        statusKey: statusKey,
+        statusAr: statusAr,
+        statusEn: statusEn,
+      );
+
+  static Future<void> rejectTaxiRequest(String driverPhone, String requestId) =>
+      _db.rejectTaxiRequest(driverPhone, requestId);
+
   static Future<Map<String, dynamic>> loadAdminReports(String phone) =>
       _db.loadAdminReports(phone);
 

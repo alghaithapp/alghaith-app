@@ -49,6 +49,13 @@ const {
   acceptDeliveryOrder,
   rejectDeliveryOrder,
   updateCourierDeliveryStatus,
+  saveTaxiRequest,
+  getCustomerTaxiRequests,
+  getTaxiPoolOrders,
+  getDriverTaxiOrders,
+  acceptTaxiRequest,
+  rejectTaxiRequest,
+  updateTaxiRequestStatus,
   getAdminReports,
   saveMerchantReview,
   getAllMerchants,
@@ -1259,6 +1266,123 @@ app.put('/db/delivery-order/reject', async (req, res) => {
   } catch (error) {
     console.error('reject delivery-order error:', error);
     const message = error?.message || 'Failed to reject delivery order.';
+    const status = message.includes('not available') ? 409 : 500;
+    return res.status(status).json({ message });
+  }
+});
+
+app.get('/db/customer-taxi-requests', async (req, res) => {
+  try {
+    const phone = requireAuthorizedPhone(req, res);
+    if (!phone) return;
+    const rows = await getCustomerTaxiRequests(phone);
+    return res.json(rows);
+  } catch (error) {
+    console.error('get customer-taxi-requests error:', error);
+    return res.status(500).json({ message: error?.message || 'Failed to load taxi requests.' });
+  }
+});
+
+app.put('/db/taxi-request', async (req, res) => {
+  try {
+    const phone = requireAuthorizedPhone(req, res);
+    if (!phone) return;
+    const row = await saveTaxiRequest(phone, req.body || {});
+    return res.json(row);
+  } catch (error) {
+    console.error('save taxi-request error:', error);
+    return res.status(500).json({ message: error?.message || 'Failed to save taxi request.' });
+  }
+});
+
+app.get('/db/taxi-pool', async (req, res) => {
+  try {
+    const phone = requireAuthorizedPhone(req, res, { allowMissing: true });
+    if (!phone) return;
+    const rows = await getTaxiPoolOrders(phone);
+    return res.json(rows);
+  } catch (error) {
+    console.error('get taxi-pool error:', error);
+    return res.status(500).json({ message: error?.message || 'Failed to load taxi pool.' });
+  }
+});
+
+app.get('/db/driver-taxi-orders', async (req, res) => {
+  try {
+    const phone = requireAuthorizedPhone(req, res, { allowMissing: true });
+    if (!phone) return;
+    const rows = await getDriverTaxiOrders(phone);
+    return res.json(rows);
+  } catch (error) {
+    console.error('get driver-taxi-orders error:', error);
+    return res.status(500).json({ message: error?.message || 'Failed to load driver taxi orders.' });
+  }
+});
+
+app.put('/db/taxi-request/accept', async (req, res) => {
+  try {
+    const phone = requireAuthorizedPhone(req, res, { allowMissing: true });
+    if (!phone) return;
+    const requestId = String(
+      req.body?.requestId || req.body?.orderId || req.body?.id || ''
+    ).trim();
+    if (!requestId) {
+      return res.status(400).json({ message: 'Request id is required.' });
+    }
+    const row = await acceptTaxiRequest(phone, requestId, req.body || {});
+    return res.json(row);
+  } catch (error) {
+    console.error('accept taxi-request error:', error);
+    const message = error?.message || 'Failed to accept taxi request.';
+    const status = message.includes('not available') ? 409 : 500;
+    return res.status(status).json({ message });
+  }
+});
+
+app.put('/db/taxi-request/status', async (req, res) => {
+  try {
+    const phone = requireAuthorizedPhone(req, res, { allowMissing: true });
+    if (!phone) return;
+    const requestId = String(
+      req.body?.requestId || req.body?.orderId || req.body?.id || ''
+    ).trim();
+    if (!requestId) {
+      return res.status(400).json({ message: 'Request id is required.' });
+    }
+    const row = await updateTaxiRequestStatus(phone, requestId, {
+      statusKey: req.body?.statusKey,
+      statusAr: req.body?.statusAr,
+      statusEn: req.body?.statusEn,
+      assignedDriverName: req.body?.assignedDriverName,
+      vehicleType: req.body?.vehicleType,
+    });
+    return res.json(row);
+  } catch (error) {
+    console.error('update taxi-request status error:', error);
+    const message = error?.message || 'Failed to update taxi status.';
+    const status =
+      message.includes('not assigned') || message.includes('not authorized')
+        ? 403
+        : 500;
+    return res.status(status).json({ message });
+  }
+});
+
+app.put('/db/taxi-request/reject', async (req, res) => {
+  try {
+    const phone = requireAuthorizedPhone(req, res, { allowMissing: true });
+    if (!phone) return;
+    const requestId = String(
+      req.body?.requestId || req.body?.orderId || req.body?.id || ''
+    ).trim();
+    if (!requestId) {
+      return res.status(400).json({ message: 'Request id is required.' });
+    }
+    const row = await rejectTaxiRequest(phone, requestId);
+    return res.json(row);
+  } catch (error) {
+    console.error('reject taxi-request error:', error);
+    const message = error?.message || 'Failed to reject taxi request.';
     const status = message.includes('not available') ? 409 : 500;
     return res.status(status).json({ message });
   }

@@ -215,41 +215,46 @@ class _ShoppingStoresScreenState extends State<ShoppingStoresScreen> {
                 if (_isBazaarChannel)
                   SliverToBoxAdapter(
                     child: Container(
-                      height: 55,
-                      margin: const EdgeInsets.only(bottom: 8),
-                      child: ListView(
-                        scrollDirection: Axis.horizontal,
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                      margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [
+                            const Color(0xFF007A7A).withValues(alpha: 0.08),
+                            const Color(0xFFF5A01D).withValues(alpha: 0.08),
+                          ],
+                        ),
+                        borderRadius: BorderRadius.circular(18),
+                        border: Border.all(
+                          color: const Color(0xFFF5A01D).withValues(alpha: 0.2),
+                        ),
+                      ),
+                      child: Row(
                         children: [
-                          _BazaarKindChip(
-                            label: 'الكل',
-                            selected: _bazaarKindFilter == 'all',
-                            color: primaryRed,
-                            onTap: () {
-                              setState(() {
-                                _bazaarKindFilter = 'all';
-                                _selectedFilter = 'الكل'; // ريست لفلتر المطبخ
-                              });
-                            },
-                          ),
-                          _BazaarKindChip(
-                            label: 'مطاعم',
-                            selected: _bazaarKindFilter == 'restaurant',
-                            color: primaryRed,
-                            onTap: () => setState(
-                              () => _bazaarKindFilter = 'restaurant',
+                          Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: const BoxDecoration(
+                              color: Color(0xFFF5A01D),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              Icons.shopping_cart_checkout_rounded,
+                              color: Colors.white,
+                              size: 18,
                             ),
                           ),
-                          _BazaarKindChip(
-                            label: 'متاجر',
-                            selected: _bazaarKindFilter == 'store',
-                            color: primaryRed,
-                            onTap: () {
-                              setState(() {
-                                _bazaarKindFilter = 'store';
-                                _selectedFilter = 'الكل'; // ريست لفلتر المطبخ
-                              });
-                            },
+                          const SizedBox(width: 12),
+                          const Expanded(
+                            child: Text(
+                              'يمكنك التسوق من كافة متاجر ومطاعم هذا القسم في سلة واحدة وبكلفة توصيل واحدة فقط.',
+                              style: TextStyle(
+                                fontFamily: 'Cairo',
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                                color: Color(0xFF1A1A1A),
+                                height: 1.4,
+                              ),
+                            ),
                           ),
                         ],
                       ),

@@ -81,6 +81,7 @@ type AdminView =
   | 'homeCategories'
   | 'appUpdate';
 type AccountFilter = 'all' | AdminAccountKind;
+type MerchantFilter = 'all' | 'pending' | 'professionals';
 
 const VIEW_META: Record<
   AdminView,
@@ -248,6 +249,7 @@ function App() {
   const [couriers, setCouriers] = useState<CourierSummary[]>([]);
   const [accounts, setAccounts] = useState<AdminAccountSummary[]>([]);
   const [accountFilter, setAccountFilter] = useState<AccountFilter>('all');
+  const [merchantFilter, setMerchantFilter] = useState<MerchantFilter>('all');
   const [selectedMerchantPhone, setSelectedMerchantPhone] = useState('');
   const [merchantDetails, setMerchantDetails] = useState<MerchantDetails | null>(
     null,
@@ -421,19 +423,32 @@ function App() {
 
   const filteredMerchants = useMemo(() => {
     const query = search.trim().toLowerCase();
-    if (!query) return merchants;
     return merchants.filter((merchant) => {
+      if (merchantFilter === 'pending') {
+        if (merchant.isApproved || merchant.approvalStatus !== 'pending') {
+          return false;
+        }
+      } else if (merchantFilter === 'professionals') {
+        if (
+          merchant.primaryServiceId !== 'professionals' &&
+          !merchant.isProfessional
+        ) {
+          return false;
+        }
+      }
+      if (!query) return true;
       const haystack = [
         merchant.storeName,
         merchant.fullName,
         merchant.phone,
         merchant.primaryServiceId,
+        merchant.isProfessional ? 'مهني' : '',
       ]
         .join(' ')
         .toLowerCase();
       return haystack.includes(query);
     });
-  }, [merchants, search]);
+  }, [merchants, search, merchantFilter]);
 
   const approvalQueue = useMemo(
     () =>
@@ -1160,10 +1175,13 @@ function App() {
                       <button
                         className="soft-button"
                         type="button"
-                        onClick={() => switchView('merchants')}
+                        onClick={() => {
+                          setMerchantFilter('pending');
+                          switchView('merchants');
+                        }}
                       >
                         <Store size={16} />
-                        <span>مراجعة التجار</span>
+                        <span>مراجعة التجار والمهنيين</span>
                       </button>
                     </article>
                     <article className="quick-action-card">
@@ -1433,7 +1451,7 @@ function App() {
                             ? 'جميع المندوبين'
                             : view === 'approvals'
                               ? 'قائمة الانتظار'
-                              : 'جميع التجار'}
+                              : 'جميع التجار والمهنيين'}
                       </h3>
                       <p>
                         {view === 'accounts'
@@ -1442,7 +1460,7 @@ function App() {
                             ? 'اضغط على الإجراء المناسب لكل مندوب.'
                             : view === 'approvals'
                               ? 'تجار مطاعم ومتاجر بانتظار الموافقة على البازار.'
-                              : 'اختر تاجراً لعرض تفاصيله في اللوحة الجانبية.'}
+                              : 'طلبات المهنيين والتجار بانتظار الموافقة تظهر في الأعلى. استخدم الفلاتر أدناه.'}
                       </p>
                     </div>
                     <span className="panel-chip">
@@ -1852,6 +1870,31 @@ function App() {
                       ) : null}
                     </div>
                   ) : (
+                  <>
+                  {view === 'merchants' ? (
+                    <div className="account-filter-row">
+                      {(
+                        [
+                          ['all', 'الكل'],
+                          ['pending', `بانتظار الموافقة (${pendingMerchantQueue.length})`],
+                          ['professionals', 'المهنيون'],
+                        ] as Array<[MerchantFilter, string]>
+                      ).map(([filter, label]) => (
+                        <button
+                          key={filter}
+                          type="button"
+                          className={
+                            merchantFilter === filter
+                              ? 'filter-chip active'
+                              : 'filter-chip'
+                          }
+                          onClick={() => setMerchantFilter(filter)}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
                   <div className="merchant-list">
                     {(view === 'approvals' ? approvalQueue : filteredMerchants).map((merchant) => {
                       const freezeLoading = activeActionKey === `freeze:${merchant.phone}`;
@@ -1873,7 +1916,17 @@ function App() {
                           <div className="merchant-main">
                             <div>
                               <div className="merchant-title-row">
-                                <h4>{merchant.storeName || 'متجر بدون اسم'}</h4>
+                                <h4>
+                                  {merchant.storeName ||
+                                    (merchant.isProfessional ||
+                                    merchant.primaryServiceId === 'professionals'
+                                      ? 'مهني بدون اسم'
+                                      : 'متجر بدون اسم')}
+                                </h4>
+                                {merchant.isProfessional ||
+                                merchant.primaryServiceId === 'professionals' ? (
+                                  <span className="status-badge muted">مهني</span>
+                                ) : null}
                                 {merchant.isApproved ? (
                                   <span className="status-badge success">مفعّل</span>
                                 ) : isRejected ? (
@@ -2110,6 +2163,7 @@ function App() {
                       </div>
                     ) : null}
                   </div>
+                  </>
                   )}
                 </div>
 

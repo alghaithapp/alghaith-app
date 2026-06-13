@@ -146,8 +146,12 @@ class PushNotificationService {
   Future<void> _handleForegroundMessage(RemoteMessage message) async {
     await PushNotificationInbox.handleIncoming(message);
     final eventKey = message.data['eventKey']?.toString() ?? '';
+    final category = message.data['category']?.toString() ?? '';
     if (eventKey.contains(':approved') || eventKey.contains(':rejected')) {
       await PushNotificationInbox.onCourierStatusPush?.call();
+    }
+    if (category == 'taxi') {
+      await PushNotificationInbox.onTaxiStatusPush?.call();
     }
   }
 
@@ -155,6 +159,10 @@ class PushNotificationService {
     debugPrint('Push: opened ${message.data}');
     unawaited(PushNotificationInbox.clearUnread());
     unawaited(PushNotificationInbox.onCourierStatusPush?.call());
+    final category = message.data['category']?.toString() ?? '';
+    if (category == 'taxi') {
+      unawaited(PushNotificationInbox.onTaxiStatusPush?.call());
+    }
   }
 
   String _platformLabel() {

@@ -306,6 +306,86 @@ class DatabaseRepository {
     });
   }
 
+  List<TaxiRequest> _mapTaxiRows(dynamic result) {
+    if (result is! List) return const [];
+    return result
+        .whereType<Map>()
+        .map((item) => TaxiRequest.fromMap(
+              Map<String, dynamic>.from(item['request_payload'] as Map),
+            ))
+        .toList();
+  }
+
+  Future<List<TaxiRequest>> loadCustomerTaxiRequests(String phone) async {
+    final result = await ApiClient.instance.get(
+      '/db/customer-taxi-requests',
+      queryParameters: {'phone': _phone(phone)},
+    );
+    return _mapTaxiRows(result);
+  }
+
+  Future<List<TaxiRequest>> loadTaxiPool(String phone) async {
+    final result = await ApiClient.instance.get(
+      '/db/taxi-pool',
+      queryParameters: {'phone': _phone(phone)},
+    );
+    return _mapTaxiRows(result);
+  }
+
+  Future<List<TaxiRequest>> loadDriverTaxiOrders(String phone) async {
+    final result = await ApiClient.instance.get(
+      '/db/driver-taxi-orders',
+      queryParameters: {'phone': _phone(phone)},
+    );
+    return _mapTaxiRows(result);
+  }
+
+  Future<void> saveTaxiRequest(String phone, TaxiRequest request) async {
+    await ApiClient.instance.put('/db/taxi-request', body: {
+      'phone': _phone(phone),
+      'request': request.toMap(),
+    });
+  }
+
+  Future<void> acceptTaxiRequest(
+    String driverPhone,
+    String requestId, {
+    String? driverName,
+    String? vehicleType,
+  }) async {
+    await ApiClient.instance.put('/db/taxi-request/accept', body: {
+      'phone': _phone(driverPhone),
+      'requestId': requestId,
+      if (driverName != null && driverName.trim().isNotEmpty)
+        'driverName': driverName.trim(),
+      if (vehicleType != null && vehicleType.trim().isNotEmpty)
+        'vehicleType': vehicleType.trim(),
+    });
+  }
+
+  Future<void> updateTaxiRequestStatus(
+    String actorPhone,
+    String requestId, {
+    required String statusKey,
+    String? statusAr,
+    String? statusEn,
+  }) async {
+    await ApiClient.instance.put('/db/taxi-request/status', body: {
+      'phone': _phone(actorPhone),
+      'requestId': requestId,
+      'statusKey': statusKey,
+      if (statusAr != null) 'statusAr': statusAr,
+      if (statusEn != null) 'statusEn': statusEn,
+    });
+  }
+
+  Future<void> rejectTaxiRequest(String driverPhone, String requestId) async {
+    await ApiClient.instance.put('/db/taxi-request/reject', body: {
+      'phone': _phone(driverPhone),
+      'requestId': requestId,
+    });
+  }
+
   Future<Map<String, dynamic>> loadAdminReports(String phone) async {
     final result = await ApiClient.instance.get(
       '/db/admin/reports',

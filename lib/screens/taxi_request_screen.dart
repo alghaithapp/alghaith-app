@@ -21,7 +21,7 @@ class TaxiRequestScreen extends StatefulWidget {
 
   const TaxiRequestScreen({super.key, this.initialVehicleTypeId});
 
-  static const bool isComingSoon = true;
+  static const bool isComingSoon = false;
 
   @override
   State<TaxiRequestScreen> createState() => _TaxiRequestScreenState();
@@ -429,7 +429,7 @@ class _TaxiRequestScreenState extends State<TaxiRequestScreen> {
     );
 
     if (confirmed != true) return;
-    final result = provider.cancelTaxiRequestByCustomer(request.id);
+    final result = await provider.cancelTaxiRequestByCustomer(request.id);
     if (!context.mounted) return;
 
     final message = result == 'cancelled'
@@ -773,12 +773,12 @@ class _TaxiRequestScreenState extends State<TaxiRequestScreen> {
     );
   }
 
-  void _submitTaxiRequest({
+  Future<void> _submitTaxiRequest({
     required BuildContext context,
     required AppProvider appProvider,
     required _VehicleOption selectedVehicle,
     required int estimatedFare,
-  }) {
+  }) async {
     final pickup = _pickupController.text.trim();
     final dropoff = _dropoffController.text.trim();
     if (pickup.isEmpty || dropoff.isEmpty) {
@@ -790,41 +790,51 @@ class _TaxiRequestScreenState extends State<TaxiRequestScreen> {
       return;
     }
 
-    appProvider.addTaxiRequest(
-      TaxiRequest(
-        id: DateTime.now().millisecondsSinceEpoch.toString(),
-        requestNumber:
-            'TX-${DateTime.now().millisecondsSinceEpoch.toString().substring(6)}',
-        requestedAtAr: 'اليوم، ${TimeOfDay.now().format(context)}',
-        requestedAtEn: 'Today, ${TimeOfDay.now().format(context)}',
-        customerNameAr: appProvider.customerName,
-        customerNameEn: appProvider.customerName,
-        customerPhone: appProvider.customerPhone,
-        pickupAddressAr: pickup,
-        pickupAddressEn: pickup,
-        dropoffAddressAr: dropoff,
-        dropoffAddressEn: dropoff,
-        rideTypeId: selectedVehicle.id,
-        rideTypeAr: selectedVehicle.name,
-        rideTypeEn: selectedVehicle.name,
-        fare: estimatedFare,
-        statusKey: 'pending',
-        statusAr: 'بانتظار السائق',
-        statusEn: 'Waiting for driver',
-        noteAr: _noteController.text.trim(),
-        noteEn: _noteController.text.trim(),
-        paymentMethodAr: _selectedPayment == 'cash'
-            ? 'نقدًا'
-            : _selectedPayment == 'wallet'
-                ? 'محفظة'
-                : 'بطاقة',
-        paymentMethodEn: _selectedPayment == 'cash'
-            ? 'Cash'
-            : _selectedPayment == 'wallet'
-                ? 'Wallet'
-                : 'Card',
-      ),
+    final request = TaxiRequest(
+      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      requestNumber:
+          'TX-${DateTime.now().millisecondsSinceEpoch.toString().substring(6)}',
+      requestedAtAr: 'اليوم، ${TimeOfDay.now().format(context)}',
+      requestedAtEn: 'Today, ${TimeOfDay.now().format(context)}',
+      customerNameAr: appProvider.customerName,
+      customerNameEn: appProvider.customerName,
+      customerPhone: appProvider.customerPhone,
+      pickupAddressAr: pickup,
+      pickupAddressEn: pickup,
+      dropoffAddressAr: dropoff,
+      dropoffAddressEn: dropoff,
+      rideTypeId: selectedVehicle.id,
+      rideTypeAr: selectedVehicle.name,
+      rideTypeEn: selectedVehicle.name,
+      fare: estimatedFare,
+      statusKey: 'pending',
+      statusAr: 'بانتظار السائق',
+      statusEn: 'Waiting for driver',
+      noteAr: _noteController.text.trim(),
+      noteEn: _noteController.text.trim(),
+      paymentMethodAr: _selectedPayment == 'cash'
+          ? 'نقدًا'
+          : _selectedPayment == 'wallet'
+              ? 'محفظة'
+              : 'بطاقة',
+      paymentMethodEn: _selectedPayment == 'cash'
+          ? 'Cash'
+          : _selectedPayment == 'wallet'
+              ? 'Wallet'
+              : 'Card',
     );
+
+    final saved = await appProvider.addTaxiRequest(request);
+    if (!context.mounted) return;
+
+    if (!saved) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('تعذّر إرسال الطلب. تحقق من الاتصال وحاول مجدداً.'),
+        ),
+      );
+      return;
+    }
 
     showCupertinoDialog(
       context: context,

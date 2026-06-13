@@ -211,6 +211,25 @@ class MerchantProfileFields {
       return 'pending';
     }
 
+    final category = store['category']?.toString().trim() ??
+        store['primary_service_id']?.toString().trim() ??
+        store['primaryServiceId']?.toString().trim() ??
+        '';
+    final serviceIds = store['serviceIds'] ?? store['service_ids'];
+    final hasProfessionalsService = category == 'professionals' ||
+        (serviceIds is List &&
+            serviceIds.map((item) => item.toString()).contains('professionals'));
+    final professionalInfo = store['professionalInfo'] ?? store['professional_info'];
+    final hasProfessionalInfo = professionalInfo is Map &&
+        (professionalInfo['name']?.toString().trim().isNotEmpty == true ||
+            professionalInfo['professionId']?.toString().trim().isNotEmpty ==
+                true ||
+            store['professionalCategoryId']?.toString().trim().isNotEmpty ==
+                true);
+    if (hasProfessionalsService || hasProfessionalInfo) {
+      return 'pending';
+    }
+
     // احتياط للبيانات القديمة: متجر باسم فعلي يُعتبر معتمداً.
     final name = store['name']?.toString().trim() ??
         store['store_name']?.toString().trim() ??

@@ -282,10 +282,103 @@ class _MerchantManagementTabState extends State<_MerchantManagementTab> {
   String? _busyMerchantPhone;
   String? _busyAction;
 
+  Future<void> _handleMerchantApproval({
+    required String merchantPhone,
+    required bool enabling,
+    required Future<void> Function() operation,
+  }) async {
+    if (_busyMerchantPhone != null || merchantPhone.isEmpty) return;
+    setState(() {
+      _busyMerchantPhone = merchantPhone;
+      _busyAction = 'approval';
+    });
+    try {
+      await operation();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            enabling ? 'تم تفعيل الحساب بنجاح' : 'تم إلغاء تفعيل الحساب',
+            style: const TextStyle(fontFamily: 'Cairo'),
+          ),
+        ),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'فشل تحديث الموافقة، حاول مجدداً',
+            style: TextStyle(fontFamily: 'Cairo'),
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _busyMerchantPhone = null;
+          _busyAction = null;
+        });
+      }
+    }
+  }
+
+  Future<void> _showRejectDialog(
+    BuildContext context,
+    AppProvider provider,
+    Map<String, dynamic> merchant,
+  ) async {
+    final controller = TextEditingController();
+    final phone = merchant['phone']?.toString() ?? '';
+    final name = merchant['storeName']?.toString() ??
+        merchant['fullName']?.toString() ??
+        phone;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text('رفض طلب $name', style: const TextStyle(fontFamily: 'Cairo')),
+        content: TextField(
+          controller: controller,
+          maxLines: 3,
+          decoration: const InputDecoration(
+            labelText: 'سبب الرفض (يظهر للمستخدم)',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('إلغاء'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('رفض الطلب'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || controller.text.trim().isEmpty) return;
+    await provider.rejectMerchantApplication(
+      phone,
+      'custom',
+      rejectionMessageAr: controller.text.trim(),
+    );
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('تم رفض الطلب وإرسال السبب للمستخدم'),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<AppProvider>();
     final merchants = provider.allMerchants;
+    final pendingMerchants = merchants.where((merchant) {
+      return merchant['isApproved'] != true &&
+          (merchant['approvalStatus']?.toString() ?? 'pending') == 'pending';
+    }).toList();
 
     return RefreshIndicator(
       onRefresh: provider.refreshAllMerchants,
@@ -296,7 +389,7 @@ class _MerchantManagementTabState extends State<_MerchantManagementTab> {
                 SizedBox(height: 120),
                 Center(
                   child: Text(
-                    'لا يوجد تجار مسجلون بعد',
+                    'لا يوجد تجار أو مهنيون مسجلون بعد',
                     style: TextStyle(
                       fontFamily: 'Cairo',
                       fontSize: 16,
@@ -309,14 +402,51 @@ class _MerchantManagementTabState extends State<_MerchantManagementTab> {
           : ListView.builder(
               padding: const EdgeInsets.all(12),
               physics: const AlwaysScrollableScrollPhysics(),
-              itemCount: merchants.length,
+              itemCount: merchants.length + (pendingMerchants.isNotEmpty ? 1 : 0),
               itemBuilder: (context, index) {
-                final merchant = merchants[index];
+                if (pendingMerchants.isNotEmpty && index == 0) {
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: accountBrandRed.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: accountBrandRed.withValues(alpha: 0.25),
+                        ),
+                      ),
+                      child: Text(
+                        'بانتظار الموافقة: ${pendingMerchants.length} (تجار ومهنيون)',
+                        style: const TextStyle(
+                          fontFamily: 'Cairo',
+                          fontWeight: FontWeight.w800,
+                          color: accountBrandRed,
+                        ),
+                      ),
+                    ),
+                  );
+                }
+                final merchantIndex =
+                    pendingMerchants.isNotEmpty ? index - 1 : index;
+                final merchant = merchants[merchantIndex];
                 final phone = merchant['phone']?.toString() ?? '';
                 return _MerchantCard(
                   merchant: merchant,
                   isBusy: _busyMerchantPhone == phone,
                   busyAction: _busyAction,
+                  onToggleApproval: () {
+                    final enabling = merchant['isApproved'] != true;
+                    _handleMerchantApproval(
+                      merchantPhone: phone,
+                      enabling: enabling,
+                      operation: () => provider.toggleMerchantApproval(
+                        phone,
+                        enabling,
+                      ),
+                    );
+                  },
+                  onReject: () => _showRejectDialog(context, provider, merchant),
                   onToggleBazaar: () {
                     final enabling = merchant['isBazaarMember'] != true;
                     _handleMerchantAction(
@@ -408,6 +538,8 @@ class _MerchantCard extends StatelessWidget {
   final Map<String, dynamic> merchant;
   final bool isBusy;
   final String? busyAction;
+  final VoidCallback onToggleApproval;
+  final VoidCallback onReject;
   final VoidCallback onToggleBazaar;
   final VoidCallback onToggleFreeze;
 
@@ -415,6 +547,8 @@ class _MerchantCard extends StatelessWidget {
     required this.merchant,
     required this.isBusy,
     required this.busyAction,
+    required this.onToggleApproval,
+    required this.onReject,
     required this.onToggleBazaar,
     required this.onToggleFreeze,
   });
@@ -429,6 +563,12 @@ class _MerchantCard extends StatelessWidget {
     final isFrozen = merchant['isFrozen'] == true;
     final rating = (merchant['rating'] as num?)?.toDouble() ?? 0.0;
     final serviceId = merchant['primaryServiceId']?.toString() ?? '';
+    final isApproved = merchant['isApproved'] == true;
+    final approvalStatus = merchant['approvalStatus']?.toString() ?? '';
+    final isRejected = approvalStatus == 'rejected';
+    final rejectionMessage = merchant['rejectionMessageAr']?.toString() ?? '';
+    final isProfessional = merchant['isProfessional'] == true ||
+        serviceId == 'professionals';
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -475,7 +615,9 @@ class _MerchantCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      storeName.isNotEmpty ? storeName : 'متجر بدون اسم',
+                      storeName.isNotEmpty
+                          ? storeName
+                          : (isProfessional ? 'مهني بدون اسم' : 'متجر بدون اسم'),
                       style: const TextStyle(
                         fontFamily: 'Cairo',
                         fontWeight: FontWeight.w900,
@@ -528,6 +670,20 @@ class _MerchantCard extends StatelessWidget {
             runSpacing: 8,
             children: [
               _InfoBadge(
+                label: isApproved
+                    ? 'مفعّل'
+                    : isRejected
+                        ? 'مرفوض'
+                        : 'بانتظار الموافقة',
+                color: isApproved
+                    ? Colors.green
+                    : isRejected
+                        ? Colors.red
+                        : accountBrandRed,
+              ),
+              if (isProfessional)
+                const _InfoBadge(label: 'مهني', color: Colors.indigo),
+              _InfoBadge(
                 label: isFrozen ? 'مجمّد' : (isOpen ? 'مفتوح' : 'مغلق'),
                 color: isFrozen
                     ? Colors.red
@@ -550,7 +706,46 @@ class _MerchantCard extends StatelessWidget {
               ),
             ],
           ),
+          if (isRejected && rejectionMessage.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text(
+              'سبب الرفض: $rejectionMessage',
+              style: TextStyle(
+                fontFamily: 'Cairo',
+                fontSize: 12,
+                color: Colors.red.shade800,
+              ),
+            ),
+          ],
           const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: _ActionChip(
+                  label: isApproved ? 'إلغاء التفعيل' : 'موافقة وتفعيل',
+                  icon: isApproved
+                      ? Icons.cancel_outlined
+                      : Icons.verified_rounded,
+                  color: isApproved ? Colors.orange : Colors.green,
+                  isBusy: isBusy && busyAction == 'approval',
+                  onTap: onToggleApproval,
+                ),
+              ),
+              if (!isApproved) ...[
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _ActionChip(
+                    label: 'رفض الطلب',
+                    icon: Icons.close_rounded,
+                    color: Colors.red,
+                    isBusy: isBusy && busyAction == 'reject',
+                    onTap: onReject,
+                  ),
+                ),
+              ],
+            ],
+          ),
+          const SizedBox(height: 8),
           Row(
             children: [
               Expanded(
