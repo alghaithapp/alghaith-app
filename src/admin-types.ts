@@ -26,12 +26,13 @@ export interface HomeCategoriesConfig {
   updatedAt: string | null;
 }
 
-export const DEFAULT_HOME_CATEGORY_IDS = new Set(['restaurant', 'product', 'cars', 'eden_printing']);
+export const DEFAULT_HOME_CATEGORY_IDS = new Set(['restaurant', 'product', 'cars', 'eden_printing', 'global_shopping']);
 
 export const TOGGLEABLE_HOME_CATEGORIES = [
   { id: 'restaurant', titleAr: 'المطاعم' },
   { id: 'product', titleAr: 'التسوق' },
   { id: 'cars', titleAr: 'السيارات' },
+  { id: 'global_shopping', titleAr: 'التسوق من الخارج' },
   { id: 'professionals', titleAr: 'المهنيين' },
   { id: 'beauty', titleAr: 'الصحة والجمال' },
   { id: 'tourism', titleAr: 'السياحة والسفر' },

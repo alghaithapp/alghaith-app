@@ -249,6 +249,20 @@ class MarketplaceCatalog {
       storeTitleAr: 'مطبعة جنة عدن',
       storeSubtitleAr: 'خدمات طباعة احترافية',
     ),
+    MarketplaceCategoryDefinition(
+      id: 'global_shopping',
+      titleAr: 'التسوق من الخارج',
+      titleEn: 'International Shopping',
+      image: 'assets/images/cat_global.png',
+      entryMode: CategoryEntryMode.subCategoryHub,
+      apiServiceId: 'product',
+      apiProductCategory: 'product',
+      hubTitleAr: 'التسوق من الخارج',
+      hubSubtitleAr: 'تسوق من أشهر الماركات العالمية (الصين وإيران)',
+      storeTitleAr: 'المتاجر العالمية',
+      storeSubtitleAr: 'اختر متجرك المفضل',
+      subCategories: _globalShoppingSubCategories,
+    ),
   ];
 
   static MarketplaceCategoryDefinition? find(String id) {
@@ -265,6 +279,7 @@ class MarketplaceCatalog {
     'product',
     'cars',
     'eden_printing',
+    'global_shopping',
   };
 
   /// الأقسام القابلة للتحكّم من لوحة الأدمن (تُستثنى البازار لأنه بانر علوي).
@@ -373,6 +388,7 @@ class MarketplaceCatalog {
 
   static const List<MarketplaceSubCategory> _globalShoppingSubCategories = [
     MarketplaceSubCategory(id: 'china', titleAr: 'الصين', titleEn: 'China', image: 'assets/images/global_china.png'),
+    MarketplaceSubCategory(id: 'iran', titleAr: 'إيران', titleEn: 'Iran', image: 'assets/images/global_iran.png'),
   ];
 
   /// أقسام المهنيين — مصدر واحد للزبون والتاجر.
