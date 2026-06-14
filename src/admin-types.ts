@@ -26,7 +26,7 @@ export interface HomeCategoriesConfig {
   updatedAt: string | null;
 }
 
-export const DEFAULT_HOME_CATEGORY_IDS = new Set(['restaurant', 'product', 'cars']);
+export const DEFAULT_HOME_CATEGORY_IDS = new Set(['restaurant', 'product', 'cars', 'eden_printing']);
 
 export const TOGGLEABLE_HOME_CATEGORIES = [
   { id: 'restaurant', titleAr: 'المطاعم' },
@@ -38,6 +38,7 @@ export const TOGGLEABLE_HOME_CATEGORIES = [
   { id: 'real_estate', titleAr: 'العقارات' },
   { id: 'offers', titleAr: 'العروض والخصومات' },
   { id: 'used', titleAr: 'المنتجات المستعملة' },
+  { id: 'eden_printing', titleAr: 'مطبعة جنة عدن' },
 ] as const;
 
 export interface AdminReports {

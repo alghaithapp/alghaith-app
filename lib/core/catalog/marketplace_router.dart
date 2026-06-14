@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../../screens/catalog_products_screen.dart';
 import '../../screens/category_hub_screen.dart';
 import '../../screens/offers_catalog_screen.dart';
+import '../../screens/eden_printing_screen.dart';
 import '../../screens/professionals_directory_screen.dart';
 import '../../screens/real_estate_deal_hub_screen.dart';
 import '../../screens/shopping_stores_screen.dart';
@@ -15,6 +16,9 @@ class MarketplaceRouter {
   const MarketplaceRouter._();
 
   static Widget screenForCategory(MarketplaceCategoryDefinition def) {
+    if (def.id == 'eden_printing') {
+      return const EdenPrintingScreen();
+    }
     switch (def.entryMode) {
       case CategoryEntryMode.directStores:
         return ShoppingStoresScreen(

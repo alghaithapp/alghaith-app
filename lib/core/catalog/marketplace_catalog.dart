@@ -1,3 +1,4 @@
+import '../../screens/eden_printing_screen.dart';
 import '../../models/app_models.dart';
 import '../../models/home_category_platform_override.dart';
 
@@ -235,6 +236,19 @@ class MarketplaceCatalog {
       defaultSubBrowseMode: SubCategoryBrowseMode.catalog,
       subCategories: _usedSubCategories,
     ),
+    MarketplaceCategoryDefinition(
+      id: 'eden_printing',
+      titleAr: 'مطبعة جنة عدن',
+      titleEn: 'Eden Printing',
+      image: 'assets/images/cat_eden_printing.png',
+      entryMode: CategoryEntryMode.directStores,
+      apiServiceId: 'eden_printing',
+      apiProductCategory: 'eden_printing',
+      hubTitleAr: 'مطبعة جنة عدن',
+      hubSubtitleAr: 'كل ما تحتاجه من خدمات الطباعة',
+      storeTitleAr: 'مطبعة جنة عدن',
+      storeSubtitleAr: 'خدمات طباعة احترافية',
+    ),
   ];
 
   static MarketplaceCategoryDefinition? find(String id) {
@@ -250,6 +264,7 @@ class MarketplaceCatalog {
     'restaurant',
     'product',
     'cars',
+    'eden_printing',
   };
 
   /// الأقسام القابلة للتحكّم من لوحة الأدمن (تُستثنى البازار لأنه بانر علوي).
