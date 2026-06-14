@@ -214,6 +214,7 @@ class EdenPrintingScreen extends StatelessWidget {
                         const SizedBox(width: 6),
                         const Text(
                           '0772 505 3888',
+                          textDirection: TextDirection.ltr,
                           style: TextStyle(
                             fontFamily: 'Cairo',
                             fontSize: 13,

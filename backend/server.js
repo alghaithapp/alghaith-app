@@ -410,7 +410,8 @@ app.get('/app/update-policy', async (_req, res) => {
     const policy = await getAppUpdatePolicy();
     return res.json({
       ...policy,
-      forceUpdate: true,
+      minBuildNumber: 1, // ضبط الحد الأدنى لرقم البناء إلى 1 لتعطيل شاشة التحديث الإجباري
+      forceUpdate: false,
     });
   } catch (error) {
     console.error('app update policy error:', error);

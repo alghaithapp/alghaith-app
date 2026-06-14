@@ -264,8 +264,8 @@ function App() {
   const [deleteTarget, setDeleteTarget] = useState<AdminAccountSummary | null>(null);
   const [appUpdatePolicy, setAppUpdatePolicy] = useState<AppUpdatePolicy | null>(null);
   const [appUpdateDraft, setAppUpdateDraft] = useState({
-    minBuildNumber: '62',
-    minVersionName: '1.2.30',
+    minBuildNumber: '1',
+    minVersionName: '1.0.0',
     latestBuildNumber: '0',
     latestVersionName: '',
     messageAr:
