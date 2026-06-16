@@ -1614,7 +1614,6 @@ class AppProvider extends ChangeNotifier {
             now.difference(completedAt) >= const Duration(hours: 2) &&
             now.difference(completedAt) <= const Duration(days: 3)) {
           _customerTimerEmitted.add(key);
-          _notificationHub.onRateOrderReminder(order);
         }
       }
     }

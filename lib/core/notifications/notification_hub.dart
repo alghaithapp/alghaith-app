@@ -132,18 +132,6 @@ class NotificationHub {
     );
   }
 
-  void onRateOrderReminder(ActiveOrder order) {
-    _notify(
-      title: 'قيّم تجربتك ${displayOrderNumber(order)}',
-      body: 'شاركنا رأيك في المتجر وخدمة التوصيل',
-      audience: 'customer',
-      orderNumber: order.orderNumber,
-      category: NotificationCategory.review,
-      priority: NotificationPriority.marketing,
-      eventKey: 'customer:${order.id}:rate_reminder',
-    );
-  }
-
   void onAbandonedCart(int itemCount) {
     _notify(
       title: 'سلتك بانتظارك',

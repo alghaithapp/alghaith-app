@@ -1007,68 +1007,23 @@ class ShoppingStoreMenuScreen extends StatefulWidget {
       _ShoppingStoreMenuScreenState();
 }
 
-class _ShoppingStoreMenuScreenState extends State<ShoppingStoreMenuScreen>
-    with SingleTickerProviderStateMixin {
+class _ShoppingStoreMenuScreenState extends State<ShoppingStoreMenuScreen> {
   final TextEditingController _searchController = TextEditingController();
   final GlobalKey _cartIconKey = GlobalKey();
-  final GlobalKey _stackKey = GlobalKey();
-  late final AnimationController _flyController;
-  Offset _flyStart = Offset.zero;
-  Offset _flyEnd = Offset.zero;
-  bool _showFlyDot = false;
   int _cartPulseTick = 0;
   String? _selectedSectionKey;
 
   @override
-  void initState() {
-    super.initState();
-    _flyController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 650),
-    )..addStatusListener((status) {
-        if (!mounted) return;
-        if (status == AnimationStatus.completed) {
-          setState(() {
-            _showFlyDot = false;
-            _cartPulseTick++;
-          });
-        }
-      });
-  }
-
-  @override
   void dispose() {
-    _flyController.dispose();
     _searchController.dispose();
     super.dispose();
   }
 
-  void _animateAddToCart(BuildContext sourceContext) {
-    final stackContext = _stackKey.currentContext;
-    final cartContext = _cartIconKey.currentContext;
-    if (stackContext == null || cartContext == null) return;
-
-    final stackBox = stackContext.findRenderObject() as RenderBox?;
-    final sourceBox = sourceContext.findRenderObject() as RenderBox?;
-    final cartBox = cartContext.findRenderObject() as RenderBox?;
-
-    if (stackBox == null || sourceBox == null || cartBox == null) return;
-    if (!stackBox.attached || !sourceBox.attached || !cartBox.attached) return;
-
-    final sourceGlobal = sourceBox.localToGlobal(
-      Offset(sourceBox.size.width / 2, sourceBox.size.height / 2),
-    );
-    final cartGlobal = cartBox.localToGlobal(
-      Offset(cartBox.size.width / 2, cartBox.size.height / 2),
-    );
-
+  void _animateAddToCart() {
     if (mounted) {
       setState(() {
-        _flyStart = stackBox.globalToLocal(sourceGlobal);
-        _flyEnd = stackBox.globalToLocal(cartGlobal);
-        _showFlyDot = true;
+        _cartPulseTick++;
       });
-      _flyController.forward(from: 0);
     }
   }
 
@@ -1141,14 +1096,9 @@ class _ShoppingStoreMenuScreenState extends State<ShoppingStoreMenuScreen>
         ],
       ),
       body: SafeArea(
-        child: Stack(
-          key: _stackKey,
-          clipBehavior:
-              Clip.none, // مهم جداً لمنع اختفاء النقطة عند وصولها للأعلى
+        child: ListView(
+          padding: const EdgeInsets.all(16),
           children: [
-            ListView(
-              padding: const EdgeInsets.all(16),
-              children: [
                 _StoreHeader(
                   profile: widget.profile,
                   visiblePhone: customerPhone,
@@ -1270,51 +1220,10 @@ class _ShoppingStoreMenuScreenState extends State<ShoppingStoreMenuScreen>
                           );
                           return;
                         }
-                        _animateAddToCart(buttonContext);
+                        _animateAddToCart();
                       },
                     );
                   }),
-              ],
-            ),
-            if (_showFlyDot)
-              IgnorePointer(
-                child: AnimatedBuilder(
-                  animation: _flyController,
-                  builder: (_, __) {
-                    final t = Curves.easeOutCubic
-                        .transform(_flyController.value); // مسار أنعم
-                    final x = _flyStart.dx + ((_flyEnd.dx - _flyStart.dx) * t);
-                    final yBase =
-                        _flyStart.dy + ((_flyEnd.dy - _flyStart.dy) * t);
-
-                    // معادلة القوس الحقيقي (Parabola)
-                    final arc = -180 * t * (1 - t);
-
-                    final scale = 1.0 - (t * 0.3);
-                    return Positioned(
-                      left: x - 12,
-                      top: yBase + arc - 12,
-                      child: Transform.scale(
-                        scale: scale,
-                        child: Container(
-                          width: 20,
-                          height: 20,
-                          decoration: BoxDecoration(
-                            color: AppColors.accent,
-                            shape: BoxShape.circle,
-                            boxShadow: [
-                              BoxShadow(
-                                color: AppColors.accent.withValues(alpha: 0.4),
-                                blurRadius: 10,
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              ),
           ],
         ),
       ),

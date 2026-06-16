@@ -100,50 +100,7 @@ async function processPendingOrderReminders(nowMs) {
 }
 
 async function processRatingReminders(nowMs) {
-  const rows = await listAllCustomerOrders();
-  for (const row of rows) {
-    const meta = readOrderMeta(row);
-    if (!meta.customerPhone) continue;
-    if (meta.payload?.isRated === true) continue;
-    if (meta.payload?.pushRatingReminderSentAt) continue;
-
-    const delivered =
-      meta.deliveryStatusKey === 'delivered' ||
-      meta.statusKey === 'completed' ||
-      meta.payload?.deliveredAt;
-    if (!delivered) continue;
-
-    const deliveredTime = deliveredAt(meta);
-    if (!deliveredTime) continue;
-    if (nowMs - deliveredTime.getTime() < RATING_REMINDER_MS) continue;
-
-    const orderNumber = displayOrderNumber(meta);
-    await sendPushToPhone(
-      meta.customerPhone,
-      buildPushPayload({
-        title: 'قيّم تجربتك',
-        body: `كيف كانت تجربتك مع الطلب ${orderNumber}؟`,
-        audience: 'customer',
-        orderId: meta.id,
-        eventKey: `customer:${meta.id}:rating_reminder`,
-        category: 'engagement',
-      })
-    );
-
-    const nextOrder = {
-      ...meta.payload,
-      pushRatingReminderSentAt: new Date(nowMs).toISOString(),
-    };
-    await saveCustomerOrder(
-      meta.customerPhone,
-      {
-        order: nextOrder,
-        merchant_phone: meta.merchantPhone || null,
-        courier_phone: meta.courierPhone || null,
-      },
-      { skipPush: true }
-    );
-  }
+  return;
 }
 
 async function processCourierPickupReminders(nowMs) {
