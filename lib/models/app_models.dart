@@ -476,6 +476,7 @@ class ActiveOrder {
   final String? createdAt;
   final String? merchantReadAt;
   final String? merchantDecisionAt;
+  final String? groupId;
   final bool isPriceLocked;
   final bool isRated;
   final int? originalPrice;
@@ -530,6 +531,7 @@ class ActiveOrder {
     this.createdAt,
     this.merchantReadAt,
     this.merchantDecisionAt,
+    this.groupId,
     this.isPriceLocked = false,
     this.isRated = false,
     this.originalPrice,
@@ -585,6 +587,7 @@ class ActiveOrder {
     String? createdAt,
     String? merchantReadAt,
     String? merchantDecisionAt,
+    String? groupId,
     bool? isPriceLocked,
     bool? isRated,
     int? originalPrice,
@@ -640,6 +643,7 @@ class ActiveOrder {
       createdAt: createdAt ?? this.createdAt,
       merchantReadAt: merchantReadAt ?? this.merchantReadAt,
       merchantDecisionAt: merchantDecisionAt ?? this.merchantDecisionAt,
+      groupId: groupId ?? this.groupId,
       isPriceLocked: isPriceLocked ?? this.isPriceLocked,
       isRated: isRated ?? this.isRated,
       originalPrice: originalPrice ?? this.originalPrice,
@@ -697,6 +701,7 @@ class ActiveOrder {
       'createdAt': createdAt,
       'merchantReadAt': merchantReadAt,
       'merchantDecisionAt': merchantDecisionAt,
+      'groupId': groupId,
       'isPriceLocked': isPriceLocked,
       'isRated': isRated,
       'originalPrice': originalPrice,
@@ -765,6 +770,7 @@ class ActiveOrder {
       createdAt: map['createdAt'] as String?,
       merchantReadAt: map['merchantReadAt'] as String?,
       merchantDecisionAt: map['merchantDecisionAt'] as String?,
+      groupId: map['groupId'] as String?,
       isPriceLocked: (map['isPriceLocked'] as bool?) ?? false,
       isRated: (map['isRated'] as bool?) ?? false,
       originalPrice: (map['originalPrice'] as num?)?.toInt(),

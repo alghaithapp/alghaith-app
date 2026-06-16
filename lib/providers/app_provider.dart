@@ -210,6 +210,7 @@ class AppProvider extends ChangeNotifier {
 
     return false;
   }
+
   Map<String, dynamic>? get appUserRecord => _appUserRecord;
   Map<String, dynamic>? get merchantStore => _merchantStore;
   List<MerchantOffer> get merchantOffers =>
@@ -238,6 +239,7 @@ class AppProvider extends ChangeNotifier {
       MerchantProfileFields.isApproved(_merchantStore);
   bool get canUseMerchantAccount =>
       hasCompletedMerchantProfile && isMerchantApproved;
+
   /// عرض مُنمذج وآمن لبيانات المتجر (قراءة فقط).
   MerchantStoreView get merchantStoreView => MerchantStoreView(_merchantStore);
   bool get isMerchantStoreOpen => merchantStoreView.isOpen;
@@ -319,6 +321,7 @@ class AppProvider extends ChangeNotifier {
     if (explicit.isNotEmpty) return explicit;
     return merchantPhone;
   }
+
   bool get merchantShowPhoneToCustomers =>
       MerchantProfileFields.showPhoneToCustomers(_merchantStore);
   bool get merchantShowWhatsAppToCustomers =>
@@ -488,8 +491,7 @@ class AppProvider extends ChangeNotifier {
       CourierProfileFields.isComplete(_courierProfile);
   bool get isCourierApproved =>
       CourierProfileFields.isApproved(_courierProfile);
-  bool get canUseCourierAccount =>
-      hasCourierProfile && isCourierApproved;
+  bool get canUseCourierAccount => hasCourierProfile && isCourierApproved;
   String get deliveryCourierName {
     final name = _courierProfile?['name']?.toString().trim();
     if (name != null && name.isNotEmpty) return name;
@@ -511,7 +513,8 @@ class AppProvider extends ChangeNotifier {
   }
 
   bool get isCourierAvailable =>
-      MerchantProfileFields.boolValue(_courierProfile?['available'], fallback: true);
+      MerchantProfileFields.boolValue(_courierProfile?['available'],
+          fallback: true);
 
   bool get isGuestMode => _isGuestMode;
 
@@ -865,7 +868,8 @@ class AppProvider extends ChangeNotifier {
     final normalizedPhone = _normalizeStoredPhone(phone);
     if (normalizedPhone.isEmpty || !AppConfig.isBackendConfigured) return;
     final activePhone = _trimmedOrNull(_authPhone);
-    if (activePhone != null && _normalizeStoredPhone(activePhone) != normalizedPhone) {
+    if (activePhone != null &&
+        _normalizeStoredPhone(activePhone) != normalizedPhone) {
       return;
     }
 
@@ -1250,7 +1254,8 @@ class AppProvider extends ChangeNotifier {
         _catalogItems = rows
             .map(_listItemFromCatalogRow)
             .where((item) =>
-                item.category != 'used' || item.isApproved) // تصفية المستعمل غير الموافق عليه
+                item.category != 'used' ||
+                item.isApproved) // تصفية المستعمل غير الموافق عليه
             .toList();
       } else {
         _catalogItems = _buildLocalCatalogFallback();
@@ -1710,17 +1715,18 @@ class AppProvider extends ChangeNotifier {
           row['delivery_fee'] is num ? (row['delivery_fee'] as num).toInt() : 0,
       'deliveryAreas': row['delivery_areas']?.toString() ?? '',
       'isOpen': MerchantProfileFields.boolValue(row['is_open'], fallback: true),
-      'isFrozen': MerchantProfileFields.boolValue(row['is_frozen'], fallback: false),
-      'isBazaarMember':
-          MerchantProfileFields.boolValue(row['is_bazaar_member'], fallback: false),
+      'isFrozen':
+          MerchantProfileFields.boolValue(row['is_frozen'], fallback: false),
+      'isBazaarMember': MerchantProfileFields.boolValue(row['is_bazaar_member'],
+          fallback: false),
       'isApproved': (row['is_approved'] ?? row['isApproved']) == null
           ? null
           : MerchantProfileFields.boolValue(
               row['is_approved'] ?? row['isApproved'],
               fallback: false,
             ),
-      'approvalStatus':
-          row['approval_status']?.toString() ?? row['approvalStatus']?.toString(),
+      'approvalStatus': row['approval_status']?.toString() ??
+          row['approvalStatus']?.toString(),
       'rejectionReasonKey': row['rejection_reason_key']?.toString() ??
           row['rejectionReasonKey']?.toString(),
       'rejectionMessageAr': row['rejection_message_ar']?.toString() ??
@@ -2759,9 +2765,10 @@ class AppProvider extends ChangeNotifier {
           row['merchant_phone']?.toString() ?? row['phone']?.toString(),
       merchantWhatsApp: row['merchant_customer_whatsapp']?.toString() ??
           row['merchant_whatsapp']?.toString(),
-      merchantShowPhoneToCustomers: row['merchant_show_phone_to_customers'] is bool
-          ? row['merchant_show_phone_to_customers'] as bool
-          : null,
+      merchantShowPhoneToCustomers:
+          row['merchant_show_phone_to_customers'] is bool
+              ? row['merchant_show_phone_to_customers'] as bool
+              : null,
       merchantShowWhatsAppToCustomers:
           row['merchant_show_whatsapp_to_customers'] is bool
               ? row['merchant_show_whatsapp_to_customers'] as bool
@@ -2954,7 +2961,8 @@ class AppProvider extends ChangeNotifier {
     Map<String, dynamic> profile,
   ) {
     final visiblePhone = MerchantProfileFields.customerVisiblePhone(profile);
-    final visibleWhatsApp = MerchantProfileFields.customerVisibleWhatsApp(profile);
+    final visibleWhatsApp =
+        MerchantProfileFields.customerVisibleWhatsApp(profile);
     final showPhone = MerchantProfileFields.showPhoneToCustomers(profile);
     final showWhatsApp = MerchantProfileFields.showWhatsAppToCustomers(profile);
     final row = Map<String, dynamic>.from(product)
@@ -3054,13 +3062,24 @@ class AppProvider extends ChangeNotifier {
     if (_cart.isNotEmpty && merchantPhone != null) {
       final firstItem = _cart.first;
       final existingMerchant = _trimmedOrNull(firstItem.merchantPhone);
-      final isBazarCart = firstItem.category == 'bazar_ghaith';
 
-      // إذا كان العنصر الحالي بازار، والسلة فيها بازار، نسمح بتعدد التجار
-      if (isBazarItem && isBazarCart) {
-        // مسموح
+      final isBazarCart = firstItem.category == 'bazar_ghaith' ||
+          firstItem.originalCategory == 'bazar_ghaith';
+      final isRestaurantCart = firstItem.category == 'restaurant' ||
+          firstItem.originalCategory == 'restaurant';
+      final isShoppingCart = firstItem.category == 'product' ||
+          firstItem.originalCategory == 'product';
+
+      // مسموح بتعدد التجار في البازار، المطاعم، والتسوق
+      final isNewItemOrderable = isBazarItem ||
+          item.category == 'restaurant' ||
+          item.category == 'product';
+      final isCartOrderable = isBazarCart || isRestaurantCart || isShoppingCart;
+
+      if (isNewItemOrderable && isCartOrderable) {
+        // مسموح بالخلط بين هذه الأقسام الثلاثة وتعدد التجار فيها
       } else {
-        // النظام القديم: تاجر واحد فقط
+        // النظام القديم أو أقسام أخرى: تاجر واحد فقط
         if (existingMerchant != null && existingMerchant != merchantPhone) {
           return false;
         }
@@ -3500,7 +3519,8 @@ class AppProvider extends ChangeNotifier {
       return false;
     }
 
-    if (order.statusKey == 'pending' || order.statusKey == 'adjustment_pending') {
+    if (order.statusKey == 'pending' ||
+        order.statusKey == 'adjustment_pending') {
       updateOrderStatus(
         orderId,
         'cancelled',
@@ -4057,6 +4077,7 @@ class AppProvider extends ChangeNotifier {
 
   Future<int> checkout({
     int deliveryFeeIqd = 0,
+    Map<String, int>? merchantDeliveryFees,
     String? orderNotes,
   }) async {
     if (_cart.isEmpty) return 0;
@@ -4084,6 +4105,9 @@ class AppProvider extends ChangeNotifier {
     final effectiveCustomerPhone = customerPhone.isNotEmpty
         ? customerPhone
         : _trimmedOrNull(_customerPhone) ?? '';
+
+    final isBazarGroup = _cart.any((i) => i.category == 'bazar_ghaith');
+    final groupId = grouped.length > 1 ? _generateUuid() : null;
 
     var createdCount = 0;
     var remainingPromoDiscount = promoDiscountTotal;
@@ -4148,7 +4172,16 @@ class AppProvider extends ChangeNotifier {
               ? _customerAddress
               : 'Location not set');
 
-      final orderDeliveryFee = createdCount == 0 ? deliveryFeeIqd : 0;
+      int orderDeliveryFee;
+      if (isBazarGroup) {
+        // في البازار: الكلفة الإجمالية توضع على الطلب الأول فقط
+        orderDeliveryFee = createdCount == 0 ? deliveryFeeIqd : 0;
+      } else {
+        // في المطاعم والتسوق: نستخدم الكلفة المحددة لكل تاجر
+        orderDeliveryFee = merchantDeliveryFees?[merchantPhone] ??
+            (createdCount == 0 ? deliveryFeeIqd : 0);
+      }
+
       final orderPromoDiscount =
           createdCount == 0 ? remainingPromoDiscount.clamp(0, subtotal) : 0;
       remainingPromoDiscount -= orderPromoDiscount;
@@ -4229,6 +4262,7 @@ class AppProvider extends ChangeNotifier {
         deliveryFeeIqd: orderDeliveryFee,
         promoDiscountIqd: orderPromoDiscount,
         originalPrice: totalPrice,
+        groupId: groupId,
       );
 
       stagedOrders.add((order: newOrder, items: List<CartItem>.from(items)));
@@ -4316,7 +4350,6 @@ class AppProvider extends ChangeNotifier {
         _notificationHub.onRoleSwitched(role, _roleLabelAr(role));
         final unreadCount = unreadNotificationsForRole(role).length;
         if (unreadCount > 0) {
-          _notificationHub.onUnreadNotificationsPrompt(role, unreadCount);
           _queueUnreadPromptForRole(role);
         }
       }
@@ -4351,7 +4384,6 @@ class AppProvider extends ChangeNotifier {
       _notificationHub.onRoleSwitched(role, _roleLabelAr(role));
       final unreadCount = unreadNotificationsForRole(role).length;
       if (unreadCount > 0) {
-        _notificationHub.onUnreadNotificationsPrompt(role, unreadCount);
         _queueUnreadPromptForRole(role);
       }
     }
@@ -4508,7 +4540,8 @@ class AppProvider extends ChangeNotifier {
     _customerAvatarBase64 = null;
     _favoriteItemIds.clear();
 
-    unawaited(PushNotificationService.instance.unbindFromUser(phone: previousPhone));
+    unawaited(
+        PushNotificationService.instance.unbindFromUser(phone: previousPhone));
     unawaited(
       AccountRepository.instance.clearSession(phone: previousPhone).then((_) {
         debugPrint('LOGOUT: Local session cleared.');
@@ -4894,8 +4927,8 @@ class AppProvider extends ChangeNotifier {
         courierPhone: courierPhone,
         isApproved: isApproved,
       );
-      final index =
-          _allCouriers.indexWhere((c) => c['phone']?.toString() == courierPhone);
+      final index = _allCouriers
+          .indexWhere((c) => c['phone']?.toString() == courierPhone);
       if (index != -1) {
         _allCouriers[index] = Map<String, dynamic>.from(_allCouriers[index]);
         _allCouriers[index]['isApproved'] = isApproved;
@@ -5243,56 +5276,104 @@ class AppProvider extends ChangeNotifier {
   Future<void> acceptDeliveryOrder(String orderId) async {
     final phone = _trimmedOrNull(_authPhone);
     if (phone == null) return;
+
+    // البحث عن الطلب لمعرفة ما إذا كان جزءاً من مجموعة
+    ActiveOrder? target;
+    for (final o in _courierPoolOrders) {
+      if (o.id == orderId) {
+        target = o;
+        break;
+      }
+    }
+
+    if (target != null && target.groupId != null) {
+      await acceptDeliveryGroup(target.groupId!);
+      return;
+    }
+
     try {
       await SupabaseService.acceptDeliveryOrder(
         phone,
         orderId,
         courierName: deliveryCourierName,
       );
-      ActiveOrder? matched;
-      for (final o in _courierPoolOrders) {
-        if (o.id == orderId) {
-          matched = o;
-          break;
-        }
-      }
-      if (matched == null) {
-        for (final o in _courierAssignedOrders) {
-          if (o.id == orderId) {
-            matched = o;
-            break;
-          }
-        }
-      }
-      _notificationHub.onCourierAcceptedOrder(
-        matched?.orderNumber ?? orderId,
-      );
+      _notificationHub.onCourierAcceptedOrder(target?.orderNumber ?? orderId);
       await refreshCourierOrders();
     } catch (error) {
       debugPrint('ACCEPT_DELIVERY_ERROR: $error');
     }
   }
 
+  Future<void> acceptDeliveryGroup(String groupId) async {
+    final phone = _trimmedOrNull(_authPhone);
+    if (phone == null) return;
+
+    final related =
+        _courierPoolOrders.where((o) => o.groupId == groupId).toList();
+    if (related.isEmpty) return;
+
+    try {
+      for (final order in related) {
+        await SupabaseService.acceptDeliveryOrder(
+          phone,
+          order.id,
+          courierName: deliveryCourierName,
+        );
+      }
+      _notificationHub
+          .onCourierAcceptedOrder('مجموعة طلبات #${related.first.orderNumber}');
+      await refreshCourierOrders();
+    } catch (error) {
+      debugPrint('ACCEPT_GROUP_ERROR: $error');
+    }
+  }
+
   Future<void> rejectDeliveryOrder(String orderId) async {
     final phone = _trimmedOrNull(_authPhone);
     if (phone == null) return;
+
+    ActiveOrder? target;
+    for (final o in _courierPoolOrders) {
+      if (o.id == orderId) {
+        target = o;
+        break;
+      }
+    }
+
+    if (target != null && target.groupId != null) {
+      await rejectDeliveryGroup(target.groupId!);
+      return;
+    }
+
     try {
       await SupabaseService.rejectDeliveryOrder(phone, orderId);
-      ActiveOrder? matched;
-      for (final o in _courierPoolOrders) {
-        if (o.id == orderId) {
-          matched = o;
-          break;
-        }
-      }
       _courierPoolOrders.removeWhere((order) => order.id == orderId);
-      _notificationHub.onCourierRejectedOrder(
-        matched?.orderNumber ?? orderId,
-      );
+      _notificationHub.onCourierRejectedOrder(target?.orderNumber ?? orderId);
       notifyListeners();
       await refreshCourierOrders();
     } catch (error) {
       debugPrint('REJECT_DELIVERY_ERROR: $error');
+    }
+  }
+
+  Future<void> rejectDeliveryGroup(String groupId) async {
+    final phone = _trimmedOrNull(_authPhone);
+    if (phone == null) return;
+
+    final related =
+        _courierPoolOrders.where((o) => o.groupId == groupId).toList();
+    if (related.isEmpty) return;
+
+    try {
+      for (final order in related) {
+        await SupabaseService.rejectDeliveryOrder(phone, order.id);
+      }
+      _courierPoolOrders.removeWhere((o) => o.groupId == groupId);
+      _notificationHub.onCourierRejectedOrder('مجموعة طلبات');
+      notifyListeners();
+      await refreshCourierOrders();
+    } catch (error) {
+      debugPrint('REJECT_GROUP_ERROR: $error');
     }
   }
 
@@ -5306,6 +5387,29 @@ class AppProvider extends ChangeNotifier {
   }
 
   Future<void> markDeliveryOnTheWay(String orderId) async {
+    ActiveOrder? target;
+    for (final o in _courierAssignedOrders) {
+      if (o.id == orderId) {
+        target = o;
+        break;
+      }
+    }
+
+    if (target != null && target.groupId != null) {
+      final related = _courierAssignedOrders
+          .where((o) => o.groupId == target!.groupId)
+          .toList();
+      for (final order in related) {
+        await _updateCourierDeliveryStatus(
+          order.id,
+          'on_way',
+          'في الطريق للزبون',
+          'On the way to customer',
+        );
+      }
+      return;
+    }
+
     await _updateCourierDeliveryStatus(
       orderId,
       'on_way',
@@ -5315,6 +5419,29 @@ class AppProvider extends ChangeNotifier {
   }
 
   Future<void> markDeliveryCompleted(String orderId) async {
+    ActiveOrder? target;
+    for (final o in _courierAssignedOrders) {
+      if (o.id == orderId) {
+        target = o;
+        break;
+      }
+    }
+
+    if (target != null && target.groupId != null) {
+      final related = _courierAssignedOrders
+          .where((o) => o.groupId == target!.groupId)
+          .toList();
+      for (final order in related) {
+        await _updateCourierDeliveryStatus(
+          order.id,
+          'delivered',
+          'تم التسليم — دفع نقداً',
+          'Delivered — cash collected',
+        );
+      }
+      return;
+    }
+
     await _updateCourierDeliveryStatus(
       orderId,
       'delivered',

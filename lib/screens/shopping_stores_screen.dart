@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../core/storage/catalog_cache.dart';
 import '../core/theme/app_colors.dart';
 import '../models/app_models.dart';
 import '../providers/app_provider.dart';
@@ -50,7 +53,9 @@ class ShoppingStoresScreen extends StatefulWidget {
 
 class _ShoppingStoresScreenState extends State<ShoppingStoresScreen> {
   final TextEditingController _searchController = TextEditingController();
-  late Future<List<Map<String, dynamic>>> _futureStores;
+  List<Map<String, dynamic>> _stores = const [];
+  Object? _storesLoadError;
+  bool _isLoadingStores = true;
   String _selectedFilter = 'الكل';
   String _bazaarKindFilter = 'all';
 
@@ -79,10 +84,59 @@ class _ShoppingStoresScreenState extends State<ShoppingStoresScreen> {
     );
   }
 
+  String get _storesCacheBucket {
+    final parts = <String>[
+      widget.storeKind.name,
+      widget.serviceId?.trim() ?? '',
+      widget.productCategory?.trim() ?? '',
+      widget.marketplaceCategory?.trim() ?? '',
+      widget.subCategory?.id.trim() ?? '',
+    ];
+    return parts
+        .map((part) => part.replaceAll(RegExp(r'[^A-Za-z0-9_-]'), '_'))
+        .join('__');
+  }
+
+  Future<void> _bootstrapStores() async {
+    final cached = await CatalogCache.readStoresBucket(_storesCacheBucket);
+    if (!mounted) return;
+    if (cached != null && cached.isNotEmpty) {
+      setState(() {
+        _stores = cached;
+        _storesLoadError = null;
+        _isLoadingStores = false;
+      });
+    }
+    unawaited(_refreshStores(showLoading: cached == null || cached.isEmpty));
+  }
+
+  Future<void> _refreshStores({bool showLoading = false}) async {
+    if (showLoading && mounted) {
+      setState(() {
+        _isLoadingStores = true;
+        _storesLoadError = null;
+      });
+    }
+    try {
+      final fresh = await _loadStores();
+      await CatalogCache.writeStoresBucket(_storesCacheBucket, fresh);
+      if (!mounted) return;
+      setState(() {
+        _stores = fresh;
+        _storesLoadError = null;
+        _isLoadingStores = false;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _storesLoadError = error;
+        _isLoadingStores = false;
+      });
+    }
+  }
+
   void _reloadStores() {
-    setState(() {
-      _futureStores = _loadStores();
-    });
+    unawaited(_refreshStores(showLoading: _stores.isEmpty));
   }
 
   bool get _isBazaarChannel =>
@@ -134,7 +188,7 @@ class _ShoppingStoresScreenState extends State<ShoppingStoresScreen> {
   @override
   void initState() {
     super.initState();
-    _futureStores = _loadStores();
+    unawaited(_bootstrapStores());
   }
 
   @override
@@ -201,7 +255,10 @@ class _ShoppingStoresScreenState extends State<ShoppingStoresScreen> {
                                 ],
                               ),
                             ),
-                            ServiceRefreshButton(onPressed: _reloadStores),
+                            ServiceRefreshButton(
+                              onPressed: _reloadStores,
+                              isLoading: _isLoadingStores,
+                            ),
                           ],
                         ),
                         const SizedBox(height: 20),
@@ -325,109 +382,107 @@ class _ShoppingStoresScreenState extends State<ShoppingStoresScreen> {
                   ),
 
                 // 3. Restaurants List
-                FutureBuilder<List<Map<String, dynamic>>>(
-                  future: _futureStores,
-                  builder: (context, snapshot) {
-                    if (snapshot.connectionState == ConnectionState.waiting) {
-                      return const SliverFillRemaining(
-                          child: Center(child: CupertinoActivityIndicator()));
-                    }
+                if (_isLoadingStores && _stores.isEmpty)
+                  const SliverFillRemaining(
+                    child: Center(child: CupertinoActivityIndicator()),
+                  )
+                else if (_storesLoadError != null && _stores.isEmpty)
+                  SliverFillRemaining(
+                    child: _ErrorState(
+                      label: headerTitle,
+                      onRetry: _reloadStores,
+                    ),
+                  )
+                else
+                  Builder(
+                    builder: (context) {
+                      var stores =
+                          _stores.where(_storeHasVisibleProducts).toList();
 
-                    if (snapshot.hasError) {
-                      return SliverFillRemaining(
-                        child: _ErrorState(
-                          label: headerTitle,
-                          onRetry: _reloadStores,
+                      // Sorting: Open restaurants first
+                      stores.sort((a, b) {
+                        final aOpen =
+                            (a['profile'] as Map)['is_open'] as bool? ?? true;
+                        final bOpen =
+                            (b['profile'] as Map)['is_open'] as bool? ?? true;
+                        if (aOpen && !bOpen) return -1;
+                        if (!aOpen && bOpen) return 1;
+                        return 0;
+                      });
+
+                      // Search and Category Filter
+                      final filtered = stores.where((s) {
+                        final p = s['profile'] as Map;
+                        final name =
+                            p['store_name']?.toString().toLowerCase() ?? '';
+                        final desc =
+                            p['description']?.toString().toLowerCase() ?? '';
+
+                        final matchesQuery =
+                            name.contains(query) || desc.contains(query);
+                        final matchesFilter = _storeMatchesCuisineFilter(p);
+                        final matchesBazaarKind = _storeMatchesBazaarKind(p);
+
+                        return matchesQuery &&
+                            matchesFilter &&
+                            matchesBazaarKind;
+                      }).toList();
+
+                      if (filtered.isEmpty) {
+                        return SliverFillRemaining(
+                          child: _NoResultsState(
+                            isBazaar: _isBazaarChannel,
+                            hasStores: stores.isNotEmpty,
+                            hasSearch: query.isNotEmpty,
+                            hasCuisineFilter: widget.showCuisineFilters &&
+                                _selectedFilter != 'الكل',
+                          ),
+                        );
+                      }
+
+                      return SliverPadding(
+                        padding: const EdgeInsets.fromLTRB(20, 10, 20, 120),
+                        sliver: SliverList(
+                          delegate: SliverChildBuilderDelegate(
+                            (context, index) {
+                              final profile = Map<String, dynamic>.from(
+                                filtered[index]['profile'] as Map,
+                              );
+                              final products =
+                                  (filtered[index]['products'] as List)
+                                      .cast<Map<String, dynamic>>();
+                              final openAsRestaurant = widget.storeKind ==
+                                      MerchantStoreKind.restaurant ||
+                                  (_isBazaarChannel &&
+                                      _isRestaurantStore(profile));
+                              return _PremiumRestaurantCard(
+                                data: filtered[index],
+                                isRestaurant: openAsRestaurant,
+                                onTap: () {
+                                  Navigator.of(context).push(
+                                    CupertinoPageRoute(
+                                      builder: (_) => openAsRestaurant
+                                          ? RestaurantMenuScreen(
+                                              storeProfile: profile,
+                                              storeProducts: products,
+                                            )
+                                          : ShoppingStoreMenuScreen(
+                                              profile: profile,
+                                              products: products,
+                                              subCategory: widget.subCategory,
+                                              storeKind: widget.storeKind,
+                                            ),
+                                    ),
+                                  );
+                                },
+                              );
+                            },
+                            childCount: filtered.length,
+                          ),
                         ),
                       );
-                    }
-
-                    var stores = (snapshot.data ?? [])
-                        .where(_storeHasVisibleProducts)
-                        .toList();
-
-                    // Sorting: Open restaurants first
-                    stores.sort((a, b) {
-                      final aOpen =
-                          (a['profile'] as Map)['is_open'] as bool? ?? true;
-                      final bOpen =
-                          (b['profile'] as Map)['is_open'] as bool? ?? true;
-                      if (aOpen && !bOpen) return -1;
-                      if (!aOpen && bOpen) return 1;
-                      return 0;
-                    });
-
-                    // Search and Category Filter
-                    final filtered = stores.where((s) {
-                      final p = s['profile'] as Map;
-                      final name =
-                          p['store_name']?.toString().toLowerCase() ?? '';
-                      final desc =
-                          p['description']?.toString().toLowerCase() ?? '';
-
-                      final matchesQuery =
-                          name.contains(query) || desc.contains(query);
-                      final matchesFilter = _storeMatchesCuisineFilter(p);
-                      final matchesBazaarKind = _storeMatchesBazaarKind(p);
-
-                      return matchesQuery && matchesFilter && matchesBazaarKind;
-                    }).toList();
-
-                    if (filtered.isEmpty) {
-                      return SliverFillRemaining(
-                        child: _NoResultsState(
-                          isBazaar: _isBazaarChannel,
-                          hasStores: stores.isNotEmpty,
-                          hasSearch: query.isNotEmpty,
-                          hasCuisineFilter: widget.showCuisineFilters &&
-                              _selectedFilter != 'الكل',
-                        ),
-                      );
-                    }
-
-                    return SliverPadding(
-                      padding: const EdgeInsets.fromLTRB(20, 10, 20, 120),
-                      sliver: SliverList(
-                        delegate: SliverChildBuilderDelegate(
-                          (context, index) {
-                            final profile = Map<String, dynamic>.from(
-                              filtered[index]['profile'] as Map,
-                            );
-                            final products =
-                                (filtered[index]['products'] as List)
-                                    .cast<Map<String, dynamic>>();
-                            final openAsRestaurant = widget.storeKind ==
-                                    MerchantStoreKind.restaurant ||
-                                (_isBazaarChannel &&
-                                    _isRestaurantStore(profile));
-                            return _PremiumRestaurantCard(
-                              data: filtered[index],
-                              isRestaurant: openAsRestaurant,
-                              onTap: () {
-                                Navigator.of(context).push(
-                                  CupertinoPageRoute(
-                                    builder: (_) => openAsRestaurant
-                                        ? RestaurantMenuScreen(
-                                            storeProfile: profile,
-                                            storeProducts: products,
-                                          )
-                                        : ShoppingStoreMenuScreen(
-                                            profile: profile,
-                                            products: products,
-                                            subCategory: widget.subCategory,
-                                            storeKind: widget.storeKind,
-                                          ),
-                                  ),
-                                );
-                              },
-                            );
-                          },
-                          childCount: filtered.length,
-                        ),
-                      ),
-                    );
-                  },
-                ),
+                    },
+                  ),
               ],
             ),
           ),
@@ -1099,131 +1154,128 @@ class _ShoppingStoreMenuScreenState extends State<ShoppingStoreMenuScreen> {
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
-                _StoreHeader(
-                  profile: widget.profile,
-                  visiblePhone: customerPhone,
-                  visibleWhatsApp: customerWhatsApp,
-                ),
-                const SizedBox(height: 12),
-                CupertinoSearchTextField(
-                  controller: _searchController,
-                  placeholder: 'ابحث داخل المتجر',
-                  onChanged: (_) => setState(() {}),
-                  onSubmitted: (_) => setState(() {}),
-                ),
-                const SizedBox(height: 12),
-                if (sectionTabs.length > 1) ...[
-                  SizedBox(
-                    height: 44,
-                    child: ListView.separated(
-                      scrollDirection: Axis.horizontal,
-                      itemCount: sectionTabs.length,
-                      separatorBuilder: (_, __) => const SizedBox(width: 10),
-                      itemBuilder: (context, index) {
-                        final tab = sectionTabs[index];
-                        final selected = _selectedSectionKey == tab.key;
-                        return GestureDetector(
-                          onTap: () => setState(
-                            () => _selectedSectionKey = tab.key,
-                          ),
-                          child: AnimatedContainer(
-                            duration: const Duration(milliseconds: 200),
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 10,
-                            ),
-                            decoration: BoxDecoration(
-                              color: selected
-                                  ? const Color(0xFFF5A01D)
-                                  : Colors.white,
-                              borderRadius: BorderRadius.circular(999),
-                              border: Border.all(
-                                color: selected
-                                    ? const Color(0xFFF5A01D)
-                                    : const Color(0xFFE8E8E8),
-                              ),
-                            ),
-                            child: Text(
-                              tab.label,
-                              style: TextStyle(
-                                fontFamily: 'Cairo',
-                                fontWeight: FontWeight.w800,
-                                fontSize: 13,
-                                color: selected ? Colors.white : Colors.black87,
-                              ),
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                ],
-                if (products.isEmpty)
-                  Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(40.0),
-                      child: Text(
-                        (widget.storeKind == MerchantStoreKind.restaurant)
-                            ? 'لا توجد وجبات متاحة حالياً'
-                            : 'لا توجد منتجات متاحة حالياً',
-                        style: const TextStyle(fontFamily: 'Cairo'),
+            _StoreHeader(
+              profile: widget.profile,
+              visiblePhone: customerPhone,
+              visibleWhatsApp: customerWhatsApp,
+            ),
+            const SizedBox(height: 12),
+            CupertinoSearchTextField(
+              controller: _searchController,
+              placeholder: 'ابحث داخل المتجر',
+              onChanged: (_) => setState(() {}),
+              onSubmitted: (_) => setState(() {}),
+            ),
+            const SizedBox(height: 12),
+            if (sectionTabs.length > 1) ...[
+              SizedBox(
+                height: 44,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: sectionTabs.length,
+                  separatorBuilder: (_, __) => const SizedBox(width: 10),
+                  itemBuilder: (context, index) {
+                    final tab = sectionTabs[index];
+                    final selected = _selectedSectionKey == tab.key;
+                    return GestureDetector(
+                      onTap: () => setState(
+                        () => _selectedSectionKey = tab.key,
                       ),
-                    ),
-                  )
-                else
-                  ...products.map((item) {
-                    return _ProductCard(
-                      item: item,
-                      profile: widget.profile,
-                      onWhatsApp: () {
-                        if (!GuestGate.requireAccount(
-                          context,
-                          message: 'سجّل دخولك للتواصل مع المتجر.',
-                        )) {
-                          return;
-                        }
-                        if (customerWhatsApp.trim().isEmpty) return;
-                        AppHelpers.launchWhatsApp(
-                          customerWhatsApp,
-                          'مرحبًا، أريد الاستفسار عن ${item['name_ar']?.toString() ?? ''}',
-                        );
-                      },
-                      onAdd: (buttonContext) {
-                        if (!GuestGate.requireAccount(
-                          context,
-                          message:
-                              'سجّل دخولك لإضافة المنتجات إلى السلة والتسوق.',
-                        )) {
-                          return;
-                        }
-                        final added = provider.addStoreProductToCart(
-                          item,
-                          widget.profile,
-                        );
-                        if (!added) {
-                          if (!context.mounted) return;
-                          showCupertinoDialog(
-                            context: context,
-                            builder: (dialogContext) => CupertinoAlertDialog(
-                              title: const Text('تنبيه'),
-                              content: const Text(
-                                'السلة تحتوي منتجات من متجر آخر. أكمل طلبك الحالي أو افرغ السلة أولاً.',
-                              ),
-                              actions: [
-                                CupertinoDialogAction(
-                                  child: const Text('حسنًا'),
-                                  onPressed: () => Navigator.pop(dialogContext),
-                                ),
-                              ],
-                            ),
-                          );
-                          return;
-                        }
-                        _animateAddToCart();
-                      },
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 200),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 10,
+                        ),
+                        decoration: BoxDecoration(
+                          color:
+                              selected ? const Color(0xFFF5A01D) : Colors.white,
+                          borderRadius: BorderRadius.circular(999),
+                          border: Border.all(
+                            color: selected
+                                ? const Color(0xFFF5A01D)
+                                : const Color(0xFFE8E8E8),
+                          ),
+                        ),
+                        child: Text(
+                          tab.label,
+                          style: TextStyle(
+                            fontFamily: 'Cairo',
+                            fontWeight: FontWeight.w800,
+                            fontSize: 13,
+                            color: selected ? Colors.white : Colors.black87,
+                          ),
+                        ),
+                      ),
                     );
-                  }),
+                  },
+                ),
+              ),
+              const SizedBox(height: 12),
+            ],
+            if (products.isEmpty)
+              Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(40.0),
+                  child: Text(
+                    (widget.storeKind == MerchantStoreKind.restaurant)
+                        ? 'لا توجد وجبات متاحة حالياً'
+                        : 'لا توجد منتجات متاحة حالياً',
+                    style: const TextStyle(fontFamily: 'Cairo'),
+                  ),
+                ),
+              )
+            else
+              ...products.map((item) {
+                return _ProductCard(
+                  item: item,
+                  profile: widget.profile,
+                  onWhatsApp: () {
+                    if (!GuestGate.requireAccount(
+                      context,
+                      message: 'سجّل دخولك للتواصل مع المتجر.',
+                    )) {
+                      return;
+                    }
+                    if (customerWhatsApp.trim().isEmpty) return;
+                    AppHelpers.launchWhatsApp(
+                      customerWhatsApp,
+                      'مرحبًا، أريد الاستفسار عن ${item['name_ar']?.toString() ?? ''}',
+                    );
+                  },
+                  onAdd: (buttonContext) {
+                    if (!GuestGate.requireAccount(
+                      context,
+                      message: 'سجّل دخولك لإضافة المنتجات إلى السلة والتسوق.',
+                    )) {
+                      return;
+                    }
+                    final added = provider.addStoreProductToCart(
+                      item,
+                      widget.profile,
+                    );
+                    if (!added) {
+                      if (!context.mounted) return;
+                      showCupertinoDialog(
+                        context: context,
+                        builder: (dialogContext) => CupertinoAlertDialog(
+                          content: const Text(
+                            'السلة تحتوي منتجات من قسم آخر (مثل العقارات أو السيارات) لا يمكن دمجها. أكمل طلبك الحالي أو افرغ السلة أولاً.',
+                          ),
+                          actions: [
+                            CupertinoDialogAction(
+                              child: const Text('حسنًا'),
+                              onPressed: () => Navigator.pop(dialogContext),
+                            ),
+                          ],
+                        ),
+                      );
+                      return;
+                    }
+                    _animateAddToCart();
+                  },
+                );
+              }),
           ],
         ),
       ),

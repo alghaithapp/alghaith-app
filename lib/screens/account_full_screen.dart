@@ -167,10 +167,30 @@ class AccountFullScreen extends StatelessWidget {
                   runSpacing: 8,
                   children: services.map((serviceId) {
                     final labels = merchantServiceLabels(serviceId);
-                    return Chip(
-                      label: Text(
+                    return Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 8,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF5A01D),
+                        borderRadius: BorderRadius.circular(12),
+                        boxShadow: [
+                          BoxShadow(
+                            color: const Color(0xFFF5A01D).withValues(alpha: 0.2),
+                            blurRadius: 6,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: Text(
                         labels.storeLabelAr,
-                        style: const TextStyle(fontFamily: 'Cairo'),
+                        style: const TextStyle(
+                          fontFamily: 'Cairo',
+                          color: Colors.white,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w800,
+                        ),
                       ),
                     );
                   }).toList(),

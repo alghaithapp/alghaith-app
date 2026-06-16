@@ -24,6 +24,18 @@ class CatalogCache {
     await _write(_storesKey, data);
   }
 
+  static Future<List<Map<String, dynamic>>?> readStoresBucket(
+      String bucket) async {
+    return _read('${_storesKey}_$bucket');
+  }
+
+  static Future<void> writeStoresBucket(
+    String bucket,
+    List<Map<String, dynamic>> data,
+  ) async {
+    await _write('${_storesKey}_$bucket', data);
+  }
+
   static Future<List<Map<String, dynamic>>?> _read(String key) async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -31,7 +43,10 @@ class CatalogCache {
       if (raw == null || raw.trim().isEmpty) return null;
       final decoded = jsonDecode(raw);
       if (decoded is List) {
-        return decoded.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
+        return decoded
+            .whereType<Map>()
+            .map((e) => Map<String, dynamic>.from(e))
+            .toList();
       }
       return null;
     } catch (_) {
@@ -39,7 +54,8 @@ class CatalogCache {
     }
   }
 
-  static Future<void> _write(String key, List<Map<String, dynamic>> data) async {
+  static Future<void> _write(
+      String key, List<Map<String, dynamic>> data) async {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(key, jsonEncode(data));

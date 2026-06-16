@@ -217,8 +217,11 @@ class _RealEstateFormScreenState extends State<RealEstateFormScreen> {
                     keyboardType: TextInputType.number,
                     validator: (value) {
                       final parsed = int.tryParse(value?.trim() ?? '');
-                      if (parsed == null || parsed <= 0) {
+                      if (parsed == null) {
                         return 'أدخل سعرًا صحيحًا';
+                      }
+                      if (parsed < 250) {
+                        return 'أقل سعر مسموح به هو 250 دينار';
                       }
                       return null;
                     },

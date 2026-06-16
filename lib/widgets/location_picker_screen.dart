@@ -40,7 +40,6 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
   static final Position _defaultCenter = Position(44.3661, 33.3152);
 
   MapboxMap? _map;
-  CircleAnnotationManager? _circleManager;
   Position _center = _defaultCenter;
   bool _isResolving = false;
   String _resolvedAddress = '';
@@ -55,41 +54,26 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
 
   Future<void> _onMapCreated(MapboxMap map) async {
     _map = map;
-    try {
-      _circleManager = await map.annotations.createCircleAnnotationManager();
-      await _refreshCenterMarker();
-    } catch (_) {}
   }
 
-  Future<void> _refreshCenterMarker() async {
-    final manager = _circleManager;
-    if (manager == null) return;
-    try {
-      await manager.deleteAll();
-      await manager.create(
-        CircleAnnotationOptions(
-          geometry: Point(coordinates: _center),
-          circleColor: const Color(0xFFF5A01D).value,
-          circleRadius: 8,
-          circleStrokeColor: Colors.white.value,
-          circleStrokeWidth: 2,
-        ),
-      );
-    } catch (_) {}
-  }
-
-  Future<void> _readCenterFromMap() async {
+  Future<void> _syncCenterFromMap({bool clearResolvedAddress = false}) async {
     final map = _map;
     if (map == null) return;
     try {
       final state = await map.getCameraState();
       final center = state.center.coordinates;
+      if (!mounted) return;
       setState(() {
         _center = Position(center.lng, center.lat);
+        if (clearResolvedAddress) {
+          _resolvedAddress = '';
+        }
       });
-      await _refreshCenterMarker();
     } catch (_) {}
   }
+
+  String get _centerSummary =>
+      '${_center.lat.toStringAsFixed(5)}, ${_center.lng.toStringAsFixed(5)}';
 
   Future<String> _reverseGeocode(double lat, double lng) async {
     if (!AppConfig.isMapboxConfigured) {
@@ -125,7 +109,7 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
 
   Future<void> _confirmLocation() async {
     setState(() => _isResolving = true);
-    await _readCenterFromMap();
+    await _syncCenterFromMap();
     final address = await _reverseGeocode(
       _center.lat.toDouble(),
       _center.lng.toDouble(),
@@ -165,7 +149,7 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
       _center = target;
       if (!AppConfig.isMapboxConfigured) {
         _resolvedAddress =
-            '${target.lat.toDouble().toStringAsFixed(5)}, ${target.lng.toDouble().toStringAsFixed(5)}';
+            '${target.lat.toStringAsFixed(5)}, ${target.lng.toStringAsFixed(5)}';
       }
     });
     await _map?.setCamera(
@@ -174,7 +158,6 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
         zoom: 15.0,
       ),
     );
-    await _refreshCenterMarker();
   }
 
   @override
@@ -201,12 +184,25 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
                           zoom: 14.0,
                         ),
                         onMapCreated: _onMapCreated,
+                        onCameraChangeListener: (_) {
+                          if (_resolvedAddress.isNotEmpty) {
+                            setState(() => _resolvedAddress = '');
+                          }
+                        },
+                        onMapIdleListener: (_) {
+                          _syncCenterFromMap();
+                        },
                       ),
                     )
                   else
                     const Positioned.fill(
                       child: _MapUnavailableNotice(),
                     ),
+                  const IgnorePointer(
+                    child: Center(
+                      child: _CenterLocationPin(),
+                    ),
+                  ),
                   Positioned(
                     right: 12,
                     bottom: 12,
@@ -239,7 +235,7 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
                 children: [
                   Text(
                     _resolvedAddress.isEmpty
-                        ? 'حرّك الخريطة ثم اضغط تأكيد الموقع'
+                        ? 'حرّك الخريطة حتى يصبح الدبوس فوق الموقع المطلوب: $_centerSummary'
                         : _resolvedAddress,
                     style: const TextStyle(
                       fontFamily: 'Cairo',
@@ -315,6 +311,40 @@ class _MapUnavailableNotice extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _CenterLocationPin extends StatelessWidget {
+  const _CenterLocationPin();
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 18,
+          height: 18,
+          decoration: BoxDecoration(
+            color: const Color(0xFFF5A01D),
+            shape: BoxShape.circle,
+            border: Border.all(color: Colors.white, width: 3),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x33000000),
+                blurRadius: 10,
+                offset: Offset(0, 4),
+              ),
+            ],
+          ),
+        ),
+        Container(
+          width: 2,
+          height: 18,
+          color: const Color(0xFFF5A01D),
+        ),
+      ],
     );
   }
 }

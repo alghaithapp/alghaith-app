@@ -37,6 +37,7 @@ class _CartScreenState extends State<CartScreen> {
   bool _isCalculatingDelivery = false;
   bool _isApplyingPromo = false;
   int _deliveryFeeIqd = 0;
+  Map<String, int> _merchantDeliveryFees = {};
   double? _deliveryDistanceKm;
   String? _lastAutoCalcSignature;
   bool _autoCalcScheduled = false;
@@ -200,57 +201,128 @@ class _CartScreenState extends State<CartScreen> {
     final sig = _autoCalcSignature(appProvider);
     _lastAutoCalcSignature = sig;
 
-    final isBazarCart = appProvider.cart.isNotEmpty &&
-        appProvider.cart.first.category == 'bazar_ghaith';
+    if (appProvider.cart.isEmpty) {
+      setState(() {
+        _deliveryFeeIqd = 0;
+        _merchantDeliveryFees = {};
+        _deliveryDistanceKm = null;
+      });
+      return;
+    }
 
-    final merchantAddress = _merchantAddress(appProvider.cart);
-    final merchantLocation = _merchantLocation(appProvider.cart);
+    final isBazarCart = appProvider.cart.first.category == 'bazar_ghaith';
+
     final customerAddress = appProvider.customerAddress.trim();
     final customerLocation = (appProvider.customerLatitude != null &&
             appProvider.customerLongitude != null)
         ? _GeoPoint(
             appProvider.customerLatitude!, appProvider.customerLongitude!)
         : null;
-    if ((merchantAddress.isEmpty && merchantLocation == null) ||
-        (customerAddress.isEmpty && customerLocation == null)) {
+
+    if (customerAddress.isEmpty && customerLocation == null) {
       setState(() {
         _deliveryFeeIqd = 0;
+        _merchantDeliveryFees = {};
         _deliveryDistanceKm = null;
       });
       return;
     }
+
     setState(() => _isCalculatingDelivery = true);
+
     try {
-      final roadKm = await _fetchRoadDistanceKm(
-        merchantAddress: merchantAddress,
-        customerAddress: customerAddress,
-        merchantLocation: merchantLocation,
-        customerLocation: customerLocation,
-      );
-      var distanceKm = roadKm;
-      if (distanceKm == null || distanceKm <= 0) {
-        distanceKm =
-            _straightLineDistanceKm(merchantLocation, customerLocation);
+      // تجميع المنتجات حسب المتجر
+      final grouped = <String, List<CartItem>>{};
+      for (final item in appProvider.cart) {
+        final phone = item.merchantPhone ?? 'unknown';
+        grouped.putIfAbsent(phone, () => []).add(item);
       }
+
+      int totalFee = 0;
+      double maxDistance = 0;
+      final newMerchantFees = <String, int>{};
+
+      // إذا كان بازار، نحسب كلفة واحدة للمجموعة كاملة (لأول متجر مثلاً أو الأبعد)
+      if (isBazarCart) {
+        // نأخذ أول متجر كممثل للمجموعة في البازار
+        final representative = appProvider.cart.first;
+        final mLoc = (representative.merchantLatitude != null &&
+                representative.merchantLongitude != null)
+            ? _GeoPoint(representative.merchantLatitude!,
+                representative.merchantLongitude!)
+            : null;
+        final mAddr = representative.merchantAddress ?? '';
+
+        final dist = await _calculateSingleDistance(
+          mAddr,
+          customerAddress,
+          mLoc,
+          customerLocation,
+        );
+
+        if (dist != null && dist > 0) {
+          totalFee = AppConfig.calculateBazarDeliveryFee(dist);
+          maxDistance = dist;
+        }
+      } else {
+        // في الأقسام الأخرى، نحسب لكل متجر على حدة ونجمع
+        for (final entry in grouped.entries) {
+          final phone = entry.key;
+          final items = entry.value;
+          final first = items.first;
+
+          final mLoc = (first.merchantLatitude != null &&
+                  first.merchantLongitude != null)
+              ? _GeoPoint(first.merchantLatitude!, first.merchantLongitude!)
+              : null;
+          final mAddr = first.merchantAddress ?? '';
+
+          final dist = await _calculateSingleDistance(
+            mAddr,
+            customerAddress,
+            mLoc,
+            customerLocation,
+          );
+
+          if (dist != null && dist > 0) {
+            final fee = AppConfig.calculateDeliveryFee(dist);
+            newMerchantFees[phone] = fee;
+            totalFee += fee;
+            if (dist > maxDistance) maxDistance = dist;
+          }
+        }
+      }
+
       if (!mounted) return;
-      final resolvedDistanceKm = distanceKm;
-      if (resolvedDistanceKm == null || resolvedDistanceKm <= 0) {
-        setState(() {
-          _deliveryFeeIqd = 0;
-          _deliveryDistanceKm = null;
-        });
-        return;
-      }
-      final feeDistanceKm = resolvedDistanceKm;
+
       setState(() {
-        _deliveryDistanceKm = feeDistanceKm;
-        _deliveryFeeIqd = isBazarCart
-            ? AppConfig.calculateBazarDeliveryFee(feeDistanceKm)
-            : AppConfig.calculateDeliveryFee(feeDistanceKm);
+        _deliveryFeeIqd = totalFee;
+        _merchantDeliveryFees = newMerchantFees;
+        _deliveryDistanceKm = maxDistance > 0 ? maxDistance : null;
       });
     } finally {
       if (mounted) setState(() => _isCalculatingDelivery = false);
     }
+  }
+
+  Future<double?> _calculateSingleDistance(
+    String mAddr,
+    String cAddr,
+    _GeoPoint? mLoc,
+    _GeoPoint? cLoc,
+  ) async {
+    if (mAddr.isEmpty && mLoc == null) return null;
+
+    final roadKm = await _fetchRoadDistanceKm(
+      merchantAddress: mAddr,
+      customerAddress: cAddr,
+      merchantLocation: mLoc,
+      customerLocation: cLoc,
+    );
+
+    if (roadKm != null && roadKm > 0) return roadKm;
+
+    return _straightLineDistanceKm(mLoc, cLoc);
   }
 
   String? _autoCalcSignature(AppProvider appProvider) {
@@ -449,6 +521,7 @@ class _CartScreenState extends State<CartScreen> {
       final count = await appProvider.checkout(
         deliveryFeeIqd:
             _deliveryOption == 2 ? (_deliveryFeeIqd + 2000) : _deliveryFeeIqd,
+        merchantDeliveryFees: _merchantDeliveryFees,
         orderNotes: _notesController.text.trim(),
       );
       if (!mounted || count == 0) return;
@@ -1002,7 +1075,7 @@ class _CartScreenState extends State<CartScreen> {
           child: Column(
             children: [
               _SummaryRow(
-                  label: 'المجموع الفرعي', value: '${subtotal.toPrice()} د.ع'),
+                  label: 'مجموع سعر المنتجات', value: '${subtotal.toPrice()} د.ع'),
               if (promoDiscount > 0) ...[
                 const SizedBox(height: 14),
                 _SummaryRow(

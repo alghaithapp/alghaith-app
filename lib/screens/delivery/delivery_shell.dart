@@ -138,6 +138,52 @@ class _DeliveryShellState extends State<DeliveryShell> {
   }
 }
 
+class CourierGroupedOrder {
+  final String? groupId;
+  final List<ActiveOrder> orders;
+  CourierGroupedOrder(this.groupId, this.orders);
+
+  String get orderNumber => orders.first.orderNumber;
+  int get totalPrice => orders.fold(0, (sum, o) => sum + o.price);
+  String get customerName => orders.first.customerNameAr;
+  String get customerPhone => orders.first.customerPhone;
+  String get customerAddress => orders.first.addressAr;
+  double? get customerLat => orders.first.customerLatitude;
+  double? get customerLng => orders.first.customerLongitude;
+
+  bool get isSingle => orders.length == 1;
+  bool get allPickedUp => orders.every((o) => o.deliveryStatusKey == 'picked_up' || o.deliveryStatusKey == 'on_way' || o.deliveryStatusKey == 'delivered');
+  bool get isOnWay => orders.any((o) => o.deliveryStatusKey == 'on_way');
+  bool get isDelivered => orders.every((o) => o.deliveryStatusKey == 'delivered');
+}
+
+extension CourierOrderGrouping on List<ActiveOrder> {
+  List<CourierGroupedOrder> groupForCourier() {
+    final Map<String, List<ActiveOrder>> grouped = {};
+    final List<CourierGroupedOrder> result = [];
+
+    for (final order in this) {
+      if (order.groupId != null && order.groupId!.isNotEmpty) {
+        grouped.putIfAbsent(order.groupId!, () => []).add(order);
+      } else {
+        result.add(CourierGroupedOrder(null, [order]));
+      }
+    }
+
+    for (final entry in grouped.entries) {
+      result.add(CourierGroupedOrder(entry.key, entry.value));
+    }
+
+    result.sort((a, b) {
+      final ta = DateTime.tryParse(a.orders.first.createdAt ?? '') ?? DateTime(2000);
+      final tb = DateTime.tryParse(b.orders.first.createdAt ?? '') ?? DateTime(2000);
+      return tb.compareTo(ta);
+    });
+
+    return result;
+  }
+}
+
 class _MapInfoLine extends StatelessWidget {
   final Color color;
   final String label;
@@ -181,7 +227,7 @@ class DeliveryDashboardScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final appProvider = Provider.of<AppProvider>(context);
-    final waiting = appProvider.deliveryIncomingOrders.length;
+    final groupedIncoming = appProvider.deliveryIncomingOrders.groupForCourier();
     final active = appProvider.deliveryActiveOrders.length;
     final done = appProvider.deliveryCompletedOrders.length;
 
@@ -211,7 +257,7 @@ class DeliveryDashboardScreen extends StatelessWidget {
                 Expanded(
                     child: _StatBox(
                         label: 'جديدة',
-                        value: '$waiting',
+                        value: '${groupedIncoming.length}',
                         color: AppColors.accent)),
                 const SizedBox(width: 10),
                 Expanded(
@@ -261,14 +307,14 @@ class DeliveryDashboardScreen extends StatelessWidget {
             const SizedBox(height: 16),
             _SectionTitle(title: 'طلبات مطاعم وتسوق جديدة'),
             const SizedBox(height: 10),
-            if (appProvider.deliveryIncomingOrders.isEmpty)
+            if (groupedIncoming.isEmpty)
               _EmptyCard(
                 text: 'لا توجد طلبات جديدة من المطاعم أو التسوق الآن',
               )
             else
-              ...appProvider.deliveryIncomingOrders
+              ...groupedIncoming
                   .take(3)
-                  .map((order) => _DeliveryOrderCard(order: order)),
+                  .map((group) => _DeliveryGroupCard(group: group)),
           ],
         ),
       ),
@@ -282,7 +328,7 @@ class DeliveryRequestsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final appProvider = Provider.of<AppProvider>(context);
-    final orders = appProvider.deliveryIncomingOrders;
+    final grouped = appProvider.deliveryIncomingOrders.groupForCourier();
 
     return CupertinoPageScaffold(
       backgroundColor: const Color(0xFFF2F2F7),
@@ -300,7 +346,7 @@ class DeliveryRequestsScreen extends StatelessWidget {
         border: null,
       ),
       child: SafeArea(
-        child: orders.isEmpty
+        child: grouped.isEmpty
             ? _EmptyCard(
                 text: 'لا توجد طلبات جاهزة للتوصيل حالياً',
               )
@@ -309,9 +355,9 @@ class DeliveryRequestsScreen extends StatelessWidget {
                 child: ListView.builder(
                   physics: const AlwaysScrollableScrollPhysics(),
                   padding: const EdgeInsets.all(16),
-                  itemCount: orders.length,
+                  itemCount: grouped.length,
                   itemBuilder: (context, index) {
-                    return _DeliveryOrderCard(order: orders[index]);
+                    return _DeliveryGroupCard(group: grouped[index]);
                   },
                 ),
               ),
@@ -326,7 +372,7 @@ class DeliveryActiveScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final appProvider = Provider.of<AppProvider>(context);
-    final orders = appProvider.deliveryActiveOrders;
+    final grouped = appProvider.deliveryActiveOrders.groupForCourier();
 
     return CupertinoPageScaffold(
       backgroundColor: const Color(0xFFF2F2F7),
@@ -344,7 +390,7 @@ class DeliveryActiveScreen extends StatelessWidget {
         border: null,
       ),
       child: SafeArea(
-        child: orders.isEmpty
+        child: grouped.isEmpty
             ? _EmptyCard(
                 text: 'لا توجد طلبات نشطة حالياً',
               )
@@ -353,9 +399,9 @@ class DeliveryActiveScreen extends StatelessWidget {
                 child: ListView.builder(
                   physics: const AlwaysScrollableScrollPhysics(),
                   padding: const EdgeInsets.all(16),
-                  itemCount: orders.length,
+                  itemCount: grouped.length,
                   itemBuilder: (context, index) {
-                    return _ActiveDeliveryCard(order: orders[index]);
+                    return _ActiveDeliveryGroupCard(group: grouped[index]);
                   },
                 ),
               ),
@@ -666,7 +712,7 @@ class DeliveryAccountScreen extends StatelessWidget {
                       const SizedBox(width: 10),
                       Expanded(
                         child: _StatCard(
-                          label: 'النشطة',
+                          label: 'نشطة',
                           value: '${appProvider.deliveryActiveOrders.length}',
                           color: Colors.blue,
                         ),
@@ -1217,46 +1263,17 @@ class _EmptyCard extends StatelessWidget {
   }
 }
 
-class _DeliveryOrderCard extends StatelessWidget {
-  final ActiveOrder order;
+class _DeliveryGroupCard extends StatelessWidget {
+  final CourierGroupedOrder group;
 
-  const _DeliveryOrderCard({required this.order});
-
-  bool get _hasCustomerLocation =>
-      order.customerLatitude != null && order.customerLongitude != null;
-
-  bool get _hasMerchantLocation =>
-      order.merchantLatitude != null && order.merchantLongitude != null;
-
-  void _openExternalMap(BuildContext context) {
-    final merchantLat = order.merchantLatitude;
-    final merchantLng = order.merchantLongitude;
-    final customerLat = order.customerLatitude;
-    final customerLng = order.customerLongitude;
-
-    // للطلبات الجديدة نفتح الخريطة على موقع المتجر (أو الزبون إذا لم يوجد المتجر)
-    if (merchantLat != null && merchantLng != null) {
-      AppHelpers.openExternalMapNavigation(
-        latitude: merchantLat,
-        longitude: merchantLng,
-        originLatitude: customerLat,
-        originLongitude: customerLng,
-        travelMode: 'walking',
-        context: context,
-      );
-    } else if (customerLat != null && customerLng != null) {
-      AppHelpers.openExternalMapNavigation(
-        latitude: customerLat,
-        longitude: customerLng,
-        travelMode: 'walking',
-        context: context,
-      );
-    }
-  }
+  const _DeliveryGroupCard({required this.group});
 
   @override
   Widget build(BuildContext context) {
     final appProvider = Provider.of<AppProvider>(context, listen: false);
+    final count = group.orders.length;
+    final isGroup = !group.isSingle;
+
     return Container(
       margin: const EdgeInsets.only(bottom: 14),
       padding: const EdgeInsets.all(18),
@@ -1276,12 +1293,12 @@ class _DeliveryOrderCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              const Icon(CupertinoIcons.bag_fill,
+              Icon(isGroup ? CupertinoIcons.square_grid_2x2_fill : CupertinoIcons.bag_fill,
                   color: AppColors.accent, size: 22),
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
-                  'طلب #${order.orderNumber}',
+                  isGroup ? 'مجموعة طلبات ($count)' : 'طلب #${group.orderNumber}',
                   style: const TextStyle(
                       fontWeight: FontWeight.w900,
                       fontFamily: 'Cairo',
@@ -1296,7 +1313,7 @@ class _DeliveryOrderCard extends StatelessWidget {
                   borderRadius: BorderRadius.circular(999),
                 ),
                 child: const Text(
-                  'دفع عند الاستلام',
+                  'COD',
                   style: TextStyle(
                     color: Colors.green,
                     fontSize: 15,
@@ -1307,23 +1324,25 @@ class _DeliveryOrderCard extends StatelessWidget {
               ),
             ],
           ),
-          if ((order.merchantStoreName ?? '').isNotEmpty) ...[
-            const SizedBox(height: 10),
-            Text(
-              'المتجر: ${order.merchantStoreName}',
-              style: const TextStyle(
-                fontFamily: 'Cairo',
-                fontWeight: FontWeight.w800,
-                fontSize: 16,
-              ),
+          const SizedBox(height: 12),
+          ...group.orders.map((order) => Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Row(
+              children: [
+                const Icon(Icons.store, size: 16, color: Colors.grey),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    '${order.merchantStoreName ?? 'متجر'} · ${order.itemsNameAr}',
+                    style: const TextStyle(fontFamily: 'Cairo', fontSize: 13),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
             ),
-          ],
-          const SizedBox(height: 10),
-          Text(
-            order.itemsNameAr,
-            style: const TextStyle(fontFamily: 'Cairo', fontSize: 15),
-          ),
-          const SizedBox(height: 10),
+          )),
+          const Divider(height: 24),
           Row(
             children: [
               const Icon(CupertinoIcons.location_solid,
@@ -1331,37 +1350,11 @@ class _DeliveryOrderCard extends StatelessWidget {
               const SizedBox(width: 6),
               Expanded(
                 child: Text(
-                  order.addressAr,
+                  group.customerAddress,
                   style: const TextStyle(
                     fontFamily: 'Cairo',
                     fontSize: 14,
                     color: Colors.grey,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              const Icon(CupertinoIcons.person_fill,
-                  size: 16, color: Colors.grey),
-              const SizedBox(width: 6),
-              Text(
-                order.customerNameAr,
-                style: const TextStyle(fontFamily: 'Cairo', fontSize: 14),
-              ),
-              const Spacer(),
-              CupertinoButton(
-                padding: EdgeInsets.zero,
-                minimumSize: const ui.Size(44, 44),
-                onPressed: () => AppHelpers.makePhoneCall(order.customerPhone),
-                child: Text(
-                  order.customerPhone,
-                  style: const TextStyle(
-                    fontFamily: 'Cairo',
-                    fontSize: 14,
-                    color: Colors.blue,
                   ),
                 ),
               ),
@@ -1372,7 +1365,7 @@ class _DeliveryOrderCard extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               const Text(
-                'مجموع الحساب والتوصيل:',
+                'إجمالي المطلوب تحصيله:',
                 style: TextStyle(
                   fontFamily: 'Cairo',
                   fontSize: 15,
@@ -1380,7 +1373,7 @@ class _DeliveryOrderCard extends StatelessWidget {
                 ),
               ),
               Text(
-                '${order.price.toPrice()} د.ع',
+                '${group.totalPrice.toPrice()} د.ع',
                 style: const TextStyle(
                   fontWeight: FontWeight.w900,
                   fontFamily: 'Cairo',
@@ -1390,36 +1383,17 @@ class _DeliveryOrderCard extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 12),
-          SizedBox(
-            width: double.infinity,
-            child: Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              alignment: WrapAlignment.end,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              children: [
-                if (_hasCustomerLocation || _hasMerchantLocation)
-                  CupertinoButton(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 18, vertical: 12),
-                    color: Colors.blueGrey,
-                    borderRadius: BorderRadius.circular(12),
-                    minimumSize: const ui.Size(88, 44),
-                    onPressed: () => _openExternalMap(context),
-                    child: const Text('الخريطة',
-                        style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 14,
-                            fontFamily: 'Cairo')),
-                  ),
-                CupertinoButton(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: CupertinoButton(
+                  padding: EdgeInsets.zero,
                   color: Colors.red.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(12),
-                  minimumSize: const ui.Size(88, 44),
-                  onPressed: () => appProvider.rejectDeliveryOrder(order.id),
+                  onPressed: () => group.groupId != null
+                      ? appProvider.rejectDeliveryGroup(group.groupId!)
+                      : appProvider.rejectDeliveryOrder(group.orders.first.id),
                   child: const Text('رفض',
                       style: TextStyle(
                           color: Colors.red,
@@ -1427,22 +1401,26 @@ class _DeliveryOrderCard extends StatelessWidget {
                           fontFamily: 'Cairo',
                           fontWeight: FontWeight.bold)),
                 ),
-                CupertinoButton(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 26, vertical: 12),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                flex: 2,
+                child: CupertinoButton(
+                  padding: EdgeInsets.zero,
                   color: Colors.green,
                   borderRadius: BorderRadius.circular(12),
-                  minimumSize: const ui.Size(96, 44),
-                  onPressed: () => appProvider.acceptDeliveryOrder(order.id),
-                  child: const Text('موافقة',
+                  onPressed: () => group.groupId != null
+                      ? appProvider.acceptDeliveryGroup(group.groupId!)
+                      : appProvider.acceptDeliveryOrder(group.orders.first.id),
+                  child: const Text('قبول المجموعة وتوصيلها',
                       style: TextStyle(
                           color: Colors.white,
                           fontSize: 14,
                           fontFamily: 'Cairo',
                           fontWeight: FontWeight.bold)),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ],
       ),
@@ -1450,61 +1428,28 @@ class _DeliveryOrderCard extends StatelessWidget {
   }
 }
 
-class _ActiveDeliveryCard extends StatelessWidget {
-  final ActiveOrder order;
+class _ActiveDeliveryGroupCard extends StatelessWidget {
+  final CourierGroupedOrder group;
 
-  const _ActiveDeliveryCard({required this.order});
+  const _ActiveDeliveryGroupCard({required this.group});
 
-  bool get _hasCustomerLocation =>
-      order.customerLatitude != null && order.customerLongitude != null;
-
-  bool get _hasMerchantLocation =>
-      order.merchantLatitude != null && order.merchantLongitude != null;
-
-  void _openExternalMap(BuildContext context) {
-    final merchantLat = order.merchantLatitude;
-    final merchantLng = order.merchantLongitude;
-    final customerLat = order.customerLatitude;
-    final customerLng = order.customerLongitude;
-    final statusKey = order.deliveryStatusKey ?? '';
-
-    // إذا قبل الطلب، يذهب إلى المتجر أولاً
-    if (statusKey == 'accepted' && merchantLat != null && merchantLng != null) {
+  void _openMapToMerchant(BuildContext context, ActiveOrder order) {
+    if (order.merchantLatitude != null && order.merchantLongitude != null) {
       AppHelpers.openExternalMapNavigation(
-        latitude: merchantLat,
-        longitude: merchantLng,
-        travelMode: 'walking',
+        latitude: order.merchantLatitude!,
+        longitude: order.merchantLongitude!,
+        travelMode: 'driving',
         context: context,
       );
-      return;
     }
+  }
 
-    // إذا استلم الطلب، يذهب إلى الزبون
-    if (const {'picked_up', 'on_way'}.contains(statusKey) &&
-        customerLat != null &&
-        customerLng != null) {
+  void _openMapToCustomer(BuildContext context) {
+    if (group.customerLat != null && group.customerLng != null) {
       AppHelpers.openExternalMapNavigation(
-        latitude: customerLat,
-        longitude: customerLng,
-        travelMode: 'walking',
-        context: context,
-      );
-      return;
-    }
-
-    // للطلبات النشطة بدون حالة محددة
-    if (customerLat != null && customerLng != null) {
-      AppHelpers.openExternalMapNavigation(
-        latitude: customerLat,
-        longitude: customerLng,
-        travelMode: 'walking',
-        context: context,
-      );
-    } else if (merchantLat != null && merchantLng != null) {
-      AppHelpers.openExternalMapNavigation(
-        latitude: merchantLat,
-        longitude: merchantLng,
-        travelMode: 'walking',
+        latitude: group.customerLat!,
+        longitude: group.customerLng!,
+        travelMode: 'driving',
         context: context,
       );
     }
@@ -1513,115 +1458,258 @@ class _ActiveDeliveryCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final appProvider = Provider.of<AppProvider>(context, listen: false);
-    final delivered = order.deliveryStatusKey == 'delivered';
-    final statusKey = order.deliveryStatusKey ?? '';
+    final allPicked = group.allPickedUp;
+
     return Container(
-      margin: const EdgeInsets.only(bottom: 14),
+      margin: const EdgeInsets.only(bottom: 16),
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(22),
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'طلب #${order.orderNumber}',
-            style: const TextStyle(
-                fontWeight: FontWeight.w900, fontFamily: 'Cairo', fontSize: 18),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            order.deliveryStatusAr ?? 'قيد التوصيل',
-            style: const TextStyle(
-                color: Colors.grey, fontFamily: 'Cairo', fontSize: 14),
-          ),
-          const SizedBox(height: 10),
-          Text(
-            order.addressAr,
-            style: const TextStyle(fontFamily: 'Cairo', fontSize: 15),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            '${order.price.toPrice()} د.ع — ${order.paymentMethodAr}',
-            style: const TextStyle(
-              fontFamily: 'Cairo',
-              fontWeight: FontWeight.w800,
-              color: AppColors.accent,
-              fontSize: 15,
+          _buildGroupHeader(),
+          const SizedBox(height: 16),
+          if (!allPicked) ...[
+            const Text(
+              'مرحلة التجميع (Pick-up):',
+              style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, color: Colors.blueGrey),
             ),
-          ),
-          const SizedBox(height: 14),
-          Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            alignment: WrapAlignment.end,
-            children: [
-              if (_hasCustomerLocation || _hasMerchantLocation)
-                CupertinoButton(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 20, vertical: 13),
-                  color: Colors.black87,
-                  borderRadius: BorderRadius.circular(14),
-                  minimumSize: const ui.Size(104, 46),
-                  onPressed: () => _openExternalMap(context),
-                  child: Text(_deliveryMapButtonLabel(order),
-                      style:
-                          const TextStyle(color: Colors.white, fontSize: 15)),
-                ),
-              if (statusKey == 'accepted')
-                CupertinoButton(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 20, vertical: 13),
-                  color: AppColors.accent,
-                  borderRadius: BorderRadius.circular(14),
-                  minimumSize: const ui.Size(104, 46),
-                  onPressed: () => appProvider.markDeliveryPickedUp(order.id),
-                  child: const Text('استلام من المتجر',
-                      style: TextStyle(color: Colors.white, fontSize: 15)),
-                ),
-              if (statusKey == 'picked_up')
-                CupertinoButton(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 20, vertical: 13),
-                  color: Colors.blue,
-                  borderRadius: BorderRadius.circular(14),
-                  minimumSize: const ui.Size(104, 46),
-                  onPressed: () => appProvider.markDeliveryOnTheWay(order.id),
-                  child: const Text('في الطريق',
-                      style: TextStyle(color: Colors.white, fontSize: 15)),
-                ),
-              if (statusKey == 'on_way')
-                CupertinoButton(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 20, vertical: 13),
-                  color: Colors.green,
-                  borderRadius: BorderRadius.circular(14),
-                  minimumSize: const ui.Size(104, 46),
-                  onPressed: () => appProvider.markDeliveryCompleted(order.id),
-                  child: const Text('تم التسليم + كاش',
-                      style: TextStyle(color: Colors.white, fontSize: 15)),
-                ),
-              if (delivered)
-                const Icon(CupertinoIcons.checkmark_seal_fill,
-                    color: Colors.green, size: 24),
-            ],
-          ),
+            const SizedBox(height: 10),
+            ...group.orders.map((order) => _buildPickupStep(context, order, appProvider)),
+          ] else ...[
+            _buildDeliveryToCustomerSection(context, appProvider),
+          ],
+          const Divider(height: 32),
+          _buildFooterInfo(),
         ],
       ),
     );
   }
 
-  static String _deliveryMapButtonLabel(ActiveOrder order) {
-    switch (order.deliveryStatusKey) {
-      case 'accepted':
-        return 'الذهاب إلى المتجر';
-      case 'picked_up':
-      case 'on_way':
-        return 'الذهاب إلى الزبون';
-      default:
-        return 'الخريطة';
-    }
+  Widget _buildGroupHeader() {
+    final allPicked = group.allPickedUp;
+    return Row(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: (allPicked ? Colors.blue : AppColors.accent).withValues(alpha: 0.1),
+            shape: BoxShape.circle,
+          ),
+          child: Icon(
+            allPicked ? Icons.local_shipping : Icons.store_mall_directory,
+            color: allPicked ? Colors.blue : AppColors.accent,
+            size: 20,
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                allPicked ? 'في الطريق للزبون' : 'جاري تجميع الطلبات',
+                style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w900, fontSize: 16),
+              ),
+              Text(
+                'مجموعة #${group.orderNumber}',
+                style: const TextStyle(fontFamily: 'Cairo', fontSize: 12, color: Colors.grey),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildPickupStep(BuildContext context, ActiveOrder order, AppProvider provider) {
+    final picked = order.deliveryStatusKey == 'picked_up' ||
+                   order.deliveryStatusKey == 'on_way' ||
+                   order.deliveryStatusKey == 'delivered';
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: picked ? Colors.green.withValues(alpha: 0.03) : const Color(0xFFF9FAFB),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: picked ? Colors.green.withValues(alpha: 0.2) : Colors.grey.shade200),
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Icon(picked ? Icons.check_circle : Icons.radio_button_unchecked,
+                   color: picked ? Colors.green : Colors.grey),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      order.merchantStoreName ?? 'متجر',
+                      style: TextStyle(
+                        fontFamily: 'Cairo',
+                        fontWeight: FontWeight.bold,
+                        decoration: picked ? TextDecoration.lineThrough : null,
+                      ),
+                    ),
+                    Text(order.itemsNameAr, style: const TextStyle(fontFamily: 'Cairo', fontSize: 11, color: Colors.grey)),
+                  ],
+                ),
+              ),
+              if (!picked)
+                CupertinoButton(
+                  padding: EdgeInsets.zero,
+                  onPressed: () => AppHelpers.makePhoneCall(order.merchantPhone ?? ''),
+                  child: const Icon(CupertinoIcons.phone_fill, size: 20),
+                ),
+            ],
+          ),
+          if (!picked) ...[
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(
+                  child: CupertinoButton(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    color: Colors.blueGrey.shade700,
+                    borderRadius: BorderRadius.circular(8),
+                    onPressed: () => _openMapToMerchant(context, order),
+                    child: const Text('موقع المتجر', style: TextStyle(fontFamily: 'Cairo', fontSize: 12, color: Colors.white)),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: CupertinoButton(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    color: AppColors.accent,
+                    borderRadius: BorderRadius.circular(8),
+                    onPressed: () => provider.markDeliveryPickedUp(order.id),
+                    child: const Text('تم الاستلام', style: TextStyle(fontFamily: 'Cairo', fontSize: 12, color: Colors.white)),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDeliveryToCustomerSection(BuildContext context, AppProvider provider) {
+    final onWay = group.isOnWay;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'مرحلة التسليم للزبون:',
+          style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, color: Colors.blue),
+        ),
+        const SizedBox(height: 12),
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.blue.withValues(alpha: 0.05),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: Colors.blue.withValues(alpha: 0.2)),
+          ),
+          child: Column(
+            children: [
+              Row(
+                children: [
+                  const Icon(CupertinoIcons.person_fill, color: Colors.blue),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      group.customerName,
+                      style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                  CupertinoButton(
+                    padding: EdgeInsets.zero,
+                    onPressed: () => AppHelpers.makePhoneCall(group.customerPhone),
+                    child: const Icon(CupertinoIcons.phone_fill, size: 22),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  const Icon(CupertinoIcons.location_solid, size: 16, color: Colors.grey),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(group.customerAddress, style: const TextStyle(fontFamily: 'Cairo', fontSize: 13, color: Colors.grey)),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              if (!onWay)
+                SizedBox(
+                  width: double.infinity,
+                  child: CupertinoButton(
+                    color: Colors.blue,
+                    borderRadius: BorderRadius.circular(12),
+                    onPressed: () => provider.markDeliveryOnTheWay(group.orders.first.id),
+                    child: const Text('بدء التحرك للزبون', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
+                  ),
+                )
+              else
+                Row(
+                  children: [
+                    Expanded(
+                      child: CupertinoButton(
+                        color: Colors.black87,
+                        padding: EdgeInsets.zero,
+                        borderRadius: BorderRadius.circular(12),
+                        onPressed: () => _openMapToCustomer(context),
+                        child: const Text('خرائط الزبون', style: TextStyle(fontFamily: 'Cairo', fontSize: 14)),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      flex: 2,
+                      child: CupertinoButton(
+                        color: Colors.green,
+                        padding: EdgeInsets.zero,
+                        borderRadius: BorderRadius.circular(12),
+                        onPressed: () => provider.markDeliveryCompleted(group.orders.first.id),
+                        child: const Text('تسليم وتحصيل الكاش', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 14)),
+                      ),
+                    ),
+                  ],
+                ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildFooterInfo() {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        const Text(
+          'المبلغ الإجمالي للتحصيل:',
+          style: TextStyle(fontFamily: 'Cairo', fontSize: 14, color: Colors.grey),
+        ),
+        Text(
+          '${group.totalPrice.toPrice()} د.ع',
+          style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w900, fontSize: 20, color: Colors.green),
+        ),
+      ],
+    );
   }
 }
 
@@ -1780,6 +1868,8 @@ class _DeliveryMapPreviewScreenState extends State<_DeliveryMapPreviewScreen> {
       return () => AppHelpers.openExternalMapNavigation(
             latitude: customerLat,
             longitude: customerLng,
+            originLatitude: courierLat,
+            originLongitude: courierLng,
             travelMode: 'walking',
           );
     }

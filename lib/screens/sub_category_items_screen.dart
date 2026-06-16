@@ -290,9 +290,8 @@ class _SubCategoryItemsScreenState extends State<SubCategoryItemsScreen>
                                                         context: context,
                                                         builder: (dialogContext) =>
                                                             CupertinoAlertDialog(
-                                                          title: const Text('تنبيه'),
                                                           content: const Text(
-                                                            'السلة تحتوي منتجات من متجر آخر. أكمل طلبك أو افرغ السلة أولاً.',
+                                                            'السلة تحتوي منتجات من قسم آخر (مثل العقارات أو السيارات) لا يمكن دمجها. أكمل طلبك أو افرغ السلة أولاً.',
                                                           ),
                                                           actions: [
                                                             CupertinoDialogAction(
