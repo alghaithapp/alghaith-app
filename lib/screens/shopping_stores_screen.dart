@@ -1089,7 +1089,7 @@ class _ShoppingStoreMenuScreenState extends State<ShoppingStoreMenuScreen>
 
   @override
   Widget build(BuildContext context) {
-    final provider = context.watch<AppProvider>();
+    final provider = context.read<AppProvider>();
     final allProducts =
         widget.products.map((row) => Map<String, dynamic>.from(row)).toList();
     final storeSections =
@@ -1124,15 +1124,18 @@ class _ShoppingStoreMenuScreenState extends State<ShoppingStoreMenuScreen>
         actions: [
           Padding(
             padding: const EdgeInsetsDirectional.only(end: 8),
-            child: _StoreCartNavButton(
-              key: _cartIconKey,
-              count: provider.cartCount,
-              pulseTick: _cartPulseTick,
-              onTap: () {
-                Navigator.of(context).push(
-                  CupertinoPageRoute(builder: (_) => const CartScreen()),
-                );
-              },
+            child: Selector<AppProvider, int>(
+              selector: (_, appProvider) => appProvider.cartCount,
+              builder: (context, cartCount, _) => _StoreCartNavButton(
+                key: _cartIconKey,
+                count: cartCount,
+                pulseTick: _cartPulseTick,
+                onTap: () {
+                  Navigator.of(context).push(
+                    CupertinoPageRoute(builder: (_) => const CartScreen()),
+                  );
+                },
+              ),
             ),
           ),
         ],
@@ -1464,9 +1467,11 @@ class _ProductCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final provider = context.watch<AppProvider>();
+    final provider = context.read<AppProvider>();
     final productId = item['id']?.toString() ?? '';
-    final isFavorite = provider.isFavoriteId(productId);
+    final isFavorite = context.select<AppProvider, bool>(
+      (appProvider) => appProvider.isFavoriteId(productId),
+    );
     final price = (item['price'] as num?)?.toInt() ?? 0;
     final imageBase64 = item['image_base64']?.toString();
     final image = AppImage(

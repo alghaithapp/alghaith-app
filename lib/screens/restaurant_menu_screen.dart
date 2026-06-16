@@ -278,7 +278,7 @@ class _RestaurantMenuScreenState extends State<RestaurantMenuScreen>
 
   @override
   Widget build(BuildContext context) {
-    final provider = context.watch<AppProvider>();
+    final provider = context.read<AppProvider>();
     final query = _searchController.text.trim().toLowerCase();
     final restaurant = _restaurant;
     final allItems = _allMenuItems(provider);
@@ -300,8 +300,6 @@ class _RestaurantMenuScreenState extends State<RestaurantMenuScreen>
       ..sort((a, b) => (b.rating ?? 0).compareTo(a.rating ?? 0));
     final topOrdered = mostOrdered.take(8).toList();
 
-    final showStickyCart =
-        provider.cart.isNotEmpty && _cartBelongsToRestaurant(provider);
     final restaurantImage = _restaurantImageData;
 
     return Scaffold(
@@ -490,7 +488,7 @@ class _RestaurantMenuScreenState extends State<RestaurantMenuScreen>
                     20,
                     0,
                     20,
-                    showStickyCart ? 120 : 32,
+                    120,
                   ),
                   sliver: SliverList.separated(
                     itemCount: sortedItems.length,
@@ -499,7 +497,6 @@ class _RestaurantMenuScreenState extends State<RestaurantMenuScreen>
                       final item = sortedItems[index];
                       return _MenuItemCard(
                         item: item,
-                        quantity: _countInCart(provider, item.id),
                         onAdd: (ctx) => _handleAddItem(item, ctx),
                         onDecrement: () => _handleDecrement(item),
                         onFavorite: () => provider.toggleFavoriteItem(item),
@@ -529,7 +526,9 @@ class _RestaurantMenuScreenState extends State<RestaurantMenuScreen>
                 const SizedBox(width: 8),
                 _CartNavButton(
                   key: _cartIconKey,
-                  count: provider.cartCount,
+                  count: context.select<AppProvider, int>(
+                    (appProvider) => appProvider.cartCount,
+                  ),
                   pulseTick: 0,
                   onTap: () {
                     Navigator.of(context).push(
@@ -540,21 +539,33 @@ class _RestaurantMenuScreenState extends State<RestaurantMenuScreen>
               ],
             ),
           ),
-          if (showStickyCart)
-            Positioned(
-              left: 20,
-              right: 20,
-              bottom: MediaQuery.of(context).padding.bottom + 12,
-              child: _StickyCartBar(
-                total: provider.cartTotal,
-                itemCount: provider.cartCount,
-                onTap: () {
-                  Navigator.of(context).push(
-                    CupertinoPageRoute(builder: (_) => const CartScreen()),
-                  );
-                },
-              ),
+          Selector<AppProvider, _RestaurantStickyCartState>(
+            selector: (_, appProvider) => _RestaurantStickyCartState(
+              isVisible:
+                  appProvider.cart.isNotEmpty && _cartBelongsToRestaurant(appProvider),
+              total: appProvider.cartTotal,
+              itemCount: appProvider.cartCount,
             ),
+            builder: (context, stickyCart, _) {
+              if (!stickyCart.isVisible) {
+                return const SizedBox.shrink();
+              }
+              return Positioned(
+                left: 20,
+                right: 20,
+                bottom: MediaQuery.of(context).padding.bottom + 12,
+                child: _StickyCartBar(
+                  total: stickyCart.total,
+                  itemCount: stickyCart.itemCount,
+                  onTap: () {
+                    Navigator.of(context).push(
+                      CupertinoPageRoute(builder: (_) => const CartScreen()),
+                    );
+                  },
+                ),
+              );
+            },
+          ),
         ],
       ),
     );
@@ -935,14 +946,12 @@ class _MostOrderedCard extends StatelessWidget {
 
 class _MenuItemCard extends StatelessWidget {
   final ListItem item;
-  final int quantity;
   final void Function(BuildContext) onAdd;
   final VoidCallback onDecrement;
   final VoidCallback onFavorite;
 
   const _MenuItemCard({
     required this.item,
-    required this.quantity,
     required this.onAdd,
     required this.onDecrement,
     required this.onFavorite,
@@ -950,8 +959,14 @@ class _MenuItemCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final provider = context.watch<AppProvider>();
-    final isFavorite = provider.isFavoriteId(item.id);
+    final isFavorite = context.select<AppProvider, bool>(
+      (appProvider) => appProvider.isFavoriteId(item.id),
+    );
+    final quantity = context.select<AppProvider, int>((appProvider) {
+      final match = appProvider.cart.where((cartItem) => cartItem.id == item.id);
+      if (match.isEmpty) return 0;
+      return match.first.count;
+    });
     final image =
         item.imageBase64?.isNotEmpty == true ? item.imageBase64 : item.image;
 
@@ -1075,6 +1090,29 @@ class _MenuItemCard extends StatelessWidget {
       ],
     );
   }
+}
+
+class _RestaurantStickyCartState {
+  final bool isVisible;
+  final int total;
+  final int itemCount;
+
+  const _RestaurantStickyCartState({
+    required this.isVisible,
+    required this.total,
+    required this.itemCount,
+  });
+
+  @override
+  bool operator ==(Object other) {
+    return other is _RestaurantStickyCartState &&
+        other.isVisible == isVisible &&
+        other.total == total &&
+        other.itemCount == itemCount;
+  }
+
+  @override
+  int get hashCode => Object.hash(isVisible, total, itemCount);
 }
 
 class _AddButton extends StatelessWidget {
