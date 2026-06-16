@@ -150,7 +150,7 @@ class PushNotificationService {
       await SupabaseService.saveDeviceToken(
         phone: phone,
         token: token,
-        platform: _platformLabel(),
+        platform: _platformLabel() ?? 'unknown',
       );
       debugPrint('Push: token registered for $phone');
     } catch (error) {
@@ -180,7 +180,7 @@ class PushNotificationService {
     }
   }
 
-  String _platformLabel() {
+  String? _platformLabel() {
     if (kIsWeb) return 'web';
     switch (defaultTargetPlatform) {
       case TargetPlatform.android:
@@ -189,6 +189,26 @@ class PushNotificationService {
         return 'ios';
       default:
         return 'unknown';
+    }
+  }
+
+  Future<void> subscribeToTopic(String topic) async {
+    if (!_initialized) return;
+    try {
+      await FirebaseMessaging.instance.subscribeToTopic(topic);
+      debugPrint('Push: subscribed to topic $topic');
+    } catch (e) {
+      debugPrint('Push: failed to subscribe to topic $topic: $e');
+    }
+  }
+
+  Future<void> unsubscribeFromTopic(String topic) async {
+    if (!_initialized) return;
+    try {
+      await FirebaseMessaging.instance.unsubscribeFromTopic(topic);
+      debugPrint('Push: unsubscribed from topic $topic');
+    } catch (e) {
+      debugPrint('Push: failed to unsubscribe from topic $topic: $e');
     }
   }
 }

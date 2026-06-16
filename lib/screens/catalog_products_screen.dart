@@ -18,6 +18,7 @@ class CatalogProductsScreen extends StatefulWidget {
   final String? subCategoryId;
   final String titleAr;
   final String? subtitleAr;
+  final bool hideBack;
 
   const CatalogProductsScreen({
     super.key,
@@ -25,6 +26,7 @@ class CatalogProductsScreen extends StatefulWidget {
     this.subCategoryId,
     required this.titleAr,
     this.subtitleAr,
+    this.hideBack = false,
   });
 
   bool get _contactOnly =>
@@ -90,6 +92,7 @@ class _CatalogProductsScreenState extends State<CatalogProductsScreen> {
       backgroundColor: const Color(0xFFF2F2F7),
       navigationBar: ServiceNavigationBar(
         title: widget.titleAr,
+        hideBack: widget.hideBack,
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [

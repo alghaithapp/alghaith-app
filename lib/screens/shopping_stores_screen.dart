@@ -31,6 +31,7 @@ class ShoppingStoresScreen extends StatefulWidget {
   final String? titleAr;
   final String? subtitleAr;
   final bool showCuisineFilters;
+  final bool hideBack;
 
   /// مثال: product | global_shopping | restaurant
   final String? marketplaceCategory;
@@ -45,6 +46,7 @@ class ShoppingStoresScreen extends StatefulWidget {
     this.titleAr,
     this.subtitleAr,
     this.showCuisineFilters = false,
+    this.hideBack = false,
   });
 
   @override
@@ -229,7 +231,7 @@ class _ShoppingStoresScreenState extends State<ShoppingStoresScreen> {
                       children: [
                         Row(
                           children: [
-                            const ServiceBackButton(),
+                            ServiceBackButton(hide: widget.hideBack),
                             Expanded(
                               child: Column(
                                 children: [

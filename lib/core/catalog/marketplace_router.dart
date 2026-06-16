@@ -15,7 +15,7 @@ import 'marketplace_catalog.dart';
 class MarketplaceRouter {
   const MarketplaceRouter._();
 
-  static Widget screenForCategory(MarketplaceCategoryDefinition def) {
+  static Widget screenForCategory(MarketplaceCategoryDefinition def, {bool hideBack = true}) {
     if (def.id == 'eden_printing') {
       return const EdenPrintingScreen();
     }
@@ -31,15 +31,16 @@ class MarketplaceRouter {
           titleAr: def.storeTitleAr,
           subtitleAr: def.storeSubtitleAr,
           showCuisineFilters: def.showCuisineFilters,
+          hideBack: hideBack,
         );
       case CategoryEntryMode.offers:
-        return const OffersCatalogScreen();
+        return OffersCatalogScreen(hideBack: hideBack);
       case CategoryEntryMode.realEstate:
-        return const RealEstateDealHubScreen();
+        return RealEstateDealHubScreen(hideBack: hideBack);
       case CategoryEntryMode.professionals:
-        return CategoryHubScreen(category: def);
+        return CategoryHubScreen(category: def, hideBack: hideBack);
       case CategoryEntryMode.cars:
-        return CategoryHubScreen(category: def);
+        return CategoryHubScreen(category: def, hideBack: hideBack);
       case CategoryEntryMode.subCategoryHub:
       case CategoryEntryMode.directCatalog:
         if (def.subCategories.isEmpty &&
@@ -48,9 +49,10 @@ class MarketplaceRouter {
             category: def.apiProductCategory,
             titleAr: def.titleAr,
             subtitleAr: def.hubSubtitleAr,
+            hideBack: hideBack,
           );
         }
-        return CategoryHubScreen(category: def);
+        return CategoryHubScreen(category: def, hideBack: hideBack);
     }
   }
 
@@ -107,6 +109,7 @@ class MarketplaceRouter {
             titleAr: sub.titleAr,
             subtitleAr: category.storeSubtitleAr,
             showCuisineFilters: category.showCuisineFilters,
+            hideBack: false,
           ),
         ),
       );
@@ -120,6 +123,7 @@ class MarketplaceRouter {
           subCategoryId: sub.id,
           titleAr: sub.titleAr,
           subtitleAr: category.hubSubtitleAr,
+          hideBack: false,
         ),
       ),
     );

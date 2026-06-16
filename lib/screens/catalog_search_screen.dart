@@ -42,7 +42,7 @@ class _CatalogSearchScreenState extends State<CatalogSearchScreen> {
 
     return CupertinoPageScaffold(
       backgroundColor: const Color(0xFFF2F2F7),
-      navigationBar: const ServiceNavigationBar(title: 'بحث المنتجات'),
+      navigationBar: ServiceNavigationBar(title: 'بحث المنتجات'),
       child: SafeArea(
         child: Column(
           children: [

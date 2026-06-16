@@ -11,7 +11,8 @@ import '../widgets/service_navigation_buttons.dart';
 import '../widgets/catalog_contact_buttons.dart';
 
 class OffersCatalogScreen extends StatefulWidget {
-  const OffersCatalogScreen({super.key});
+  final bool hideBack;
+  const OffersCatalogScreen({super.key, this.hideBack = false});
 
   @override
   State<OffersCatalogScreen> createState() => _OffersCatalogScreenState();
@@ -85,6 +86,7 @@ class _OffersCatalogScreenState extends State<OffersCatalogScreen> {
       backgroundColor: const Color(0xFFF2F2F7),
       navigationBar: ServiceNavigationBar(
         title: 'العروض والخصومات',
+        hideBack: widget.hideBack,
         onRefresh: _reload,
       ),
       child: SafeArea(

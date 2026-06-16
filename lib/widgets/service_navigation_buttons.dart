@@ -73,11 +73,13 @@ class ServiceNavIconButton extends StatelessWidget {
 
 class ServiceBackButton extends StatelessWidget {
   final VoidCallback? onPressed;
+  final bool hide;
 
-  const ServiceBackButton({super.key, this.onPressed});
+  const ServiceBackButton({super.key, this.onPressed, this.hide = false});
 
   @override
   Widget build(BuildContext context) {
+    if (hide) return const SizedBox.shrink();
     final isRtl = Directionality.of(context) == TextDirection.rtl;
     return ServiceNavIconButton(
       icon: isRtl
@@ -117,6 +119,7 @@ class ServiceNavigationBar extends StatelessWidget
   final bool isRefreshing;
   final Widget? trailing;
   final VoidCallback? onBack;
+  final bool hideBack;
 
   const ServiceNavigationBar({
     super.key,
@@ -125,6 +128,7 @@ class ServiceNavigationBar extends StatelessWidget
     this.isRefreshing = false,
     this.trailing,
     this.onBack,
+    this.hideBack = false,
   }) : assert(
           onRefresh == null || trailing == null,
           'Use either onRefresh or trailing, not both.',
@@ -151,7 +155,7 @@ class ServiceNavigationBar extends StatelessWidget
       transitionBetweenRoutes: true,
       leading: Padding(
         padding: const EdgeInsetsDirectional.only(start: 6),
-        child: ServiceBackButton(onPressed: onBack),
+        child: ServiceBackButton(onPressed: onBack, hide: hideBack),
       ),
       middle: Text(
         title,

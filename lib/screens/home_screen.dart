@@ -25,7 +25,7 @@ class _HomeScreenState extends State<HomeScreen> {
       provider.refreshHomeCategoriesConfig();
       if (provider.isCustomer) {
         provider.refreshCustomerCatalog();
-        provider.refreshMarketplaceStats(force: true);
+        provider.refreshMarketplaceStats();
       }
     });
   }
@@ -51,7 +51,10 @@ class _HomeScreenState extends State<HomeScreen> {
                     Navigator.of(context).push(
                       CupertinoPageRoute(
                         builder: (context) =>
-                            CategoryItemsScreen(category: cat.asServiceCategory),
+                            CategoryItemsScreen(
+                          category: cat.asServiceCategory,
+                          hideBack: true,
+                        ),
                       ),
                     );
                   }
@@ -114,7 +117,10 @@ class _HomeScreenState extends State<HomeScreen> {
                       Navigator.of(context).push(
                         CupertinoPageRoute(
                           builder: (context) =>
-                              CategoryItemsScreen(category: cat),
+                              CategoryItemsScreen(
+                            category: cat,
+                            hideBack: true,
+                          ),
                         ),
                       );
                     },

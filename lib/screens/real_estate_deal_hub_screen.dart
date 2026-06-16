@@ -9,7 +9,8 @@ import 'real_estate_type_hub_screen.dart';
 
 /// المستوى الأول: شراء — بيع — إيجار.
 class RealEstateDealHubScreen extends StatelessWidget {
-  const RealEstateDealHubScreen({super.key});
+  final bool hideBack;
+  const RealEstateDealHubScreen({super.key, this.hideBack = false});
 
   @override
   Widget build(BuildContext context) {
@@ -17,7 +18,10 @@ class RealEstateDealHubScreen extends StatelessWidget {
 
     return CupertinoPageScaffold(
       backgroundColor: const Color(0xFFF2F2F7),
-      navigationBar: const ServiceNavigationBar(title: 'العقارات'),
+      navigationBar: ServiceNavigationBar(
+        title: 'العقارات',
+        hideBack: hideBack,
+      ),
       child: SafeArea(
         child: CustomScrollView(
           physics: const BouncingScrollPhysics(),

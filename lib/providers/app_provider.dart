@@ -6,6 +6,7 @@ import '../core/catalog/marketplace_catalog.dart';
 import '../core/catalog/marketplace_stats.dart';
 import '../core/checkout/cart_promo.dart';
 import '../core/orders/order_adjustment.dart';
+import '../core/storage/catalog_cache.dart';
 import '../core/storage/home_categories_cache.dart';
 import '../core/notifications/notification_hub.dart';
 import '../core/notifications/push_notification_inbox.dart';
@@ -46,11 +47,13 @@ class AppProvider extends ChangeNotifier {
   List<MerchantReview> _merchantReviews = [];
   List<ListItem> _items = [];
   List<ListItem> _catalogItems = [];
+  DateTime? _lastCatalogFetch;
   MarketplaceStatsSnapshot? _marketplaceStats;
   bool _marketplaceStatsLoading = false;
   List<CartItem> _cart = [];
   CartPromoDefinition? _appliedCartPromo;
   List<ActiveOrder> _orders = [];
+  DateTime? _lastOrdersFetch;
   List<ActiveOrder> _merchantIncomingOrders = [];
   List<ActiveOrder> _courierPoolOrders = [];
   List<ActiveOrder> _courierAssignedOrders = [];
@@ -543,6 +546,9 @@ class AppProvider extends ChangeNotifier {
   Future<void> _loadSettings() async {
     await _restoreHomeCategoriesFromCache();
     unawaited(refreshHomeCategoriesConfig());
+
+    // تحميل الكاتالوج من الذاكرة المحلية فوراً
+    unawaited(_restoreCatalogFromCache());
 
     String? restoredPhone;
     try {
@@ -1246,17 +1252,43 @@ class AppProvider extends ChangeNotifier {
     }
   }
 
-  Future<void> refreshCustomerCatalog() async {
+  Future<void> _restoreCatalogFromCache() async {
+    try {
+      final cached = await CatalogCache.readCatalog();
+      if (cached != null && cached.isNotEmpty) {
+        _catalogItems = cached.map(_listItemFromCatalogRow).toList();
+        _applyFavoriteSelections();
+        notifyListeners();
+        debugPrint('CACHE: Global catalog restored (${_catalogItems.length} items)');
+      }
+    } catch (e) {
+      debugPrint('CACHE_RESTORE_ERROR: $e');
+    }
+  }
+
+  Future<void> refreshCustomerCatalog({bool force = false}) async {
     if (!SupabaseService.isConfigured) return;
+
+    // منع التحديث المتكرر إذا تم التحميل قبل أقل من 5 دقائق (إلا إذا كان إجبارياً)
+    if (!force && _lastCatalogFetch != null &&
+        DateTime.now().difference(_lastCatalogFetch!) < const Duration(minutes: 5)) {
+      return;
+    }
+
     try {
       final rows = await SupabaseService.loadCatalog();
       if (rows.isNotEmpty) {
-        _catalogItems = rows
+        final newItems = rows
             .map(_listItemFromCatalogRow)
             .where((item) =>
                 item.category != 'used' ||
                 item.isApproved) // تصفية المستعمل غير الموافق عليه
             .toList();
+
+        _catalogItems = newItems;
+        _lastCatalogFetch = DateTime.now();
+        // حفظ في الكاش للمرة القادمة
+        unawaited(CatalogCache.writeCatalog(rows));
       } else {
         _catalogItems = _buildLocalCatalogFallback();
       }
@@ -1264,9 +1296,11 @@ class AppProvider extends ChangeNotifier {
       notifyListeners();
     } catch (error) {
       debugPrint('CATALOG_LOAD_ERROR: $error');
-      _catalogItems = _buildLocalCatalogFallback();
-      _applyFavoriteSelections();
-      notifyListeners();
+      if (_catalogItems.isEmpty) {
+        _catalogItems = _buildLocalCatalogFallback();
+        _applyFavoriteSelections();
+        notifyListeners();
+      }
     }
   }
 
@@ -1419,9 +1453,15 @@ class AppProvider extends ChangeNotifier {
     }
   }
 
-  Future<void> refreshCustomerOrders() async {
+  Future<void> refreshCustomerOrders({bool force = false}) async {
     final phone = _trimmedOrNull(_authPhone);
     if (phone == null || !SupabaseService.isConfigured) return;
+
+    if (!force && _lastOrdersFetch != null &&
+        DateTime.now().difference(_lastOrdersFetch!) < const Duration(minutes: 2)) {
+      return;
+    }
+
     try {
       final previousById = {
         for (final order in _orders) order.id: order,
@@ -1432,8 +1472,9 @@ class AppProvider extends ChangeNotifier {
         loaded = await SupabaseService.loadCustomerOrders(phone);
       }
 
+      _lastOrdersFetch = DateTime.now();
+
       // احتفظ بأي طلبات محلية حديثة غير موجودة على السيرفر بعد
-      // (إذا كان الحفظ بطيئاً أو فشل مؤقتاً)
       final serverIds = {for (final o in loaded) o.id};
       final recentLocalOrphans = _orders.where((o) {
         if (serverIds.contains(o.id)) return false;
@@ -2091,6 +2132,9 @@ class AppProvider extends ChangeNotifier {
     }
     _accountType ??= _accountTypeForRole(_userRole!);
     _accountType ??= 'marketplace';
+    if (_userRole == 'admin') {
+      unawaited(PushNotificationService.instance.subscribeToTopic('admin_alerts'));
+    }
     _isGuestMode = false;
   }
 
@@ -4402,6 +4446,12 @@ class AppProvider extends ChangeNotifier {
     required String? previousRole,
   }) async {
     try {
+      if (role == 'admin') {
+        unawaited(PushNotificationService.instance.subscribeToTopic('admin_alerts'));
+      } else if (previousRole == 'admin') {
+        unawaited(PushNotificationService.instance.unsubscribeFromTopic('admin_alerts'));
+      }
+
       if (previousRole == 'merchant' && role != 'merchant') {
         try {
           await _syncMerchantDataBeforeLeavingMerchantMode();

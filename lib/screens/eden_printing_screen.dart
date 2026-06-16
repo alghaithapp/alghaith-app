@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../core/theme/app_colors.dart';
 import '../utils/helpers.dart';
 import '../widgets/app_image.dart';
+import '../widgets/service_navigation_buttons.dart';
 
 /// شاشة مطبعة جنة عدن — تعرض الخدمات وزر واتساب للتواصل المباشر.
 class EdenPrintingScreen extends StatelessWidget {
@@ -47,16 +48,9 @@ class EdenPrintingScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return CupertinoPageScaffold(
       backgroundColor: const Color(0xFFF8F5F2),
-      navigationBar: CupertinoNavigationBar(
-        backgroundColor: const Color(0xFFFFF8F5),
-        middle: const Text(
-          'مطبعة جنة عدن',
-          style: TextStyle(
-            fontFamily: 'Cairo',
-            fontWeight: FontWeight.w900,
-            fontSize: 17,
-          ),
-        ),
+      navigationBar: ServiceNavigationBar(
+        title: 'مطبعة جنة عدن',
+        hideBack: true,
       ),
       child: SafeArea(
         child: SingleChildScrollView(

@@ -388,18 +388,11 @@ class MainShell extends StatefulWidget {
 
 class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
   int _currentIndex = 0;
+  final GlobalKey<NavigatorState> _homeNavigatorKey = GlobalKey<NavigatorState>();
   Timer? _orderRefreshTimer;
   Map<String, CustomerOrderSnapshot> _lastOrderSnapshots = {};
   OverlayEntry? _notificationEntry;
   final List<CustomerBannerData> _pendingBanners = [];
-
-  final List<Widget> _screens = [
-    const HomeScreen(),
-    const FavoritesScreen(),
-    const CartScreen(),
-    const OrdersScreen(),
-    const AccountScreen(),
-  ];
 
   @override
   void initState() {
@@ -437,10 +430,27 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
     if (!mounted) return;
     final tab = context.read<AppProvider>().takePendingMainTab();
     if (tab == null) return;
-    final clamped = tab.clamp(0, _screens.length - 1);
+    final clamped = tab.clamp(0, 4);
     if (_currentIndex != clamped) {
       setState(() => _currentIndex = clamped);
     }
+  }
+
+  Widget _buildHomeTab() {
+    return Navigator(
+      key: _homeNavigatorKey,
+      onGenerateRoute: (settings) {
+        return CupertinoPageRoute(
+          settings: settings,
+          builder: (context) {
+            if (settings.name == '/') {
+              return const HomeScreen();
+            }
+            return const HomeScreen();
+          },
+        );
+      },
+    );
   }
 
   Future<void> _pollCustomerOrders() async {
@@ -532,39 +542,66 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
     final cartCount = appProvider.cartCount;
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    return Scaffold(
-      backgroundColor:
-          isDark ? const Color(0xFF111111) : const Color(0xFFF2F2F7),
-      body: SafeArea(
-        bottom: false,
-        child: _screens[_currentIndex],
-      ),
-      bottomNavigationBar: SafeBottomBar(
-        color: isDark
-            ? const Color(0xFF1A1A1A)
-            : Colors.white.withValues(alpha: 0.95),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: isDark ? 0.35 : 0.05),
-            blurRadius: 20,
-            offset: const Offset(0, -5),
+    final screens = [
+      _buildHomeTab(),
+      const FavoritesScreen(),
+      const CartScreen(),
+      const OrdersScreen(),
+      const AccountScreen(),
+    ];
+
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) async {
+        if (didPop) return;
+        if (_currentIndex == 0) {
+          final canPop = await _homeNavigatorKey.currentState?.maybePop() ?? false;
+          if (canPop) return;
+        } else {
+          setState(() => _currentIndex = 0);
+          return;
+        }
+        if (Navigator.of(context).canPop()) {
+          Navigator.of(context).pop();
+        }
+      },
+      child: Scaffold(
+        backgroundColor:
+            isDark ? const Color(0xFF111111) : const Color(0xFFF2F2F7),
+        body: SafeArea(
+          bottom: false,
+          child: IndexedStack(
+            index: _currentIndex,
+            children: screens,
           ),
-        ],
-        child: SizedBox(
-          height: 64,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: [
-                _buildNavItem(0, CupertinoIcons.house_fill, 'الرئيسية'),
-                _buildNavItem(1, CupertinoIcons.heart_fill, 'المفضلة'),
-                _buildSpecialCartItemCompact(
-                    2, CupertinoIcons.shopping_cart, cartCount),
-                _buildNavItem(3, CupertinoIcons.doc_text_fill, 'طلباتي',
-                    badgeCount: appProvider.customerActiveOrdersCount),
-                _buildNavItem(4, CupertinoIcons.person_fill, 'حسابي'),
-              ],
+        ),
+        bottomNavigationBar: SafeBottomBar(
+          color: isDark
+              ? const Color(0xFF1A1A1A)
+              : Colors.white.withValues(alpha: 0.95),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: isDark ? 0.35 : 0.05),
+              blurRadius: 20,
+              offset: const Offset(0, -5),
+            ),
+          ],
+          child: SizedBox(
+            height: 64,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: [
+                  _buildNavItem(0, CupertinoIcons.house_fill, 'الرئيسية'),
+                  _buildNavItem(1, CupertinoIcons.heart_fill, 'المفضلة'),
+                  _buildSpecialCartItemCompact(
+                      2, CupertinoIcons.shopping_cart, cartCount),
+                  _buildNavItem(3, CupertinoIcons.doc_text_fill, 'طلباتي',
+                      badgeCount: appProvider.customerActiveOrdersCount),
+                  _buildNavItem(4, CupertinoIcons.person_fill, 'حسابي'),
+                ],
+              ),
             ),
           ),
         ),

@@ -17,7 +17,7 @@ class CarRequestHubScreen extends StatelessWidget {
 
     return CupertinoPageScaffold(
       backgroundColor: const Color(0xFFF2F2F7),
-      navigationBar: const ServiceNavigationBar(title: 'طلب سيارة'),
+      navigationBar: ServiceNavigationBar(title: 'طلب سيارة'),
       child: SafeArea(
         child: CustomScrollView(
           physics: const BouncingScrollPhysics(),

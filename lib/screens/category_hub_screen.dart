@@ -8,8 +8,13 @@ import '../widgets/service_navigation_buttons.dart';
 
 class CategoryHubScreen extends StatelessWidget {
   final MarketplaceCategoryDefinition category;
+  final bool hideBack;
 
-  const CategoryHubScreen({super.key, required this.category});
+  const CategoryHubScreen({
+    super.key,
+    required this.category,
+    this.hideBack = false,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -20,6 +25,7 @@ class CategoryHubScreen extends StatelessWidget {
       backgroundColor: const Color(0xFFF2F2F7),
       navigationBar: ServiceNavigationBar(
         title: category.hubTitleAr,
+        hideBack: hideBack,
       ),
       child: SafeArea(
         child: subs.isEmpty

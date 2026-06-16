@@ -8,8 +8,13 @@ import '../providers/app_provider.dart';
 
 class CategoryItemsScreen extends StatelessWidget {
   final ServiceCategory category;
+  final bool hideBack;
 
-  const CategoryItemsScreen({super.key, required this.category});
+  const CategoryItemsScreen({
+    super.key,
+    required this.category,
+    this.hideBack = false,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -24,7 +29,7 @@ class CategoryItemsScreen extends StatelessWidget {
       return MarketplaceRouter.realEstateMerchantScreen();
     }
 
-    return MarketplaceRouter.screenForCategory(def);
+    return MarketplaceRouter.screenForCategory(def, hideBack: hideBack);
   }
 }
 
