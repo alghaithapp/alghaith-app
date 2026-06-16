@@ -42,6 +42,7 @@ class _MerchantShellState extends State<MerchantShell> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!context.mounted) return;
       final provider = context.read<AppProvider>();
       // حفظ الحالات الأولية لجميع الطلبات
       _lastOrderStatuses = {

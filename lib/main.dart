@@ -39,6 +39,7 @@ import 'widgets/exit_confirm_scope.dart';
 import 'widgets/merchant_order_cross_role_alert.dart';
 import 'widgets/safe_bottom_bar.dart';
 import 'widgets/app_update_gate.dart';
+
 Future<void> main() async {
   // معالج عام يمنع أي "شاشة رمادية" صامتة: بدل تعطّل الإطار الأول بدون أثر،
   // نعرض واجهة بديلة مفهومة للمستخدم مع تسجيل الخطأ في سجلّات النظام.
@@ -346,8 +347,8 @@ class PushNotificationLifecycleScope extends StatefulWidget {
       _PushNotificationLifecycleScopeState();
 }
 
-class _PushNotificationLifecycleScopeState extends State<PushNotificationLifecycleScope>
-    with WidgetsBindingObserver {
+class _PushNotificationLifecycleScopeState
+    extends State<PushNotificationLifecycleScope> with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
@@ -498,9 +499,9 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
         data: data,
         onTap: () {
           context.read<AppProvider>().markNotificationsReadForOrder(
-            data.orderNumber,
-            'customer',
-          );
+                data.orderNumber,
+                'customer',
+              );
           entry.remove();
           _notificationEntry = null;
           setState(() => _currentIndex = 3);
@@ -528,7 +529,7 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
   @override
   Widget build(BuildContext context) {
     final appProvider = Provider.of<AppProvider>(context);
-    final cartCount = appProvider.cart.length;
+    final cartCount = appProvider.cartCount;
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
@@ -556,13 +557,13 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
-              _buildNavItem(0, CupertinoIcons.house_fill, 'الرئيسية'),
-              _buildNavItem(1, CupertinoIcons.heart_fill, 'المفضلة'),
-              _buildSpecialCartItemCompact(
-                  2, CupertinoIcons.shopping_cart, cartCount),
-              _buildNavItem(3, CupertinoIcons.doc_text_fill, 'طلباتي',
-                  badgeCount: appProvider.customerActiveOrdersCount),
-              _buildNavItem(4, CupertinoIcons.person_fill, 'حسابي'),
+                _buildNavItem(0, CupertinoIcons.house_fill, 'الرئيسية'),
+                _buildNavItem(1, CupertinoIcons.heart_fill, 'المفضلة'),
+                _buildSpecialCartItemCompact(
+                    2, CupertinoIcons.shopping_cart, cartCount),
+                _buildNavItem(3, CupertinoIcons.doc_text_fill, 'طلباتي',
+                    badgeCount: appProvider.customerActiveOrdersCount),
+                _buildNavItem(4, CupertinoIcons.person_fill, 'حسابي'),
               ],
             ),
           ),
@@ -602,7 +603,8 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
         children: [
           isActive
               ? FadeInUp(
-                  duration: const Duration(milliseconds: 300), child: iconWidget)
+                  duration: const Duration(milliseconds: 300),
+                  child: iconWidget)
               : iconWidget,
           const SizedBox(height: 4),
           Text(
@@ -697,8 +699,7 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
     );
   }
 
-  Widget _buildSpecialCartItemCompact(
-      int index, IconData icon, int count) {
+  Widget _buildSpecialCartItemCompact(int index, IconData icon, int count) {
     return GestureDetector(
       onTap: () => setState(() => _currentIndex = index),
       child: Column(

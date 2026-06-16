@@ -24,6 +24,7 @@ class _CatalogSearchScreenState extends State<CatalogSearchScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!context.mounted) return;
       context.read<AppProvider>().refreshCustomerCatalog();
     });
   }
@@ -166,13 +167,18 @@ class _CatalogResultCard extends StatelessWidget {
             ),
           ),
           CupertinoButton(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
             color: const Color(0xFFF5A01D),
-            minimumSize: Size.zero,
+            minimumSize: const Size(82, 44),
             onPressed: onAdd,
             child: const Text(
               'إضافة',
-              style: TextStyle(fontSize: 12, color: Colors.white),
+              style: TextStyle(
+                fontSize: 13,
+                color: Colors.white,
+                fontWeight: FontWeight.w800,
+                fontFamily: 'Cairo',
+              ),
             ),
           ),
         ],

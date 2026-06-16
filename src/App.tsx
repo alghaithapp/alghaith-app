@@ -17,6 +17,7 @@ import {
   ShoppingBag,
   Smartphone,
   Store,
+  RefreshCw,
   Trash2,
   UserX,
   Users,
@@ -41,6 +42,7 @@ import {
   sendCode,
   suspendAdminAccount,
   syncMerchantBazaarProducts,
+  updateAdminAccountRole,
   toggleCourierApproval,
   toggleDriverApproval,
   toggleMerchantApproval,
@@ -262,6 +264,7 @@ function App() {
   const [rejectMessage, setRejectMessage] = useState('');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<AdminAccountSummary | null>(null);
+  const [roleChangeTarget, setRoleChangeTarget] = useState<AdminAccountSummary | null>(null);
   const [appUpdatePolicy, setAppUpdatePolicy] = useState<AppUpdatePolicy | null>(null);
   const [appUpdateDraft, setAppUpdateDraft] = useState({
     minBuildNumber: '1',
@@ -790,6 +793,31 @@ function App() {
     } catch (error) {
       const message =
         error instanceof Error ? error.message : 'تعذر تحديث حالة المندوب.';
+      setActionError(message);
+    } finally {
+      setActiveActionKey('');
+    }
+  }
+
+  async function handleChangeRole(account: AdminAccountSummary, newRole: string) {
+    if (!token) return;
+    if (account.kind === 'admin') {
+      setActionError('لا يمكن تغيير دور مشرف محمي.');
+      return;
+    }
+    const actionKey = `role:${account.phone}`;
+    setActiveActionKey(actionKey);
+    setActionError('');
+    setSuccessMessage('');
+    try {
+      await updateAdminAccountRole(token, account.phone, newRole);
+      setSuccessMessage(
+        `تم تغيير دور ${account.displayName || account.phone} إلى ${newRole}.`,
+      );
+      await refreshCoreData(token, account.phone);
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'تعذر تغيير دور الحساب.';
       setActionError(message);
     } finally {
       setActiveActionKey('');
@@ -1619,6 +1647,33 @@ function App() {
                                       {account.isSuspended ? 'فك التعليق' : 'تعليق الحساب'}
                                     </span>
                                   </button>
+                                ) : null}
+                                {!isAdmin ? (
+                                  <div className="role-change-wrapper">
+                                    <select
+                                      className="role-select"
+                                      value={account.role || 'customer'}
+                                      disabled={
+                                        activeActionKey === `role:${account.phone}` ||
+                                        suspendLoading ||
+                                        deleteLoading
+                                      }
+                                      onChange={(event) => {
+                                        handleChangeRole(account, event.target.value).catch(() => undefined);
+                                      }}
+                                    >
+                                      <option value="customer">زبون</option>
+                                      <option value="merchant">تاجر</option>
+                                      <option value="delivery">مندوب</option>
+                                      <option value="driver">سائق</option>
+                                      <option value="admin">مشرف</option>
+                                    </select>
+                                    {activeActionKey === `role:${account.phone}` ? (
+                                      <LoaderCircle className="spin" size={14} />
+                                    ) : (
+                                      <RefreshCw size={14} />
+                                    )}
+                                  </div>
                                 ) : null}
                                 {!isAdmin ? (
                                   <button

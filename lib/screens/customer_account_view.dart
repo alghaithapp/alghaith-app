@@ -66,36 +66,11 @@ class CustomerAccountView extends StatelessWidget {
                     ],
                     const SizedBox(height: 14),
                     _NavigationCard(
-                      icon: Icons.storefront_rounded,
-                      iconColor: AppColors.accent,
-                      title: 'الانتقال إلى حساب التاجر',
-                      subtitle: 'استخدم نفس الحساب وادخل إلى واجهة التاجر',
-                      onTap: () => switchAccountRoleWithLoading(
-                        context,
-                        provider,
-                        'merchant',
-                        loadingMessage:
-                            'يرجى الانتظار... جارٍ التحويل إلى حساب التاجر',
-                        errorMessage: 'تعذر الانتقال إلى حساب التاجر حالياً.',
-                      ),
-                    ),
-                    const SizedBox(height: 14),
-                    _NavigationCard(
-                      icon: Icons.delivery_dining_rounded,
-                      iconColor: const Color(0xFF00A3A3),
-                      title: 'الانتقال إلى حساب مندوب التوصيل',
-                      subtitle: provider.hasCourierProfile
-                          ? 'استخدم نفس الحساب وادخل إلى واجهة المندوب'
-                          : 'سجّل بيانات المندوب أولاً لتفعيل الحساب',
-                      onTap: () => switchAccountRoleWithLoading(
-                        context,
-                        provider,
-                        'delivery',
-                        loadingMessage:
-                            'يرجى الانتظار... جارٍ التحويل إلى حساب المندوب',
-                        errorMessage:
-                            'تعذر الانتقال إلى حساب المندوب حالياً.',
-                      ),
+                      icon: Icons.swap_horiz_rounded,
+                      iconColor: const Color(0xFFE040FB),
+                      title: 'تبديل الحساب (الدور)',
+                      subtitle: 'الانتقال إلى واجهة التاجر أو المندوب أو الزبون',
+                      onTap: () => showRoleSwitcher(context, provider),
                     ),
                     const SizedBox(height: 14),
                     _NavigationCard(

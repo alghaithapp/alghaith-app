@@ -37,7 +37,7 @@ class NotificationsScreen extends StatelessWidget {
                   'قراءة الكل',
                   style: TextStyle(
                     fontFamily: 'Cairo',
-                    fontSize: 13,
+                    fontSize: 18,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
@@ -101,7 +101,7 @@ class _NotificationTile extends StatelessWidget {
               child: Icon(
                 CupertinoIcons.bell_fill,
                 color: item.read ? Colors.grey : const Color(0xFFF5A01D),
-                size: 18,
+                size: 24,
               ),
             ),
             const SizedBox(width: 15),
@@ -113,7 +113,7 @@ class _NotificationTile extends StatelessWidget {
                     item.title,
                     style: TextStyle(
                       fontWeight: FontWeight.bold,
-                      fontSize: 14,
+                      fontSize: 20,
                       fontFamily: 'Cairo',
                       color: item.read ? Colors.black54 : Colors.black,
                     ),
@@ -123,7 +123,7 @@ class _NotificationTile extends StatelessWidget {
                     item.body,
                     style: const TextStyle(
                       color: Colors.grey,
-                      fontSize: 11,
+                      fontSize: 16,
                       fontFamily: 'Cairo',
                     ),
                   ),

@@ -167,31 +167,10 @@ class MerchantMoreScreen extends StatelessWidget {
         ),
         _MoreTile(
           cardColor: cardColor,
-          title: 'الانتقال إلى حساب الزبون',
-          subtitle: 'استخدم نفس التسجيل وانتقل لواجهة الزبون',
-          icon: Icons.person_rounded,
-          onTap: () => switchAccountRoleWithLoading(
-            context,
-            provider,
-            'customer',
-            loadingMessage: 'يرجى الانتظار... جارٍ التحويل إلى حساب الزبون',
-            errorMessage: 'تعذر الانتقال إلى حساب الزبون حالياً.',
-          ),
-        ),
-        _MoreTile(
-          cardColor: cardColor,
-          title: 'الانتقال إلى حساب مندوب التوصيل',
-          subtitle: provider.hasCourierProfile
-              ? 'استخدم نفس التسجيل وانتقل لواجهة المندوب'
-              : 'سجّل بيانات المندوب أولاً لتفعيل الحساب',
-          icon: Icons.delivery_dining_rounded,
-          onTap: () => switchAccountRoleWithLoading(
-            context,
-            provider,
-            'delivery',
-            loadingMessage: 'يرجى الانتظار... جارٍ التحويل إلى حساب المندوب',
-            errorMessage: 'تعذر الانتقال إلى حساب المندوب حالياً.',
-          ),
+          title: 'تبديل الحساب (الدور)',
+          subtitle: 'الانتقال إلى واجهة الزبون أو المندوب أو التاجر',
+          icon: Icons.swap_horiz_rounded,
+          onTap: () => showRoleSwitcher(context, provider),
         ),
         _MoreTile(
           cardColor: cardColor,

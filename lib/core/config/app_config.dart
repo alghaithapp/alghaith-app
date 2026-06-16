@@ -137,6 +137,21 @@ class AppConfig {
     return roundedFee < deliveryFeeMinIqd ? deliveryFeeMinIqd : roundedFee;
   }
 
+  static int calculateBazarDeliveryFee(double distanceKm) {
+    if (!distanceKm.isFinite || distanceKm <= 0) return 0;
+
+    double rawFee;
+    if (distanceKm <= 3.0) {
+      rawFee = 1000;
+    } else {
+      rawFee = 1000 + ((distanceKm - 3.0) * 350);
+    }
+
+    // تقريب للأعلى لأقرب فئة 250 د.ع
+    final roundedFee = (rawFee / 250).ceil() * 250;
+    return roundedFee < 1000 ? 1000 : roundedFee;
+  }
+
   static void validate({bool throwOnError = true}) {
     final issues = <String>[];
 

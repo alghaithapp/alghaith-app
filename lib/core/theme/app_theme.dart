@@ -19,7 +19,9 @@ abstract final class AppButtonStyles {
       disabledForegroundColor: Colors.white.withValues(alpha: 0.9),
       iconColor: Colors.white,
       padding: padding,
-      minimumSize: minimumSize,
+      minimumSize: minimumSize ?? const Size(64, 48),
+      tapTargetSize: MaterialTapTargetSize.padded,
+      visualDensity: VisualDensity.standard,
       shape: RoundedRectangleBorder(borderRadius: borderRadius),
     );
   }
@@ -37,7 +39,9 @@ abstract final class AppButtonStyles {
       disabledForegroundColor: Colors.white.withValues(alpha: 0.9),
       iconColor: Colors.white,
       padding: padding,
-      minimumSize: minimumSize,
+      minimumSize: minimumSize ?? const Size(64, 48),
+      tapTargetSize: MaterialTapTargetSize.padded,
+      visualDensity: VisualDensity.standard,
       shape: RoundedRectangleBorder(borderRadius: borderRadius),
     );
   }
@@ -49,9 +53,11 @@ abstract final class AppTheme {
       platform: TargetPlatform.iOS,
       useMaterial3: true,
       brightness: Brightness.light,
+      visualDensity: VisualDensity.standard,
+      materialTapTargetSize: MaterialTapTargetSize.padded,
     );
     return base.copyWith(
-      colorScheme: ColorScheme.light(
+      colorScheme: const ColorScheme.light(
         primary: AppColors.primary,
         onPrimary: Colors.white,
         secondary: AppColors.accent,
@@ -86,18 +92,32 @@ abstract final class AppTheme {
           borderRadius: BorderRadius.all(Radius.circular(24)),
         ),
       ),
-      filledButtonTheme: FilledButtonThemeData(style: AppButtonStyles.accentFilled()),
+      filledButtonTheme:
+          FilledButtonThemeData(style: AppButtonStyles.accentFilled()),
       elevatedButtonTheme:
           ElevatedButtonThemeData(style: AppButtonStyles.accentElevated()),
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
           foregroundColor: AppColors.accent,
           side: const BorderSide(color: AppColors.accent),
+          minimumSize: const Size(64, 48),
+          tapTargetSize: MaterialTapTargetSize.padded,
+          visualDensity: VisualDensity.standard,
         ),
       ),
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
           foregroundColor: AppColors.primary,
+          minimumSize: const Size(64, 48),
+          tapTargetSize: MaterialTapTargetSize.padded,
+          visualDensity: VisualDensity.standard,
+        ),
+      ),
+      iconButtonTheme: IconButtonThemeData(
+        style: IconButton.styleFrom(
+          minimumSize: const Size(48, 48),
+          tapTargetSize: MaterialTapTargetSize.padded,
+          visualDensity: VisualDensity.standard,
         ),
       ),
       progressIndicatorTheme: const ProgressIndicatorThemeData(
@@ -119,14 +139,16 @@ abstract final class AppTheme {
       platform: TargetPlatform.iOS,
       useMaterial3: true,
       brightness: Brightness.dark,
+      visualDensity: VisualDensity.standard,
+      materialTapTargetSize: MaterialTapTargetSize.padded,
     );
     return base.copyWith(
-      colorScheme: ColorScheme.dark(
+      colorScheme: const ColorScheme.dark(
         primary: AppColors.primaryLight,
         onPrimary: Colors.white,
         secondary: AppColors.accent,
         onSecondary: Colors.white,
-        surface: const Color(0xFF1A1A1A),
+        surface: Color(0xFF1A1A1A),
       ),
       scaffoldBackgroundColor: const Color(0xFF111111),
       textTheme: GoogleFonts.cairoTextTheme(base.textTheme),
@@ -134,9 +156,34 @@ abstract final class AppTheme {
         brightness: Brightness.dark,
         primaryColor: AppColors.accent,
       ),
-      filledButtonTheme: FilledButtonThemeData(style: AppButtonStyles.accentFilled()),
+      filledButtonTheme:
+          FilledButtonThemeData(style: AppButtonStyles.accentFilled()),
       elevatedButtonTheme:
           ElevatedButtonThemeData(style: AppButtonStyles.accentElevated()),
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: OutlinedButton.styleFrom(
+          foregroundColor: AppColors.accent,
+          side: const BorderSide(color: AppColors.accent),
+          minimumSize: const Size(64, 48),
+          tapTargetSize: MaterialTapTargetSize.padded,
+          visualDensity: VisualDensity.standard,
+        ),
+      ),
+      textButtonTheme: TextButtonThemeData(
+        style: TextButton.styleFrom(
+          foregroundColor: AppColors.primaryLight,
+          minimumSize: const Size(64, 48),
+          tapTargetSize: MaterialTapTargetSize.padded,
+          visualDensity: VisualDensity.standard,
+        ),
+      ),
+      iconButtonTheme: IconButtonThemeData(
+        style: IconButton.styleFrom(
+          minimumSize: const Size(48, 48),
+          tapTargetSize: MaterialTapTargetSize.padded,
+          visualDensity: VisualDensity.standard,
+        ),
+      ),
     );
   }
 }

@@ -1,5 +1,9 @@
 const admin = require('firebase-admin');
 
+const ANDROID_NOTIFICATION_CHANNEL_ID = 'alghaith_orders_v3';
+const ANDROID_NOTIFICATION_SOUND = 'alghaith_notify';
+const IOS_NOTIFICATION_SOUND = 'alghaith_notify.wav';
+
 let initialized = false;
 
 function initFirebaseAdmin() {
@@ -64,6 +68,10 @@ async function sendPushToTokens(
     }),
     android: {
       priority: 'high',
+      notification: {
+        channelId: ANDROID_NOTIFICATION_CHANNEL_ID,
+        sound: ANDROID_NOTIFICATION_SOUND,
+      },
     },
     apns: {
       headers: {
@@ -73,7 +81,7 @@ async function sendPushToTokens(
         aps: {
           'content-available': 1,
           badge: 1,
-          sound: 'alghaith_notify.wav',
+          sound: IOS_NOTIFICATION_SOUND,
         },
       },
     },

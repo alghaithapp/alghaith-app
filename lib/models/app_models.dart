@@ -21,6 +21,7 @@ class ListItem {
   final int price;
   final double? rating;
   final String category;
+  final String? originalCategory;
   final String? subCategory;
 
   /// قسم داخل متجر التاجر (مكسرات، حلويات، …) — ليس قسم التسوق العام.
@@ -67,6 +68,7 @@ class ListItem {
     required this.price,
     this.rating,
     required this.category,
+    this.originalCategory,
     this.subCategory,
     this.sectionId,
     required this.categoryLabelAr,
@@ -112,6 +114,7 @@ class ListItem {
     int? price,
     double? rating,
     String? category,
+    String? originalCategory,
     String? subCategory,
     String? sectionId,
     String? categoryLabelAr,
@@ -156,6 +159,7 @@ class ListItem {
       price: price ?? this.price,
       rating: rating ?? this.rating,
       category: category ?? this.category,
+      originalCategory: originalCategory ?? this.originalCategory,
       subCategory: subCategory ?? this.subCategory,
       sectionId: sectionId ?? this.sectionId,
       categoryLabelAr: categoryLabelAr ?? this.categoryLabelAr,
@@ -395,6 +399,7 @@ class CartItem {
   final bool? merchantIsFrozen;
   final String? optionAr;
   final String? optionEn;
+  final String? originalCategory;
 
   CartItem({
     required this.id,
@@ -420,6 +425,7 @@ class CartItem {
     this.merchantIsFrozen,
     this.optionAr,
     this.optionEn,
+    this.originalCategory,
   });
 }
 
@@ -457,6 +463,8 @@ class ActiveOrder {
   final String? paymentMethod;
   final String? merchantPhone;
   final String? merchantStoreName;
+  final double? merchantLatitude;
+  final double? merchantLongitude;
   final bool requiresDelivery;
   final bool codConfirmed;
   final String? deliveredAt;
@@ -509,6 +517,8 @@ class ActiveOrder {
     this.paymentMethod,
     this.merchantPhone,
     this.merchantStoreName,
+    this.merchantLatitude,
+    this.merchantLongitude,
     this.requiresDelivery = true,
     this.codConfirmed = false,
     this.deliveredAt,
@@ -562,6 +572,8 @@ class ActiveOrder {
     String? paymentMethod,
     String? merchantPhone,
     String? merchantStoreName,
+    double? merchantLatitude,
+    double? merchantLongitude,
     bool? requiresDelivery,
     bool? codConfirmed,
     String? deliveredAt,
@@ -614,6 +626,8 @@ class ActiveOrder {
       paymentMethod: paymentMethod ?? this.paymentMethod,
       merchantPhone: merchantPhone ?? this.merchantPhone,
       merchantStoreName: merchantStoreName ?? this.merchantStoreName,
+      merchantLatitude: merchantLatitude ?? this.merchantLatitude,
+      merchantLongitude: merchantLongitude ?? this.merchantLongitude,
       requiresDelivery: requiresDelivery ?? this.requiresDelivery,
       codConfirmed: codConfirmed ?? this.codConfirmed,
       deliveredAt: deliveredAt ?? this.deliveredAt,
@@ -670,6 +684,8 @@ class ActiveOrder {
       'paymentMethod': paymentMethod,
       'merchantPhone': merchantPhone,
       'merchantStoreName': merchantStoreName,
+      'merchantLatitude': merchantLatitude,
+      'merchantLongitude': merchantLongitude,
       'requiresDelivery': requiresDelivery,
       'codConfirmed': codConfirmed,
       'deliveredAt': deliveredAt,
@@ -733,6 +749,10 @@ class ActiveOrder {
       paymentMethod: map['paymentMethod'] as String? ?? map['payment_method'] as String?,
       merchantPhone: map['merchantPhone'] as String?,
       merchantStoreName: map['merchantStoreName'] as String?,
+      merchantLatitude: (map['merchantLatitude'] as num?)?.toDouble() ??
+          (map['merchant_latitude'] as num?)?.toDouble(),
+      merchantLongitude: (map['merchantLongitude'] as num?)?.toDouble() ??
+          (map['merchant_longitude'] as num?)?.toDouble(),
       requiresDelivery: (map['requiresDelivery'] as bool?) ?? true,
       codConfirmed: (map['codConfirmed'] as bool?) ?? false,
       deliveredAt: map['deliveredAt'] as String?,

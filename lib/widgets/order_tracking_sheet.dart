@@ -191,8 +191,7 @@ class _OrderTrackingSheetState extends State<OrderTrackingSheet> {
   }
 
   List<Widget> _buildSteps(ActiveOrder order) {
-    final key = order.deliveryStatusKey ?? order.statusKey;
-    final doneUntil = _doneIndex(key);
+    final doneUntil = _doneIndex(order);
 
     final labels = [
       (
@@ -216,21 +215,61 @@ class _OrderTrackingSheetState extends State<OrderTrackingSheet> {
     return List.generate(labels.length, (index) {
       final isDone = index <= doneUntil;
       final isActive = index == doneUntil + 1;
+      final deliveryStep = index == 2 ? _deliveryStepLabel(order) : null;
       return _TimelineStep(
-        title: labels[index].$1,
-        subtitle: labels[index].$2,
+        title: deliveryStep?.$1 ?? labels[index].$1,
+        subtitle: deliveryStep?.$2 ?? labels[index].$2,
         isDone: isDone,
         isActive: isActive,
       );
     });
   }
 
-  int _doneIndex(String key) {
-    if (const {'completed', 'delivered', 'done'}.contains(key)) return 3;
-    if (key == 'on_way') return 2;
-    if (const {'picked_up', 'accepted'}.contains(key)) return 1;
-    if (const {'preparing', 'delivering', 'waiting'}.contains(key)) return 0;
+  int _doneIndex(ActiveOrder order) {
+    final dKey = order.deliveryStatusKey;
+    final sKey = order.statusKey;
+
+    if (const {'completed', 'delivered', 'done'}.contains(dKey) ||
+        const {'completed', 'delivered', 'done'}.contains(sKey)) {
+      return 3;
+    }
+    if (dKey == 'on_way') return 2;
+    if (const {'picked_up', 'accepted'}.contains(dKey)) return 1;
+    if (dKey == 'waiting' || sKey == 'delivering') return 1;
+    if (const {'preparing', 'waiting', 'accepted'}.contains(sKey)) {
+      return 0;
+    }
     return -1;
+  }
+
+  (String, String) _deliveryStepLabel(ActiveOrder order) {
+    switch (order.deliveryStatusKey) {
+      case 'waiting':
+        return (
+          'بانتظار مندوب التوصيل',
+          order.deliveryStatusAr ?? 'سيظهر الطلب للمندوبين المتاحين',
+        );
+      case 'accepted':
+        return (
+          'المندوب في الطريق للمتجر',
+          order.deliveryStatusAr ?? 'المندوب متجه لاستلام الطلب',
+        );
+      case 'picked_up':
+        return (
+          'تم استلام الطلب من المتجر',
+          order.deliveryStatusAr ?? 'المندوب استلم الطلب',
+        );
+      case 'on_way':
+        return (
+          'المندوب في الطريق إليك',
+          order.deliveryStatusAr ?? 'جاري التوصيل',
+        );
+      default:
+        return (
+          'التوصيل',
+          order.deliveryStatusAr ?? 'بانتظار تجهيز الطلب',
+        );
+    }
   }
 
   String? _etaLabel(ActiveOrder order) {

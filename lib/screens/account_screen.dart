@@ -182,34 +182,11 @@ class _MerchantAccountView extends StatelessWidget {
             ),
             const SizedBox(height: 14),
             _RoleSwitchCard(
-              title: 'الانتقال إلى حساب الزبون',
-              subtitle: 'احتفظ بنفس الدخول واستخدم واجهة الزبون',
-              icon: CupertinoIcons.person_fill,
-              color: AppColors.accent,
-              onTap: () => switchAccountRoleWithLoading(
-                context,
-                appProvider,
-                'customer',
-                loadingMessage: 'يرجى الانتظار... جارٍ التحويل إلى حساب الزبون',
-                errorMessage: 'تعذر الانتقال إلى حساب الزبون حالياً.',
-              ),
-            ),
-            const SizedBox(height: 14),
-            _RoleSwitchCard(
-              title: 'الانتقال إلى حساب مندوب التوصيل',
-              subtitle: appProvider.hasCourierProfile
-                  ? 'احتفظ بنفس الدخول واستخدم واجهة المندوب'
-                  : 'سجّل بيانات المندوب أولاً لتفعيل الحساب',
-              icon: Icons.delivery_dining_rounded,
-              color: const Color(0xFF00A3A3),
-              onTap: () => switchAccountRoleWithLoading(
-                context,
-                appProvider,
-                'delivery',
-                loadingMessage:
-                    'يرجى الانتظار... جارٍ التحويل إلى حساب المندوب',
-                errorMessage: 'تعذر الانتقال إلى حساب المندوب حالياً.',
-              ),
+              title: 'تبديل الحساب (الدور)',
+              subtitle: 'الانتقال إلى واجهة الزبون أو المندوب أو التاجر',
+              icon: Icons.swap_horiz_rounded,
+              color: const Color(0xFFE040FB),
+              onTap: () => showRoleSwitcher(context, appProvider),
             ),
             const SizedBox(height: 14),
             Container(

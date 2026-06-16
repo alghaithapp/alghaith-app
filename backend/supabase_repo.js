@@ -3736,6 +3736,49 @@ async function toggleMerchantFreezeStatus(adminPhone, merchantPhone, isFrozen) {
   return { success: true, merchant: data[0] };
 }
 
+async function updateAccountRole(adminPhone, targetPhone, newRole) {
+  await assertAdminAccess(adminPhone);
+
+  const phoneKey = await resolvePhoneKey(targetPhone);
+  if (!phoneKey) {
+    throw new Error('Account phone is required.');
+  }
+
+  const existing = await getAppUser(phoneKey);
+  if (!existing) {
+    throw new Error('Account not found.');
+  }
+
+  const normalizedRole = String(newRole || '').trim().toLowerCase();
+  const validRoles = ['customer', 'merchant', 'delivery', 'driver', 'admin'];
+  if (!validRoles.includes(normalizedRole)) {
+    throw new Error(`Invalid role. Must be one of: ${validRoles.join(', ')}`);
+  }
+
+  // Directly update app_users table to bypass the locked account_type check in saveAppUser
+  const supabase = assertSupabaseAdmin();
+  const { error } = await supabase
+    .from('app_users')
+    .update({
+      role: normalizedRole,
+      account_type: normalizedRole,
+      updated_at: nowIso(),
+    })
+    .eq('phone', phoneKey);
+
+  if (error) throw new Error(error.message);
+
+  // Also update the user state
+  const state = (await getUserState(phoneKey)) || {};
+  await saveUserState(phoneKey, {
+    ...state,
+    userRole: normalizedRole,
+    user_role: normalizedRole,
+  });
+
+  return { success: true, phone: phoneKey, role: normalizedRole };
+}
+
 async function isProtectedAdminAccount(phone) {
   const phoneKey = await resolvePhoneKey(phone);
   const variants = getPhoneVariants(phoneKey);
@@ -4569,6 +4612,7 @@ module.exports = {
   saveAdminAppUpdatePolicy,
   getHomeCategoriesConfig,
   saveAdminHomeCategoriesConfig,
+  updateAccountRole,
   ensurePlatformAdminAccess,
   isPlatformAdminPhone,
 };

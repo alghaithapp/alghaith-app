@@ -92,7 +92,7 @@ node scripts/generate_notification_sound.cjs
 
 - **Android**: الملف يُنسخ إلى `android/app/src/main/res/raw/`.
 - **iOS**: الملف يُنسخ إلى `ios/Runner/` ويُضمَّن في Xcode Resources.
-- على Android، تغيير الصوت يستخدم قناة جديدة `alghaith_orders_v2` لأن القناة القديمة لا تتغير بعد إنشائها.
+- على Android، تغيير الصوت يستخدم قناة جديدة `alghaith_orders_v3` لأن القناة القديمة لا تتغير بعد إنشائها.
 
 ## 7) تذكير الإشعارات غير المقروءة
 

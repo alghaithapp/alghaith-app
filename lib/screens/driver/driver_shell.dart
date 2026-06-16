@@ -36,6 +36,7 @@ class _DriverShellState extends State<DriverShell> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!context.mounted) return;
       RoleSwitchNotificationPresenter.showIfNeeded(context);
     });
   }

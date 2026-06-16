@@ -47,6 +47,7 @@ class _DeliveryShellState extends State<DeliveryShell> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!context.mounted) return;
       RoleSwitchNotificationPresenter.showIfNeeded(context);
     });
   }
@@ -60,64 +61,116 @@ class _DeliveryShellState extends State<DeliveryShell> {
       onRefresh: (provider) => provider.refreshCourierOrders(),
       pollBanners: (provider) => provider.pollCourierBanners(),
       child: Scaffold(
-      backgroundColor:
-          isDark ? const Color(0xFF111111) : const Color(0xFFF2F2F7),
-      body: SafeArea(
-        bottom: false,
-        child: _screens[_currentIndex],
-      ),
-      bottomNavigationBar: SafeBottomBar(
-        color: isDark
-            ? const Color(0xFF1A1A1A)
-            : Colors.white.withValues(alpha: 0.95),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: isDark ? 0.35 : 0.05),
-            blurRadius: 20,
-            offset: const Offset(0, -5),
-          ),
-        ],
-        child: SizedBox(
-          height: 64,
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              _navItem(0, CupertinoIcons.graph_square_fill, 'الرئيسية'),
-              _navItem(1, CupertinoIcons.bell_fill, 'الطلبات'),
-              _navItem(2, Icons.motorcycle, 'نشطة'),
-              _navItem(3, CupertinoIcons.checkmark_seal_fill, 'مكتملة'),
-              _navItem(4, CupertinoIcons.person_fill, 'الحساب'),
-            ],
+        backgroundColor:
+            isDark ? const Color(0xFF111111) : const Color(0xFFF2F2F7),
+        body: SafeArea(
+          bottom: false,
+          child: _screens[_currentIndex],
+        ),
+        bottomNavigationBar: SafeBottomBar(
+          color: isDark
+              ? const Color(0xFF1A1A1A)
+              : Colors.white.withValues(alpha: 0.95),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: isDark ? 0.35 : 0.05),
+              blurRadius: 20,
+              offset: const Offset(0, -5),
+            ),
+          ],
+          child: SizedBox(
+            height: 108,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: [
+                _navItem(0, CupertinoIcons.graph_square_fill, 'الرئيسية'),
+                _navItem(1, CupertinoIcons.bell_fill, 'الطلبات'),
+                _navItem(2, Icons.motorcycle, 'نشطة'),
+                _navItem(3, CupertinoIcons.checkmark_seal_fill, 'مكتملة'),
+                _navItem(4, CupertinoIcons.person_fill, 'الحساب'),
+              ],
+            ),
           ),
         ),
-      ),
       ),
     );
   }
 
   Widget _navItem(int index, IconData icon, String label) {
     final isActive = _currentIndex == index;
-    return GestureDetector(
-      onTap: () => setState(() => _currentIndex = index),
-      behavior: HitTestBehavior.opaque,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon,
-              color: isActive ? AppBottomNavStyle.activeColor : CupertinoColors.systemGrey,
-              size: 26),
-          const SizedBox(height: 4),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 9,
-              fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
-              color: isActive ? AppBottomNavStyle.activeColor : CupertinoColors.systemGrey,
-              fontFamily: 'Cairo',
-            ),
+    return Expanded(
+      child: GestureDetector(
+        onTap: () => setState(() => _currentIndex = index),
+        behavior: HitTestBehavior.opaque,
+        child: SizedBox(
+          height: double.infinity,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                icon,
+                color: isActive
+                    ? AppBottomNavStyle.activeColor
+                    : CupertinoColors.systemGrey,
+                size: 44,
+              ),
+              const SizedBox(height: 7),
+              Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
+                  color: isActive
+                      ? AppBottomNavStyle.activeColor
+                      : CupertinoColors.systemGrey,
+                  fontFamily: 'Cairo',
+                ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
+    );
+  }
+}
+
+class _MapInfoLine extends StatelessWidget {
+  final Color color;
+  final String label;
+  final String value;
+
+  const _MapInfoLine({
+    required this.color,
+    required this.label,
+    required this.value,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 10,
+          height: 10,
+          margin: const EdgeInsets.only(top: 4),
+          decoration: BoxDecoration(
+            color: color,
+            shape: BoxShape.circle,
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            '$label: $value',
+            style: const TextStyle(fontFamily: 'Cairo', fontSize: 12),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -163,15 +216,11 @@ class DeliveryDashboardScreen extends StatelessWidget {
                 const SizedBox(width: 10),
                 Expanded(
                     child: _StatBox(
-                        label: 'نشطة',
-                        value: '$active',
-                        color: Colors.blue)),
+                        label: 'نشطة', value: '$active', color: Colors.blue)),
                 const SizedBox(width: 10),
                 Expanded(
                     child: _StatBox(
-                        label: 'مكتملة',
-                        value: '$done',
-                        color: Colors.green)),
+                        label: 'مكتملة', value: '$done', color: Colors.green)),
               ],
             ),
             const SizedBox(height: 16),
@@ -203,7 +252,8 @@ class DeliveryDashboardScreen extends StatelessWidget {
                         ),
                       ),
                     ),
-                    const Icon(CupertinoIcons.chevron_left, color: Colors.white),
+                    const Icon(CupertinoIcons.chevron_left,
+                        color: Colors.white),
                   ],
                 ),
               ),
@@ -517,9 +567,12 @@ class DeliveryAccountScreen extends StatelessWidget {
                             ],
                           ),
                           child: ClipOval(
-                            child: CourierProfileFields.profileImage(profile).isNotEmpty
+                            child: CourierProfileFields.profileImage(profile)
+                                    .isNotEmpty
                                 ? AppImage(
-                                    imageData: CourierProfileFields.profileImage(profile),
+                                    imageData:
+                                        CourierProfileFields.profileImage(
+                                            profile),
                                     fit: BoxFit.cover,
                                   )
                                 : Icon(Icons.motorcycle,
@@ -622,7 +675,8 @@ class DeliveryAccountScreen extends StatelessWidget {
                       Expanded(
                         child: _StatCard(
                           label: 'المكتملة',
-                          value: '${appProvider.deliveryCompletedOrders.length}',
+                          value:
+                              '${appProvider.deliveryCompletedOrders.length}',
                           color: Colors.green,
                         ),
                       ),
@@ -644,33 +698,11 @@ class DeliveryAccountScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 14),
                   _NavigationCard(
-                    icon: CupertinoIcons.person_fill,
-                    iconColor: AppColors.primary,
-                    title: 'التحويل إلى حساب الزبون',
-                    subtitle: 'استخدم التطبيق كزبون لطلب المنتجات',
-                    onTap: () => switchAccountRoleWithLoading(
-                      context,
-                      appProvider,
-                      'customer',
-                      loadingMessage:
-                          'يرجى الانتظار... جارٍ التحويل إلى حساب الزبون',
-                      errorMessage: 'تعذر الانتقال إلى حساب الزبون حالياً.',
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                  _NavigationCard(
-                    icon: Icons.storefront_rounded,
-                    iconColor: AppColors.accent,
-                    title: 'التحويل إلى حساب التاجر',
-                    subtitle: 'إدارة متجرك ومنتجاتك الخاصة',
-                    onTap: () => switchAccountRoleWithLoading(
-                      context,
-                      appProvider,
-                      'merchant',
-                      loadingMessage:
-                          'يرجى الانتظار... جارٍ التحويل إلى حساب التاجر',
-                      errorMessage: 'تعذر الانتقال إلى حساب التاجر حالياً.',
-                    ),
+                    icon: Icons.swap_horiz_rounded,
+                    iconColor: const Color(0xFFE040FB),
+                    title: 'تبديل الحساب (الدور)',
+                    subtitle: 'الانتقال إلى واجهة الزبون أو التاجر أو المندوب',
+                    onTap: () => showRoleSwitcher(context, appProvider),
                   ),
                   const SizedBox(height: 24),
                   _SectionTitle(title: 'بيانات السكن والوثائق'),
@@ -682,13 +714,15 @@ class DeliveryAccountScreen extends StatelessWidget {
                       children: [
                         _InfoTile(
                           label: 'عنوان السكن',
-                          value: CourierProfileFields.homeAddress(profile).isNotEmpty
+                          value: CourierProfileFields.homeAddress(profile)
+                                  .isNotEmpty
                               ? CourierProfileFields.homeAddress(profile)
                               : '—',
                         ),
                         _InfoTile(
                           label: 'اسم المختار',
-                          value: CourierProfileFields.mukhtarName(profile).isNotEmpty
+                          value: CourierProfileFields.mukhtarName(profile)
+                                  .isNotEmpty
                               ? CourierProfileFields.mukhtarName(profile)
                               : '—',
                           showDivider: false,
@@ -704,14 +738,25 @@ class DeliveryAccountScreen extends StatelessWidget {
                     child: ListView(
                       scrollDirection: Axis.horizontal,
                       children: [
-                        if (CourierProfileFields.vehicleImage(profile).isNotEmpty)
-                          _docPreview(CourierProfileFields.vehicleImage(profile), 'الدراجة'),
-                        if (CourierProfileFields.residenceCardImage(profile).isNotEmpty)
-                          _docPreview(CourierProfileFields.residenceCardImage(profile), 'بطاقة السكن'),
-                        if (CourierProfileFields.idFrontImage(profile).isNotEmpty)
-                          _docPreview(CourierProfileFields.idFrontImage(profile), 'الموحدة (1)'),
-                        if (CourierProfileFields.idBackImage(profile).isNotEmpty)
-                          _docPreview(CourierProfileFields.idBackImage(profile), 'الموحدة (2)'),
+                        if (CourierProfileFields.vehicleImage(profile)
+                            .isNotEmpty)
+                          _docPreview(
+                              CourierProfileFields.vehicleImage(profile),
+                              'الدراجة'),
+                        if (CourierProfileFields.residenceCardImage(profile)
+                            .isNotEmpty)
+                          _docPreview(
+                              CourierProfileFields.residenceCardImage(profile),
+                              'بطاقة السكن'),
+                        if (CourierProfileFields.idFrontImage(profile)
+                            .isNotEmpty)
+                          _docPreview(
+                              CourierProfileFields.idFrontImage(profile),
+                              'الموحدة (1)'),
+                        if (CourierProfileFields.idBackImage(profile)
+                            .isNotEmpty)
+                          _docPreview(CourierProfileFields.idBackImage(profile),
+                              'الموحدة (2)'),
                       ],
                     ),
                   ),
@@ -1180,19 +1225,48 @@ class _DeliveryOrderCard extends StatelessWidget {
   bool get _hasCustomerLocation =>
       order.customerLatitude != null && order.customerLongitude != null;
 
+  bool get _hasMerchantLocation =>
+      order.merchantLatitude != null && order.merchantLongitude != null;
+
+  void _openExternalMap(BuildContext context) {
+    final merchantLat = order.merchantLatitude;
+    final merchantLng = order.merchantLongitude;
+    final customerLat = order.customerLatitude;
+    final customerLng = order.customerLongitude;
+
+    // للطلبات الجديدة نفتح الخريطة على موقع المتجر (أو الزبون إذا لم يوجد المتجر)
+    if (merchantLat != null && merchantLng != null) {
+      AppHelpers.openExternalMapNavigation(
+        latitude: merchantLat,
+        longitude: merchantLng,
+        originLatitude: customerLat,
+        originLongitude: customerLng,
+        travelMode: 'walking',
+        context: context,
+      );
+    } else if (customerLat != null && customerLng != null) {
+      AppHelpers.openExternalMapNavigation(
+        latitude: customerLat,
+        longitude: customerLng,
+        travelMode: 'walking',
+        context: context,
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final appProvider = Provider.of<AppProvider>(context, listen: false);
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
+      margin: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(22),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 12,
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 14,
             offset: const Offset(0, 6),
           ),
         ],
@@ -1203,27 +1277,29 @@ class _DeliveryOrderCard extends StatelessWidget {
           Row(
             children: [
               const Icon(CupertinoIcons.bag_fill,
-                  color: AppColors.accent, size: 18),
-              const SizedBox(width: 8),
+                  color: AppColors.accent, size: 22),
+              const SizedBox(width: 10),
               Expanded(
                 child: Text(
                   'طلب #${order.orderNumber}',
                   style: const TextStyle(
-                      fontWeight: FontWeight.w800, fontFamily: 'Cairo'),
+                      fontWeight: FontWeight.w900,
+                      fontFamily: 'Cairo',
+                      fontSize: 18),
                 ),
               ),
               Container(
                 padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 decoration: BoxDecoration(
                   color: Colors.green.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(999),
                 ),
-                child: Text(
+                child: const Text(
                   'دفع عند الاستلام',
-                  style: const TextStyle(
+                  style: TextStyle(
                     color: Colors.green,
-                    fontSize: 11,
+                    fontSize: 15,
                     fontWeight: FontWeight.bold,
                     fontFamily: 'Cairo',
                   ),
@@ -1232,120 +1308,141 @@ class _DeliveryOrderCard extends StatelessWidget {
             ],
           ),
           if ((order.merchantStoreName ?? '').isNotEmpty) ...[
-            const SizedBox(height: 8),
+            const SizedBox(height: 10),
             Text(
               'المتجر: ${order.merchantStoreName}',
               style: const TextStyle(
                 fontFamily: 'Cairo',
-                fontWeight: FontWeight.w700,
-                fontSize: 13,
+                fontWeight: FontWeight.w800,
+                fontSize: 16,
               ),
             ),
           ],
-          const SizedBox(height: 8),
+          const SizedBox(height: 10),
           Text(
             order.itemsNameAr,
-            style: const TextStyle(fontFamily: 'Cairo'),
+            style: const TextStyle(fontFamily: 'Cairo', fontSize: 15),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 10),
           Row(
             children: [
               const Icon(CupertinoIcons.location_solid,
-                  size: 14, color: Colors.grey),
+                  size: 16, color: Colors.grey),
               const SizedBox(width: 6),
               Expanded(
                 child: Text(
                   order.addressAr,
                   style: const TextStyle(
                     fontFamily: 'Cairo',
-                    fontSize: 12,
+                    fontSize: 14,
                     color: Colors.grey,
                   ),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 8),
           Row(
             children: [
               const Icon(CupertinoIcons.person_fill,
-                  size: 14, color: Colors.grey),
+                  size: 16, color: Colors.grey),
               const SizedBox(width: 6),
               Text(
                 order.customerNameAr,
-                style: const TextStyle(fontFamily: 'Cairo', fontSize: 12),
+                style: const TextStyle(fontFamily: 'Cairo', fontSize: 14),
               ),
               const Spacer(),
               CupertinoButton(
                 padding: EdgeInsets.zero,
-                minSize: 0,
+                minimumSize: const ui.Size(44, 44),
                 onPressed: () => AppHelpers.makePhoneCall(order.customerPhone),
                 child: Text(
                   order.customerPhone,
                   style: const TextStyle(
                     fontFamily: 'Cairo',
-                    fontSize: 12,
+                    fontSize: 14,
                     color: Colors.blue,
                   ),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 14),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('${order.price.toPrice()} د.ع',
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w900,
-                    fontFamily: 'Cairo',
-                  )),
-              Row(
-                children: [
-                  if (_hasCustomerLocation) ...[
-                    CupertinoButton(
-                      padding:
-                          const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                      color: Colors.blueGrey,
-                      borderRadius: BorderRadius.circular(12),
-                      minimumSize: const ui.Size(0, 0),
-                      onPressed: () => Navigator.of(context).push(
-                        CupertinoPageRoute(
-                          builder: (_) => _DeliveryMapPreviewScreen(order: order),
-                        ),
-                      ),
-                      child: Text('الخريطة',
-                          style:
-                              const TextStyle(color: Colors.white, fontSize: 12)),
-                    ),
-                    const SizedBox(width: 8),
-                  ],
-                  CupertinoButton(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                    color: Colors.red,
-                    borderRadius: BorderRadius.circular(12),
-                    minimumSize: const ui.Size(0, 0),
-                    onPressed: () => appProvider.rejectDeliveryOrder(order.id),
-                    child: Text('رفض',
-                        style:
-                            const TextStyle(color: Colors.white, fontSize: 12)),
-                  ),
-                  const SizedBox(width: 8),
-                  CupertinoButton(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                    color: Colors.green,
-                    borderRadius: BorderRadius.circular(12),
-                    minimumSize: const ui.Size(0, 0),
-                    onPressed: () => appProvider.acceptDeliveryOrder(order.id),
-                    child: Text('موافقة',
-                        style:
-                            const TextStyle(color: Colors.white, fontSize: 12)),
-                  ),
-                ],
+              const Text(
+                'مجموع الحساب والتوصيل:',
+                style: TextStyle(
+                  fontFamily: 'Cairo',
+                  fontSize: 15,
+                  color: Colors.grey,
+                ),
+              ),
+              Text(
+                '${order.price.toPrice()} د.ع',
+                style: const TextStyle(
+                  fontWeight: FontWeight.w900,
+                  fontFamily: 'Cairo',
+                  fontSize: 18,
+                  color: AppColors.accent,
+                ),
               ),
             ],
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              alignment: WrapAlignment.end,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                if (_hasCustomerLocation || _hasMerchantLocation)
+                  CupertinoButton(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 18, vertical: 12),
+                    color: Colors.blueGrey,
+                    borderRadius: BorderRadius.circular(12),
+                    minimumSize: const ui.Size(88, 44),
+                    onPressed: () => _openExternalMap(context),
+                    child: const Text('الخريطة',
+                        style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 14,
+                            fontFamily: 'Cairo')),
+                  ),
+                CupertinoButton(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                  color: Colors.red.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(12),
+                  minimumSize: const ui.Size(88, 44),
+                  onPressed: () => appProvider.rejectDeliveryOrder(order.id),
+                  child: const Text('رفض',
+                      style: TextStyle(
+                          color: Colors.red,
+                          fontSize: 14,
+                          fontFamily: 'Cairo',
+                          fontWeight: FontWeight.bold)),
+                ),
+                CupertinoButton(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 26, vertical: 12),
+                  color: Colors.green,
+                  borderRadius: BorderRadius.circular(12),
+                  minimumSize: const ui.Size(96, 44),
+                  onPressed: () => appProvider.acceptDeliveryOrder(order.id),
+                  child: const Text('موافقة',
+                      style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 14,
+                          fontFamily: 'Cairo',
+                          fontWeight: FontWeight.bold)),
+                ),
+              ],
+            ),
           ),
         ],
       ),
@@ -1361,17 +1458,69 @@ class _ActiveDeliveryCard extends StatelessWidget {
   bool get _hasCustomerLocation =>
       order.customerLatitude != null && order.customerLongitude != null;
 
+  bool get _hasMerchantLocation =>
+      order.merchantLatitude != null && order.merchantLongitude != null;
+
+  void _openExternalMap(BuildContext context) {
+    final merchantLat = order.merchantLatitude;
+    final merchantLng = order.merchantLongitude;
+    final customerLat = order.customerLatitude;
+    final customerLng = order.customerLongitude;
+    final statusKey = order.deliveryStatusKey ?? '';
+
+    // إذا قبل الطلب، يذهب إلى المتجر أولاً
+    if (statusKey == 'accepted' && merchantLat != null && merchantLng != null) {
+      AppHelpers.openExternalMapNavigation(
+        latitude: merchantLat,
+        longitude: merchantLng,
+        travelMode: 'walking',
+        context: context,
+      );
+      return;
+    }
+
+    // إذا استلم الطلب، يذهب إلى الزبون
+    if (const {'picked_up', 'on_way'}.contains(statusKey) &&
+        customerLat != null &&
+        customerLng != null) {
+      AppHelpers.openExternalMapNavigation(
+        latitude: customerLat,
+        longitude: customerLng,
+        travelMode: 'walking',
+        context: context,
+      );
+      return;
+    }
+
+    // للطلبات النشطة بدون حالة محددة
+    if (customerLat != null && customerLng != null) {
+      AppHelpers.openExternalMapNavigation(
+        latitude: customerLat,
+        longitude: customerLng,
+        travelMode: 'walking',
+        context: context,
+      );
+    } else if (merchantLat != null && merchantLng != null) {
+      AppHelpers.openExternalMapNavigation(
+        latitude: merchantLat,
+        longitude: merchantLng,
+        travelMode: 'walking',
+        context: context,
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final appProvider = Provider.of<AppProvider>(context, listen: false);
     final delivered = order.deliveryStatusKey == 'delivered';
     final statusKey = order.deliveryStatusKey ?? '';
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
+      margin: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(22),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1379,93 +1528,100 @@ class _ActiveDeliveryCard extends StatelessWidget {
           Text(
             'طلب #${order.orderNumber}',
             style: const TextStyle(
-                fontWeight: FontWeight.w800, fontFamily: 'Cairo'),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            order.deliveryStatusAr ?? 'قيد التوصيل',
-            style: const TextStyle(color: Colors.grey, fontFamily: 'Cairo'),
+                fontWeight: FontWeight.w900, fontFamily: 'Cairo', fontSize: 18),
           ),
           const SizedBox(height: 8),
           Text(
-            order.addressAr,
-            style: const TextStyle(fontFamily: 'Cairo', fontSize: 12),
+            order.deliveryStatusAr ?? 'قيد التوصيل',
+            style: const TextStyle(
+                color: Colors.grey, fontFamily: 'Cairo', fontSize: 14),
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 10),
+          Text(
+            order.addressAr,
+            style: const TextStyle(fontFamily: 'Cairo', fontSize: 15),
+          ),
+          const SizedBox(height: 6),
           Text(
             '${order.price.toPrice()} د.ع — ${order.paymentMethodAr}',
             style: const TextStyle(
               fontFamily: 'Cairo',
               fontWeight: FontWeight.w800,
               color: AppColors.accent,
+              fontSize: 15,
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 14),
           Wrap(
-            spacing: 8,
-            runSpacing: 8,
+            spacing: 10,
+            runSpacing: 10,
             alignment: WrapAlignment.end,
             children: [
-              if (_hasCustomerLocation)
+              if (_hasCustomerLocation || _hasMerchantLocation)
                 CupertinoButton(
                   padding:
-                      const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                      const EdgeInsets.symmetric(horizontal: 20, vertical: 13),
                   color: Colors.black87,
-                  borderRadius: BorderRadius.circular(12),
-                  minimumSize: const ui.Size(0, 0),
-                  onPressed: () => Navigator.of(context).push(
-                    CupertinoPageRoute(
-                      builder: (_) => _DeliveryMapPreviewScreen(order: order),
-                    ),
-                  ),
-                  child: Text('لوكيشن الزبون',
+                  borderRadius: BorderRadius.circular(14),
+                  minimumSize: const ui.Size(104, 46),
+                  onPressed: () => _openExternalMap(context),
+                  child: Text(_deliveryMapButtonLabel(order),
                       style:
-                          const TextStyle(color: Colors.white, fontSize: 12)),
+                          const TextStyle(color: Colors.white, fontSize: 15)),
                 ),
               if (statusKey == 'accepted')
                 CupertinoButton(
                   padding:
-                      const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                      const EdgeInsets.symmetric(horizontal: 20, vertical: 13),
                   color: AppColors.accent,
-                  borderRadius: BorderRadius.circular(12),
-                  minimumSize: const ui.Size(0, 0),
+                  borderRadius: BorderRadius.circular(14),
+                  minimumSize: const ui.Size(104, 46),
                   onPressed: () => appProvider.markDeliveryPickedUp(order.id),
-                  child: Text('استلام من المتجر',
-                      style:
-                          const TextStyle(color: Colors.white, fontSize: 12)),
+                  child: const Text('استلام من المتجر',
+                      style: TextStyle(color: Colors.white, fontSize: 15)),
                 ),
               if (statusKey == 'picked_up')
                 CupertinoButton(
                   padding:
-                      const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                      const EdgeInsets.symmetric(horizontal: 20, vertical: 13),
                   color: Colors.blue,
-                  borderRadius: BorderRadius.circular(12),
-                  minimumSize: const ui.Size(0, 0),
+                  borderRadius: BorderRadius.circular(14),
+                  minimumSize: const ui.Size(104, 46),
                   onPressed: () => appProvider.markDeliveryOnTheWay(order.id),
-                  child: Text('في الطريق',
-                      style:
-                          const TextStyle(color: Colors.white, fontSize: 12)),
+                  child: const Text('في الطريق',
+                      style: TextStyle(color: Colors.white, fontSize: 15)),
                 ),
               if (statusKey == 'on_way')
                 CupertinoButton(
                   padding:
-                      const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                      const EdgeInsets.symmetric(horizontal: 20, vertical: 13),
                   color: Colors.green,
-                  borderRadius: BorderRadius.circular(12),
-                  minimumSize: const ui.Size(0, 0),
+                  borderRadius: BorderRadius.circular(14),
+                  minimumSize: const ui.Size(104, 46),
                   onPressed: () => appProvider.markDeliveryCompleted(order.id),
-                  child: Text('تم التسليم + كاش',
-                      style:
-                          const TextStyle(color: Colors.white, fontSize: 12)),
+                  child: const Text('تم التسليم + كاش',
+                      style: TextStyle(color: Colors.white, fontSize: 15)),
                 ),
               if (delivered)
                 const Icon(CupertinoIcons.checkmark_seal_fill,
-                    color: Colors.green),
+                    color: Colors.green, size: 24),
             ],
           ),
         ],
       ),
     );
+  }
+
+  static String _deliveryMapButtonLabel(ActiveOrder order) {
+    switch (order.deliveryStatusKey) {
+      case 'accepted':
+        return 'الذهاب إلى المتجر';
+      case 'picked_up':
+      case 'on_way':
+        return 'الذهاب إلى الزبون';
+      default:
+        return 'الخريطة';
+    }
   }
 }
 
@@ -1475,7 +1631,8 @@ class _DeliveryMapPreviewScreen extends StatefulWidget {
   const _DeliveryMapPreviewScreen({required this.order});
 
   @override
-  State<_DeliveryMapPreviewScreen> createState() => _DeliveryMapPreviewScreenState();
+  State<_DeliveryMapPreviewScreen> createState() =>
+      _DeliveryMapPreviewScreenState();
 }
 
 class _DeliveryMapPreviewScreenState extends State<_DeliveryMapPreviewScreen> {
@@ -1483,10 +1640,22 @@ class _DeliveryMapPreviewScreenState extends State<_DeliveryMapPreviewScreen> {
   CircleAnnotationManager? _circleManager;
   Position? _courierPosition;
 
-  Position get _customerPosition => Position(
-        widget.order.customerLongitude!,
-        widget.order.customerLatitude!,
-      );
+  Position? get _customerPosition {
+    final lat = widget.order.customerLatitude;
+    final lng = widget.order.customerLongitude;
+    if (lat == null || lng == null) return null;
+    return Position(lng, lat);
+  }
+
+  Position? get _merchantPosition {
+    final lat = widget.order.merchantLatitude;
+    final lng = widget.order.merchantLongitude;
+    if (lat == null || lng == null) return null;
+    return Position(lng, lat);
+  }
+
+  Position get _initialPosition =>
+      _merchantPosition ?? _customerPosition ?? Position(44.3661, 33.3152);
 
   Future<void> _onMapCreated(MapboxMap map) async {
     _map = map;
@@ -1524,21 +1693,36 @@ class _DeliveryMapPreviewScreenState extends State<_DeliveryMapPreviewScreen> {
     if (manager == null) return;
     try {
       await manager.deleteAll();
-      await manager.create(
-        CircleAnnotationOptions(
-          geometry: Point(coordinates: _customerPosition),
-          circleColor: const Color(0xFFF5A01D).value,
-          circleRadius: 8,
-          circleStrokeColor: Colors.white.value,
-          circleStrokeWidth: 2,
-        ),
-      );
+      final merchant = _merchantPosition;
+      if (merchant != null) {
+        await manager.create(
+          CircleAnnotationOptions(
+            geometry: Point(coordinates: merchant),
+            circleColor: const Color(0xFF1976D2).value,
+            circleRadius: 9,
+            circleStrokeColor: Colors.white.value,
+            circleStrokeWidth: 2,
+          ),
+        );
+      }
+      final customer = _customerPosition;
+      if (customer != null) {
+        await manager.create(
+          CircleAnnotationOptions(
+            geometry: Point(coordinates: customer),
+            circleColor: const Color(0xFFF5A01D).value,
+            circleRadius: 9,
+            circleStrokeColor: Colors.white.value,
+            circleStrokeWidth: 2,
+          ),
+        );
+      }
       final courier = _courierPosition;
       if (courier != null) {
         await manager.create(
           CircleAnnotationOptions(
             geometry: Point(coordinates: courier),
-            circleColor: const Color(0xFF1976D2).value,
+            circleColor: const Color(0xFF2E7D32).value,
             circleRadius: 8,
             circleStrokeColor: Colors.white.value,
             circleStrokeWidth: 2,
@@ -1548,14 +1732,81 @@ class _DeliveryMapPreviewScreenState extends State<_DeliveryMapPreviewScreen> {
     } catch (_) {}
   }
 
+  VoidCallback? _externalNavigationAction() {
+    final customerLat = widget.order.customerLatitude;
+    final customerLng = widget.order.customerLongitude;
+    final merchantLat = widget.order.merchantLatitude;
+    final merchantLng = widget.order.merchantLongitude;
+    final statusKey = widget.order.deliveryStatusKey ?? '';
+    final courierLat = _courierPosition?.lat.toDouble();
+    final courierLng = _courierPosition?.lng.toDouble();
+
+    if (statusKey == 'accepted' && merchantLat != null && merchantLng != null) {
+      return () => AppHelpers.openExternalMapNavigation(
+            latitude: merchantLat,
+            longitude: merchantLng,
+            originLatitude: courierLat,
+            originLongitude: courierLng,
+            travelMode: 'walking',
+          );
+    }
+
+    if (const {'picked_up', 'on_way'}.contains(statusKey) &&
+        customerLat != null &&
+        customerLng != null) {
+      return () => AppHelpers.openExternalMapNavigation(
+            latitude: customerLat,
+            longitude: customerLng,
+            originLatitude: courierLat,
+            originLongitude: courierLng,
+            travelMode: 'walking',
+          );
+    }
+
+    if (merchantLat != null &&
+        merchantLng != null &&
+        customerLat != null &&
+        customerLng != null) {
+      return () => AppHelpers.openExternalMapNavigation(
+            latitude: customerLat,
+            longitude: customerLng,
+            originLatitude: merchantLat,
+            originLongitude: merchantLng,
+            travelMode: 'walking',
+          );
+    }
+
+    if (customerLat != null && customerLng != null) {
+      return () => AppHelpers.openExternalMapNavigation(
+            latitude: customerLat,
+            longitude: customerLng,
+            travelMode: 'walking',
+          );
+    }
+
+    if (merchantLat != null && merchantLng != null) {
+      return () => AppHelpers.openExternalMapNavigation(
+            latitude: merchantLat,
+            longitude: merchantLng,
+            travelMode: 'walking',
+          );
+    }
+
+    return null;
+  }
+
   @override
   Widget build(BuildContext context) {
     final customerLat = widget.order.customerLatitude;
     final customerLng = widget.order.customerLongitude;
-    if (customerLat == null || customerLng == null) {
+    final merchantLat = widget.order.merchantLatitude;
+    final merchantLng = widget.order.merchantLongitude;
+    final hasCustomer = customerLat != null && customerLng != null;
+    final hasMerchant = merchantLat != null && merchantLng != null;
+    if (!hasCustomer && !hasMerchant) {
       return CupertinoPageScaffold(
         navigationBar: const CupertinoNavigationBar(
-          middle: Text('لوكيشن الزبون'),
+          middle: Text('الخريطة'),
         ),
         child: const SafeArea(
           child: Center(
@@ -1571,15 +1822,12 @@ class _DeliveryMapPreviewScreenState extends State<_DeliveryMapPreviewScreen> {
     return CupertinoPageScaffold(
       navigationBar: CupertinoNavigationBar(
         middle: const Text(
-          'لوكيشن الزبون',
+          'خريطة التوصيل',
           style: TextStyle(fontFamily: 'Cairo'),
         ),
         trailing: CupertinoButton(
           padding: EdgeInsets.zero,
-          onPressed: () => AppHelpers.openExternalMapNavigation(
-            latitude: customerLat,
-            longitude: customerLng,
-          ),
+          onPressed: _externalNavigationAction(),
           child: const Text(
             'فتح الخرائط',
             style: TextStyle(fontFamily: 'Cairo', fontSize: 13),
@@ -1593,7 +1841,7 @@ class _DeliveryMapPreviewScreenState extends State<_DeliveryMapPreviewScreen> {
               child: MapWidget(
                 styleUri: 'mapbox://styles/mapbox/streets-v12',
                 cameraOptions: CameraOptions(
-                  center: Point(coordinates: _customerPosition),
+                  center: Point(coordinates: _initialPosition),
                   zoom: 14.8,
                 ),
                 onMapCreated: _onMapCreated,
@@ -1606,19 +1854,30 @@ class _DeliveryMapPreviewScreenState extends State<_DeliveryMapPreviewScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    'عنوان الزبون: ${widget.order.addressAr}',
-                    style: const TextStyle(fontFamily: 'Cairo', fontSize: 12),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    'إحداثيات الزبون: ${customerLat.toStringAsFixed(5)}, ${customerLng.toStringAsFixed(5)}',
-                    style: const TextStyle(
-                      fontFamily: 'Cairo',
-                      fontSize: 12,
-                      color: Colors.grey,
+                  if (hasMerchant)
+                    _MapInfoLine(
+                      color: const Color(0xFF1976D2),
+                      label: 'المتجر',
+                      value:
+                          '${widget.order.merchantStoreName ?? '-'} · ${merchantLat.toStringAsFixed(5)}, ${merchantLng.toStringAsFixed(5)}',
                     ),
-                  ),
+                  if (hasCustomer) ...[
+                    const SizedBox(height: 6),
+                    _MapInfoLine(
+                      color: const Color(0xFFF5A01D),
+                      label: 'الزبون',
+                      value:
+                          '${widget.order.addressAr} · ${customerLat.toStringAsFixed(5)}, ${customerLng.toStringAsFixed(5)}',
+                    ),
+                  ],
+                  if (_courierPosition != null) ...[
+                    const SizedBox(height: 6),
+                    const _MapInfoLine(
+                      color: Color(0xFF2E7D32),
+                      label: 'موقعك',
+                      value: 'موقع المندوب الحالي',
+                    ),
+                  ],
                 ],
               ),
             ),

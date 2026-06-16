@@ -1365,6 +1365,8 @@ class AppProvider extends ChangeNotifier {
         isRestaurantOrder: order.isRestaurantOrder,
         merchantPhone: order.merchantPhone,
         merchantStoreName: order.merchantStoreName,
+        merchantLatitude: order.merchantLatitude,
+        merchantLongitude: order.merchantLongitude,
         requiresDelivery: order.requiresDelivery,
         codConfirmed: order.codConfirmed,
         deliveredAt: order.deliveredAt,
@@ -2666,7 +2668,10 @@ class AppProvider extends ChangeNotifier {
   int get merchantCompletedOrdersCount =>
       _merchantIncomingOrders.where((o) => o.statusKey == 'completed').length;
   int get merchantAcceptedOrdersCount => _merchantIncomingOrders
-      .where((o) => o.statusKey == 'accepted' || o.statusKey == 'completed')
+      .where((o) =>
+          o.statusKey == 'accepted' ||
+          o.statusKey == 'delivering' ||
+          o.statusKey == 'completed')
       .length;
   int get merchantRejectedOrdersCount =>
       _merchantIncomingOrders.where(_isMerchantRejectedOrder).length;
@@ -2698,6 +2703,7 @@ class AppProvider extends ChangeNotifier {
 
   double? _orderResponseMinutes(ActiveOrder order) {
     final isMerchantDecision = order.statusKey == 'accepted' ||
+        order.statusKey == 'delivering' ||
         order.statusKey == 'completed' ||
         _isMerchantRejectedOrder(order);
     if (!isMerchantDecision) return null;
@@ -2797,6 +2803,7 @@ class AppProvider extends ChangeNotifier {
       price: (row['price'] as num?)?.toInt() ?? 0,
       rating: (row['rating'] as num?)?.toDouble(),
       category: row['category']?.toString() ?? 'restaurant',
+      originalCategory: row['category']?.toString() ?? 'restaurant',
       subCategory: row['sub_category']?.toString(),
       sectionId: row['section_id']?.toString() ?? row['sectionId']?.toString(),
       categoryLabelAr: row['category_label_ar']?.toString() ?? '',
@@ -2974,7 +2981,16 @@ class AppProvider extends ChangeNotifier {
       ..['merchant_is_open'] = profile['is_open']
       ..['merchant_is_frozen'] = profile['is_frozen'];
     final item = _listItemFromCatalogRow(row);
-    return item.copyWith(isFavorite: _favoriteItemIds.contains(item.id));
+    final primaryService = profile['primary_service_id']?.toString() ?? '';
+    final serviceIds = profile['service_ids'];
+    bool isBazar = primaryService == 'bazar_ghaith';
+    if (!isBazar && serviceIds is List) {
+      isBazar = serviceIds.map((e) => e.toString()).contains('bazar_ghaith');
+    }
+    return item.copyWith(
+      category: isBazar ? 'bazar_ghaith' : item.category,
+      isFavorite: _favoriteItemIds.contains(item.id),
+    );
   }
 
   void toggleFavoriteItem(ListItem item) {
@@ -3064,6 +3080,7 @@ class AppProvider extends ChangeNotifier {
         count: 1,
         image: item.imageBase64 ?? item.image,
         category: item.category,
+        originalCategory: item.originalCategory ?? item.category,
         descriptionAr: item.descriptionAr,
         descriptionEn: item.descriptionEn,
         merchantPhone: item.merchantPhone,
@@ -3174,8 +3191,11 @@ class AppProvider extends ChangeNotifier {
           count: line.quantity,
           image: line.image ?? '',
           category: category,
+          originalCategory: category,
           merchantPhone: order.merchantPhone,
           merchantStoreName: order.merchantStoreName,
+          merchantLatitude: order.merchantLatitude,
+          merchantLongitude: order.merchantLongitude,
         ),
       );
     }
@@ -3586,6 +3606,8 @@ class AppProvider extends ChangeNotifier {
       isRestaurantOrder: order.isRestaurantOrder,
       merchantPhone: order.merchantPhone,
       merchantStoreName: order.merchantStoreName,
+      merchantLatitude: order.merchantLatitude,
+      merchantLongitude: order.merchantLongitude,
       requiresDelivery: order.requiresDelivery,
       codConfirmed: order.codConfirmed,
       deliveredAt: order.deliveredAt,
@@ -3674,11 +3696,19 @@ class AppProvider extends ChangeNotifier {
     final index = list.indexWhere((o) => o.id == orderId);
     if (index == -1) return;
     final order = list[index];
+    if (isMerchant && newStatusKey == 'accepted' && order.requiresDelivery) {
+      newStatusKey = 'delivering';
+      statusAr = 'جاهز للتوصيل';
+      statusEn = 'Ready for Delivery';
+    }
     final previousStatus = order.statusKey;
     final nowIso = DateTime.now().toIso8601String();
-    final isDecisionStatus =
-        newStatusKey == 'accepted' || newStatusKey == 'cancelled';
-    final lockPrice = order.isPriceLocked || newStatusKey == 'accepted';
+    final isDecisionStatus = newStatusKey == 'accepted' ||
+        newStatusKey == 'delivering' ||
+        newStatusKey == 'cancelled';
+    final lockPrice = order.isPriceLocked ||
+        newStatusKey == 'accepted' ||
+        newStatusKey == 'delivering';
     final updated = ActiveOrder(
       id: order.id,
       orderNumber: order.orderNumber,
@@ -3710,6 +3740,8 @@ class AppProvider extends ChangeNotifier {
       isRestaurantOrder: order.isRestaurantOrder,
       merchantPhone: order.merchantPhone,
       merchantStoreName: order.merchantStoreName,
+      merchantLatitude: order.merchantLatitude,
+      merchantLongitude: order.merchantLongitude,
       requiresDelivery: order.requiresDelivery,
       codConfirmed: order.codConfirmed,
       deliveredAt: order.deliveredAt,
@@ -4083,15 +4115,15 @@ class AppProvider extends ChangeNotifier {
         );
       }
       if (!_isMerchantAcceptingForCartItem(items.first)) {
-        final service = items.first.category;
+        final service = items.first.originalCategory ?? items.first.category;
         if (service == 'restaurant') {
           throw StateError(
-            'المطعم مغلق الآن ولا يستقبل الطلبات خارج أوقات العمل.',
+            'المطعم مغلق ولا يستقبل طلبات حالياً',
           );
         }
-        if (service == 'product') {
+        if (service == 'product' || service == 'bazar_ghaith') {
           throw StateError(
-            'المتجر مغلق الآن ولا يستقبل طلبات التسوق خارج أوقات العمل.',
+            'المتجر مغلق لا يستقبل طلبات حالياً',
           );
         }
         throw StateError(
@@ -4136,6 +4168,15 @@ class AppProvider extends ChangeNotifier {
         promoCode: orderPromoDiscount > 0 ? promoCode : null,
         promoDiscountIqd: orderPromoDiscount,
       );
+      double? orderMerchantLatitude;
+      double? orderMerchantLongitude;
+      for (final item in items) {
+        orderMerchantLatitude ??= item.merchantLatitude;
+        orderMerchantLongitude ??= item.merchantLongitude;
+        if (orderMerchantLatitude != null && orderMerchantLongitude != null) {
+          break;
+        }
+      }
       final newOrder = ActiveOrder(
         id: orderId,
         orderNumber: '#$shortOrder',
@@ -4181,6 +4222,8 @@ class AppProvider extends ChangeNotifier {
         deliveryStatusEn: null,
         merchantPhone: merchantPhone,
         merchantStoreName: merchantStoreName,
+        merchantLatitude: orderMerchantLatitude,
+        merchantLongitude: orderMerchantLongitude,
         createdAt: createdAtIso,
         isPriceLocked: false,
         itemsSubtotalIqd: subtotal,
@@ -4536,6 +4579,8 @@ class AppProvider extends ChangeNotifier {
       isRestaurantOrder: order.isRestaurantOrder,
       merchantPhone: order.merchantPhone,
       merchantStoreName: order.merchantStoreName,
+      merchantLatitude: order.merchantLatitude,
+      merchantLongitude: order.merchantLongitude,
       requiresDelivery: order.requiresDelivery,
       codConfirmed: order.codConfirmed,
       deliveredAt: order.deliveredAt,

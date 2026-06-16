@@ -3,7 +3,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart' as geo;
 import 'package:http/http.dart' as http;
-import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
+
 import 'package:provider/provider.dart';
 import 'dart:convert';
 import '../providers/app_provider.dart';
@@ -40,7 +40,7 @@ class _CartScreenState extends State<CartScreen> {
   double? _deliveryDistanceKm;
   String? _lastAutoCalcSignature;
   bool _autoCalcScheduled = false;
-  
+
   // 1: Normal, 2: Fast
   int _deliveryOption = 1;
 
@@ -52,13 +52,14 @@ class _CartScreenState extends State<CartScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
+      if (!context.mounted) return;
       final provider = context.read<AppProvider>();
       final appliedPromo = provider.appliedCartPromo;
       if (appliedPromo != null) {
         _promoController.text = appliedPromo.code;
       }
-      if (provider.cart.isNotEmpty && provider.customerAddress.trim().isNotEmpty) {
+      if (provider.cart.isNotEmpty &&
+          provider.customerAddress.trim().isNotEmpty) {
         unawaited(_recalculateDeliveryFee(provider));
       }
     });
@@ -158,6 +159,7 @@ class _CartScreenState extends State<CartScreen> {
             uri,
             headers: const {'Content-Type': 'application/json'},
             body: jsonEncode({
+              'routeProfile': 'delivery',
               'pickupAddress': merchantAddress,
               'dropoffAddress': customerAddress,
               if (merchantLocation != null) ...{
@@ -195,23 +197,19 @@ class _CartScreenState extends State<CartScreen> {
   }
 
   Future<void> _recalculateDeliveryFee(AppProvider appProvider) async {
+    final sig = _autoCalcSignature(appProvider);
+    _lastAutoCalcSignature = sig;
+
     final isBazarCart = appProvider.cart.isNotEmpty &&
         appProvider.cart.first.category == 'bazar_ghaith';
-
-    if (isBazarCart) {
-      setState(() {
-        _deliveryDistanceKm = null;
-        _deliveryFeeIqd = 1000;
-      });
-      return;
-    }
 
     final merchantAddress = _merchantAddress(appProvider.cart);
     final merchantLocation = _merchantLocation(appProvider.cart);
     final customerAddress = appProvider.customerAddress.trim();
     final customerLocation = (appProvider.customerLatitude != null &&
             appProvider.customerLongitude != null)
-        ? _GeoPoint(appProvider.customerLatitude!, appProvider.customerLongitude!)
+        ? _GeoPoint(
+            appProvider.customerLatitude!, appProvider.customerLongitude!)
         : null;
     if ((merchantAddress.isEmpty && merchantLocation == null) ||
         (customerAddress.isEmpty && customerLocation == null)) {
@@ -231,7 +229,8 @@ class _CartScreenState extends State<CartScreen> {
       );
       var distanceKm = roadKm;
       if (distanceKm == null || distanceKm <= 0) {
-        distanceKm = _straightLineDistanceKm(merchantLocation, customerLocation);
+        distanceKm =
+            _straightLineDistanceKm(merchantLocation, customerLocation);
       }
       if (!mounted) return;
       final resolvedDistanceKm = distanceKm;
@@ -245,9 +244,10 @@ class _CartScreenState extends State<CartScreen> {
       final feeDistanceKm = resolvedDistanceKm;
       setState(() {
         _deliveryDistanceKm = feeDistanceKm;
-        _deliveryFeeIqd = AppConfig.calculateDeliveryFee(feeDistanceKm);
+        _deliveryFeeIqd = isBazarCart
+            ? AppConfig.calculateBazarDeliveryFee(feeDistanceKm)
+            : AppConfig.calculateDeliveryFee(feeDistanceKm);
       });
-      _lastAutoCalcSignature = _autoCalcSignature(appProvider);
     } finally {
       if (mounted) setState(() => _isCalculatingDelivery = false);
     }
@@ -261,12 +261,11 @@ class _CartScreenState extends State<CartScreen> {
     final customerLat = appProvider.customerLatitude;
     final customerLng = appProvider.customerLongitude;
     final hasMerchant = merchantLocation != null || merchantAddress.isNotEmpty;
-    final hasCustomer =
-        (customerLat != null && customerLng != null) || customerAddress.isNotEmpty;
+    final hasCustomer = (customerLat != null && customerLng != null) ||
+        customerAddress.isNotEmpty;
     if (!hasMerchant || !hasCustomer) return null;
-    final cartSignature = appProvider.cart
-        .map((item) => '${item.id}:${item.count}')
-        .join('|');
+    final cartSignature =
+        appProvider.cart.map((item) => '${item.id}:${item.count}').join('|');
     final merchantSig = merchantLocation == null
         ? merchantAddress
         : '${merchantLocation.latitude.toStringAsFixed(6)},${merchantLocation.longitude.toStringAsFixed(6)}';
@@ -297,13 +296,13 @@ class _CartScreenState extends State<CartScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       _autoCalcScheduled = false;
       if (!mounted) return;
-      final provider = context.read<AppProvider>();
-      final latestSignature = _autoCalcSignature(provider);
-      if (latestSignature == null || latestSignature == _lastAutoCalcSignature) {
+      final latestSignature = _autoCalcSignature(appProvider);
+      if (latestSignature == null ||
+          latestSignature == _lastAutoCalcSignature) {
         return;
       }
       _lastAutoCalcSignature = latestSignature;
-      await _recalculateDeliveryFee(provider);
+      await _recalculateDeliveryFee(appProvider);
     });
   }
 
@@ -315,7 +314,9 @@ class _CartScreenState extends State<CartScreen> {
       if (!enabled) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('يرجى تفعيل خدمة الموقع في الهاتف.', style: TextStyle(fontFamily: 'Cairo'))),
+            const SnackBar(
+                content: Text('يرجى تفعيل خدمة الموقع في الهاتف.',
+                    style: TextStyle(fontFamily: 'Cairo'))),
           );
         }
         return;
@@ -328,7 +329,9 @@ class _CartScreenState extends State<CartScreen> {
           permission == geo.LocationPermission.deniedForever) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('تم رفض إذن الموقع.', style: TextStyle(fontFamily: 'Cairo'))),
+            const SnackBar(
+                content: Text('تم رفض إذن الموقع.',
+                    style: TextStyle(fontFamily: 'Cairo'))),
           );
         }
         return;
@@ -409,10 +412,12 @@ class _CartScreenState extends State<CartScreen> {
     )) {
       return;
     }
-    if (appProvider.customerLatitude == null || appProvider.customerLongitude == null) {
+    if (appProvider.customerLatitude == null ||
+        appProvider.customerLongitude == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('يرجى تحديد موقعك من الخريطة قبل إتمام الطلب.', style: TextStyle(fontFamily: 'Cairo')),
+          content: Text('يرجى تحديد موقعك من الخريطة قبل إتمام الطلب.',
+              style: TextStyle(fontFamily: 'Cairo')),
         ),
       );
       return;
@@ -420,7 +425,8 @@ class _CartScreenState extends State<CartScreen> {
     if (appProvider.customerAddress.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('يرجى تحديد موقعك أولاً لحساب رسوم التوصيل.', style: TextStyle(fontFamily: 'Cairo')),
+          content: Text('يرجى تحديد موقعك أولاً لحساب رسوم التوصيل.',
+              style: TextStyle(fontFamily: 'Cairo')),
         ),
       );
       return;
@@ -431,7 +437,8 @@ class _CartScreenState extends State<CartScreen> {
       if (_deliveryFeeIqd <= 0) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('تعذر حساب رسوم التوصيل. حاول تحديد موقعك مجدداً.', style: TextStyle(fontFamily: 'Cairo')),
+            content: Text('تعذر حساب رسوم التوصيل. حاول تحديد موقعك مجدداً.',
+                style: TextStyle(fontFamily: 'Cairo')),
           ),
         );
         return;
@@ -440,14 +447,16 @@ class _CartScreenState extends State<CartScreen> {
     setState(() => _isCheckingOut = true);
     try {
       final count = await appProvider.checkout(
-        deliveryFeeIqd: _deliveryOption == 2 ? (_deliveryFeeIqd + 2000) : _deliveryFeeIqd,
+        deliveryFeeIqd:
+            _deliveryOption == 2 ? (_deliveryFeeIqd + 2000) : _deliveryFeeIqd,
         orderNotes: _notesController.text.trim(),
       );
       if (!mounted || count == 0) return;
       await showCupertinoDialog(
         context: context,
         builder: (context) => CupertinoAlertDialog(
-          title: const Text('تم تقديم الطلب بنجاح!', style: TextStyle(fontFamily: 'Cairo')),
+          title: const Text('تم تقديم الطلب بنجاح!',
+              style: TextStyle(fontFamily: 'Cairo')),
           content: Text(
             'تم إرسال $count ${count == 1 ? 'طلب' : 'طلبات'} للتاجر. يمكنك متابعة حالة الطلب من صفحة الطلبات.',
             style: const TextStyle(fontFamily: 'Cairo'),
@@ -481,9 +490,11 @@ class _CartScreenState extends State<CartScreen> {
     final appProvider = Provider.of<AppProvider>(context);
     _scheduleAutoFeeCalculation(appProvider);
     final cart = appProvider.cart;
-    final restaurantName = cart.isNotEmpty ? (cart.first.merchantStoreName ?? 'المطعم') : '';
-    
-    final finalDeliveryFee = _deliveryOption == 2 ? (_deliveryFeeIqd + 2000) : _deliveryFeeIqd;
+    final restaurantName =
+        cart.isNotEmpty ? (cart.first.merchantStoreName ?? 'المطعم') : '';
+
+    final finalDeliveryFee =
+        _deliveryOption == 2 ? (_deliveryFeeIqd + 2000) : _deliveryFeeIqd;
     final subtotal = appProvider.cartTotal;
     final promoDiscount = appProvider.cartPromoDiscountIqd;
     final totalAmount = subtotal - promoDiscount + finalDeliveryFee;
@@ -492,58 +503,65 @@ class _CartScreenState extends State<CartScreen> {
       textDirection: TextDirection.rtl,
       child: Scaffold(
         backgroundColor: Colors.white,
-        body: cart.isEmpty ? _buildEmptyState(appProvider) : Stack(
-          children: [
-            Column(
-              children: [
-                _buildHeader(context, cart.length, restaurantName, appProvider),
-                Expanded(
-                  child: ListView(
-                    controller: _scrollController,
-                    padding: const EdgeInsets.fromLTRB(20, 0, 20, 170),
+        body: cart.isEmpty
+            ? _buildEmptyState(appProvider)
+            : Stack(
+                children: [
+                  Column(
                     children: [
-                      ...cart.map((item) => _CartItemCard(
-                        item: item,
-                        isFavorite: appProvider.isFavoriteId(item.id),
-                        onIncrement: () => appProvider.incrementCartItem(item.id),
-                        onDecrement: () {
-                          if (item.count > 1) {
-                            appProvider.decrementCartItem(item.id);
-                          } else {
-                            appProvider.removeFromCart(item.id);
-                          }
-                        },
-                        onFavorite: () => appProvider.toggleFavorite(item.id),
-                      )),
-                      const SizedBox(height: 12),
-                      _buildLocationSection(appProvider),
-                      if (cart.isNotEmpty && cart.first.category != 'bazar_ghaith') ...[
-                        const SizedBox(height: 24),
-                        _buildDeliveryOptions(),
-                      ],
-                      const SizedBox(height: 24),
-                      _buildPromoSection(appProvider),
-                      const SizedBox(height: 24),
-                      _buildOrderSummary(
-                        subtotal,
-                        promoDiscount,
-                        finalDeliveryFee,
-                        totalAmount,
-                        appProvider.appliedCartPromo?.labelAr,
+                      _buildHeader(
+                          context, cart.length, restaurantName, appProvider),
+                      Expanded(
+                        child: ListView(
+                          controller: _scrollController,
+                          padding: const EdgeInsets.fromLTRB(20, 0, 20, 170),
+                          children: [
+                            ...cart.map((item) => _CartItemCard(
+                                  item: item,
+                                  isFavorite: appProvider.isFavoriteId(item.id),
+                                  onIncrement: () =>
+                                      appProvider.incrementCartItem(item.id),
+                                  onDecrement: () {
+                                    if (item.count > 1) {
+                                      appProvider.decrementCartItem(item.id);
+                                    } else {
+                                      appProvider.removeFromCart(item.id);
+                                    }
+                                  },
+                                  onFavorite: () =>
+                                      appProvider.toggleFavorite(item.id),
+                                )),
+                            const SizedBox(height: 12),
+                            _buildLocationSection(appProvider),
+                            if (cart.isNotEmpty &&
+                                cart.first.category != 'bazar_ghaith') ...[
+                              const SizedBox(height: 24),
+                              _buildDeliveryOptions(),
+                            ],
+                            const SizedBox(height: 24),
+                            _buildPromoSection(appProvider),
+                            const SizedBox(height: 24),
+                            _buildOrderSummary(
+                              subtotal,
+                              promoDiscount,
+                              finalDeliveryFee,
+                              totalAmount,
+                              appProvider.appliedCartPromo?.labelAr,
+                            ),
+                            const SizedBox(height: 24),
+                            _buildNotesSection(),
+                            const SizedBox(height: 24),
+                            _buildPaymentNotice(),
+                            const SizedBox(height: 8),
+                          ],
+                        ),
                       ),
-                      const SizedBox(height: 24),
-                      _buildNotesSection(),
-                      const SizedBox(height: 24),
-                      _buildPaymentNotice(),
-                      const SizedBox(height: 8),
                     ],
                   ),
-                ),
-              ],
-            ),
-            _buildStickyCheckoutBar(totalAmount, cart.length, appProvider),
-          ],
-        ),
+                  _buildStickyCheckoutBar(
+                      totalAmount, cart.length, appProvider),
+                ],
+              ),
       ),
     );
   }
@@ -587,7 +605,9 @@ class _CartScreenState extends State<CartScreen> {
                   ),
                   if (count > 0 && restaurant.isNotEmpty)
                     Text(
-                      '$count ${count == 1 ? 'صنف' : 'أصناف'} من $restaurant',
+                      provider.cartHasMultipleMerchants
+                          ? '$count ${count == 1 ? 'صنف' : 'أصناف'} من بازار ومطاعم الغيث'
+                          : '$count ${count == 1 ? 'صنف' : 'أصناف'} من $restaurant',
                       textAlign: TextAlign.center,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
@@ -786,7 +806,11 @@ class _CartScreenState extends State<CartScreen> {
     if (address.isEmpty) {
       return (title: 'الموقع محدد', subtitle: '');
     }
-    final parts = address.split('،').map((p) => p.trim()).where((p) => p.isNotEmpty).toList();
+    final parts = address
+        .split('،')
+        .map((p) => p.trim())
+        .where((p) => p.isNotEmpty)
+        .toList();
     if (parts.length <= 1) {
       return (title: address, subtitle: '');
     }
@@ -799,7 +823,8 @@ class _CartScreenState extends State<CartScreen> {
       children: [
         const Text(
           'خيارات التوصيل',
-          style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w900, fontSize: 18),
+          style: TextStyle(
+              fontFamily: 'Cairo', fontWeight: FontWeight.w900, fontSize: 18),
         ),
         const SizedBox(height: 12),
         Row(
@@ -834,7 +859,8 @@ class _CartScreenState extends State<CartScreen> {
       children: [
         const Text(
           'كود الخصم',
-          style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w900, fontSize: 18),
+          style: TextStyle(
+              fontFamily: 'Cairo', fontWeight: FontWeight.w900, fontSize: 18),
         ),
         const SizedBox(height: 12),
         Container(
@@ -843,7 +869,10 @@ class _CartScreenState extends State<CartScreen> {
             color: Colors.white,
             borderRadius: BorderRadius.circular(20),
             boxShadow: [
-              BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 15, offset: const Offset(0, 5)),
+              BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.05),
+                  blurRadius: 15,
+                  offset: const Offset(0, 5)),
             ],
           ),
           child: Row(
@@ -856,7 +885,8 @@ class _CartScreenState extends State<CartScreen> {
                   onSubmitted: (_) => _applyPromoCode(provider),
                   decoration: const InputDecoration(
                     hintText: 'أدخل رمز الخصم',
-                    hintStyle: TextStyle(fontFamily: 'Cairo', fontSize: 14, color: Colors.grey),
+                    hintStyle: TextStyle(
+                        fontFamily: 'Cairo', fontSize: 14, color: Colors.grey),
                     border: InputBorder.none,
                   ),
                 ),
@@ -910,7 +940,8 @@ class _CartScreenState extends State<CartScreen> {
       children: [
         const Text(
           'ملاحظات الطلب',
-          style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w900, fontSize: 18),
+          style: TextStyle(
+              fontFamily: 'Cairo', fontWeight: FontWeight.w900, fontSize: 18),
         ),
         const SizedBox(height: 12),
         Container(
@@ -919,7 +950,10 @@ class _CartScreenState extends State<CartScreen> {
             color: Colors.white,
             borderRadius: BorderRadius.circular(20),
             boxShadow: [
-              BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 15, offset: const Offset(0, 5)),
+              BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.05),
+                  blurRadius: 15,
+                  offset: const Offset(0, 5)),
             ],
           ),
           child: TextField(
@@ -927,7 +961,8 @@ class _CartScreenState extends State<CartScreen> {
             maxLines: 3,
             decoration: const InputDecoration(
               hintText: 'ملاحظات إضافية للمطعم أو المندوب',
-              hintStyle: TextStyle(fontFamily: 'Cairo', fontSize: 14, color: Colors.grey),
+              hintStyle: TextStyle(
+                  fontFamily: 'Cairo', fontSize: 14, color: Colors.grey),
               border: InputBorder.none,
             ),
           ),
@@ -948,7 +983,8 @@ class _CartScreenState extends State<CartScreen> {
       children: [
         const Text(
           'ملخص الطلب',
-          style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w900, fontSize: 18),
+          style: TextStyle(
+              fontFamily: 'Cairo', fontWeight: FontWeight.w900, fontSize: 18),
         ),
         const SizedBox(height: 12),
         Container(
@@ -957,12 +993,16 @@ class _CartScreenState extends State<CartScreen> {
             color: Colors.white,
             borderRadius: BorderRadius.circular(24),
             boxShadow: [
-              BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 20, offset: const Offset(0, 8)),
+              BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.05),
+                  blurRadius: 20,
+                  offset: const Offset(0, 8)),
             ],
           ),
           child: Column(
             children: [
-              _SummaryRow(label: 'المجموع الفرعي', value: '${subtotal.toPrice()} د.ع'),
+              _SummaryRow(
+                  label: 'المجموع الفرعي', value: '${subtotal.toPrice()} د.ع'),
               if (promoDiscount > 0) ...[
                 const SizedBox(height: 14),
                 _SummaryRow(
@@ -973,8 +1013,9 @@ class _CartScreenState extends State<CartScreen> {
               ],
               const SizedBox(height: 14),
               _SummaryRow(
-                label: 'رسوم التوصيل', 
-                value: delivery > 0 ? '${delivery.toPrice()} د.ع' : 'حدد الموقع',
+                label: 'رسوم التوصيل',
+                value:
+                    delivery > 0 ? '${delivery.toPrice()} د.ع' : 'حدد الموقع',
                 valueColor: delivery > 0 ? Colors.black : Colors.red,
               ),
               const Padding(
@@ -982,8 +1023,8 @@ class _CartScreenState extends State<CartScreen> {
                 child: Divider(height: 1),
               ),
               _SummaryRow(
-                label: 'المجموع الكلي', 
-                value: '${total.toPrice()} د.ع', 
+                label: 'المجموع الكلي',
+                value: '${total.toPrice()} د.ع',
                 isLarge: true,
                 valueColor: _brandRed,
               ),
@@ -1013,12 +1054,19 @@ class _CartScreenState extends State<CartScreen> {
               children: [
                 const Text(
                   'الدفع نقداً عند استلام الطلب من المندوب',
-                  style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w900, fontSize: 14, color: Color(0xFF9A3412)),
+                  style: TextStyle(
+                      fontFamily: 'Cairo',
+                      fontWeight: FontWeight.w900,
+                      fontSize: 14,
+                      color: Color(0xFF9A3412)),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   'يرجى تجهيز المبلغ المطلوب عند الاستلام',
-                  style: TextStyle(fontFamily: 'Cairo', fontSize: 12, color: Colors.orange.shade800),
+                  style: TextStyle(
+                      fontFamily: 'Cairo',
+                      fontSize: 12,
+                      color: Colors.orange.shade800),
                 ),
               ],
             ),
@@ -1222,7 +1270,9 @@ class _CartItemCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final description = (item.descriptionAr?.trim().isNotEmpty == true)
         ? item.descriptionAr!.trim()
-        : (item.optionAr?.trim().isNotEmpty == true ? item.optionAr!.trim() : '');
+        : (item.optionAr?.trim().isNotEmpty == true
+            ? item.optionAr!.trim()
+            : '');
 
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
@@ -1533,7 +1583,11 @@ class _SummaryRow extends StatelessWidget {
   final bool isLarge;
   final Color? valueColor;
 
-  const _SummaryRow({required this.label, required this.value, this.isLarge = false, this.valueColor});
+  const _SummaryRow(
+      {required this.label,
+      required this.value,
+      this.isLarge = false,
+      this.valueColor});
 
   @override
   Widget build(BuildContext context) {
@@ -1617,10 +1671,18 @@ class _SmallButton extends StatelessWidget {
         ),
         alignment: Alignment.center,
         child: isLoading
-            ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+            ? const SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(
+                    strokeWidth: 2, color: Colors.white))
             : Text(
                 label,
-                style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 11, color: textColor),
+                style: TextStyle(
+                    fontFamily: 'Cairo',
+                    fontWeight: FontWeight.bold,
+                    fontSize: 11,
+                    color: textColor),
               ),
       ),
     );
@@ -1692,22 +1754,14 @@ class _MiniMapPreview extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final hasCoords = latitude != null && longitude != null;
-    final center = hasCoords
-        ? Position(longitude!, latitude!)
-        : Position(44.3661, 33.3152);
 
     return ColoredBox(
       color: const Color(0xFFECEFF3),
       child: Stack(
         fit: StackFit.expand,
         children: [
-          if (hasCoords && AppConfig.isMapboxConfigured)
-            IgnorePointer(
-              child: MapWidget(
-                styleUri: 'mapbox://styles/mapbox/streets-v12',
-                cameraOptions: CameraOptions(center: Point(coordinates: center), zoom: 13.5),
-              ),
-            )
+          if (hasCoords)
+            _StaticMapTile(latitude: latitude!, longitude: longitude!)
           else
             Container(
               decoration: const BoxDecoration(
@@ -1749,7 +1803,8 @@ class _MiniMapPreview extends StatelessWidget {
               bottom: 10,
               left: 10,
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(999),
@@ -1776,9 +1831,59 @@ class _MiniMapPreview extends StatelessWidget {
   }
 }
 
+/// خريطة ثابتة تعمل على جميع المنصات (ويب وأندرويد وiOS)
+/// باستخدام Google Maps Static API — لا تحتاج Plugin نيتيف.
+class _StaticMapTile extends StatelessWidget {
+  final double latitude;
+  final double longitude;
+
+  const _StaticMapTile({
+    required this.latitude,
+    required this.longitude,
+  });
+
+  String get _url {
+    final lat = latitude.toStringAsFixed(6);
+    final lng = longitude.toStringAsFixed(6);
+    // مفتاح Google Maps العام (نفس المفتاح المستخدم في web/index.html)
+    const apiKey = 'AIzaSyBX720zCrccLT6ZKrc_o7r9tr0TAHDsy8c';
+    return 'https://maps.googleapis.com/maps/api/staticmap'
+        '?center=$lat,$lng'
+        '&zoom=14'
+        '&size=400x200'
+        '&scale=2'
+        '&markers=color:red%7C$lat,$lng'
+        '&key=$apiKey';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Image.network(
+      _url,
+      fit: BoxFit.cover,
+      errorBuilder: (_, __, ___) => Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Color(0xFFECEFF3), Color(0xFFDDE3EA)],
+          ),
+        ),
+      ),
+      loadingBuilder: (_, child, progress) {
+        if (progress == null) return child;
+        return Container(
+          color: const Color(0xFFECEFF3),
+          alignment: Alignment.center,
+          child: const CupertinoActivityIndicator(),
+        );
+      },
+    );
+  }
+}
+
 class _GeoPoint {
   final double latitude;
   final double longitude;
   const _GeoPoint(this.latitude, this.longitude);
 }
-

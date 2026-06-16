@@ -126,5 +126,4 @@ workflows:
           failure: true
       app_store_connect:
         auth: integration
-        # أول مرة: أنشئ التطبيق في App Store Connect يدوياً ثم فعّل true
-        submit_to_testflight: false
+        submit_to_testflight: true

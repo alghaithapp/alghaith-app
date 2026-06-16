@@ -56,6 +56,7 @@ class _MerchantOrdersScreenState extends State<MerchantOrdersScreen> {
         list = all
             .where((o) =>
                 o.statusKey == 'accepted' ||
+                o.statusKey == 'delivering' ||
                 o.statusKey == 'cancel_requested' ||
                 o.statusKey == 'adjustment_pending')
             .toList();
@@ -96,6 +97,7 @@ class _MerchantOrdersScreenState extends State<MerchantOrdersScreen> {
     final approvalCount = provider.merchantIncomingOrders
         .where((o) =>
             o.statusKey == 'accepted' ||
+            o.statusKey == 'delivering' ||
             o.statusKey == 'cancel_requested' ||
             o.statusKey == 'adjustment_pending')
         .length;
@@ -210,12 +212,21 @@ class _MerchantOrdersScreenState extends State<MerchantOrdersScreen> {
                       onReject: () => _rejectOrder(context, provider, order),
                       onComplete: () {
                         if (order.statusKey != 'accepted') return;
-                        provider.updateOrderStatus(
-                          order.id,
-                          'completed',
-                          'مكتمل',
-                          'Completed',
-                        );
+                        if (order.requiresDelivery) {
+                          provider.updateOrderStatus(
+                            order.id,
+                            'delivering',
+                            'جاهز للتوصيل',
+                            'Ready for Delivery',
+                          );
+                        } else {
+                          provider.updateOrderStatus(
+                            order.id,
+                            'completed',
+                            'مكتمل',
+                            'Completed',
+                          );
+                        }
                       },
                       onApproveCancelRequest: () {
                         provider.resolveCustomerCancellationRequestByMerchant(
@@ -1070,6 +1081,8 @@ class _StatusBadge extends StatelessWidget {
     switch (order.statusKey) {
       case 'accepted':
         return _BadgeStyle('مقبول', const Color(0xFFEDE7F6), const Color(0xFF7B1FA2));
+      case 'delivering':
+        return _BadgeStyle('جاهز للتوصيل', const Color(0xFFE3F2FD), const Color(0xFF1565C0));
       case 'adjustment_pending':
         return _BadgeStyle(
           'بانتظار الزبون',
@@ -1220,7 +1233,11 @@ class _OrderActions extends StatelessWidget {
           ),
         ],
         if (order.statusKey == 'accepted')
-          _PillButton(label: 'إكمال الطلب', primary: true, onTap: onComplete),
+          _PillButton(
+            label: order.requiresDelivery ? 'جاهز للتوصيل' : 'إكمال الطلب',
+            primary: true,
+            onTap: onComplete,
+          ),
         if (order.statusKey == 'cancel_requested') ...[
           _PillButton(
             label: 'الموافقة على الإلغاء',

@@ -759,6 +759,36 @@ button {
   flex-wrap: wrap;
 }
 
+.role-change-wrapper {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.role-select {
+  padding: 6px 8px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-strong);
+  background: var(--surface-muted);
+  color: var(--brand-primary-dark);
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+  outline: none;
+  transition: border-color 0.15s ease;
+  max-width: 100px;
+}
+
+.role-select:focus {
+  border-color: var(--brand-primary);
+}
+
+.role-select:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 .mini-stat,
 .detail-stat {
   padding: 14px;

@@ -7,6 +7,7 @@ const helmet = require('helmet');
 const rateLimitLib = require('express-rate-limit');
 const rateLimit = rateLimitLib.default || rateLimitLib;
 const ipKeyGenerator = rateLimitLib.ipKeyGenerator || ((ip) => ip);
+const { version: backendVersion } = require('./package.json');
 const {
   isConfigured: isSupabaseConfigured,
   supabaseKeyRole,
@@ -80,6 +81,7 @@ const {
   saveAdminAppUpdatePolicy,
   getHomeCategoriesConfig,
   saveAdminHomeCategoriesConfig,
+  updateAccountRole,
   ensurePlatformAdminAccess,
 } = require('./supabase_repo');
 const { validatePromoCode } = require('./promo_codes');
@@ -390,7 +392,7 @@ async function sendOtpViaOtpiq(phoneNumber, verificationCode, channel = 'sms') {
 app.get('/health', (_, res) => {
   res.json({
     ok: true,
-    version: '1.1.13',
+    version: backendVersion,
     pushConfigured: isPushConfigured(),
   });
 });
@@ -462,7 +464,35 @@ async function geocodeAddressWithMapbox(addressText) {
   return { latitude, longitude };
 }
 
-async function computeRoadDistanceMeters(origin, destination) {
+function haversineDistanceMeters(origin, destination) {
+  const earthRadiusMeters = 6371000;
+  const toRadians = (value) => (value * Math.PI) / 180;
+  const lat1 = toRadians(origin.latitude);
+  const lat2 = toRadians(destination.latitude);
+  const deltaLat = toRadians(destination.latitude - origin.latitude);
+  const deltaLng = toRadians(destination.longitude - origin.longitude);
+  const a =
+    Math.sin(deltaLat / 2) * Math.sin(deltaLat / 2) +
+    Math.cos(lat1) *
+      Math.cos(lat2) *
+      Math.sin(deltaLng / 2) *
+      Math.sin(deltaLng / 2);
+  return earthRadiusMeters * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function normalizeRouteProfile(value) {
+  const profile = String(value || '').trim().toLowerCase();
+  if (profile === 'walking' || profile === 'pedestrian') return 'walking';
+  if (profile === 'cycling' || profile === 'bike' || profile === 'bicycle') {
+    return 'cycling';
+  }
+  if (profile === 'delivery' || profile === 'courier' || profile === 'motorbike') {
+    return 'delivery';
+  }
+  return 'driving';
+}
+
+async function computeRoadDistanceMeters(origin, destination, profile = 'driving') {
   const coordinates =
     `${origin.longitude},${origin.latitude};${destination.longitude},${destination.latitude}`;
   const params = new URLSearchParams({
@@ -471,8 +501,11 @@ async function computeRoadDistanceMeters(origin, destination) {
     language: 'ar',
     access_token: mapboxAccessToken,
   });
+  if (profile === 'driving') {
+    params.set('continue_straight', 'false');
+  }
   const response = await fetch(
-    `https://api.mapbox.com/directions/v5/mapbox/driving/${coordinates}?${params.toString()}`
+    `https://api.mapbox.com/directions/v5/mapbox/${profile}/${coordinates}?${params.toString()}`
   );
 
   if (!response.ok) {
@@ -488,6 +521,49 @@ async function computeRoadDistanceMeters(origin, destination) {
   return {
     distanceMeters: route.distance,
     duration: String(route.duration || ''),
+    profile,
+  };
+}
+
+async function computeDeliveryDistanceMeters(origin, destination) {
+  const straightMeters = haversineDistanceMeters(origin, destination);
+  const fallbackMeters = straightMeters * 1.18;
+  const minimumMeters = straightMeters * 1.05;
+  const candidates = [];
+
+  for (const profile of ['cycling', 'walking', 'driving']) {
+    try {
+      const route = await computeRoadDistanceMeters(origin, destination, profile);
+      if (Number.isFinite(route.distanceMeters) && route.distanceMeters > 0) {
+        candidates.push(route);
+      }
+    } catch (error) {
+      console.warn(`delivery distance ${profile} failed:`, error?.message || error);
+    }
+  }
+
+  if (!candidates.length) {
+    return {
+      distanceMeters: fallbackMeters,
+      duration: '',
+      profile: 'straight-line-adjusted',
+    };
+  }
+
+  const nonDrivingCandidates = candidates.filter((route) => route.profile !== 'driving');
+  const sourceCandidates = nonDrivingCandidates.length ? nonDrivingCandidates : candidates;
+  const shortest = sourceCandidates.reduce((best, route) =>
+    route.distanceMeters < best.distanceMeters ? route : best
+  );
+  const cappedMeters = Math.max(shortest.distanceMeters, minimumMeters);
+  const adjustedMeters = nonDrivingCandidates.length
+    ? cappedMeters
+    : Math.min(cappedMeters, fallbackMeters);
+
+  return {
+    distanceMeters: adjustedMeters,
+    duration: shortest.duration,
+    profile: shortest.profile,
   };
 }
 
@@ -505,6 +581,7 @@ app.post('/maps/route-distance', async (req, res) => {
     const pickupLongitude = Number(req.body?.pickupLongitude);
     const dropoffLatitude = Number(req.body?.dropoffLatitude);
     const dropoffLongitude = Number(req.body?.dropoffLongitude);
+    const routeProfile = normalizeRouteProfile(req.body?.routeProfile);
 
     const hasPickupCoords =
       Number.isFinite(pickupLatitude) && Number.isFinite(pickupLongitude);
@@ -529,11 +606,15 @@ app.post('/maps/route-distance', async (req, res) => {
       });
     }
 
-    const route = await computeRoadDistanceMeters(origin, destination);
+    const route =
+      routeProfile === 'delivery'
+        ? await computeDeliveryDistanceMeters(origin, destination)
+        : await computeRoadDistanceMeters(origin, destination, routeProfile);
     return res.json({
       distanceMeters: route.distanceMeters,
       distanceKm: route.distanceMeters / 1000,
       duration: route.duration,
+      routeProfile: route.profile,
     });
   } catch (error) {
     console.error('route-distance error:', error);
@@ -1777,6 +1858,32 @@ app.put('/db/admin/account-suspend', async (req, res) => {
     const status = message.includes('Admin access')
       ? 403
       : message.includes('not found') || message.includes('Cannot')
+        ? 400
+        : 500;
+    return res.status(status).json({ message });
+  }
+});
+
+app.put('/db/admin/account-role', async (req, res) => {
+  try {
+    const phone = requireAuthorizedPhone(req, res, { allowMissing: true });
+    if (!phone) return;
+    const accountPhone = String(req.body?.accountPhone || '').trim();
+    const newRole = String(req.body?.role || '').trim();
+    if (!accountPhone) {
+      return res.status(400).json({ message: 'accountPhone is required.' });
+    }
+    if (!newRole) {
+      return res.status(400).json({ message: 'role is required.' });
+    }
+    const result = await updateAccountRole(phone, accountPhone, newRole);
+    return res.json(result);
+  } catch (error) {
+    console.error('admin account-role error:', error);
+    const message = error?.message || 'Failed to update account role.';
+    const status = message.includes('Admin access')
+      ? 403
+      : message.includes('not found') || message.includes('required')
         ? 400
         : 500;
     return res.status(status).json({ message });

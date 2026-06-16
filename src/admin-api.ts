@@ -134,6 +134,18 @@ export async function suspendAdminAccount(
   });
 }
 
+export async function updateAdminAccountRole(
+  token: string,
+  accountPhone: string,
+  role: string,
+) {
+  return request(DATABASE_API_BASE_URL, '/db/admin/account-role', {
+    method: 'PUT',
+    token,
+    body: JSON.stringify({ accountPhone, role }),
+  });
+}
+
 export async function deleteAdminAccount(token: string, accountPhone: string) {
   return request(DATABASE_API_BASE_URL, '/db/admin/account', {
     method: 'DELETE',

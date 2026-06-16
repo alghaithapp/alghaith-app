@@ -54,16 +54,103 @@ class AppHelpers {
   static Future<void> openExternalMapNavigation({
     required double latitude,
     required double longitude,
+    double? originLatitude,
+    double? originLongitude,
+    String travelMode = 'driving',
+    BuildContext? context,
   }) async {
+    final normalizedTravelMode = const {
+      'walking',
+      'bicycling',
+      'transit',
+      'driving'
+    }.contains(travelMode)
+        ? travelMode
+        : 'driving';
+    final hasOrigin = originLatitude != null && originLongitude != null;
+    final originParam =
+        hasOrigin ? '&origin=$originLatitude,$originLongitude' : '';
+
+    // Google Maps
     final googleUri = Uri.parse(
-      'https://www.google.com/maps/dir/?api=1&destination=$latitude,$longitude&travelmode=driving',
+      'https://www.google.com/maps/dir/?api=1$originParam'
+      '&destination=$latitude,$longitude&travelmode=$normalizedTravelMode',
     );
+    // Google Maps app deep link
+    final googleAppUri = Uri.parse(
+      'comgooglemaps://?daddr=$latitude,$longitude'
+      '${hasOrigin ? '&saddr=$originLatitude,$originLongitude' : ''}'
+      '&directionsmode=$normalizedTravelMode',
+    );
+    // Waze
+    final wazeUri = Uri.parse(
+      'https://waze.com/ul?ll=$latitude,$longitude&navigate=yes'
+      '${hasOrigin ? '&from=$originLatitude,$originLongitude' : ''}',
+    );
+    // System geo URI (يفتح قائمة اختيار التطبيقات المثبتة)
     final geoUri = Uri.parse('geo:$latitude,$longitude?q=$latitude,$longitude');
 
-    if (await canLaunchUrl(geoUri)) {
-      await launchUrl(geoUri, mode: LaunchMode.externalApplication);
+    // إذا كان هناك Context نعرض خيارات
+    if (context != null && context.mounted) {
+      await showCupertinoModalPopup<void>(
+        context: context,
+        builder: (ctx) => CupertinoActionSheet(
+          title: const Text(
+            'فتح الموقع بتطبيق الخرائط',
+            style: TextStyle(fontFamily: 'Cairo', fontSize: 15),
+          ),
+          actions: [
+            CupertinoActionSheetAction(
+              onPressed: () {
+                Navigator.of(ctx).pop();
+                launchUrl(googleUri, mode: LaunchMode.externalApplication);
+              },
+              child: const Text('Google Maps',
+                  style: TextStyle(fontFamily: 'Cairo')),
+            ),
+            CupertinoActionSheetAction(
+              onPressed: () async {
+                Navigator.of(ctx).pop();
+                if (await canLaunchUrl(googleAppUri)) {
+                  await launchUrl(googleAppUri,
+                      mode: LaunchMode.externalApplication);
+                } else {
+                  await launchUrl(googleUri,
+                      mode: LaunchMode.externalApplication);
+                }
+              },
+              child: const Text('تطبيق Google Maps',
+                  style: TextStyle(fontFamily: 'Cairo')),
+            ),
+            if (normalizedTravelMode == 'driving')
+              CupertinoActionSheetAction(
+                onPressed: () {
+                  Navigator.of(ctx).pop();
+                  launchUrl(wazeUri, mode: LaunchMode.externalApplication);
+                },
+                child:
+                    const Text('Waze', style: TextStyle(fontFamily: 'Cairo')),
+              ),
+            CupertinoActionSheetAction(
+              onPressed: () {
+                Navigator.of(ctx).pop();
+                launchUrl(geoUri, mode: LaunchMode.externalApplication);
+              },
+              child: const Text('النظام (اختيار من التطبيقات)',
+                  style: TextStyle(fontFamily: 'Cairo')),
+            ),
+          ],
+          cancelButton: CupertinoActionSheetAction(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('إلغاء',
+                style: TextStyle(fontFamily: 'Cairo', color: Colors.red)),
+          ),
+        ),
+      );
       return;
     }
+
+    // Fallback بدون Context: يفتح Google Maps مباشرة
     await launchUrl(googleUri, mode: LaunchMode.externalApplication);
   }
 
@@ -120,7 +207,8 @@ class AppHelpers {
               children: [
                 Icon(CupertinoIcons.photo_fill, color: Colors.orange),
                 SizedBox(width: 10),
-                Text('الاستوديو / ملفات', style: TextStyle(fontFamily: 'Cairo')),
+                Text('الاستوديو / ملفات',
+                    style: TextStyle(fontFamily: 'Cairo')),
               ],
             ),
             onPressed: () {
@@ -211,4 +299,3 @@ class AppHelpers {
     return const [];
   }
 }
-

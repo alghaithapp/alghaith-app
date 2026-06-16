@@ -10,7 +10,7 @@ class NotificationSound {
 
   static const String fileName = 'alghaith_notify.wav';
   static const String androidResource = 'alghaith_notify';
-  static const String channelId = 'alghaith_orders_v2';
+  static const String channelId = 'alghaith_orders_v3';
   static const String channelName = 'طلبات الغيث';
 
   static const AndroidNotificationSound androidSound =
