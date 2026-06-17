@@ -269,7 +269,11 @@ class _OverviewTab extends StatelessWidget {
   List<Map<String, dynamic>> _recentOrders(Map<String, dynamic> reports) {
     final raw = reports['recentOrders'];
     if (raw is! List) return const [];
-    return raw.whereType<Map>().map((item) => Map<String, dynamic>.from(item)).toList();
+    return raw
+        .whereType<Map>()
+        .map((item) => Map<String, dynamic>.from(item))
+        .take(5)
+        .toList();
   }
 }
 
