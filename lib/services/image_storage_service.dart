@@ -2,6 +2,9 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter_image_compress/flutter_image_compress.dart';
+import 'package:path_provider/path_provider.dart' as path_provider;
+import 'package:path/path.dart' as p;
 
 import 'cloudflare_service.dart';
 
@@ -31,21 +34,60 @@ class ImageStorageService {
         payload.length > 80;
   }
 
-  /// رفع: Cloudflare Worker → Base64 مضغوط كاحتياط فقط للصور الصغيرة.
+  /// رفع: ضغط الصورة أولاً ثم الرفع إلى Cloudflare Worker.
   static Future<String?> uploadImageFile(
     File file, {
     String bucket = 'uploads',
   }) async {
-    final cloudUrl = await CloudflareService.uploadFile(file, bucket: bucket);
+    File fileToUpload = file;
+    try {
+      final compressed = await compressImage(file);
+      if (compressed != null) {
+        fileToUpload = compressed;
+        debugPrint(
+          'IMAGE_STORAGE: Compressed from ${file.lengthSync()} to ${compressed.lengthSync()} bytes',
+        );
+      }
+    } catch (e) {
+      debugPrint('IMAGE_STORAGE_COMPRESS_ERROR: $e');
+    }
+
+    final cloudUrl = await CloudflareService.uploadFile(fileToUpload, bucket: bucket);
     if (cloudUrl != null && cloudUrl.trim().isNotEmpty) {
       return cloudUrl.trim();
     }
 
-    final base64 = await encodeFileAsBase64(file);
+    final base64 = await encodeFileAsBase64(fileToUpload);
     if (base64 != null) {
       debugPrint('IMAGE_STORAGE: Using Base64 fallback (${base64.length} chars)');
     }
     return base64;
+  }
+
+  /// ضغط الصورة لتقليل الباندويث والمساحة.
+  static Future<File?> compressImage(File file) async {
+    try {
+      final tempDir = await path_provider.getTemporaryDirectory();
+      final targetPath = p.join(
+        tempDir.path,
+        '${DateTime.now().millisecondsSinceEpoch}_compressed.jpg',
+      );
+
+      final result = await FlutterImageCompress.compressAndGetFile(
+        file.absolute.path,
+        targetPath,
+        quality: 80,
+        minWidth: 1024,
+        minHeight: 1024,
+        format: CompressFormat.jpeg,
+      );
+
+      if (result == null) return null;
+      return File(result.path);
+    } catch (e) {
+      debugPrint('IMAGE_COMPRESSION_FAILED: $e');
+      return null;
+    }
   }
 
   static Future<String?> encodeFileAsBase64(File file) async {
