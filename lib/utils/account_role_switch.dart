@@ -219,6 +219,23 @@ void showRoleSwitcher(BuildContext context, AppProvider provider) {
                 errorMsg: 'تعذر الانتقال إلى حساب المندوب حالياً.',
                 isDark: isDark,
               ),
+            if (currentRole != 'delivery' && (currentRole != 'customer' || currentRole != 'merchant'))
+              const SizedBox(height: 12),
+            if (currentRole != 'driver')
+              _buildRoleItem(
+                ctx,
+                provider,
+                title: 'سائق تكسي',
+                subtitle: provider.hasDriverProfile
+                    ? 'استقبال طلبات التكسي وإدارة الرحلات'
+                    : 'سجّل بيانات السائق أولاً لتفعيل الحساب',
+                roleKey: 'driver',
+                icon: CupertinoIcons.car_fill,
+                color: const Color(0xFF1565C0),
+                loadingMsg: 'يرجى الانتظار... جارٍ التحويل إلى حساب التكسي',
+                errorMsg: 'تعذر الانتقال إلى حساب التكسي حالياً.',
+                isDark: isDark,
+              ),
           ],
         ),
       );

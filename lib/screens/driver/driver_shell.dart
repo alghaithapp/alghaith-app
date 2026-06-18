@@ -11,6 +11,7 @@ import '../../providers/app_provider.dart';
 import '../../utils/extensions.dart';
 import '../../utils/role_notification_poller.dart';
 import '../../utils/role_switch_notifications.dart';
+import '../../utils/account_role_switch.dart';
 import '../../screens/notifications_screen.dart';
 import '../../widgets/app_image.dart';
 import '../../widgets/safe_bottom_bar.dart';
@@ -674,6 +675,19 @@ class DriverAccountScreen extends StatelessWidget {
             child: Text(
               'تعديل الحساب',
               style: const TextStyle(
+                  fontFamily: 'Cairo', fontWeight: FontWeight.w900),
+            ),
+          ),
+        ),
+        SizedBox(
+          width: double.infinity,
+          child: CupertinoButton(
+            color: const Color(0xFFE040FB),
+            borderRadius: BorderRadius.circular(18),
+            onPressed: () => showRoleSwitcher(context, provider),
+            child: const Text(
+              'تبديل الحساب (الدور)',
+              style: TextStyle(
                   fontFamily: 'Cairo', fontWeight: FontWeight.w900),
             ),
           ),
