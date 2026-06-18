@@ -21,6 +21,14 @@ class DriverProfileFields {
   static String plate(Map<String, dynamic>? profile) =>
       profile?['plate']?.toString().trim() ?? '';
 
+  static String vehicleType(Map<String, dynamic>? profile) =>
+      profile?['vehicle']?.toString().trim() ?? '';
+
+  static String area(Map<String, dynamic>? profile) {
+    final raw = profile?['area'] ?? profile?['homeAddress'];
+    return raw?.toString().trim() ?? '';
+  }
+
   static String mukhtarName(Map<String, dynamic>? profile) =>
       profile?['mukhtarName']?.toString().trim() ?? '';
 
@@ -49,7 +57,8 @@ class DriverProfileFields {
     return name(profile).isNotEmpty &&
         phone(profile).isNotEmpty &&
         homeAddress(profile).isNotEmpty &&
-        vehicle(profile).isNotEmpty &&
+        vehicleType(profile).isNotEmpty &&
+        area(profile).isNotEmpty &&
         plate(profile).isNotEmpty &&
         mukhtarName(profile).isNotEmpty &&
         profileImage(profile).isNotEmpty &&

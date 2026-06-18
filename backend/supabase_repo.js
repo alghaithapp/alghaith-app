@@ -3258,9 +3258,9 @@ async function getAllCouriers(adminPhone) {
 function mapDriverForAdmin(phone, user, profile) {
   const name = String(profile.name ?? '').trim();
   const contactPhone = String(profile.phone ?? phone ?? '').trim();
-  const vehicle = String(profile.vehicle ?? '').trim();
+  const vehicle = String(profile.vehicle ?? profile.carImage ?? '').trim();
   const plate = String(profile.plate ?? '').trim();
-  const area = String(profile.area ?? '').trim();
+  const area = String(profile.area ?? profile.homeAddress ?? '').trim();
 
   return {
     phone: String(phone || '').trim(),
@@ -3942,9 +3942,9 @@ function isDriverProfileComplete(profile) {
   if (!profile || typeof profile !== 'object') return false;
   const name = String(profile.name ?? '').trim();
   const phone = String(profile.phone ?? '').trim();
-  const vehicle = String(profile.vehicle ?? '').trim();
+  const vehicle = String(profile.vehicle ?? profile.carImage ?? '').trim();
   const plate = String(profile.plate ?? '').trim();
-  const area = String(profile.area ?? '').trim();
+  const area = String(profile.area ?? profile.homeAddress ?? '').trim();
   return Boolean(name && phone && vehicle && plate && area);
 }
 

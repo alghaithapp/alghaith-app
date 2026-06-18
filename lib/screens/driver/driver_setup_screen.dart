@@ -24,6 +24,8 @@ class _DriverSetupScreenState extends State<DriverSetupScreen> {
   final TextEditingController _homeAddressController = TextEditingController();
   final TextEditingController _mukhtarNameController = TextEditingController();
   final TextEditingController _plateController = TextEditingController();
+  final TextEditingController _vehicleController = TextEditingController();
+  final TextEditingController _areaController = TextEditingController();
   String? _profileImageRef;
   String? _carImageRef;
   String? _idFrontImageRef;
@@ -39,6 +41,8 @@ class _DriverSetupScreenState extends State<DriverSetupScreen> {
     _homeAddressController.dispose();
     _mukhtarNameController.dispose();
     _plateController.dispose();
+    _vehicleController.dispose();
+    _areaController.dispose();
     super.dispose();
   }
 
@@ -141,6 +145,8 @@ class _DriverSetupScreenState extends State<DriverSetupScreen> {
     final homeAddress = _homeAddressController.text.trim();
     final mukhtarName = _mukhtarNameController.text.trim();
     final plate = _plateController.text.trim();
+    final vehicle = _vehicleController.text.trim();
+    final area = _areaController.text.trim();
     final profileImage = _profileImageRef?.trim() ?? '';
     final carImage = _carImageRef?.trim() ?? '';
     final idFrontImage = _idFrontImageRef?.trim() ?? '';
@@ -165,6 +171,14 @@ class _DriverSetupScreenState extends State<DriverSetupScreen> {
     }
     if (plate.isEmpty) {
       _showMessage('أدخل رقم لوحة السيارة');
+      return;
+    }
+    if (vehicle.isEmpty) {
+      _showMessage('أدخل نوع المركبة');
+      return;
+    }
+    if (area.isEmpty) {
+      _showMessage('أدخل منطقة العمل');
       return;
     }
     if (profileImage.isEmpty) {
@@ -199,6 +213,8 @@ class _DriverSetupScreenState extends State<DriverSetupScreen> {
         'homeAddress': homeAddress,
         'mukhtarName': mukhtarName,
         'plate': plate,
+        'vehicle': vehicle,
+        'area': area,
         'profileImage': profileImage,
         'carImage': carImage,
         'idFrontImage': idFrontImage,
@@ -352,9 +368,19 @@ class _DriverSetupScreenState extends State<DriverSetupScreen> {
           const _SectionTitle(text: 'بيانات المركبة'),
           const SizedBox(height: 8),
           _Field(
+            label: 'نوع المركبة',
+            hintText: 'مثال: سيارة صالون — تاكسي — هايلوكس',
+            controller: _vehicleController,
+          ),
+          _Field(
             label: 'رقم لوحة السيارة',
             hintText: 'مثال: 12345 بغداد',
             controller: _plateController,
+          ),
+          _Field(
+            label: 'منطقة العمل',
+            hintText: 'المدينة أو المنطقة التي ستعمل بها',
+            controller: _areaController,
           ),
           const SizedBox(height: 20),
 
