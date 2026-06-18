@@ -144,7 +144,7 @@ class RoleSelectionScreen extends StatelessWidget {
                       ),
                     const SizedBox(height: 14),
                   ],
-                  if (appProvider.isDriverAccount) ...[
+                  if (!locked || appProvider.isDriverAccount) ...[
                     _RoleCard(
                       title: 'سائق تكسي',
                       subtitle: 'استقبال طلبات التكسي وإدارة الرحلات',
