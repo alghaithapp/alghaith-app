@@ -558,10 +558,24 @@ class AppProvider extends ChangeNotifier {
 
   bool get driverAcceptsTaxi =>
       _userRole == 'driver' || _driverServiceEnabled('taxi');
-  bool get driverAcceptsDelivery => false;
-  bool get driverAcceptsBoth => false;
-  String get driverServiceModeLabelAr => 'سائق تكسي';
-  String get driverServiceModeLabelEn => 'Taxi Driver';
+  bool get driverAcceptsDelivery =>
+      _userRole == 'driver' && _driverServiceEnabled('delivery');
+  bool get driverAcceptsBoth =>
+      _userRole == 'driver' &&
+      _driverServiceEnabled('taxi') &&
+      _driverServiceEnabled('delivery');
+  String get driverServiceModeLabelAr {
+    if (_userRole != 'driver') return '';
+    if (driverAcceptsBoth) return 'سائق تكسي + توصيل';
+    if (driverAcceptsDelivery) return 'سائق توصيل';
+    return 'سائق تكسي';
+  }
+  String get driverServiceModeLabelEn {
+    if (_userRole != 'driver') return '';
+    if (driverAcceptsBoth) return 'Taxi + Delivery';
+    if (driverAcceptsDelivery) return 'Delivery Driver';
+    return 'Taxi Driver';
+  }
 
   void setLanguage(String l) {
     // الإعداد مخصص للعربية فقط حاليًا
@@ -2387,10 +2401,12 @@ class AppProvider extends ChangeNotifier {
   void _normalizeDriverProfileForRole() {
     if (_userRole != 'driver' || _driverProfile == null) return;
     _driverType = 'taxi';
+    final currentServices = _driverProfile?['services'];
+    final deliveryEnabled = currentServices is Map && currentServices['delivery'] == true;
     _driverProfile = {
       ..._driverProfile!,
       'type': 'taxi',
-      'services': {'taxi': true, 'delivery': false},
+      'services': {'taxi': true, 'delivery': deliveryEnabled},
     };
   }
 
@@ -2479,10 +2495,19 @@ class AppProvider extends ChangeNotifier {
   }
 
   Future<void> setDriverServiceEnabled(String service, bool enabled) async {
-    if (service != 'taxi') return;
+    if (service != 'taxi' && service != 'delivery') return;
+    final currentServices = Map<String, dynamic>.from(
+      (_driverProfile?['services'] is Map)
+          ? (_driverProfile!['services'] as Map)
+          : {},
+    );
+    currentServices[service] = enabled;
+    if (service == 'delivery' && enabled) {
+      currentServices['taxi'] = true;
+    }
     await setDriverProfile({
       'type': 'taxi',
-      'services': {'taxi': enabled, 'delivery': false},
+      'services': currentServices,
     });
   }
 
@@ -4659,6 +4684,11 @@ class AppProvider extends ChangeNotifier {
         await refreshCourierOrders();
       } else if (role == 'driver') {
         await refreshTaxiRequests();
+        try {
+          await refreshCourierOrders();
+        } catch (error) {
+          debugPrint('DRIVER_DELIVERY_REFRESH: $error');
+        }
       } else if (role == 'customer') {
         await refreshTaxiRequests();
       }

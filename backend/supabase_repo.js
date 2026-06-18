@@ -2197,17 +2197,35 @@ async function getActiveCourierPhones() {
     const isDeliveryAccount =
       role === 'delivery' || accountType === 'delivery';
     const isMarketplace = accountType === 'marketplace' || !accountType;
+    const isDriverAccount = role === 'driver' || accountType === 'driver';
 
-    if (!isDeliveryAccount && !isMarketplace) continue;
+    // المندوبين العاديين
+    if (isDeliveryAccount || isMarketplace) {
+      const state = await getUserState(phone);
+      const profile = state?.courierProfile;
+      if (
+        isCourierProfileComplete(profile) &&
+        isCourierApproved(profile) &&
+        profile.available !== false
+      ) {
+        phones.add(phone);
+      }
+    }
 
-    const state = await getUserState(phone);
-    const profile = state?.courierProfile;
-    if (
-      isCourierProfileComplete(profile) &&
-      isCourierApproved(profile) &&
-      profile.available !== false
-    ) {
-      phones.add(phone);
+    // السائقين الذين فعّلوا خدمة التوصيل
+    if (isDriverAccount) {
+      const state = await getUserState(phone);
+      const profile = readDriverProfileFromState(state);
+      const services = profile?.services;
+      const deliveryEnabled = services && typeof services === 'object' && services.delivery === true;
+      if (
+        isDriverProfileComplete(profile) &&
+        isDriverApproved(profile) &&
+        profile.available !== false &&
+        deliveryEnabled
+      ) {
+        phones.add(phone);
+      }
     }
   }
 

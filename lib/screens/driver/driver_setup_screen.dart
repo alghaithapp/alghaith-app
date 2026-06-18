@@ -193,7 +193,7 @@ class _DriverSetupScreenState extends State<DriverSetupScreen> {
       provider.setDriverType('taxi');
       await provider.setDriverProfile({
         'type': 'taxi',
-        'services': {'taxi': true, 'delivery': false},
+        'services': {'taxi': true, 'delivery': true},
         'name': name,
         'phone': phone,
         'homeAddress': homeAddress,
