@@ -256,8 +256,12 @@ Widget _buildRoleItem(
   required bool isDark,
 }) {
   return GestureDetector(
-    onTap: () {
+    onTap: () async {
       Navigator.of(context).pop();
+      // ننتظر لحظة حتى تكتمل أنيميشن إغلاق القائمة السفلية (خاصة iOS)
+      // قبل فتح نافذة التحميل الجديدة لتجنب تعارض الأنيميشن والبطء
+      await Future<void>.delayed(const Duration(milliseconds: 150));
+      if (!context.mounted) return;
       switchAccountRoleWithLoading(
         context,
         provider,

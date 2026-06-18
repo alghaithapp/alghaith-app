@@ -371,8 +371,11 @@ class AppProvider extends ChangeNotifier {
           : merchantStoreView.deliveryFee;
   String get merchantDeliveryAreas =>
       (_merchantStore?['deliveryAreas'] as String?)?.trim() ?? '';
-  double get merchantRating =>
-      (_merchantStore?['rating'] as num?)?.toDouble() ?? 0.0;
+  double get merchantRating => (() {
+        final storedRating = (_merchantStore?['rating'] as num?)?.toDouble();
+        if (storedRating != null && storedRating > 0) return storedRating;
+        return _averageMerchantRatingFromReviews();
+      })();
   List<MerchantProductSection> get merchantProductSections =>
       MerchantProductSections.parseFromStore(_merchantStore);
   String? merchantProductSectionName(String? sectionId) =>
@@ -383,6 +386,16 @@ class AppProvider extends ChangeNotifier {
   double? _toDoubleValue(dynamic value) {
     if (value is num) return value.toDouble();
     return double.tryParse(value?.toString() ?? '');
+  }
+
+  double _averageMerchantRatingFromReviews() {
+    if (_merchantReviews.isEmpty) return 0.0;
+    final validReviews =
+        _merchantReviews.where((review) => review.stars > 0).toList();
+    if (validReviews.isEmpty) return 0.0;
+    final total =
+        validReviews.fold<int>(0, (sum, review) => sum + review.stars);
+    return total / validReviews.length;
   }
 
   bool _isOrderActiveStatus(String statusKey) {
@@ -1270,7 +1283,8 @@ class AppProvider extends ChangeNotifier {
         _catalogItems = cached.map(_listItemFromCatalogRow).toList();
         _applyFavoriteSelections();
         notifyListeners();
-        debugPrint('CACHE: Global catalog restored (${_catalogItems.length} items)');
+        debugPrint(
+            'CACHE: Global catalog restored (${_catalogItems.length} items)');
       }
     } catch (e) {
       debugPrint('CACHE_RESTORE_ERROR: $e');
@@ -1281,8 +1295,10 @@ class AppProvider extends ChangeNotifier {
     if (!SupabaseService.isConfigured) return;
 
     // منع التحديث المتكرر إذا تم التحميل قبل أقل من 5 دقائق (إلا إذا كان إجبارياً)
-    if (!force && _lastCatalogFetch != null &&
-        DateTime.now().difference(_lastCatalogFetch!) < const Duration(minutes: 5)) {
+    if (!force &&
+        _lastCatalogFetch != null &&
+        DateTime.now().difference(_lastCatalogFetch!) <
+            const Duration(minutes: 5)) {
       return;
     }
 
@@ -1468,8 +1484,10 @@ class AppProvider extends ChangeNotifier {
     final phone = _trimmedOrNull(_authPhone);
     if (phone == null || !SupabaseService.isConfigured) return;
 
-    if (!force && _lastOrdersFetch != null &&
-        DateTime.now().difference(_lastOrdersFetch!) < const Duration(minutes: 2)) {
+    if (!force &&
+        _lastOrdersFetch != null &&
+        DateTime.now().difference(_lastOrdersFetch!) <
+            const Duration(minutes: 2)) {
       return;
     }
 
@@ -2143,7 +2161,8 @@ class AppProvider extends ChangeNotifier {
     _accountType ??= _accountTypeForRole(_userRole!);
     _accountType ??= 'marketplace';
     if (_userRole == 'admin') {
-      unawaited(PushNotificationService.instance.subscribeToTopic('admin_alerts'));
+      unawaited(
+          PushNotificationService.instance.subscribeToTopic('admin_alerts'));
     }
     _isGuestMode = false;
   }
@@ -3019,26 +3038,30 @@ class AppProvider extends ChangeNotifier {
 
   String? takePendingOrderId(String role) {
     switch (role) {
-      case 'customer': {
-        final id = _pendingOrderIdCustomer;
-        _pendingOrderIdCustomer = null;
-        return id;
-      }
-      case 'merchant': {
-        final id = _pendingOrderIdMerchant;
-        _pendingOrderIdMerchant = null;
-        return id;
-      }
-      case 'delivery': {
-        final id = _pendingOrderIdDelivery;
-        _pendingOrderIdDelivery = null;
-        return id;
-      }
-      case 'driver': {
-        final id = _pendingOrderIdDriver;
-        _pendingOrderIdDriver = null;
-        return id;
-      }
+      case 'customer':
+        {
+          final id = _pendingOrderIdCustomer;
+          _pendingOrderIdCustomer = null;
+          return id;
+        }
+      case 'merchant':
+        {
+          final id = _pendingOrderIdMerchant;
+          _pendingOrderIdMerchant = null;
+          return id;
+        }
+      case 'delivery':
+        {
+          final id = _pendingOrderIdDelivery;
+          _pendingOrderIdDelivery = null;
+          return id;
+        }
+      case 'driver':
+        {
+          final id = _pendingOrderIdDriver;
+          _pendingOrderIdDriver = null;
+          return id;
+        }
       default:
         return null;
     }
@@ -3077,7 +3100,8 @@ class AppProvider extends ChangeNotifier {
         _extractOrderIdFromEventKey(eventKey);
     final hasOrderId = orderId != null && orderId.isNotEmpty;
 
-    debugPrint('Push: handleNotificationOpen event=$eventKey category=$category targetRole=$role orderId=$orderId');
+    debugPrint(
+        'Push: handleNotificationOpen event=$eventKey category=$category targetRole=$role orderId=$orderId');
 
     // أولاً: استخراج معرف الطلب وتعيينه لفتح تفاصيل الطلب لاحقًا
     if (hasOrderId) {
@@ -3089,7 +3113,8 @@ class AppProvider extends ChangeNotifier {
       if (role == 'merchant') requestTabForRole('merchant', 1);
       if (role == 'delivery') requestTabForRole('delivery', 1);
       if (role == 'driver') requestTabForRole('driver', 1);
-    } else if (eventKey.contains('order:cancelled') || eventKey.contains('order:updated')) {
+    } else if (eventKey.contains('order:cancelled') ||
+        eventKey.contains('order:updated')) {
       if (role == 'customer') requestTabForRole('customer', 3);
       if (role == 'merchant') requestTabForRole('merchant', 1);
     } else if (eventKey.contains('approval:approved')) {
@@ -4540,7 +4565,7 @@ class AppProvider extends ChangeNotifier {
         }
       }
       notifyListeners();
-      await _persistLocalBackup();
+      unawaited(_persistLocalBackup());
       unawaited(
           _runRoleSwitchSideEffects(role: role, previousRole: previousRole));
       return true;
@@ -4575,7 +4600,9 @@ class AppProvider extends ChangeNotifier {
     }
 
     notifyListeners();
-    await _persistLocalBackup();
+    // الحفظ المحلي يكون في الخلفية حتى لا يُبطئ تبديل الدور.
+    // البيانات الأساسية محفوظة أصلاً في Supabase.
+    unawaited(_persistLocalBackup());
 
     unawaited(
         _runRoleSwitchSideEffects(role: role, previousRole: previousRole));
@@ -4589,9 +4616,11 @@ class AppProvider extends ChangeNotifier {
   }) async {
     try {
       if (role == 'admin') {
-        unawaited(PushNotificationService.instance.subscribeToTopic('admin_alerts'));
+        unawaited(
+            PushNotificationService.instance.subscribeToTopic('admin_alerts'));
       } else if (previousRole == 'admin') {
-        unawaited(PushNotificationService.instance.unsubscribeFromTopic('admin_alerts'));
+        unawaited(PushNotificationService.instance
+            .unsubscribeFromTopic('admin_alerts'));
       }
 
       if (previousRole == 'merchant' && role != 'merchant') {
