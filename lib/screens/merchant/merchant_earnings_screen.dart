@@ -20,6 +20,23 @@ const _shadowSoft = [
   ),
 ];
 
+/// الفترات الزمنية المتاحة
+class _PeriodOption {
+  final int days; // 0 = كل الوقت
+  final String label;
+
+  const _PeriodOption(this.days, this.label);
+}
+
+const _periods = [
+  _PeriodOption(0, 'اليوم'),
+  _PeriodOption(7, 'الأسبوع'),
+  _PeriodOption(30, 'الشهر'),
+  _PeriodOption(90, '3 أشهر'),
+  _PeriodOption(180, '6 أشهر'),
+  _PeriodOption(-1, 'كل الوقت'),
+];
+
 class MerchantEarningsScreen extends StatefulWidget {
   const MerchantEarningsScreen({super.key});
 
@@ -29,7 +46,7 @@ class MerchantEarningsScreen extends StatefulWidget {
 
 class _MerchantEarningsScreenState extends State<MerchantEarningsScreen>
     with SingleTickerProviderStateMixin {
-  int _chartPeriodDays = 30;
+  int _selectedPeriodDays = 30; // الشهر افتراضياً
   late final AnimationController _chartAnim;
   late final Animation<double> _chartCurve;
 
@@ -51,7 +68,7 @@ class _MerchantEarningsScreenState extends State<MerchantEarningsScreen>
   }
 
   void _onPeriodChanged(int days) {
-    setState(() => _chartPeriodDays = days);
+    setState(() => _selectedPeriodDays = days);
     _chartAnim
       ..reset()
       ..forward();
@@ -60,12 +77,26 @@ class _MerchantEarningsScreenState extends State<MerchantEarningsScreen>
   DateTime? _orderDate(AppProvider provider, ActiveOrder order) =>
       provider.parseOrderCreatedAtForSort(order);
 
+  /// ترشيح الطلبات حسب الفترة
   List<ActiveOrder> _ordersInPeriod(
     List<ActiveOrder> orders,
     AppProvider provider,
     int days,
   ) {
-    if (days <= 0) return orders;
+    if (days <= 0) {
+      // اليوم = 0، الأسبوع = 7، إلخ... -1 = كل الوقت
+      if (days == 0) {
+        // اليوم
+        final todayStart = DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day);
+        final tomorrow = todayStart.add(const Duration(days: 1));
+        return orders.where((o) {
+          final created = _orderDate(provider, o);
+          return created != null && !created.isBefore(todayStart) && created.isBefore(tomorrow);
+        }).toList();
+      }
+      if (days == -1) return orders; // كل الوقت
+      return orders;
+    }
     final cutoff = DateTime.now().subtract(Duration(days: days));
     return orders.where((o) {
       final created = _orderDate(provider, o);
@@ -101,11 +132,66 @@ class _MerchantEarningsScreenState extends State<MerchantEarningsScreen>
     return ((current - previous) / previous) * 100;
   }
 
+  /// تجميع الطلبات حسب اليوم لرسم بياني زمني
+  List<_DayBucket> _buildDayBuckets(
+    List<ActiveOrder> orders,
+    AppProvider provider,
+    int days,
+  ) {
+    if (orders.isEmpty) return [];
+
+    final now = DateTime.now();
+    final int rangeDays;
+    if (days == 0) rangeDays = 1; // اليوم
+    else if (days == -1) {
+      // كل الوقت -> نأخذ أقدم طلب
+      final oldest = orders.fold<DateTime?>(null, (prev, o) {
+        final d = _orderDate(provider, o);
+        if (d == null) return prev;
+        if (prev == null || d.isBefore(prev)) return d;
+        return prev;
+      });
+      if (oldest == null) return [];
+      rangeDays = now.difference(oldest).inDays + 1;
+    } else {
+      rangeDays = days;
+    }
+
+    // نأخذ على الأكثر 30 نقطة للرسم
+    final step = math.max(1, (rangeDays / 30).ceil());
+    final buckets = <_DayBucket>[];
+    for (var i = 0; i < rangeDays; i += step) {
+      final dayStart = now.subtract(Duration(days: i + step - 1));
+      final dayEnd = now.subtract(Duration(days: i - 1));
+      final start = DateTime(dayStart.year, dayStart.month, dayStart.day);
+      final end = DateTime(dayEnd.year, dayEnd.month, dayEnd.day).add(const Duration(days: 1));
+
+      final inRange = orders.where((o) {
+        final d = _orderDate(provider, o);
+        return d != null && !d.isBefore(start) && d.isBefore(end);
+      }).toList();
+
+      buckets.add(_DayBucket(
+        label: _dayLabel(start, step),
+        sales: _sumPrices(inRange.where((o) => o.statusKey == 'completed')),
+        count: inRange.length,
+      ));
+    }
+
+    return buckets.reversed.toList();
+  }
+
+  String _dayLabel(DateTime day, int step) {
+    if (step >= 30) return DateFormat('MMM', 'ar').format(day);
+    if (step >= 7) return DateFormat('d MMM', 'ar').format(day);
+    return DateFormat('d', 'ar').format(day);
+  }
+
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<AppProvider>();
     final allOrders = provider.merchantIncomingOrders;
-    final periodOrders = _ordersInPeriod(allOrders, provider, _chartPeriodDays);
+    final periodOrders = _ordersInPeriod(allOrders, provider, _selectedPeriodDays);
 
     final now = DateTime.now();
     final thisMonthStart = DateTime(now.year, now.month, 1);
@@ -119,10 +205,13 @@ class _MerchantEarningsScreenState extends State<MerchantEarningsScreen>
       thisMonthStart,
     );
 
-    final totalSales = provider.totalSales;
-    final totalOrders = provider.merchantOrdersCount;
-    final completedCount = provider.merchantCompletedOrdersCount;
-    final pendingCount = provider.merchantPendingOrdersCount;
+    // الإحصائيات حسب الفترة المحددة
+    final periodSales = _sumPrices(
+      periodOrders.where((o) => o.statusKey == 'completed'),
+    );
+    final periodOrdersCount = periodOrders.length;
+    final periodCompleted = periodOrders.where((o) => o.statusKey == 'completed').length;
+    final periodPending = periodOrders.where((o) => o.statusKey == 'pending').length;
 
     final salesTrend = _percentChange(thisMonth.sales, lastMonth.sales);
     final ordersTrend = _percentChange(thisMonth.orders, lastMonth.orders);
@@ -130,6 +219,7 @@ class _MerchantEarningsScreenState extends State<MerchantEarningsScreen>
         _percentChange(thisMonth.completed, lastMonth.completed);
     final pendingTrend = _percentChange(thisMonth.pending, lastMonth.pending);
 
+    // أعمدة الرسم البياني حسب الحالة
     final completedOrders =
         periodOrders.where((o) => o.statusKey == 'completed').toList();
     final preparingOrders = periodOrders
@@ -166,6 +256,10 @@ class _MerchantEarningsScreenState extends State<MerchantEarningsScreen>
       ),
     ];
 
+    // الرسم البياني الزمني (حسب الأيام)
+    final dayBuckets = _buildDayBuckets(periodOrders, provider, _selectedPeriodDays);
+    final maxDaySales = dayBuckets.fold<int>(0, (max, b) => math.max(max, b.sales));
+
     final recentOrders = [...allOrders]
       ..sort((a, b) {
         final da = _orderDate(provider, a);
@@ -176,8 +270,6 @@ class _MerchantEarningsScreenState extends State<MerchantEarningsScreen>
         return db.compareTo(da);
       });
 
-    final notificationCount = provider.merchantPendingOrdersCount;
-
     return Directionality(
       textDirection: TextDirection.rtl,
       child: ColoredBox(
@@ -187,6 +279,13 @@ class _MerchantEarningsScreenState extends State<MerchantEarningsScreen>
           children: [
             const _EarningsHeader(),
             const SizedBox(height: 18),
+            // اختيار الفترة
+            _PeriodSelector(
+              selectedDays: _selectedPeriodDays,
+              onChanged: _onPeriodChanged,
+            ),
+            const SizedBox(height: 16),
+            // الإحصائيات حسب الفترة المحددة
             GridView.count(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
@@ -197,51 +296,57 @@ class _MerchantEarningsScreenState extends State<MerchantEarningsScreen>
               children: [
                 _StatGridCard(
                   title: 'إجمالي المبيعات',
-                  value: '${_formatAmount(totalSales)} د.ع',
+                  value: '${_formatAmount(periodSales)} د.ع',
                   icon: Icons.account_balance_wallet_rounded,
                   iconColor: const Color(0xFFFF9500),
                   iconBg: const Color(0xFFFFF3E0),
                   trend: salesTrend,
                   sparkColor: const Color(0xFFFF9500),
-                  sparkSeed: totalSales,
+                  sparkSeed: periodSales,
                 ),
                 _StatGridCard(
                   title: 'عدد الطلبات',
-                  value: '$totalOrders طلب',
+                  value: '$periodOrdersCount طلب',
                   icon: Icons.shopping_bag_rounded,
                   iconColor: const Color(0xFF007AFF),
                   iconBg: const Color(0xFFE3F2FD),
                   trend: ordersTrend,
                   sparkColor: const Color(0xFF007AFF),
-                  sparkSeed: totalOrders,
+                  sparkSeed: periodOrdersCount,
                 ),
                 _StatGridCard(
                   title: 'المكتملة',
-                  value: '$completedCount طلب',
+                  value: '$periodCompleted طلب',
                   icon: Icons.check_circle_rounded,
                   iconColor: const Color(0xFF34C759),
                   iconBg: const Color(0xFFE8F5E9),
                   trend: completedTrend,
                   sparkColor: const Color(0xFF34C759),
-                  sparkSeed: completedCount,
+                  sparkSeed: periodCompleted,
                 ),
                 _StatGridCard(
                   title: 'بانتظار',
-                  value: '$pendingCount طلب',
+                  value: '$periodPending طلب',
                   icon: Icons.hourglass_top_rounded,
                   iconColor: const Color(0xFFAF52DE),
                   iconBg: const Color(0xFFF3E5F5),
                   trend: pendingTrend,
                   sparkColor: const Color(0xFFAF52DE),
-                  sparkSeed: pendingCount,
+                  sparkSeed: periodPending,
                 ),
               ],
             ),
             const SizedBox(height: 16),
+            // رسم بياني بالأعمدة (حسب الحالة)
             _SimplifiedChartCard(
-              periodDays: _chartPeriodDays,
-              onPeriodChanged: _onPeriodChanged,
               bars: chartBars,
+              animation: _chartCurve,
+            ),
+            const SizedBox(height: 16),
+            // رسم بياني زمني (حسب الأيام)
+            _TimelineChartCard(
+              buckets: dayBuckets,
+              maxValue: maxDaySales,
               animation: _chartCurve,
             ),
             const SizedBox(height: 16),
@@ -278,11 +383,86 @@ class _PeriodStats {
   });
 }
 
+/// بيانات يوم للرسم البياني الزمني
+class _DayBucket {
+  final String label;
+  final int sales;
+  final int count;
+
+  const _DayBucket({
+    required this.label,
+    required this.sales,
+    required this.count,
+  });
+}
+
 String _formatAmount(int value) {
   try {
     return NumberFormat.decimalPattern('ar').format(value);
   } catch (_) {
     return value.toPrice();
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+// اختيار الفترة الزمنية
+// ─────────────────────────────────────────────────────────────
+
+class _PeriodSelector extends StatelessWidget {
+  final int selectedDays;
+  final ValueChanged<int> onChanged;
+
+  const _PeriodSelector({
+    required this.selectedDays,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 38,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: _periods.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 8),
+        itemBuilder: (context, index) {
+          final period = _periods[index];
+          final isSelected = period.days == selectedDays;
+          return GestureDetector(
+            onTap: () => onChanged(period.days),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              decoration: BoxDecoration(
+                color: isSelected ? _brand : Colors.white,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: isSelected ? _brand : const Color(0xFFE5E5EA),
+                ),
+                boxShadow: isSelected
+                    ? [
+                        BoxShadow(
+                          color: _brand.withValues(alpha: 0.25),
+                          blurRadius: 8,
+                          offset: const Offset(0, 3),
+                        ),
+                      ]
+                    : null,
+              ),
+              alignment: Alignment.center,
+              child: Text(
+                period.label,
+                style: TextStyle(
+                  fontFamily: 'Cairo',
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: isSelected ? Colors.white : const Color(0xFF636366),
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
   }
 }
 
@@ -520,7 +700,7 @@ class _SparklinePainter extends CustomPainter {
 }
 
 // ─────────────────────────────────────────────────────────────
-// Chart card
+// Chart card (حسب الحالة - أعمدة)
 // ─────────────────────────────────────────────────────────────
 
 class _ChartBarData {
@@ -536,14 +716,10 @@ class _ChartBarData {
 }
 
 class _SimplifiedChartCard extends StatelessWidget {
-  final int periodDays;
-  final ValueChanged<int> onPeriodChanged;
   final List<_ChartBarData> bars;
   final Animation<double> animation;
 
   const _SimplifiedChartCard({
-    required this.periodDays,
-    required this.onPeriodChanged,
     required this.bars,
     required this.animation,
   });
@@ -563,11 +739,11 @@ class _SimplifiedChartCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Row(
+          const Row(
             children: [
-              const Expanded(
+              Expanded(
                 child: Text(
-                  'رسم بياني مبسط',
+                  'حسب الحالة',
                   style: TextStyle(
                     fontFamily: 'Cairo',
                     fontSize: 17,
@@ -576,61 +752,11 @@ class _SimplifiedChartCard extends StatelessWidget {
                   ),
                 ),
               ),
-              PopupMenuButton<int>(
-                initialValue: periodDays,
-                onSelected: onPeriodChanged,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: _bg,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: const Color(0xFFE5E5EA)),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        periodDays == 7
-                            ? 'آخر 7 أيام'
-                            : periodDays == 30
-                                ? 'آخر 30 يوم'
-                                : 'كل الوقت',
-                        style: const TextStyle(
-                          fontFamily: 'Cairo',
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                          color: Color(0xFF1C1C1E),
-                        ),
-                      ),
-                      const SizedBox(width: 4),
-                      const Icon(Icons.keyboard_arrow_down_rounded, size: 18),
-                    ],
-                  ),
-                ),
-                itemBuilder: (_) => [
-                  const PopupMenuItem(
-                    value: 7,
-                    child: Text('آخر 7 أيام', style: TextStyle(fontFamily: 'Cairo')),
-                  ),
-                  const PopupMenuItem(
-                    value: 30,
-                    child: Text('آخر 30 يوم', style: TextStyle(fontFamily: 'Cairo')),
-                  ),
-                  const PopupMenuItem(
-                    value: 0,
-                    child: Text('كل الوقت', style: TextStyle(fontFamily: 'Cairo')),
-                  ),
-                ],
-              ),
             ],
           ),
           const SizedBox(height: 16),
           SizedBox(
-            height: 220,
+            height: 200,
             child: AnimatedBuilder(
               animation: animation,
               builder: (context, _) {
@@ -660,7 +786,7 @@ class _SimplifiedChartCard extends StatelessWidget {
                       child: Stack(
                         children: [
                           CustomPaint(
-                            size: const Size(double.infinity, 220),
+                            size: const Size(double.infinity, 200),
                             painter: _ChartGridPainter(),
                           ),
                           Padding(
@@ -700,7 +826,7 @@ class _SimplifiedChartCard extends StatelessWidget {
                                             milliseconds: 300,
                                           ),
                                           curve: Curves.easeOutCubic,
-                                          height: 150 * ratio.clamp(0.0, 1.0),
+                                          height: 140 * ratio.clamp(0.0, 1.0),
                                           width: double.infinity,
                                           decoration: BoxDecoration(
                                             color: bar.color,
@@ -775,6 +901,139 @@ class _SimplifiedChartCard extends StatelessWidget {
     final mag = math.pow(10, (math.log(value) / math.ln10).floor()).toInt();
     final step = mag ~/ 4;
     return ((value / step).ceil() * step).clamp(step, 1000000);
+  }
+
+  String _formatCompact(int v) {
+    if (v >= 1000000) return '${(v / 1000000).toStringAsFixed(v % 1000000 == 0 ? 0 : 1)}M';
+    if (v >= 1000) return '${(v / 1000).round()}K';
+    return '$v';
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+// رسم بياني زمني (حسب الأيام)
+// ─────────────────────────────────────────────────────────────
+
+class _TimelineChartCard extends StatelessWidget {
+  final List<_DayBucket> buckets;
+  final int maxValue;
+  final Animation<double> animation;
+
+  const _TimelineChartCard({
+    required this.buckets,
+    required this.maxValue,
+    required this.animation,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (buckets.isEmpty) return const SizedBox.shrink();
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 18, 16, 16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: _shadowSoft,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'المبيعات حسب التاريخ',
+                  style: TextStyle(
+                    fontFamily: 'Cairo',
+                    fontSize: 17,
+                    fontWeight: FontWeight.w900,
+                    color: Color(0xFF1C1C1E),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          SizedBox(
+            height: 180,
+            child: AnimatedBuilder(
+              animation: animation,
+              builder: (context, _) {
+                final chartMax = maxValue > 0 ? maxValue : 1;
+                return Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Expanded(
+                      child: CustomPaint(
+                        size: const Size(double.infinity, 180),
+                        painter: _ChartGridPainter(),
+                      ),
+                    ),
+                    Expanded(
+                      flex: 10,
+                      child: Padding(
+                        padding: const EdgeInsets.only(bottom: 24, top: 8),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: buckets.map((bucket) {
+                            final ratio = (bucket.sales / chartMax) * animation.value;
+                            return Expanded(
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 2),
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.end,
+                                  children: [
+                                    if (bucket.sales > 0)
+                                      Text(
+                                        _formatCompact(bucket.sales),
+                                        style: const TextStyle(
+                                          fontFamily: 'Cairo',
+                                          fontSize: 7,
+                                          fontWeight: FontWeight.w700,
+                                          color: Color(0xFF636366),
+                                        ),
+                                      ),
+                                    const SizedBox(height: 2),
+                                    AnimatedContainer(
+                                      duration: const Duration(milliseconds: 300),
+                                      curve: Curves.easeOutCubic,
+                                      height: 120 * ratio.clamp(0.0, 1.0),
+                                      width: double.infinity,
+                                      decoration: BoxDecoration(
+                                        color: _brand.withValues(alpha: 0.85),
+                                        borderRadius: const BorderRadius.vertical(
+                                          top: Radius.circular(6),
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      bucket.label,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                        fontFamily: 'Cairo',
+                                        fontSize: 7,
+                                        color: Color(0xFF8E8E93),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          }).toList(),
+                        ),
+                      ),
+                    ),
+                  ],
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   String _formatCompact(int v) {

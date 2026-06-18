@@ -78,6 +78,17 @@ class AppProvider extends ChangeNotifier {
   final String _lang = 'ar';
   bool _darkMode = false;
 
+  int? _pendingMainTab;
+  int? _pendingMerchantTab;
+  int? _pendingDeliveryTab;
+  int? _pendingDriverTab;
+
+  // معرف الطلب المراد فتح تفاصيله بعد التوجيه للتبويب المناسب (من الإشعار)
+  String? _pendingOrderIdCustomer;
+  String? _pendingOrderIdMerchant;
+  String? _pendingOrderIdDelivery;
+  String? _pendingOrderIdDriver;
+
   /// يتحكم بالنوافذ والبانرات المنبثقة فقط (قائمة الإشعارات تبقى تعمل).
   bool _inAppAlertsEnabled = true;
   bool _isHydrating = true;
@@ -1692,7 +1703,6 @@ class AppProvider extends ChangeNotifier {
     await SupabaseService.saveCustomerOrder(phone, order);
   }
 
-  /// تحويل الحالة الحالية إلى JSON للحفظ (فقط للإعدادات غير الحساسة)
   Map<String, dynamic> _buildRemoteState() {
     return {
       'adminAccess': _hasAdminAccess,
@@ -2959,8 +2969,6 @@ class AppProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  int? _pendingMainTab;
-
   void requestMainShellTab(int index) {
     if (index < 0) return;
     _pendingMainTab = index;
@@ -2973,9 +2981,143 @@ class AppProvider extends ChangeNotifier {
     return tab;
   }
 
+  int? takePendingMerchantTab() {
+    final tab = _pendingMerchantTab;
+    _pendingMerchantTab = null;
+    return tab;
+  }
+
+  int? takePendingDeliveryTab() {
+    final tab = _pendingDeliveryTab;
+    _pendingDeliveryTab = null;
+    return tab;
+  }
+
+  int? takePendingDriverTab() {
+    final tab = _pendingDriverTab;
+    _pendingDriverTab = null;
+    return tab;
+  }
+
+  // ── طلب فتح تفاصيل طلب معين بعد التوجيه للتبويب المناسب ─────────────
+  void setPendingOrderId(String role, String? orderId) {
+    switch (role) {
+      case 'customer':
+        _pendingOrderIdCustomer = orderId;
+        break;
+      case 'merchant':
+        _pendingOrderIdMerchant = orderId;
+        break;
+      case 'delivery':
+        _pendingOrderIdDelivery = orderId;
+        break;
+      case 'driver':
+        _pendingOrderIdDriver = orderId;
+        break;
+    }
+  }
+
+  String? takePendingOrderId(String role) {
+    switch (role) {
+      case 'customer': {
+        final id = _pendingOrderIdCustomer;
+        _pendingOrderIdCustomer = null;
+        return id;
+      }
+      case 'merchant': {
+        final id = _pendingOrderIdMerchant;
+        _pendingOrderIdMerchant = null;
+        return id;
+      }
+      case 'delivery': {
+        final id = _pendingOrderIdDelivery;
+        _pendingOrderIdDelivery = null;
+        return id;
+      }
+      case 'driver': {
+        final id = _pendingOrderIdDriver;
+        _pendingOrderIdDriver = null;
+        return id;
+      }
+      default:
+        return null;
+    }
+  }
+
+  void requestTabForRole(String role, int index) {
+    if (index < 0) return;
+    switch (role) {
+      case 'customer':
+        _pendingMainTab = index;
+        break;
+      case 'merchant':
+        _pendingMerchantTab = index;
+        break;
+      case 'delivery':
+        _pendingDeliveryTab = index;
+        break;
+      case 'driver':
+        _pendingDriverTab = index;
+        break;
+    }
+    notifyListeners();
+  }
+
   void goToCustomerHomeTab() {
     resetHome();
-    requestMainShellTab(0);
+    requestTabForRole('customer', 0);
+  }
+
+  void handleNotificationOpen(Map<String, dynamic> data) {
+    final eventKey = data['eventKey']?.toString() ?? '';
+    final category = data['category']?.toString() ?? '';
+    final role = data['role']?.toString() ?? _userRole ?? 'customer';
+    // استخراج معرف الطلب من بيانات الإشعار (حتى لو كان داخل eventKey مثل "merchant:ORDER_ID:new")
+    final orderId = data['orderId']?.toString().trim() ??
+        _extractOrderIdFromEventKey(eventKey);
+    final hasOrderId = orderId != null && orderId.isNotEmpty;
+
+    debugPrint('Push: handleNotificationOpen event=$eventKey category=$category targetRole=$role orderId=$orderId');
+
+    // أولاً: استخراج معرف الطلب وتعيينه لفتح تفاصيل الطلب لاحقًا
+    if (hasOrderId) {
+      setPendingOrderId(role, orderId);
+    }
+
+    // منطق التوجيه بناءً على نوع الحدث
+    if (eventKey.contains('order:new') || eventKey.contains('request:new')) {
+      if (role == 'merchant') requestTabForRole('merchant', 1);
+      if (role == 'delivery') requestTabForRole('delivery', 1);
+      if (role == 'driver') requestTabForRole('driver', 1);
+    } else if (eventKey.contains('order:cancelled') || eventKey.contains('order:updated')) {
+      if (role == 'customer') requestTabForRole('customer', 3);
+      if (role == 'merchant') requestTabForRole('merchant', 1);
+    } else if (eventKey.contains('approval:approved')) {
+      if (role == 'merchant') requestTabForRole('merchant', 0);
+      if (role == 'delivery') requestTabForRole('delivery', 0);
+      if (role == 'driver') requestTabForRole('driver', 0);
+    } else if (category == 'taxi') {
+      if (role == 'driver') requestTabForRole('driver', 1);
+      if (role == 'customer') requestTabForRole('customer', 0);
+    } else {
+      // افتراضياً لصفحة الطلبات لأي تحديث غير معروف
+      if (role == 'customer') requestTabForRole('customer', 3);
+      if (role == 'merchant') requestTabForRole('merchant', 1);
+      if (role == 'delivery') requestTabForRole('delivery', 1);
+      if (role == 'driver') requestTabForRole('driver', 1);
+    }
+  }
+
+  /// استخراج معرف الطلب من eventKey (مثل `merchant:ORDER_ID:new`)
+  String? _extractOrderIdFromEventKey(String eventKey) {
+    if (eventKey.isEmpty) return null;
+    final parts = eventKey.split(':');
+    if (parts.length >= 3) {
+      // المقطع الثاني بعد أول : هو معرف الطلب
+      final candidate = parts[1].trim();
+      if (candidate.isNotEmpty && !candidate.contains(' ')) return candidate;
+    }
+    return null;
   }
 
   void toggleFavorite(String id) {

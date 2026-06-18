@@ -84,6 +84,13 @@ class ExitConfirmScope extends StatelessWidget {
       canPop: false,
       onPopInvokedWithResult: (didPop, result) async {
         if (didPop) return;
+        // السماح بالرجوع إذا كان هناك صفحات في Navigator
+        final navigator = Navigator.of(context);
+        if (navigator.canPop()) {
+          navigator.pop();
+          return;
+        }
+        // إذا لم يكن هناك صفحات للرجوع إليها، نعرض تأكيد الخروج
         final shouldExit = await _confirmExit(context);
         if (shouldExit) {
           await SystemNavigator.pop();

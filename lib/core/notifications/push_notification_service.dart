@@ -72,6 +72,7 @@ class PushNotificationService {
       );
       if (initialMessage != null) {
         await PushNotificationInbox.clearUnread();
+        _handleOpenedMessage(initialMessage);
       }
 
       messaging.onTokenRefresh.listen((token) {
@@ -177,6 +178,23 @@ class PushNotificationService {
     final category = message.data['category']?.toString() ?? '';
     if (category == 'taxi') {
       unawaited(PushNotificationInbox.onTaxiStatusPush?.call());
+    }
+
+    // إبلاغ الـ Provider بفتح إشعار للقيام بالتوجيه
+    _lastOpenedNotificationData = message.data;
+    if (_onNotificationOpened != null) {
+      _onNotificationOpened!(message.data);
+    }
+  }
+
+  Map<String, dynamic>? _lastOpenedNotificationData;
+  void Function(Map<String, dynamic> data)? _onNotificationOpened;
+
+  void setOnNotificationOpened(void Function(Map<String, dynamic> data) callback) {
+    _onNotificationOpened = callback;
+    if (_lastOpenedNotificationData != null) {
+      callback(_lastOpenedNotificationData!);
+      _lastOpenedNotificationData = null;
     }
   }
 

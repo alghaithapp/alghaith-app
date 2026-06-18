@@ -215,291 +215,324 @@ class _ShoppingStoresScreenState extends State<ShoppingStoresScreen> {
 
     return Scaffold(
       backgroundColor: Colors.white,
-      body: Stack(
-        children: [
-          SafeArea(
-            bottom: false,
-            child: CustomScrollView(
-              physics: const BouncingScrollPhysics(),
-              slivers: [
-                // 1. Header Section
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 20, vertical: 10),
-                    child: Column(
-                      children: [
-                        Row(
+      body: SafeArea(
+        bottom: false,
+        child: Column(
+          children: [
+            // Header ثابت لا يتحرك مع التمرير
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+              child: Column(
+                children: [
+                  Row(
+                    children: [
+                      _ModernBackButton(hide: widget.hideBack),
+                      Expanded(
+                        child: Column(
                           children: [
-                            ServiceBackButton(hide: widget.hideBack),
-                            Expanded(
-                              child: Column(
-                                children: [
-                                  Text(
-                                    headerTitle,
-                                    textAlign: TextAlign.center,
-                                    style: const TextStyle(
-                                      fontFamily: 'Cairo',
-                                      fontSize: 24,
-                                      fontWeight: FontWeight.w900,
-                                      color: Color(0xFF1A1A1A),
-                                    ),
-                                  ),
-                                  Text(
-                                    headerSubtitle,
-                                    textAlign: TextAlign.center,
-                                    style: TextStyle(
-                                      fontFamily: 'Cairo',
-                                      fontSize: 13,
-                                      color: Colors.grey.shade600,
-                                    ),
-                                  ),
-                                ],
+                            Text(
+                              headerTitle,
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(
+                                fontFamily: 'Cairo',
+                                fontSize: 24,
+                                fontWeight: FontWeight.w900,
+                                color: Color(0xFF1A1A1A),
                               ),
                             ),
-                            ServiceRefreshButton(
-                              onPressed: _reloadStores,
-                              isLoading: _isLoadingStores,
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 20),
-                        _SearchBar(
-                          controller: _searchController,
-                          onChanged: (_) => setState(() {}),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-
-                if (_isBazaarChannel)
-                  SliverToBoxAdapter(
-                    child: Container(
-                      margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [
-                            const Color(0xFF007A7A).withValues(alpha: 0.08),
-                            const Color(0xFFF5A01D).withValues(alpha: 0.08),
-                          ],
-                        ),
-                        borderRadius: BorderRadius.circular(18),
-                        border: Border.all(
-                          color: const Color(0xFFF5A01D).withValues(alpha: 0.2),
-                        ),
-                      ),
-                      child: Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.all(8),
-                            decoration: const BoxDecoration(
-                              color: Color(0xFFF5A01D),
-                              shape: BoxShape.circle,
-                            ),
-                            child: const Icon(
-                              Icons.shopping_cart_checkout_rounded,
-                              color: Colors.white,
-                              size: 18,
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          const Expanded(
-                            child: Text(
-                              'يمكنك التسوق من كافة متاجر ومطاعم هذا القسم في سلة واحدة وبكلفة توصيل واحدة فقط.',
+                            Text(
+                              headerSubtitle,
+                              textAlign: TextAlign.center,
                               style: TextStyle(
                                 fontFamily: 'Cairo',
-                                fontSize: 12,
-                                fontWeight: FontWeight.w700,
-                                color: Color(0xFF1A1A1A),
-                                height: 1.4,
+                                fontSize: 13,
+                                color: Colors.grey.shade600,
                               ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
-                    ),
+                      ServiceRefreshButton(
+                        onPressed: _reloadStores,
+                        isLoading: _isLoadingStores,
+                      ),
+                    ],
                   ),
-
-                // 2. Category Filters
-                if (widget.showCuisineFilters &&
-                    (!_isBazaarChannel || _bazaarKindFilter == 'restaurant'))
-                  SliverToBoxAdapter(
-                    child: Container(
-                      height: 55,
-                      margin: const EdgeInsets.symmetric(vertical: 10),
-                      child: ListView.builder(
-                        scrollDirection: Axis.horizontal,
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        itemCount: _filters.length,
-                        itemBuilder: (context, index) {
-                          final filter = _filters[index];
-                          final isSelected = _selectedFilter == filter;
-                          return GestureDetector(
-                            onTap: () =>
-                                setState(() => _selectedFilter = filter),
-                            child: AnimatedContainer(
-                              duration: const Duration(milliseconds: 300),
-                              margin: const EdgeInsets.symmetric(
-                                horizontal: 5,
-                                vertical: 5,
+                  const SizedBox(height: 20),
+                  _SearchBar(
+                    controller: _searchController,
+                    onChanged: (_) => setState(() {}),
+                  ),
+                ],
+              ),
+            ),
+            // المحتوى القابل للتمرير
+            Expanded(
+              child: CustomScrollView(
+                physics: const BouncingScrollPhysics(),
+                slivers: [
+                  // 1. Bazaar Banner
+                  if (_isBazaarChannel)
+                    SliverToBoxAdapter(
+                      child: Container(
+                        margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [
+                              const Color(0xFF007A7A).withValues(alpha: 0.08),
+                              const Color(0xFFF5A01D).withValues(alpha: 0.08),
+                            ],
+                          ),
+                          borderRadius: BorderRadius.circular(18),
+                          border: Border.all(
+                            color: const Color(0xFFF5A01D).withValues(alpha: 0.2),
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: const BoxDecoration(
+                                color: Color(0xFFF5A01D),
+                                shape: BoxShape.circle,
                               ),
-                              padding:
-                                  const EdgeInsets.symmetric(horizontal: 20),
-                              decoration: BoxDecoration(
-                                color: isSelected
-                                    ? primaryRed
-                                    : const Color(0xFFF5F5F5),
-                                borderRadius: BorderRadius.circular(25),
-                                boxShadow: isSelected
-                                    ? [
-                                        BoxShadow(
-                                          color: primaryRed.withValues(
-                                            alpha: 0.3,
-                                          ),
-                                          blurRadius: 8,
-                                          offset: const Offset(0, 4),
-                                        ),
-                                      ]
-                                    : null,
+                              child: const Icon(
+                                Icons.shopping_cart_checkout_rounded,
+                                color: Colors.white,
+                                size: 18,
                               ),
-                              alignment: Alignment.center,
+                            ),
+                            const SizedBox(width: 12),
+                            const Expanded(
                               child: Text(
-                                filter,
+                                'يمكنك التسوق من كافة متاجر ومطاعم هذا القسم في سلة واحدة وبكلفة توصيل واحدة فقط.',
                                 style: TextStyle(
                                   fontFamily: 'Cairo',
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 13,
-                                  color: isSelected
-                                      ? Colors.white
-                                      : const Color(0xFF4A4A4A),
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                  color: Color(0xFF1A1A1A),
+                                  height: 1.4,
                                 ),
                               ),
                             ),
-                          );
-                        },
+                          ],
+                        ),
                       ),
                     ),
-                  ),
 
-                // 3. Restaurants List
-                if (_isLoadingStores && _stores.isEmpty)
-                  const SliverFillRemaining(
-                    child: Center(child: CupertinoActivityIndicator()),
-                  )
-                else if (_storesLoadError != null && _stores.isEmpty)
-                  SliverFillRemaining(
-                    child: _ErrorState(
-                      label: headerTitle,
-                      onRetry: _reloadStores,
+                  // 2. Category Filters
+                  if (widget.showCuisineFilters &&
+                      (!_isBazaarChannel || _bazaarKindFilter == 'restaurant'))
+                    SliverToBoxAdapter(
+                      child: Container(
+                        height: 55,
+                        margin: const EdgeInsets.symmetric(vertical: 10),
+                        child: ListView.builder(
+                          scrollDirection: Axis.horizontal,
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          itemCount: _filters.length,
+                          itemBuilder: (context, index) {
+                            final filter = _filters[index];
+                            final isSelected = _selectedFilter == filter;
+                            return GestureDetector(
+                              onTap: () =>
+                                  setState(() => _selectedFilter = filter),
+                              child: AnimatedContainer(
+                                duration: const Duration(milliseconds: 300),
+                                margin: const EdgeInsets.symmetric(
+                                  horizontal: 5,
+                                  vertical: 5,
+                                ),
+                                padding:
+                                    const EdgeInsets.symmetric(horizontal: 20),
+                                decoration: BoxDecoration(
+                                  color: isSelected
+                                      ? primaryRed
+                                      : const Color(0xFFF5F5F5),
+                                  borderRadius: BorderRadius.circular(25),
+                                  boxShadow: isSelected
+                                      ? [
+                                          BoxShadow(
+                                            color: primaryRed.withValues(
+                                              alpha: 0.3,
+                                            ),
+                                            blurRadius: 8,
+                                            offset: const Offset(0, 4),
+                                          ),
+                                        ]
+                                      : null,
+                                ),
+                                alignment: Alignment.center,
+                                child: Text(
+                                  filter,
+                                  style: TextStyle(
+                                    fontFamily: 'Cairo',
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 13,
+                                    color: isSelected
+                                        ? Colors.white
+                                        : const Color(0xFF4A4A4A),
+                                  ),
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
                     ),
-                  )
-                else
-                  Builder(
-                    builder: (context) {
-                      var stores =
-                          _stores.where(_storeHasVisibleProducts).toList();
 
-                      // Sorting: Open restaurants first
-                      stores.sort((a, b) {
-                        final aOpen =
-                            (a['profile'] as Map)['is_open'] as bool? ?? true;
-                        final bOpen =
-                            (b['profile'] as Map)['is_open'] as bool? ?? true;
-                        if (aOpen && !bOpen) return -1;
-                        if (!aOpen && bOpen) return 1;
-                        return 0;
-                      });
+                  // 3. Restaurants List
+                  if (_isLoadingStores && _stores.isEmpty)
+                    const SliverFillRemaining(
+                      child: Center(child: CupertinoActivityIndicator()),
+                    )
+                  else if (_storesLoadError != null && _stores.isEmpty)
+                    SliverFillRemaining(
+                      child: _ErrorState(
+                        label: headerTitle,
+                        onRetry: _reloadStores,
+                      ),
+                    )
+                  else
+                    Builder(
+                      builder: (context) {
+                        var stores =
+                            _stores.where(_storeHasVisibleProducts).toList();
 
-                      // Search and Category Filter
-                      final filtered = stores.where((s) {
-                        final p = s['profile'] as Map;
-                        final name =
-                            p['store_name']?.toString().toLowerCase() ?? '';
-                        final desc =
-                            p['description']?.toString().toLowerCase() ?? '';
+                        // Sorting: Open restaurants first
+                        stores.sort((a, b) {
+                          final aOpen =
+                              (a['profile'] as Map)['is_open'] as bool? ?? true;
+                          final bOpen =
+                              (b['profile'] as Map)['is_open'] as bool? ?? true;
+                          if (aOpen && !bOpen) return -1;
+                          if (!aOpen && bOpen) return 1;
+                          return 0;
+                        });
 
-                        final matchesQuery =
-                            name.contains(query) || desc.contains(query);
-                        final matchesFilter = _storeMatchesCuisineFilter(p);
-                        final matchesBazaarKind = _storeMatchesBazaarKind(p);
+                        // Search and Category Filter
+                        final filtered = stores.where((s) {
+                          final p = s['profile'] as Map;
+                          final name =
+                              p['store_name']?.toString().toLowerCase() ?? '';
+                          final desc =
+                              p['description']?.toString().toLowerCase() ?? '';
 
-                        return matchesQuery &&
-                            matchesFilter &&
-                            matchesBazaarKind;
-                      }).toList();
+                          final matchesQuery =
+                              name.contains(query) || desc.contains(query);
+                          final matchesFilter = _storeMatchesCuisineFilter(p);
+                          final matchesBazaarKind = _storeMatchesBazaarKind(p);
 
-                      if (filtered.isEmpty) {
-                        return SliverFillRemaining(
-                          child: _NoResultsState(
-                            isBazaar: _isBazaarChannel,
-                            hasStores: stores.isNotEmpty,
-                            hasSearch: query.isNotEmpty,
-                            hasCuisineFilter: widget.showCuisineFilters &&
-                                _selectedFilter != 'الكل',
+                          return matchesQuery &&
+                              matchesFilter &&
+                              matchesBazaarKind;
+                        }).toList();
+
+                        if (filtered.isEmpty) {
+                          return SliverFillRemaining(
+                            child: _NoResultsState(
+                              isBazaar: _isBazaarChannel,
+                              hasStores: stores.isNotEmpty,
+                              hasSearch: query.isNotEmpty,
+                              hasCuisineFilter: widget.showCuisineFilters &&
+                                  _selectedFilter != 'الكل',
+                            ),
+                          );
+                        }
+
+                        return SliverPadding(
+                          padding: const EdgeInsets.fromLTRB(20, 10, 20, 120),
+                          sliver: SliverList(
+                            delegate: SliverChildBuilderDelegate(
+                              (context, index) {
+                                final profile = Map<String, dynamic>.from(
+                                  filtered[index]['profile'] as Map,
+                                );
+                                final products =
+                                    (filtered[index]['products'] as List)
+                                        .cast<Map<String, dynamic>>();
+                                final openAsRestaurant = widget.storeKind ==
+                                        MerchantStoreKind.restaurant ||
+                                    (_isBazaarChannel &&
+                                        _isRestaurantStore(profile));
+                                return _PremiumRestaurantCard(
+                                  data: filtered[index],
+                                  isRestaurant: openAsRestaurant,
+                                  onTap: () {
+                                    Navigator.of(context).push(
+                                      CupertinoPageRoute(
+                                        builder: (_) => openAsRestaurant
+                                            ? RestaurantMenuScreen(
+                                                storeProfile: profile,
+                                                storeProducts: products,
+                                              )
+                                            : ShoppingStoreMenuScreen(
+                                                profile: profile,
+                                                products: products,
+                                                subCategory: widget.subCategory,
+                                                storeKind: widget.storeKind,
+                                              ),
+                                      ),
+                                    );
+                                  },
+                                );
+                              },
+                              childCount: filtered.length,
+                            ),
                           ),
                         );
-                      }
-
-                      return SliverPadding(
-                        padding: const EdgeInsets.fromLTRB(20, 10, 20, 120),
-                        sliver: SliverList(
-                          delegate: SliverChildBuilderDelegate(
-                            (context, index) {
-                              final profile = Map<String, dynamic>.from(
-                                filtered[index]['profile'] as Map,
-                              );
-                              final products =
-                                  (filtered[index]['products'] as List)
-                                      .cast<Map<String, dynamic>>();
-                              final openAsRestaurant = widget.storeKind ==
-                                      MerchantStoreKind.restaurant ||
-                                  (_isBazaarChannel &&
-                                      _isRestaurantStore(profile));
-                              return _PremiumRestaurantCard(
-                                data: filtered[index],
-                                isRestaurant: openAsRestaurant,
-                                onTap: () {
-                                  Navigator.of(context).push(
-                                    CupertinoPageRoute(
-                                      builder: (_) => openAsRestaurant
-                                          ? RestaurantMenuScreen(
-                                              storeProfile: profile,
-                                              storeProducts: products,
-                                            )
-                                          : ShoppingStoreMenuScreen(
-                                              profile: profile,
-                                              products: products,
-                                              subCategory: widget.subCategory,
-                                              storeKind: widget.storeKind,
-                                            ),
-                                    ),
-                                  );
-                                },
-                              );
-                            },
-                            childCount: filtered.length,
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-              ],
-            ),
-          ),
-
-          // 4. Guest Mode Banner
-          if (appProvider.isGuestMode)
-            Positioned(
-              bottom: 0,
-              left: 0,
-              right: 0,
-              child: _GuestModeBanner(
-                onLogin: () => GuestGate.exitGuestToLogin(context),
+                      },
+                    ),
+                ],
               ),
             ),
-        ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// زر رجوع عصري وجميل مع تأثيرات بصرية
+class _ModernBackButton extends StatelessWidget {
+  final bool hide;
+
+  const _ModernBackButton({this.hide = false});
+
+  @override
+  Widget build(BuildContext context) {
+    if (hide) return const SizedBox.shrink();
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => Navigator.of(context).maybePop(),
+        borderRadius: BorderRadius.circular(16),
+        child: Ink(
+          width: 48,
+          height: 48,
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: const Color(0xFFE84A3A).withValues(alpha: 0.15),
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFFE84A3A).withValues(alpha: 0.08),
+                blurRadius: 12,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Center(
+            child: Icon(
+              Icons.arrow_forward_ios_rounded,
+              size: 20,
+              color: const Color(0xFFE84A3A),
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -522,12 +555,18 @@ class _PremiumRestaurantCard extends StatelessWidget {
     final products = (data['products'] as List).cast<Map<String, dynamic>>();
     final isOpen = profile['is_open'] as bool? ?? true;
 
-    // التقييم الحقيقي من قاعدة البيانات
-    final dbRating = profile['rating']?.toDouble();
-    final hasRating = dbRating != null && dbRating > 0;
+    final dbRating = profile['rating']?.toDouble() ?? 0.0;
+    final hasRating = dbRating > 0;
     final ratingLabel = hasRating ? dbRating.toStringAsFixed(1) : 'جديد';
 
-    final primaryRed = const Color(0xFFF5A01D);
+    final primaryOrange = const Color(0xFFF5A01D);
+    final customerPhone = MerchantProfileFields.customerVisiblePhone(profile);
+    final customerWhatsApp = MerchantProfileFields.customerVisibleWhatsApp(profile);
+
+    // Placeholder data for stats if not available in backend
+    final productsCount = profile['totalProducts'] ?? products.length;
+    final ordersCount = profile['completedOrders'] ?? '1.2K';
+    final clientsCount = profile['totalClients'] ?? '3.6K';
 
     return Container(
       margin: const EdgeInsets.only(bottom: 20),
@@ -536,279 +575,351 @@ class _PremiumRestaurantCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(28),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 15,
-            offset: const Offset(0, 8),
+            color: Colors.black.withValues(alpha: 0.06),
+            blurRadius: 20,
+            offset: const Offset(0, 10),
           ),
         ],
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Cover & Status
-          Stack(
-            children: [
-              ClipRRect(
-                borderRadius:
-                    const BorderRadius.vertical(top: Radius.circular(28)),
-                child: AppImage(
-                  imageData: ImageStorageService.merchantUploadedImageRef(
-                        profile['cover_image_url'] ??
-                            profile['coverImageBase64'],
-                      ) ??
-                      '',
-                  height: 160,
-                  width: double.infinity,
-                  fit: BoxFit.cover,
-                ),
-              ),
-              Positioned(
-                top: 12,
-                right: 12,
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.95),
-                    borderRadius: BorderRadius.circular(15),
-                    boxShadow: [
-                      BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.05),
-                          blurRadius: 5)
-                    ],
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Container(
-                        width: 7,
-                        height: 7,
-                        decoration: BoxDecoration(
-                          color: isOpen ? Colors.green : Colors.grey,
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-                      const SizedBox(width: 5),
-                      Text(
-                        isOpen ? 'مفتوح الآن' : 'مغلق',
-                        style: TextStyle(
-                          fontFamily: 'Cairo',
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
-                          color: isOpen ? Colors.green : Colors.grey.shade700,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
-
-          // Logo, Name & Rating
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+          // 1. Split Header (Cover + Info)
+          SizedBox(
+            height: 180,
+            child: Stack(
               children: [
-                Transform.translate(
-                  offset: const Offset(0, -25),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Container(
-                        width: 65,
-                        height: 65,
-                        padding: const EdgeInsets.all(2),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          shape: BoxShape.circle,
-                          boxShadow: [
-                            BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.08),
-                                blurRadius: 10)
-                          ],
+                // Cover Image (Left Half mostly)
+                Row(
+                  children: [
+                    Expanded(
+                      flex: 6,
+                      child: ClipRRect(
+                        borderRadius: const BorderRadius.only(
+                          topLeft: Radius.circular(28),
+                          bottomLeft: Radius.circular(0),
                         ),
-                        child: ClipOval(
-                          child: AppImage(
-                            imageData:
-                                ImageStorageService.merchantUploadedImageRef(
-                                      profile['profile_image_base64'] ??
-                                          profile['logoImageBase64'],
-                                    ) ??
-                                    '',
+                        child: AppImage(
+                          imageData: ImageStorageService.merchantUploadedImageRef(
+                            profile['cover_image_url'] ?? profile['coverImageBase64'],
+                          ),
+                          height: double.infinity,
+                          fit: BoxFit.cover,
+                        ),
+                      ),
+                    ),
+                    const Spacer(flex: 4),
+                  ],
+                ),
+                // Gradient Overlay to transition cover to info
+                Positioned.fill(
+                  child: Container(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.centerLeft,
+                        end: Alignment.centerRight,
+                        colors: [
+                          Colors.transparent,
+                          Colors.white.withValues(alpha: 0.1),
+                          Colors.white,
+                        ],
+                        stops: const [0.0, 0.4, 0.6],
+                      ),
+                    ),
+                  ),
+                ),
+                // Top Status Badge
+                Positioned(
+                  top: 16,
+                  left: 16,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.9),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (hasRating) ...[
+                          const Icon(Icons.star, color: Colors.amber, size: 14),
+                          const SizedBox(width: 4),
+                          Text(
+                            ratingLabel,
+                            style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 12),
+                          ),
+                          const SizedBox(width: 8),
+                          Container(width: 1, height: 12, color: Colors.grey.shade300),
+                          const SizedBox(width: 8),
+                        ],
+                        Container(
+                          width: 8,
+                          height: 8,
+                          decoration: BoxDecoration(
+                            color: isOpen ? Colors.green : Colors.grey,
+                            shape: BoxShape.circle,
                           ),
                         ),
-                      ),
-                      const Spacer(),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFFFF8E1),
-                          borderRadius: BorderRadius.circular(10),
+                        const SizedBox(width: 6),
+                        Text(
+                          isOpen ? 'مفتوح الآن' : 'مغلق',
+                          style: TextStyle(
+                            fontFamily: 'Cairo',
+                            fontSize: 11,
+                            fontWeight: FontWeight.w800,
+                            color: isOpen ? Colors.green : Colors.grey,
+                          ),
                         ),
-                        child: Row(
-                          children: [
-                            Icon(CupertinoIcons.star_fill,
-                                color: hasRating ? Colors.amber : Colors.grey,
-                                size: 12),
-                            const SizedBox(width: 4),
-                            Text(
-                              ratingLabel,
-                              style: const TextStyle(
-                                  fontWeight: FontWeight.bold, fontSize: 12),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
-
-                Transform.translate(
-                  offset: const Offset(0, -10),
+                // Merchant Info (Right Side)
+                Positioned(
+                  top: 16,
+                  right: 16,
+                  bottom: 0,
+                  left: 140, // Avoid overlapping cover
                   child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                    crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
+                      // Circular Avatar with Verification
+                      Stack(
+                        alignment: Alignment.bottomRight,
+                        children: [
+                          Container(
+                            width: 72,
+                            height: 72,
+                            padding: const EdgeInsets.all(2.5),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              shape: BoxShape.circle,
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.1),
+                                  blurRadius: 10,
+                                ),
+                              ],
+                            ),
+                            child: ClipOval(
+                              child: AppImage(
+                                imageData: ImageStorageService.merchantUploadedImageRef(
+                                  profile['profile_image_base64'] ?? profile['logoImageBase64'],
+                                ),
+                              ),
+                            ),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.all(2),
+                            decoration: const BoxDecoration(
+                              color: Colors.white,
+                              shape: BoxShape.circle,
+                            ),
+                            child: Icon(Icons.verified, color: primaryOrange, size: 18),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
                       Text(
-                        profile['store_name']?.toString() ?? 'اسم المطعم',
+                        profile['store_name']?.toString() ?? 'المتجر',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
-                            fontFamily: 'Cairo',
-                            fontSize: 18,
-                            fontWeight: FontWeight.w900),
+                          fontFamily: 'Cairo',
+                          fontWeight: FontWeight.w900,
+                          fontSize: 18,
+                          height: 1.2,
+                        ),
                       ),
                       Text(
-                        profile['description']?.toString() ??
-                            'ألذ المأكولات العصرية',
+                        profile['description']?.toString() ?? 'وصف المتجر',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
-                            fontFamily: 'Cairo',
-                            fontSize: 12,
-                            color: Colors.grey.shade600),
+                          fontFamily: 'Cairo',
+                          fontSize: 11,
+                          color: Colors.grey.shade600,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.location_on, color: Colors.grey.shade400, size: 12),
+                          const SizedBox(width: 4),
+                          Flexible(
+                            child: Text(
+                              MerchantProfileFields.addressFromMap(profile),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontFamily: 'Cairo',
+                                fontSize: 10,
+                                color: Colors.grey.shade500,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),
                 ),
+              ],
+            ),
+          ),
 
-                const SizedBox(height: 5),
+          // 2. Stats Bar
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF9F9F9),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: const Color(0xFFEEEEEE)),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: [
+                  _StatItem(label: 'منتج', value: '$productsCount', icon: Icons.shopping_bag_outlined),
+                  _divider(),
+                  _StatItem(label: 'طلب', value: '$ordersCount', icon: Icons.shopping_cart_outlined),
+                  _divider(),
+                  _StatItem(label: 'عميل', value: '$clientsCount', icon: Icons.groups_outlined),
+                  _divider(),
+                  _StatItem(label: 'التقييم', value: ratingLabel, icon: Icons.star_outline_rounded, color: Colors.amber),
+                ],
+              ),
+            ),
+          ),
 
-                // Info Chips
-                Wrap(
-                  spacing: 6,
-                  runSpacing: 6,
-                  children: [
-                    _PremiumInfoChip(
-                      icon: CupertinoIcons.location_solid,
-                      label: MerchantProfileFields.addressFromMap(profile)
-                              .isNotEmpty
-                          ? MerchantProfileFields.addressFromMap(profile)
-                          : 'بدون عنوان',
+          // 3. Product Gallery
+          if (products.isNotEmpty) ...[
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'أحدث المنتجات',
+                    style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w900, fontSize: 13),
+                  ),
+                  Icon(Icons.chevron_left, color: Colors.grey.shade400, size: 18),
+                ],
+              ),
+            ),
+            SizedBox(
+              height: 100,
+              child: ListView.builder(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                itemCount: products.length,
+                itemBuilder: (context, idx) {
+                  final price = (products[idx]['price'] as num?)?.toInt() ?? 0;
+                  return Container(
+                    width: 90,
+                    margin: const EdgeInsets.only(left: 10),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: const Color(0xFFF0F0F0)),
                     ),
-                    _PremiumInfoChip(
-                      icon: CupertinoIcons.time,
-                      label: MerchantProfileFields.workingHoursLabel(profile),
+                    child: Stack(
+                      children: [
+                        Positioned.fill(
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(15),
+                            child: AppImage(
+                              imageData: products[idx]['image_base64'] ?? products[idx]['image'],
+                              fit: BoxFit.cover,
+                            ),
+                          ),
+                        ),
+                        Positioned(
+                          bottom: 0,
+                          left: 0,
+                          right: 0,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(vertical: 4),
+                            decoration: BoxDecoration(
+                              color: Colors.black.withValues(alpha: 0.4),
+                              borderRadius: const BorderRadius.vertical(bottom: Radius.circular(15)),
+                            ),
+                            child: Text(
+                              '${price.toPrice()} د.ع',
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
-                    _PremiumInfoChip(
-                      icon: CupertinoIcons.square_grid_2x2_fill,
-                      label: isRestaurant
-                          ? '${products.length} وجبة'
-                          : '${products.length} منتج',
-                    ),
-                  ],
+                  );
+                },
+              ),
+            ),
+          ],
+
+          const SizedBox(height: 20),
+
+          // 4. Action Bar
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            child: Row(
+              children: [
+                _MiniActionBtn(
+                  label: 'مراسلة',
+                  icon: Icons.chat_bubble_outline_rounded,
+                  color: Colors.blueGrey,
+                  onTap: () {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('ميزة المراسلة قريباً...', style: TextStyle(fontFamily: 'Cairo'))),
+                    );
+                  },
                 ),
-
-                const SizedBox(height: 12),
-
-                // Food Preview Gallery
-                if (products.isNotEmpty)
-                  SizedBox(
-                    height: 55,
-                    child: ListView.builder(
-                      scrollDirection: Axis.horizontal,
-                      itemCount: products.length > 5 ? 5 : products.length,
-                      itemBuilder: (context, idx) {
-                        final isLast = idx == 4 && products.length > 5;
-                        return Container(
-                          width: 55,
-                          margin: const EdgeInsets.only(left: 8),
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: Colors.grey.shade100),
-                          ),
-                          child: Stack(
-                            fit: StackFit.expand,
-                            children: [
-                              ClipRRect(
-                                borderRadius: BorderRadius.circular(11),
-                                child: AppImage(
-                                  imageData: products[idx]['image_base64'] ??
-                                      products[idx]['image'],
-                                  fit: BoxFit.cover,
-                                ),
-                              ),
-                              if (isLast)
-                                Container(
-                                  decoration: BoxDecoration(
-                                    color: Colors.black.withValues(alpha: 0.5),
-                                    borderRadius: BorderRadius.circular(11),
-                                  ),
-                                  alignment: Alignment.center,
-                                  child: Text(
-                                    '+${products.length - 4}',
-                                    style: const TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.bold),
-                                  ),
-                                ),
-                            ],
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-
-                const SizedBox(height: 15),
-
-                // Main Action Button
-                Container(
-                  width: double.infinity,
-                  height: 50,
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                        colors: [primaryRed, const Color(0xFFFF3D00)]),
-                    borderRadius: BorderRadius.circular(15),
-                    boxShadow: [
-                      BoxShadow(
-                          color: primaryRed.withValues(alpha: 0.25),
+                const SizedBox(width: 8),
+                _MiniActionBtn(
+                  label: 'اتصال',
+                  icon: Icons.phone_outlined,
+                  color: Colors.green,
+                  onTap: () {
+                    if (customerPhone.isNotEmpty) AppHelpers.makePhoneCall(customerPhone);
+                  },
+                ),
+                const SizedBox(width: 8),
+                _MiniActionBtn(
+                  label: 'واتساب',
+                  icon: Icons.chat_outlined,
+                  color: const Color(0xFF25D366),
+                  onTap: () {
+                    if (customerWhatsApp.isNotEmpty) AppHelpers.launchWhatsApp(customerWhatsApp, 'مرحباً، أريد الاستفسار عن منتجاتكم.');
+                  },
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Container(
+                    height: 48,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(colors: [primaryOrange, const Color(0xFFFF8A00)]),
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: [
+                        BoxShadow(
+                          color: primaryOrange.withValues(alpha: 0.25),
                           blurRadius: 10,
-                          offset: const Offset(0, 4)),
-                    ],
-                  ),
-                  child: ElevatedButton.icon(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.transparent,
-                      shadowColor: Colors.transparent,
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(15)),
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
                     ),
-                    onPressed: onTap,
-                    icon: Icon(
-                      isRestaurant
-                          ? Icons.restaurant_menu_rounded
-                          : Icons.shopping_bag_rounded,
-                      color: Colors.white,
-                      size: 20,
-                    ),
-                    label: Text(
-                      isRestaurant ? 'عرض المنيو' : 'عرض المنتجات',
-                      style: const TextStyle(
-                        fontFamily: 'Cairo',
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
+                    child: ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.transparent,
+                        shadowColor: Colors.transparent,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        padding: EdgeInsets.zero,
+                      ),
+                      onPressed: onTap,
+                      icon: const Icon(Icons.store_outlined, color: Colors.white, size: 20),
+                      label: const Text(
+                        'عرض المتجر',
+                        style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w900, color: Colors.white, fontSize: 13),
                       ),
                     ),
                   ),
@@ -817,6 +928,68 @@ class _PremiumRestaurantCard extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _divider() => Container(width: 1, height: 24, color: Colors.grey.shade200);
+}
+
+class _StatItem extends StatelessWidget {
+  final String label;
+  final String value;
+  final IconData icon;
+  final Color? color;
+
+  const _StatItem({required this.label, required this.value, required this.icon, this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Icon(icon, size: 16, color: color ?? Colors.grey.shade600),
+        const SizedBox(height: 4),
+        Text(
+          value,
+          style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 14, height: 1),
+        ),
+        Text(
+          label,
+          style: const TextStyle(fontFamily: 'Cairo', fontSize: 10, color: Colors.grey, height: 1.2),
+        ),
+      ],
+    );
+  }
+}
+
+class _MiniActionBtn extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _MiniActionBtn({required this.label, required this.icon, required this.color, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return CupertinoButton(
+      padding: EdgeInsets.zero,
+      onPressed: onTap,
+      child: Container(
+        width: 64,
+        height: 48,
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: color.withValues(alpha: 0.2)),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, size: 18, color: color),
+            Text(label, style: TextStyle(fontFamily: 'Cairo', fontSize: 9, fontWeight: FontWeight.bold, color: color)),
+          ],
+        ),
       ),
     );
   }

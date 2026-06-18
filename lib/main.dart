@@ -3,6 +3,7 @@ import 'dart:ui' show PlatformDispatcher;
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show SystemNavigator;
 import 'package:provider/provider.dart';
 import 'package:animate_do/animate_do.dart';
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
@@ -39,6 +40,9 @@ import 'widgets/exit_confirm_scope.dart';
 import 'widgets/merchant_order_cross_role_alert.dart';
 import 'widgets/safe_bottom_bar.dart';
 import 'widgets/app_update_gate.dart';
+import 'widgets/order_tracking_sheet.dart';
+import 'models/app_models.dart';
+import 'screens/merchant/order_details_screen.dart';
 
 Future<void> main() async {
   // معالج عام يمنع أي "شاشة رمادية" صامتة: بدل تعطّل الإطار الأول بدون أثر،
@@ -301,9 +305,7 @@ class AlGhaithApp extends StatelessWidget {
         return const ExitConfirmScope(child: CustomerSetupScreen());
       }
 
-      return const ExitConfirmScope(
-        child: MerchantOrderCrossRoleAlert(child: MainShell()),
-      );
+      return MerchantOrderCrossRoleAlert(child: MainShell());
     }
 
     return PushNotificationLifecycleScope(
@@ -399,8 +401,12 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     context.read<AppProvider>().addListener(_onAppProviderChanged);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    PushNotificationService.instance.setOnNotificationOpened((data) {
       if (!mounted) return;
+      context.read<AppProvider>().handleNotificationOpen(data);
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!context.mounted) return;
       final provider = context.read<AppProvider>();
       _lastOrderSnapshots = {
         for (final order in provider.orders)
@@ -414,6 +420,8 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
         _pollCustomerOrders();
       });
       RoleSwitchNotificationPresenter.showIfNeeded(context);
+      // فتح تفاصيل الطلب إذا كان هناك orderId معلّق من الإشعار
+      _openPendingOrderDetail();
     });
   }
 
@@ -528,6 +536,26 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
     overlay.insert(entry);
   }
 
+  /// فتح تفاصيل الطلب إذا كان هناك orderId معلّق من الإشعار
+  void _openPendingOrderDetail() {
+    if (!mounted) return;
+    final provider = context.read<AppProvider>();
+    final orderId = provider.takePendingOrderId('customer');
+    if (orderId == null || orderId.isEmpty) return;
+
+    // ننتظر قليلاً حتى يتم تحميل الطلبات ثم نفتح التفاصيل
+    Future.delayed(const Duration(milliseconds: 500), () {
+      if (!mounted) return;
+      final updatedProvider = context.read<AppProvider>();
+      final order = updatedProvider.orders.where((o) => o.id == orderId).firstOrNull;
+      if (order == null) return;
+      showCupertinoModalPopup(
+        context: context,
+        builder: (context) => OrderTrackingSheet(order: order),
+      );
+    });
+  }
+
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed && mounted) {
@@ -561,8 +589,75 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
           setState(() => _currentIndex = 0);
           return;
         }
-        if (Navigator.of(context).canPop()) {
-          Navigator.of(context).pop();
+        // إذا كنا في التبويب الرئيسي ولا يوجد صفحات للرجوع، نعرض تأكيد الخروج
+        final shouldExit = await showDialog<bool>(
+          context: context,
+          barrierColor: Colors.black54,
+          builder: (dialogContext) {
+            return AlertDialog(
+              backgroundColor: AppColors.card,
+              surfaceTintColor: AppColors.card,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(24),
+              ),
+              title: const Text(
+                'تأكيد الخروج',
+                textDirection: TextDirection.rtl,
+                style: TextStyle(
+                  fontFamily: 'Cairo',
+                  fontWeight: FontWeight.w900,
+                  fontSize: 18,
+                  color: AppColors.primary,
+                ),
+              ),
+              content: const Text(
+                'هل تريد الخروج من تطبيق الغيث؟',
+                textDirection: TextDirection.rtl,
+                style: TextStyle(
+                  fontFamily: 'Cairo',
+                  fontSize: 14,
+                  height: 1.5,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+              actionsAlignment: MainAxisAlignment.start,
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(false),
+                  style: TextButton.styleFrom(
+                    foregroundColor: AppColors.textSecondary,
+                  ),
+                  child: const Text(
+                    'إلغاء',
+                    style: TextStyle(
+                      fontFamily: 'Cairo',
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                FilledButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(true),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: AppColors.accent,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                  ),
+                  child: const Text(
+                    'خروج',
+                    style: TextStyle(
+                      fontFamily: 'Cairo',
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+        if (shouldExit == true) {
+          await SystemNavigator.pop();
         }
       },
       child: Scaffold(

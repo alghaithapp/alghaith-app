@@ -53,7 +53,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         builder: (context) =>
                             CategoryItemsScreen(
                           category: cat.asServiceCategory,
-                          hideBack: true,
+                          hideBack: false,
                         ),
                       ),
                     );
@@ -119,7 +119,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           builder: (context) =>
                               CategoryItemsScreen(
                             category: cat,
-                            hideBack: true,
+                            hideBack: false,
                           ),
                         ),
                       );

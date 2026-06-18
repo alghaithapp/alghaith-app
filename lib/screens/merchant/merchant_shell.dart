@@ -13,6 +13,7 @@ import 'merchant_earnings_screen.dart';
 import 'merchant_more_screen.dart';
 import 'merchant_orders_screen.dart';
 import 'merchant_products_screen.dart';
+import 'order_details_screen.dart';
 
 class MerchantShell extends StatefulWidget {
   const MerchantShell({super.key});
@@ -41,6 +42,7 @@ class _MerchantShellState extends State<MerchantShell> {
   @override
   void initState() {
     super.initState();
+    context.read<AppProvider>().addListener(_onAppProviderChanged);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!context.mounted) return;
       final provider = context.read<AppProvider>();
@@ -62,8 +64,35 @@ class _MerchantShellState extends State<MerchantShell> {
 
   @override
   void dispose() {
+    context.read<AppProvider>().removeListener(_onAppProviderChanged);
     _refreshTimer?.cancel();
     super.dispose();
+  }
+
+  void _onAppProviderChanged() {
+    if (!mounted) return;
+    final provider = context.read<AppProvider>();
+    final tab = provider.takePendingMerchantTab();
+    if (tab != null && tab != _currentIndex) {
+      setState(() => _currentIndex = tab);
+    }
+    // فتح تفاصيل الطلب إذا كان هناك orderId معلّق من الإشعار
+    final orderId = provider.takePendingOrderId('merchant');
+    if (orderId != null && orderId.isNotEmpty) {
+      Future.delayed(const Duration(milliseconds: 300), () {
+        if (!mounted) return;
+        final updatedProvider = context.read<AppProvider>();
+        final order = updatedProvider.merchantIncomingOrders
+            .where((o) => o.id == orderId)
+            .firstOrNull;
+        if (order == null) return;
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => OrderDetailsScreen(order: order),
+          ),
+        );
+      });
+    }
   }
 
   Future<void> _pollForNewOrders() async {

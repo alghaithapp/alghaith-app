@@ -334,22 +334,6 @@ class _SettingsListCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final items = [
       _SettingsItemData(
-        icon: CupertinoIcons.location_fill,
-        color: Colors.green,
-        title: 'عناويني',
-        onTap: () => Navigator.of(context, rootNavigator: true).push(
-          CupertinoPageRoute(builder: (_) => const AddressesScreen()),
-        ),
-      ),
-      _SettingsItemData(
-        icon: CupertinoIcons.creditcard_fill,
-        color: Colors.blue,
-        title: 'طرق الدفع',
-        onTap: () => Navigator.of(context, rootNavigator: true).push(
-          CupertinoPageRoute(builder: (_) => const PaymentMethodsScreen()),
-        ),
-      ),
-      _SettingsItemData(
         icon: CupertinoIcons.doc_text_fill,
         color: AppColors.accent,
         title: 'سجل الطلبات',
@@ -371,16 +355,11 @@ class _SettingsListCard extends StatelessWidget {
           CupertinoPageRoute(builder: (_) => const AppSettingsScreen()),
         ),
       ),
+      // تم إخفاء "عناويني" و "طرق الدفع" بناءً على طلب الإدارة
       _SettingsItemData(
-        icon: Icons.facebook_rounded,
-        color: const Color(0xFF1877F2),
-        title: 'صفحة الغيث على فيسبوك',
-        onTap: AppHelpers.openFacebookPage,
-      ),
-      _SettingsItemData(
-        icon: Icons.chat_rounded,
+        icon: Icons.headset_mic_rounded,
         color: Colors.green,
-        title: 'اتصل بنا (واتساب)',
+        title: 'خدمة دعم العملاء',
         onTap: () => AppHelpers.launchWhatsApp(
           AppHelpers.supportWhatsAppNumber,
           'مرحبا، أحتاج مساعدة في تطبيق الغيث',

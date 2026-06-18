@@ -38,6 +38,16 @@ class _DriverShellState extends State<DriverShell> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!context.mounted) return;
       RoleSwitchNotificationPresenter.showIfNeeded(context);
+      // فتح تفاصيل الطلب إذا كان هناك orderId معلّق من الإشعار
+      final provider = context.read<AppProvider>();
+      final orderId = provider.takePendingOrderId('driver');
+      if (orderId != null && orderId.isNotEmpty) {
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => DriverTripDetailsScreen(orderId: orderId),
+          ),
+        );
+      }
     });
   }
 
@@ -110,6 +120,83 @@ class _DriverShellState extends State<DriverShell> {
         ],
       ),
     );
+  }
+}
+
+class DriverTripDetailsScreen extends StatelessWidget {
+  final String orderId;
+
+  const DriverTripDetailsScreen({super.key, required this.orderId});
+
+  @override
+  Widget build(BuildContext context) {
+    final provider = context.watch<AppProvider>();
+    final incomingTaxi =
+        _findTaxi(provider.visibleTaxiIncomingRequests, orderId);
+    final activeTaxi = _findTaxi(provider.visibleTaxiActiveRequests, orderId);
+    final completedTaxi =
+        _findTaxi(provider.visibleTaxiCompletedRequests, orderId);
+    final incomingDelivery =
+        _findOrder(provider.visibleDeliveryIncomingOrders, orderId);
+    final activeDelivery =
+        _findOrder(provider.visibleDeliveryActiveOrders, orderId);
+    final completedDelivery =
+        _findOrder(provider.visibleDeliveryCompletedOrders, orderId);
+
+    Widget body;
+    if (incomingTaxi != null) {
+      body = _TaxiRequestCard(request: incomingTaxi);
+    } else if (activeTaxi != null) {
+      body = _TaxiRequestCard(request: activeTaxi);
+    } else if (completedTaxi != null) {
+      body = _TaxiRequestCard(request: completedTaxi);
+    } else if (incomingDelivery != null) {
+      body = _DriverDeliveryOrderCard(order: incomingDelivery);
+    } else if (activeDelivery != null) {
+      body = _DriverActiveDeliveryCard(order: activeDelivery);
+    } else if (completedDelivery != null) {
+      body = _DriverActiveDeliveryCard(order: completedDelivery);
+    } else {
+      body = const _EmptyState(
+        title: 'Order not found',
+        subtitle: 'Pull to refresh and try again.',
+      );
+    }
+
+    return Scaffold(
+      backgroundColor: const Color(0xFFF2F2F7),
+      appBar: AppBar(
+        title: const Text('Trip details'),
+        backgroundColor: Colors.white,
+        foregroundColor: Colors.black,
+        elevation: 0,
+      ),
+      body: RefreshIndicator(
+        onRefresh: () async {
+          await provider.refreshDriverTaxiRequests();
+          await provider.refreshCourierOrders();
+        },
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.all(16),
+          children: [body],
+        ),
+      ),
+    );
+  }
+
+  TaxiRequest? _findTaxi(List<TaxiRequest> requests, String id) {
+    for (final request in requests) {
+      if (request.id == id) return request;
+    }
+    return null;
+  }
+
+  ActiveOrder? _findOrder(List<ActiveOrder> orders, String id) {
+    for (final order in orders) {
+      if (order.id == id) return order;
+    }
+    return null;
   }
 }
 
@@ -221,8 +308,7 @@ class DriverDashboardScreen extends StatelessWidget {
                 provider.visibleDeliveryIncomingOrders.isEmpty)
               _EmptyState(
                 title: 'لا توجد طلبات حتى الآن',
-                subtitle:
-                    'ستظهر هنا الطلبات الجديدة فور إرسالها من الزبائن.',
+                subtitle: 'ستظهر هنا الطلبات الجديدة فور إرسالها من الزبائن.',
               )
             else ...[
               if (provider.driverAcceptsTaxi) ...[
@@ -257,8 +343,7 @@ class DriverDashboardScreen extends StatelessWidget {
                   )
                 else
                   ...provider.visibleDeliveryIncomingOrders.take(3).map(
-                        (order) =>
-                            _DriverDeliveryOrderCard(order: order),
+                        (order) => _DriverDeliveryOrderCard(order: order),
                       ),
               ],
             ],
@@ -431,7 +516,8 @@ class DriverAccountScreen extends StatelessWidget {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
           ),
-          leading: const Icon(Icons.notifications_outlined, color: AppColors.accent),
+          leading:
+              const Icon(Icons.notifications_outlined, color: AppColors.accent),
           title: const Text(
             'الإشعارات',
             style: TextStyle(
@@ -567,21 +653,12 @@ class DriverAccountScreen extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 12),
-        _InfoTile(
-            label: 'الاسم', value: '${profile['name'] ?? '-'}'),
-        _InfoTile(
-            label: 'الهاتف',
-            value: '${profile['phone'] ?? '-'}'),
+        _InfoTile(label: 'الاسم', value: '${profile['name'] ?? '-'}'),
+        _InfoTile(label: 'الهاتف', value: '${profile['phone'] ?? '-'}'),
         _InfoTile(label: 'نوع الحساب', value: typeLabel),
-        _InfoTile(
-            label: 'السيارة',
-            value: '${profile['vehicle'] ?? '-'}'),
-        _InfoTile(
-            label: 'اللوحة',
-            value: '${profile['plate'] ?? '-'}'),
-        _InfoTile(
-            label: 'المنطقة',
-            value: '${profile['area'] ?? '-'}'),
+        _InfoTile(label: 'السيارة', value: '${profile['vehicle'] ?? '-'}'),
+        _InfoTile(label: 'اللوحة', value: '${profile['plate'] ?? '-'}'),
+        _InfoTile(label: 'المنطقة', value: '${profile['area'] ?? '-'}'),
         if ((profile['notes'] as String?)?.isNotEmpty ?? false)
           _InfoTile(
             label: 'ملاحظات',
@@ -725,9 +802,7 @@ class DriverAccountScreen extends StatelessWidget {
                           ),
                         ),
                         subtitle: Text(
-                          isAvailable
-                              ? 'تستقبل الطلبات'
-                              : 'مؤقتًا غير متصل',
+                          isAvailable ? 'تستقبل الطلبات' : 'مؤقتًا غير متصل',
                           style: const TextStyle(fontFamily: 'Cairo'),
                         ),
                       ),
@@ -736,8 +811,7 @@ class DriverAccountScreen extends StatelessWidget {
                       _editField('نوع السيارة', vehicleController),
                       _editField('رقم اللوحة', plateController),
                       _editField('منطقة العمل', areaController),
-                      _editField('ملاحظات', notesController,
-                          maxLines: 3),
+                      _editField('ملاحظات', notesController, maxLines: 3),
                       const SizedBox(height: 16),
                       SizedBox(
                         width: double.infinity,
@@ -1141,13 +1215,13 @@ class _TaxiRequestCard extends StatelessWidget {
                         ? Colors.lightBlue
                         : isCancelRequested
                             ? AppColors.accent
-                        : isCancelled
-                            ? Colors.grey
-                        : isRejected
-                            ? Colors.red
-                            : isAccepted
-                                ? Colors.teal
-                                : AppColors.accent;
+                            : isCancelled
+                                ? Colors.grey
+                                : isRejected
+                                    ? Colors.red
+                                    : isAccepted
+                                        ? Colors.teal
+                                        : AppColors.accent;
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -1225,7 +1299,8 @@ class _TaxiRequestCard extends StatelessWidget {
                   child: _ActionButton(
                     label: 'موافقة الإلغاء',
                     color: Colors.red,
-                    onTap: () => provider.approveTaxiCancellationByDriver(request.id),
+                    onTap: () =>
+                        provider.approveTaxiCancellationByDriver(request.id),
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -1233,7 +1308,8 @@ class _TaxiRequestCard extends StatelessWidget {
                   child: _ActionButton(
                     label: 'رفض الإلغاء',
                     color: Colors.green,
-                    onTap: () => provider.rejectTaxiCancellationByDriver(request.id),
+                    onTap: () =>
+                        provider.rejectTaxiCancellationByDriver(request.id),
                   ),
                 ),
               ] else if (isAccepted) ...[
@@ -1342,7 +1418,8 @@ class _TaxiRequestPreview extends StatelessWidget {
               color: AppColors.accent.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(16),
             ),
-            child: const Icon(Icons.local_taxi_rounded, color: AppColors.accent),
+            child:
+                const Icon(Icons.local_taxi_rounded, color: AppColors.accent),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -1765,7 +1842,8 @@ class _EmptyState extends StatelessWidget {
       ),
       child: Column(
         children: [
-          const Icon(Icons.local_taxi_rounded, size: 54, color: AppColors.accent),
+          const Icon(Icons.local_taxi_rounded,
+              size: 54, color: AppColors.accent),
           const SizedBox(height: 12),
           Text(
             title,

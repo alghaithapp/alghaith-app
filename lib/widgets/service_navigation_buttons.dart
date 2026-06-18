@@ -81,12 +81,39 @@ class ServiceBackButton extends StatelessWidget {
   Widget build(BuildContext context) {
     if (hide) return const SizedBox.shrink();
     final isRtl = Directionality.of(context) == TextDirection.rtl;
-    return ServiceNavIconButton(
-      icon: isRtl
-          ? Icons.arrow_forward_ios_rounded
-          : Icons.arrow_back_ios_new_rounded,
-      tooltip: 'رجوع',
-      onPressed: onPressed ?? () => Navigator.of(context).maybePop(),
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onPressed ?? () => Navigator.of(context).maybePop(),
+        borderRadius: BorderRadius.circular(16),
+        child: Ink(
+          width: 48,
+          height: 48,
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: AppColors.accent.withValues(alpha: 0.15),
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.accent.withValues(alpha: 0.08),
+                blurRadius: 12,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Center(
+            child: Icon(
+              isRtl
+                  ? Icons.arrow_forward_ios_rounded
+                  : Icons.arrow_back_ios_new_rounded,
+              size: 20,
+              color: AppColors.accent,
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

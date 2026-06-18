@@ -49,6 +49,16 @@ class _DeliveryShellState extends State<DeliveryShell> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!context.mounted) return;
       RoleSwitchNotificationPresenter.showIfNeeded(context);
+      // فتح تفاصيل الطلب إذا كان هناك orderId معلّق من الإشعار
+      final provider = context.read<AppProvider>();
+      final orderId = provider.takePendingOrderId('delivery');
+      if (orderId != null && orderId.isNotEmpty) {
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => DeliveryOrderDetailsScreen(orderId: orderId),
+          ),
+        );
+      }
     });
   }
 
@@ -138,6 +148,66 @@ class _DeliveryShellState extends State<DeliveryShell> {
   }
 }
 
+class DeliveryOrderDetailsScreen extends StatelessWidget {
+  final String orderId;
+
+  const DeliveryOrderDetailsScreen({super.key, required this.orderId});
+
+  @override
+  Widget build(BuildContext context) {
+    final provider = context.watch<AppProvider>();
+    final incoming = _findOrder(provider.deliveryIncomingOrders, orderId);
+    final active = _findOrder(provider.deliveryActiveOrders, orderId);
+    final completed = _findOrder(provider.deliveryCompletedOrders, orderId);
+
+    Widget body;
+    if (incoming != null) {
+      body = _DeliveryGroupCard(
+          group: CourierGroupedOrder(incoming.groupId, [incoming]));
+    } else if (active != null) {
+      body = _ActiveDeliveryGroupCard(
+          group: CourierGroupedOrder(active.groupId, [active]));
+    } else if (completed != null) {
+      body = _CompletedDeliveryCard(order: completed);
+    } else {
+      body = _EmptyCard(text: 'Order not found');
+    }
+
+    return CupertinoPageScaffold(
+      backgroundColor: const Color(0xFFF2F2F7),
+      navigationBar: CupertinoNavigationBar(
+        middle: const Text(
+          'Order details',
+          style: TextStyle(fontWeight: FontWeight.bold, fontFamily: 'Cairo'),
+        ),
+        trailing: CupertinoButton(
+          padding: EdgeInsets.zero,
+          onPressed: provider.refreshCourierOrders,
+          child: const Icon(CupertinoIcons.refresh, size: 22),
+        ),
+        border: null,
+      ),
+      child: SafeArea(
+        child: RefreshIndicator(
+          onRefresh: provider.refreshCourierOrders,
+          child: ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.all(16),
+            children: [body],
+          ),
+        ),
+      ),
+    );
+  }
+
+  ActiveOrder? _findOrder(List<ActiveOrder> orders, String id) {
+    for (final order in orders) {
+      if (order.id == id) return order;
+    }
+    return null;
+  }
+}
+
 class CourierGroupedOrder {
   final String? groupId;
   final List<ActiveOrder> orders;
@@ -152,9 +222,13 @@ class CourierGroupedOrder {
   double? get customerLng => orders.first.customerLongitude;
 
   bool get isSingle => orders.length == 1;
-  bool get allPickedUp => orders.every((o) => o.deliveryStatusKey == 'picked_up' || o.deliveryStatusKey == 'on_way' || o.deliveryStatusKey == 'delivered');
+  bool get allPickedUp => orders.every((o) =>
+      o.deliveryStatusKey == 'picked_up' ||
+      o.deliveryStatusKey == 'on_way' ||
+      o.deliveryStatusKey == 'delivered');
   bool get isOnWay => orders.any((o) => o.deliveryStatusKey == 'on_way');
-  bool get isDelivered => orders.every((o) => o.deliveryStatusKey == 'delivered');
+  bool get isDelivered =>
+      orders.every((o) => o.deliveryStatusKey == 'delivered');
 }
 
 extension CourierOrderGrouping on List<ActiveOrder> {
@@ -175,8 +249,10 @@ extension CourierOrderGrouping on List<ActiveOrder> {
     }
 
     result.sort((a, b) {
-      final ta = DateTime.tryParse(a.orders.first.createdAt ?? '') ?? DateTime(2000);
-      final tb = DateTime.tryParse(b.orders.first.createdAt ?? '') ?? DateTime(2000);
+      final ta =
+          DateTime.tryParse(a.orders.first.createdAt ?? '') ?? DateTime(2000);
+      final tb =
+          DateTime.tryParse(b.orders.first.createdAt ?? '') ?? DateTime(2000);
       return tb.compareTo(ta);
     });
 
@@ -227,7 +303,8 @@ class DeliveryDashboardScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final appProvider = Provider.of<AppProvider>(context);
-    final groupedIncoming = appProvider.deliveryIncomingOrders.groupForCourier();
+    final groupedIncoming =
+        appProvider.deliveryIncomingOrders.groupForCourier();
     final active = appProvider.deliveryActiveOrders.length;
     final done = appProvider.deliveryCompletedOrders.length;
 
@@ -1293,12 +1370,18 @@ class _DeliveryGroupCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              Icon(isGroup ? CupertinoIcons.square_grid_2x2_fill : CupertinoIcons.bag_fill,
-                  color: AppColors.accent, size: 22),
+              Icon(
+                  isGroup
+                      ? CupertinoIcons.square_grid_2x2_fill
+                      : CupertinoIcons.bag_fill,
+                  color: AppColors.accent,
+                  size: 22),
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
-                  isGroup ? 'مجموعة طلبات ($count)' : 'طلب #${group.orderNumber}',
+                  isGroup
+                      ? 'مجموعة طلبات ($count)'
+                      : 'طلب #${group.orderNumber}',
                   style: const TextStyle(
                       fontWeight: FontWeight.w900,
                       fontFamily: 'Cairo',
@@ -1326,22 +1409,23 @@ class _DeliveryGroupCard extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           ...group.orders.map((order) => Padding(
-            padding: const EdgeInsets.only(bottom: 8),
-            child: Row(
-              children: [
-                const Icon(Icons.store, size: 16, color: Colors.grey),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    '${order.merchantStoreName ?? 'متجر'} · ${order.itemsNameAr}',
-                    style: const TextStyle(fontFamily: 'Cairo', fontSize: 13),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Row(
+                  children: [
+                    const Icon(Icons.store, size: 16, color: Colors.grey),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        '${order.merchantStoreName ?? 'متجر'} · ${order.itemsNameAr}',
+                        style:
+                            const TextStyle(fontFamily: 'Cairo', fontSize: 13),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
                 ),
-              ],
-            ),
-          )),
+              )),
           const Divider(height: 24),
           Row(
             children: [
@@ -1482,10 +1566,14 @@ class _ActiveDeliveryGroupCard extends StatelessWidget {
           if (!allPicked) ...[
             const Text(
               'مرحلة التجميع (Pick-up):',
-              style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, color: Colors.blueGrey),
+              style: TextStyle(
+                  fontFamily: 'Cairo',
+                  fontWeight: FontWeight.bold,
+                  color: Colors.blueGrey),
             ),
             const SizedBox(height: 10),
-            ...group.orders.map((order) => _buildPickupStep(context, order, appProvider)),
+            ...group.orders
+                .map((order) => _buildPickupStep(context, order, appProvider)),
           ] else ...[
             _buildDeliveryToCustomerSection(context, appProvider),
           ],
@@ -1503,7 +1591,8 @@ class _ActiveDeliveryGroupCard extends StatelessWidget {
         Container(
           padding: const EdgeInsets.all(10),
           decoration: BoxDecoration(
-            color: (allPicked ? Colors.blue : AppColors.accent).withValues(alpha: 0.1),
+            color: (allPicked ? Colors.blue : AppColors.accent)
+                .withValues(alpha: 0.1),
             shape: BoxShape.circle,
           ),
           child: Icon(
@@ -1519,11 +1608,15 @@ class _ActiveDeliveryGroupCard extends StatelessWidget {
             children: [
               Text(
                 allPicked ? 'في الطريق للزبون' : 'جاري تجميع الطلبات',
-                style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w900, fontSize: 16),
+                style: const TextStyle(
+                    fontFamily: 'Cairo',
+                    fontWeight: FontWeight.w900,
+                    fontSize: 16),
               ),
               Text(
                 'مجموعة #${group.orderNumber}',
-                style: const TextStyle(fontFamily: 'Cairo', fontSize: 12, color: Colors.grey),
+                style: const TextStyle(
+                    fontFamily: 'Cairo', fontSize: 12, color: Colors.grey),
               ),
             ],
           ),
@@ -1532,25 +1625,31 @@ class _ActiveDeliveryGroupCard extends StatelessWidget {
     );
   }
 
-  Widget _buildPickupStep(BuildContext context, ActiveOrder order, AppProvider provider) {
+  Widget _buildPickupStep(
+      BuildContext context, ActiveOrder order, AppProvider provider) {
     final picked = order.deliveryStatusKey == 'picked_up' ||
-                   order.deliveryStatusKey == 'on_way' ||
-                   order.deliveryStatusKey == 'delivered';
+        order.deliveryStatusKey == 'on_way' ||
+        order.deliveryStatusKey == 'delivered';
 
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: picked ? Colors.green.withValues(alpha: 0.03) : const Color(0xFFF9FAFB),
+        color: picked
+            ? Colors.green.withValues(alpha: 0.03)
+            : const Color(0xFFF9FAFB),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: picked ? Colors.green.withValues(alpha: 0.2) : Colors.grey.shade200),
+        border: Border.all(
+            color: picked
+                ? Colors.green.withValues(alpha: 0.2)
+                : Colors.grey.shade200),
       ),
       child: Column(
         children: [
           Row(
             children: [
               Icon(picked ? Icons.check_circle : Icons.radio_button_unchecked,
-                   color: picked ? Colors.green : Colors.grey),
+                  color: picked ? Colors.green : Colors.grey),
               const SizedBox(width: 10),
               Expanded(
                 child: Column(
@@ -1564,14 +1663,19 @@ class _ActiveDeliveryGroupCard extends StatelessWidget {
                         decoration: picked ? TextDecoration.lineThrough : null,
                       ),
                     ),
-                    Text(order.itemsNameAr, style: const TextStyle(fontFamily: 'Cairo', fontSize: 11, color: Colors.grey)),
+                    Text(order.itemsNameAr,
+                        style: const TextStyle(
+                            fontFamily: 'Cairo',
+                            fontSize: 11,
+                            color: Colors.grey)),
                   ],
                 ),
               ),
               if (!picked)
                 CupertinoButton(
                   padding: EdgeInsets.zero,
-                  onPressed: () => AppHelpers.makePhoneCall(order.merchantPhone ?? ''),
+                  onPressed: () =>
+                      AppHelpers.makePhoneCall(order.merchantPhone ?? ''),
                   child: const Icon(CupertinoIcons.phone_fill, size: 20),
                 ),
             ],
@@ -1586,7 +1690,11 @@ class _ActiveDeliveryGroupCard extends StatelessWidget {
                     color: Colors.blueGrey.shade700,
                     borderRadius: BorderRadius.circular(8),
                     onPressed: () => _openMapToMerchant(context, order),
-                    child: const Text('موقع المتجر', style: TextStyle(fontFamily: 'Cairo', fontSize: 12, color: Colors.white)),
+                    child: const Text('موقع المتجر',
+                        style: TextStyle(
+                            fontFamily: 'Cairo',
+                            fontSize: 12,
+                            color: Colors.white)),
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -1596,7 +1704,11 @@ class _ActiveDeliveryGroupCard extends StatelessWidget {
                     color: AppColors.accent,
                     borderRadius: BorderRadius.circular(8),
                     onPressed: () => provider.markDeliveryPickedUp(order.id),
-                    child: const Text('تم الاستلام', style: TextStyle(fontFamily: 'Cairo', fontSize: 12, color: Colors.white)),
+                    child: const Text('تم الاستلام',
+                        style: TextStyle(
+                            fontFamily: 'Cairo',
+                            fontSize: 12,
+                            color: Colors.white)),
                   ),
                 ),
               ],
@@ -1607,14 +1719,18 @@ class _ActiveDeliveryGroupCard extends StatelessWidget {
     );
   }
 
-  Widget _buildDeliveryToCustomerSection(BuildContext context, AppProvider provider) {
+  Widget _buildDeliveryToCustomerSection(
+      BuildContext context, AppProvider provider) {
     final onWay = group.isOnWay;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const Text(
           'مرحلة التسليم للزبون:',
-          style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, color: Colors.blue),
+          style: TextStyle(
+              fontFamily: 'Cairo',
+              fontWeight: FontWeight.bold,
+              color: Colors.blue),
         ),
         const SizedBox(height: 12),
         Container(
@@ -1633,12 +1749,14 @@ class _ActiveDeliveryGroupCard extends StatelessWidget {
                   Expanded(
                     child: Text(
                       group.customerName,
-                      style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold),
+                      style: const TextStyle(
+                          fontFamily: 'Cairo', fontWeight: FontWeight.bold),
                     ),
                   ),
                   CupertinoButton(
                     padding: EdgeInsets.zero,
-                    onPressed: () => AppHelpers.makePhoneCall(group.customerPhone),
+                    onPressed: () =>
+                        AppHelpers.makePhoneCall(group.customerPhone),
                     child: const Icon(CupertinoIcons.phone_fill, size: 22),
                   ),
                 ],
@@ -1646,10 +1764,15 @@ class _ActiveDeliveryGroupCard extends StatelessWidget {
               const SizedBox(height: 8),
               Row(
                 children: [
-                  const Icon(CupertinoIcons.location_solid, size: 16, color: Colors.grey),
+                  const Icon(CupertinoIcons.location_solid,
+                      size: 16, color: Colors.grey),
                   const SizedBox(width: 8),
                   Expanded(
-                    child: Text(group.customerAddress, style: const TextStyle(fontFamily: 'Cairo', fontSize: 13, color: Colors.grey)),
+                    child: Text(group.customerAddress,
+                        style: const TextStyle(
+                            fontFamily: 'Cairo',
+                            fontSize: 13,
+                            color: Colors.grey)),
                   ),
                 ],
               ),
@@ -1660,8 +1783,11 @@ class _ActiveDeliveryGroupCard extends StatelessWidget {
                   child: CupertinoButton(
                     color: Colors.blue,
                     borderRadius: BorderRadius.circular(12),
-                    onPressed: () => provider.markDeliveryOnTheWay(group.orders.first.id),
-                    child: const Text('بدء التحرك للزبون', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
+                    onPressed: () =>
+                        provider.markDeliveryOnTheWay(group.orders.first.id),
+                    child: const Text('بدء التحرك للزبون',
+                        style: TextStyle(
+                            fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
                   ),
                 )
               else
@@ -1673,7 +1799,9 @@ class _ActiveDeliveryGroupCard extends StatelessWidget {
                         padding: EdgeInsets.zero,
                         borderRadius: BorderRadius.circular(12),
                         onPressed: () => _openMapToCustomer(context),
-                        child: const Text('خرائط الزبون', style: TextStyle(fontFamily: 'Cairo', fontSize: 14)),
+                        child: const Text('خرائط الزبون',
+                            style:
+                                TextStyle(fontFamily: 'Cairo', fontSize: 14)),
                       ),
                     ),
                     const SizedBox(width: 10),
@@ -1683,8 +1811,13 @@ class _ActiveDeliveryGroupCard extends StatelessWidget {
                         color: Colors.green,
                         padding: EdgeInsets.zero,
                         borderRadius: BorderRadius.circular(12),
-                        onPressed: () => provider.markDeliveryCompleted(group.orders.first.id),
-                        child: const Text('تسليم وتحصيل الكاش', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 14)),
+                        onPressed: () => provider
+                            .markDeliveryCompleted(group.orders.first.id),
+                        child: const Text('تسليم وتحصيل الكاش',
+                            style: TextStyle(
+                                fontFamily: 'Cairo',
+                                fontWeight: FontWeight.bold,
+                                fontSize: 14)),
                       ),
                     ),
                   ],
@@ -1702,11 +1835,16 @@ class _ActiveDeliveryGroupCard extends StatelessWidget {
       children: [
         const Text(
           'المبلغ الإجمالي للتحصيل:',
-          style: TextStyle(fontFamily: 'Cairo', fontSize: 14, color: Colors.grey),
+          style:
+              TextStyle(fontFamily: 'Cairo', fontSize: 14, color: Colors.grey),
         ),
         Text(
           '${group.totalPrice.toPrice()} د.ع',
-          style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w900, fontSize: 20, color: Colors.green),
+          style: const TextStyle(
+              fontFamily: 'Cairo',
+              fontWeight: FontWeight.w900,
+              fontSize: 20,
+              color: Colors.green),
         ),
       ],
     );

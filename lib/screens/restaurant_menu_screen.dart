@@ -512,9 +512,7 @@ class _RestaurantMenuScreenState extends State<RestaurantMenuScreen>
             right: 12,
             child: Row(
               children: [
-                ServiceBackButton(
-                  onPressed: () => Navigator.of(context).maybePop(),
-                ),
+                const _ModernBackButton(),
                 const Spacer(),
                 _CircleNavButton(
                   icon: isRestaurantFavorite
@@ -1037,17 +1035,19 @@ class _MenuItemCard extends StatelessWidget {
                   Row(
                     children: [
                       Expanded(
-                        child: Text(
-                          '${item.price.toPrice()} د.ع',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontFamily: 'Cairo',
-                            fontWeight: FontWeight.w900,
-                            fontSize: 16,
-                            color: _brandRed,
-                          ),
-                        ),
+                        child: item.price > 0
+                            ? Text(
+                                '${item.price.toPrice()} د.ع',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontFamily: 'Cairo',
+                                  fontWeight: FontWeight.w900,
+                                  fontSize: 16,
+                                  color: _brandRed,
+                                ),
+                              )
+                            : const SizedBox.shrink(),
                       ),
                       const SizedBox(width: 8),
                       SizedBox(
@@ -1445,6 +1445,50 @@ class _EmptySearchState extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// زر رجوع عصري وجميل مع تأثيرات بصرية
+class _ModernBackButton extends StatelessWidget {
+  final bool hide;
+
+  const _ModernBackButton({this.hide = false});
+
+  @override
+  Widget build(BuildContext context) {
+    if (hide) return const SizedBox.shrink();
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => Navigator.of(context).maybePop(),
+        borderRadius: BorderRadius.circular(16),
+        child: Ink(
+          width: 48,
+          height: 48,
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.94),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: _brandRed.withValues(alpha: 0.15),
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: _brandRed.withValues(alpha: 0.08),
+                blurRadius: 12,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Center(
+            child: Icon(
+              Icons.arrow_forward_ios_rounded,
+              size: 20,
+              color: _brandRed,
+            ),
+          ),
+        ),
       ),
     );
   }

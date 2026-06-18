@@ -1,5 +1,6 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../models/app_notification.dart';
@@ -67,6 +68,51 @@ class NotificationsScreen extends StatelessWidget {
   }
 }
 
+/// تحويل milliseconds إلى نص عربي للوقت والتاريخ
+String _formatNotificationTime(int createdAtMs) {
+  final date = DateTime.fromMillisecondsSinceEpoch(createdAtMs);
+  final now = DateTime.now();
+  final diff = now.difference(date);
+
+  // أقل من دقيقة
+  if (diff.inSeconds < 60) {
+    return 'الآن';
+  }
+
+  // أقل من ساعة
+  if (diff.inMinutes < 60) {
+    final m = diff.inMinutes;
+    if (m == 1) return 'منذ دقيقة';
+    return 'منذ $m دقائق';
+  }
+
+  // أقل من 24 ساعة
+  if (diff.inHours < 24) {
+    final h = diff.inHours;
+    if (h == 1) return 'منذ ساعة';
+    return 'منذ $h ساعات';
+  }
+
+  // أقل من 48 ساعة (أمس)
+  if (diff.inHours < 48) {
+    final time = DateFormat('h:mm a', 'en').format(date);
+    return 'أمس $time';
+  }
+
+  // أقل من 7 أيام
+  if (diff.inDays < 7) {
+    final dayNames = ['الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت', 'الأحد'];
+    final dayName = dayNames[date.weekday - 1];
+    final time = DateFormat('h:mm a', 'en').format(date);
+    return '$dayName $time';
+  }
+
+  // تاريخ كامل
+  final formatted = DateFormat('d MMMM yyyy', 'ar').format(date);
+  final time = DateFormat('h:mm a', 'en').format(date);
+  return '$formatted $time';
+}
+
 class _NotificationTile extends StatelessWidget {
   final AppNotificationItem item;
 
@@ -75,6 +121,7 @@ class _NotificationTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final provider = context.read<AppProvider>();
+    final timeText = _formatNotificationTime(item.createdAtMs);
     return GestureDetector(
       onTap: () {
         if (!item.read) provider.markNotificationRead(item.id);
@@ -93,6 +140,7 @@ class _NotificationTile extends StatelessWidget {
           ),
         ),
         child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             CircleAvatar(
               backgroundColor: item.read
@@ -127,6 +175,25 @@ class _NotificationTile extends StatelessWidget {
                       fontFamily: 'Cairo',
                     ),
                   ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Icon(
+                        CupertinoIcons.time,
+                        size: 14,
+                        color: Colors.grey.shade400,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        timeText,
+                        style: TextStyle(
+                          color: Colors.grey.shade400,
+                          fontSize: 12,
+                          fontFamily: 'Cairo',
+                        ),
+                      ),
+                    ],
+                  ),
                 ],
               ),
             ),
@@ -134,6 +201,7 @@ class _NotificationTile extends StatelessWidget {
               Container(
                 width: 8,
                 height: 8,
+                margin: const EdgeInsets.only(top: 4),
                 decoration: const BoxDecoration(
                   color: Color(0xFFF5A01D),
                   shape: BoxShape.circle,
