@@ -2407,6 +2407,7 @@ async function saveMerchantProduct(phone, data = {}) {
   if (!merchantProfile) {
     throw new Error('Merchant profile not found.');
   }
+  // إذا لم يعدل التاجر اسم المتجر بعد، نأخذه من البيانات الواردة (للمهنيين بشكل خاص)
   const payload = {
     id:
       data.id && String(data.id).trim().length > 0
@@ -3626,7 +3627,7 @@ async function toggleMerchantApprovalStatus(adminPhone, merchantPhone, isApprove
 
   const phoneKey = await resolvePhoneKey(merchantPhone);
   const profile = await getMerchantProfile(phoneKey);
-  if (!profile || !merchantProfileDisplayName(profile)) {
+  if (!profile) {
     throw new Error('Merchant profile not found.');
   }
 
@@ -3679,7 +3680,7 @@ async function rejectMerchantApplication(
 
   const phoneKey = await resolvePhoneKey(merchantPhone);
   const profile = await getMerchantProfile(phoneKey);
-  if (!profile || !merchantProfileDisplayName(profile)) {
+  if (!profile) {
     throw new Error('Merchant profile not found.');
   }
 
