@@ -21,7 +21,8 @@ dependencies:
   url_launcher: ^6.3.0
   package_info_plus: ^8.3.0
   http: ^1.2.2
-  mapbox_maps_flutter: any
+  flutter_map: ^7.0.2
+  latlong2: ^0.9.1
   geolocator: ^13.0.2
   firebase_core: ^3.15.2
   firebase_messaging: ^15.2.10

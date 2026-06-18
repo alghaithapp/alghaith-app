@@ -2,9 +2,10 @@ import 'dart:convert';
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_map/flutter_map.dart';
 import 'package:geolocator/geolocator.dart' as geo;
 import 'package:http/http.dart' as http;
-import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
+import 'package:latlong2/latlong.dart';
 
 import '../core/config/app_config.dart';
 
@@ -37,10 +38,10 @@ class LocationPickerScreen extends StatefulWidget {
 }
 
 class _LocationPickerScreenState extends State<LocationPickerScreen> {
-  static final Position _defaultCenter = Position(44.3661, 33.3152);
+  static final LatLng _defaultCenter = LatLng(33.3152, 44.3661);
 
-  MapboxMap? _map;
-  Position _center = _defaultCenter;
+  final MapController _mapController = MapController();
+  LatLng _center = _defaultCenter;
   bool _isResolving = false;
   String _resolvedAddress = '';
 
@@ -48,32 +49,32 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
   void initState() {
     super.initState();
     if (widget.initialLatitude != null && widget.initialLongitude != null) {
-      _center = Position(widget.initialLongitude!, widget.initialLatitude!);
+      _center = LatLng(widget.initialLatitude!, widget.initialLongitude!);
     }
   }
 
-  Future<void> _onMapCreated(MapboxMap map) async {
-    _map = map;
+  @override
+  void dispose() {
+    _mapController.dispose();
+    super.dispose();
   }
 
-  Future<void> _syncCenterFromMap({bool clearResolvedAddress = false}) async {
-    final map = _map;
-    if (map == null) return;
-    try {
-      final state = await map.getCameraState();
-      final center = state.center.coordinates;
+  void _onMapEvent(MapEvent event) {
+    if (event is MapEventFlingAnimationEnd ||
+        event is MapEventDragEnd) {
+      final center = _mapController.camera.center;
       if (!mounted) return;
       setState(() {
-        _center = Position(center.lng, center.lat);
-        if (clearResolvedAddress) {
+        _center = center;
+        if (_resolvedAddress.isNotEmpty) {
           _resolvedAddress = '';
         }
       });
-    } catch (_) {}
+    }
   }
 
   String get _centerSummary =>
-      '${_center.lat.toStringAsFixed(5)}, ${_center.lng.toStringAsFixed(5)}';
+      '${_center.latitude.toStringAsFixed(5)}, ${_center.longitude.toStringAsFixed(5)}';
 
   Future<String> _reverseGeocode(double lat, double lng) async {
     if (!AppConfig.isMapboxConfigured) {
@@ -109,10 +110,9 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
 
   Future<void> _confirmLocation() async {
     setState(() => _isResolving = true);
-    await _syncCenterFromMap();
     final address = await _reverseGeocode(
-      _center.lat.toDouble(),
-      _center.lng.toDouble(),
+      _center.latitude,
+      _center.longitude,
     );
     if (!mounted) return;
     setState(() {
@@ -122,8 +122,8 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
     Navigator.of(context).pop(
       PickedLocation(
         address: address,
-        latitude: _center.lat.toDouble(),
-        longitude: _center.lng.toDouble(),
+        latitude: _center.latitude,
+        longitude: _center.longitude,
       ),
     );
   }
@@ -144,20 +144,11 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
         accuracy: geo.LocationAccuracy.high,
       ),
     );
-    final target = Position(current.longitude, current.latitude);
+    final target = LatLng(current.latitude, current.longitude);
     setState(() {
       _center = target;
-      if (!AppConfig.isMapboxConfigured) {
-        _resolvedAddress =
-            '${target.lat.toStringAsFixed(5)}, ${target.lng.toStringAsFixed(5)}';
-      }
     });
-    await _map?.setCamera(
-      CameraOptions(
-        center: Point(coordinates: target),
-        zoom: 15.0,
-      ),
-    );
+    _mapController.move(target, 15.0);
   }
 
   @override
@@ -175,34 +166,32 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
             Expanded(
               child: Stack(
                 children: [
-                  if (AppConfig.isMapboxConfigured)
-                    Positioned.fill(
-                      child: MapWidget(
-                        styleUri: 'mapbox://styles/mapbox/streets-v12',
-                        cameraOptions: CameraOptions(
-                          center: Point(coordinates: _center),
-                          zoom: 14.0,
-                        ),
-                        onMapCreated: _onMapCreated,
-                        onCameraChangeListener: (_) {
-                          if (_resolvedAddress.isNotEmpty) {
-                            setState(() => _resolvedAddress = '');
-                          }
-                        },
-                        onMapIdleListener: (_) {
-                          _syncCenterFromMap();
-                        },
+                  // الخريطة — OpenStreetMap مجاناً بدون مفتاح
+                  Positioned.fill(
+                    child: FlutterMap(
+                      mapController: _mapController,
+                      options: MapOptions(
+                        initialCenter: _center,
+                        initialZoom: 14.0,
+                        onMapEvent: _onMapEvent,
                       ),
-                    )
-                  else
-                    const Positioned.fill(
-                      child: _MapUnavailableNotice(),
+                      children: [
+                        TileLayer(
+                          urlTemplate:
+                              'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+                          subdomains: const ['a', 'b', 'c'],
+                          userAgentPackageName: 'com.alghaith.app',
+                        ),
+                      ],
                     ),
+                  ),
+                  // الدبوس في منتصف الخريطة
                   const IgnorePointer(
                     child: Center(
                       child: _CenterLocationPin(),
                     ),
                   ),
+                  // زر الموقع الحالي
                   Positioned(
                     right: 12,
                     bottom: 12,
@@ -226,6 +215,7 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
                 ],
               ),
             ),
+            // الشريط السفلي
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(14),
@@ -267,49 +257,6 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
             ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-class _MapUnavailableNotice extends StatelessWidget {
-  const _MapUnavailableNotice();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      color: const Color(0xFFE8EEF0),
-      padding: const EdgeInsets.symmetric(horizontal: 24),
-      alignment: Alignment.center,
-      child: const Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.map_outlined, size: 52, color: Color(0xFF607D8B)),
-          SizedBox(height: 14),
-          Text(
-            'الخريطة غير متاحة',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontFamily: 'Cairo',
-              fontWeight: FontWeight.w900,
-              fontSize: 18,
-              color: Color(0xFF1A1A1A),
-            ),
-          ),
-          SizedBox(height: 8),
-          Text(
-            'مفتاح Mapbox (pk.) غير مضبوط.\n'
-            'أضف MAPBOX_PUBLIC_TOKEN في Codemagic أو على خادم Railway.\n'
-            'يمكنك مؤقتاً استخدام زر «موقعي» ثم «تأكيد» للإحداثيات فقط.',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontFamily: 'Cairo',
-              fontSize: 13,
-              height: 1.5,
-              color: Color(0xFF5A6B6E),
-            ),
-          ),
-        ],
       ),
     );
   }
