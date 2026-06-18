@@ -1275,3 +1275,26 @@ tbody tr:hover {
     padding: 22px;
   }
 }
+
+/* Section dividers for admin lists */
+.section-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 0 8px;
+  margin: 0;
+}
+.section-divider::before,
+.section-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: #e5e7eb;
+}
+.section-divider span {
+  font-size: 13px;
+  font-weight: 700;
+  font-family: 'system-ui', sans-serif;
+  white-space: nowrap;
+  color: #6b7280;
+}
