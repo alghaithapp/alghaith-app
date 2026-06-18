@@ -68,10 +68,6 @@ async function sendPushToTokens(
     }),
     android: {
       priority: 'high',
-      notification: {
-        channelId: ANDROID_NOTIFICATION_CHANNEL_ID,
-        sound: ANDROID_NOTIFICATION_SOUND,
-      },
     },
     apns: {
       headers: {
@@ -87,10 +83,20 @@ async function sendPushToTokens(
     },
   };
 
+  // إشعار النظام يُضاف فقط لبعض الإشعارات المهمة (مثل تغيير الحساب).
+  // باقي الإشعارات ترسل data-only، والتطبيق يعرضها بنفسه
+  // عبر flutter_local_notifications بشكل صحيح مع العنوان والمحتوى.
   if (showSystemBanner && safeBody) {
     message.notification = {
       title: safeTitle,
       body: safeBody,
+    };
+    message.android = {
+      ...message.android,
+      notification: {
+        channelId: ANDROID_NOTIFICATION_CHANNEL_ID,
+        sound: ANDROID_NOTIFICATION_SOUND,
+      },
     };
   }
 
