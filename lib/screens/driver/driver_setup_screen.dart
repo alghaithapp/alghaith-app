@@ -13,17 +13,17 @@ class DriverSetupScreen extends StatefulWidget {
 
 class _DriverSetupScreenState extends State<DriverSetupScreen> {
   final TextEditingController _nameController =
-      TextEditingController(text: 'السائق التجريبي');
+      TextEditingController();
   final TextEditingController _phoneController =
-      TextEditingController(text: '07700000000');
+      TextEditingController();
   final TextEditingController _vehicleController =
-      TextEditingController(text: 'تويوتا كامري');
+      TextEditingController();
   final TextEditingController _plateController =
-      TextEditingController(text: '12345 بغداد');
+      TextEditingController();
   final TextEditingController _areaController =
-      TextEditingController(text: 'بغداد - المنصور');
+      TextEditingController();
   final TextEditingController _notesController =
-      TextEditingController(text: 'جاهز لاستلام طلبات التكسي القريبة');
+      TextEditingController();
 
   @override
   void dispose() {

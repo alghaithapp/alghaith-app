@@ -9,6 +9,7 @@ import '../../core/catalog/marketplace_catalog.dart';
 import '../../providers/app_provider.dart';
 import '../../utils/platform_key.dart';
 import '../../utils/extensions.dart';
+import '../../utils/account_role_switch.dart';
 import '../../widgets/app_image.dart';
 import '../../widgets/app_logo.dart';
 
@@ -26,7 +27,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 4, vsync: this);
+    _tabController = TabController(length: 5, vsync: this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _refreshAll();
     });
@@ -37,6 +38,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
     provider.refreshAdminReports();
     provider.refreshAllMerchants();
     provider.refreshAllCouriers();
+    provider.refreshAllDrivers();
     provider.refreshHomeCategoriesConfig();
   }
 
@@ -52,6 +54,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
     final reports = provider.adminReports ?? const {};
     final merchants = provider.allMerchants;
     final couriers = provider.allCouriers;
+    final drivers = provider.allDrivers;
 
     final pendingMerchants = merchants.where((m) =>
       m['isApproved'] != true && (m['approvalStatus']?.toString() ?? 'pending') == 'pending'
@@ -59,6 +62,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
 
     final pendingCouriers = couriers.where((c) =>
       c['isApproved'] != true && (c['approvalStatus']?.toString() ?? 'pending') == 'pending'
+    ).length;
+
+    final pendingDrivers = drivers.where((d) =>
+      d['isApproved'] != true && (d['approvalStatus']?.toString() ?? 'pending') == 'pending'
     ).length;
 
     return Scaffold(
@@ -131,6 +138,18 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                 ],
               ),
             ),
+            Tab(
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text('السائقين'),
+                  if (pendingDrivers > 0) ...[
+                    const SizedBox(width: 6),
+                    _CountBadge(count: pendingDrivers, color: Colors.red),
+                  ]
+                ],
+              ),
+            ),
             const Tab(text: 'الأقسام', icon: Icon(Icons.grid_view_rounded, size: 20)),
           ],
         ),
@@ -141,6 +160,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
           _OverviewTab(reports: reports),
           const _MerchantManagementTab(),
           const _CourierManagementTab(),
+          const _DriverManagementTab(),
           const _HomeCategoriesTab(),
         ],
       ),
@@ -600,17 +620,26 @@ class _MerchantManagementTabState extends State<_MerchantManagementTab> {
 
   void _handleAction(AppProvider provider, Map m, String action) async {
     final phone = m['phone']?.toString() ?? '';
-    if (action == 'approve') {
-      setState(() { _busyMerchantPhone = phone; _busyAction = 'approval'; });
-      await provider.toggleMerchantApproval(phone, true);
-    } else if (action == 'reject') {
-      _showRejectDialog(context, provider, m);
-    } else if (action == 'freeze') {
-      setState(() { _busyMerchantPhone = phone; _busyAction = 'freeze'; });
-      await provider.toggleMerchantFrozen(phone, !(m['isFrozen'] == true));
-    } else if (action == 'bazaar') {
-      setState(() { _busyMerchantPhone = phone; _busyAction = 'bazaar'; });
-      await provider.toggleMerchantBazaarMember(phone, !(m['isBazaarMember'] == true));
+    try {
+      if (action == 'approve') {
+        setState(() { _busyMerchantPhone = phone; _busyAction = 'approval'; });
+        await provider.toggleMerchantApproval(phone, true);
+      } else if (action == 'reject') {
+        _showRejectDialog(context, provider, m);
+        return;
+      } else if (action == 'freeze') {
+        setState(() { _busyMerchantPhone = phone; _busyAction = 'freeze'; });
+        await provider.toggleMerchantFrozen(phone, !(m['isFrozen'] == true));
+      } else if (action == 'bazaar') {
+        setState(() { _busyMerchantPhone = phone; _busyAction = 'bazaar'; });
+        await provider.toggleMerchantBazaarMember(phone, !(m['isBazaarMember'] == true));
+      }
+    } catch (error) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('فشلت العملية: $error', style: const TextStyle(fontFamily: 'Cairo'))),
+        );
+      }
     }
     setState(() { _busyMerchantPhone = null; _busyAction = null; });
   }
@@ -865,13 +894,57 @@ class _CourierManagementTabState extends State<_CourierManagementTab> {
 
   void _handleAction(AppProvider provider, Map c, String action) async {
     final phone = c['phone']?.toString() ?? '';
-    setState(() => _busyCourierPhone = phone);
-    if (action == 'approve') {
-      await provider.toggleCourierApproval(phone, true);
-    } else if (action == 'stop') {
-      await provider.toggleCourierApproval(phone, false);
+    try {
+      if (action == 'approve') {
+        setState(() => _busyCourierPhone = phone);
+        await provider.toggleCourierApproval(phone, true);
+      } else if (action == 'stop') {
+        setState(() => _busyCourierPhone = phone);
+        await provider.toggleCourierApproval(phone, false);
+      } else if (action == 'reject') {
+        _showRejectDialog(context, provider, c);
+        return;
+      }
+    } catch (error) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('فشلت العملية: $error', style: const TextStyle(fontFamily: 'Cairo'))),
+        );
+      }
     }
     setState(() => _busyCourierPhone = null);
+  }
+
+  Future<void> _showRejectDialog(BuildContext context, AppProvider provider, Map courier) async {
+    final controller = TextEditingController();
+    final phone = courier['phone']?.toString() ?? '';
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('رفض طلب المندوب', style: TextStyle(fontFamily: 'Cairo')),
+        content: TextField(
+          controller: controller,
+          decoration: const InputDecoration(labelText: 'سبب الرفض'),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('إلغاء')),
+          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('رفض')),
+        ],
+      ),
+    );
+    if (confirmed == true && controller.text.isNotEmpty) {
+      try {
+        await provider.rejectCourierApplication(phone, 'custom', rejectionMessageAr: controller.text);
+      } catch (error) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('فشل الرفض: $error', style: const TextStyle(fontFamily: 'Cairo'))),
+          );
+        }
+      }
+    }
+    setState(() => _busyCourierPhone = null);
+    controller.dispose();
   }
 }
 
@@ -901,13 +974,215 @@ class _ModernCourierCard extends StatelessWidget {
           ),
           if (isBusy)
             const CupertinoActivityIndicator()
+          else if (!isApproved)
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _QuickActionBtn(
+                  label: 'تفعيل', icon: Icons.check, color: Colors.green,
+                  onTap: () => onAction('approve'),
+                ),
+                const SizedBox(width: 8),
+                _QuickActionBtn(
+                  label: 'رفض', icon: Icons.close, color: Colors.red,
+                  onTap: () => onAction('reject'),
+                ),
+              ],
+            )
           else
             _QuickActionBtn(
-              label: isApproved ? 'إيقاف' : 'تفعيل',
-              icon: isApproved ? Icons.block : Icons.check,
-              color: isApproved ? Colors.red : Colors.green,
-              onTap: () => onAction(isApproved ? 'stop' : 'approve'),
+              label: 'إيقاف', icon: Icons.block, color: Colors.red,
+              onTap: () => onAction('stop'),
             ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DriverManagementTab extends StatefulWidget {
+  const _DriverManagementTab();
+  @override
+  State<_DriverManagementTab> createState() => _DriverManagementTabState();
+}
+
+class _DriverManagementTabState extends State<_DriverManagementTab> {
+  String? _busyDriverPhone;
+  String? _busyAction;
+
+  @override
+  Widget build(BuildContext context) {
+    final provider = context.watch<AppProvider>();
+    final drivers = provider.allDrivers;
+    final pending = drivers.where((d) =>
+      d['isApproved'] != true && (d['approvalStatus']?.toString() ?? 'pending') == 'pending'
+    ).toList();
+    final approved = drivers.where((d) => d['isApproved'] == true).toList();
+
+    return RefreshIndicator(
+      onRefresh: () async => provider.refreshAllDrivers(),
+      child: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          if (pending.isNotEmpty) ...[
+            const _SectionHeader(title: 'سائقون بانتظار التفعيل', color: Colors.orange),
+            const SizedBox(height: 12),
+            ...pending.map((d) => _ModernDriverCard(
+              driver: d,
+              isBusy: _busyDriverPhone == d['phone'],
+              busyAction: _busyAction,
+              onAction: (action) => _handleAction(provider, d, action),
+            )),
+            const SizedBox(height: 24),
+          ],
+          const _SectionHeader(title: 'السائقون النشطون', color: Colors.blue),
+          const SizedBox(height: 12),
+          if (approved.isEmpty)
+            const _EmptyState(text: 'لا يوجد سائقون معتمدون حالياً')
+          else
+            ...approved.map((d) => _ModernDriverCard(
+              driver: d,
+              isBusy: _busyDriverPhone == d['phone'],
+              busyAction: _busyAction,
+              onAction: (action) => _handleAction(provider, d, action),
+            )),
+          const SizedBox(height: 100),
+        ],
+      ),
+    );
+  }
+
+  void _handleAction(AppProvider provider, Map d, String action) async {
+    final phone = d['phone']?.toString() ?? '';
+    try {
+      if (action == 'approve') {
+        setState(() { _busyDriverPhone = phone; _busyAction = 'approval'; });
+        await provider.toggleDriverApproval(phone, true);
+      } else if (action == 'stop') {
+        setState(() { _busyDriverPhone = phone; _busyAction = 'stop'; });
+        await provider.toggleDriverApproval(phone, false);
+      } else if (action == 'reject') {
+        _showRejectDialog(context, provider, d);
+        return;
+      }
+    } catch (error) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('فشلت العملية: $error', style: const TextStyle(fontFamily: 'Cairo'))),
+        );
+      }
+    }
+    setState(() { _busyDriverPhone = null; _busyAction = null; });
+  }
+
+  Future<void> _showRejectDialog(BuildContext context, AppProvider provider, Map driver) async {
+    final controller = TextEditingController();
+    final phone = driver['phone']?.toString() ?? '';
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('رفض طلب السائق', style: TextStyle(fontFamily: 'Cairo')),
+        content: TextField(
+          controller: controller,
+          decoration: const InputDecoration(labelText: 'سبب الرفض'),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('إلغاء')),
+          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('رفض')),
+        ],
+      ),
+    );
+    if (confirmed == true && controller.text.isNotEmpty) {
+      try {
+        await provider.rejectDriverApplication(phone, 'custom', rejectionMessageAr: controller.text);
+      } catch (error) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('فشل الرفض: $error', style: const TextStyle(fontFamily: 'Cairo'))),
+          );
+        }
+      }
+    }
+    setState(() { _busyDriverPhone = null; _busyAction = null; });
+    controller.dispose();
+  }
+}
+
+class _ModernDriverCard extends StatelessWidget {
+  final Map driver;
+  final bool isBusy;
+  final String? busyAction;
+  final Function(String action) onAction;
+
+  const _ModernDriverCard({
+    required this.driver,
+    required this.isBusy,
+    this.busyAction,
+    required this.onAction,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isApproved = driver['isApproved'] == true;
+    final name = driver['name'] ?? 'سائق';
+    final phone = driver['phone'] ?? '';
+    final vehicle = driver['vehicle'] ?? '';
+    final plate = driver['plate'] ?? '';
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFEEEEEE)),
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              const CircleAvatar(
+                backgroundColor: Color(0xFFF0F2F5),
+                child: Icon(Icons.local_taxi_rounded, size: 20, color: Colors.blueGrey),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text('$name', style: const TextStyle(fontWeight: FontWeight.bold, fontFamily: 'Cairo')),
+                  Text('$phone', style: const TextStyle(fontSize: 11, color: Colors.grey, fontFamily: 'Cairo')),
+                  if (vehicle.isNotEmpty)
+                    Text('$vehicle | $plate', style: const TextStyle(fontSize: 10, color: Colors.grey, fontFamily: 'Cairo')),
+                ]),
+              ),
+              _StatusBadge(
+                label: isApproved ? 'مفعّل' : (driver['approvalStatus'] == 'rejected' ? 'مرفوض' : 'معلق'),
+                color: isApproved ? Colors.green : (driver['approvalStatus'] == 'rejected' ? Colors.red : Colors.orange),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              if (!isApproved) ...[
+                Expanded(child: _QuickActionBtn(
+                  label: 'موافقة', icon: Icons.check, color: Colors.green,
+                  onTap: () => onAction('approve'),
+                  isLoading: isBusy && busyAction == 'approval',
+                )),
+                const SizedBox(width: 8),
+                Expanded(child: _QuickActionBtn(
+                  label: 'رفض', icon: Icons.close, color: Colors.red,
+                  onTap: () => onAction('reject'),
+                )),
+              ] else ...[
+                Expanded(child: _QuickActionBtn(
+                  label: 'إيقاف', icon: Icons.block, color: Colors.red,
+                  onTap: () => onAction('stop'),
+                  isLoading: isBusy && busyAction == 'stop',
+                )),
+              ],
+            ],
+          ),
         ],
       ),
     );

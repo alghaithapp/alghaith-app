@@ -4965,6 +4965,9 @@ class AppProvider extends ChangeNotifier {
       List<Map<String, dynamic>>.unmodifiable(_allMerchants);
   List<Map<String, dynamic>> get allCouriers =>
       List<Map<String, dynamic>>.unmodifiable(_allCouriers);
+  List<Map<String, dynamic>> _allDrivers = [];
+  List<Map<String, dynamic>> get allDrivers =>
+      List<Map<String, dynamic>>.unmodifiable(_allDrivers);
 
   Future<void> refreshAllMerchants() async {
     final phone = _trimmedOrNull(_authPhone) ?? _trimmedOrNull(_customerPhone);
@@ -5059,6 +5062,17 @@ class AppProvider extends ChangeNotifier {
       notifyListeners();
     } catch (error) {
       debugPrint('ADMIN_COURIERS_ERROR: $error');
+    }
+  }
+
+  Future<void> refreshAllDrivers() async {
+    final phone = _trimmedOrNull(_authPhone) ?? _trimmedOrNull(_customerPhone);
+    if (phone == null || !SupabaseService.isConfigured) return;
+    try {
+      _allDrivers = await SupabaseService.loadAllDrivers();
+      notifyListeners();
+    } catch (error) {
+      debugPrint('ADMIN_DRIVERS_ERROR: $error');
     }
   }
 
@@ -5164,6 +5178,51 @@ class AppProvider extends ChangeNotifier {
       notifyListeners();
     } catch (error) {
       debugPrint('ADMIN_TOGGLE_COURIER_ERROR: $error');
+      rethrow;
+    }
+  }
+
+  Future<void> toggleDriverApproval(
+    String driverPhone,
+    bool isApproved,
+  ) async {
+    final phone = _trimmedOrNull(_authPhone) ?? _trimmedOrNull(_customerPhone);
+    if (phone == null || !SupabaseService.isConfigured) return;
+    try {
+      await SupabaseService.toggleDriverApprovalStatus(
+        driverPhone: driverPhone,
+        isApproved: isApproved,
+      );
+      final index = _allDrivers
+          .indexWhere((d) => d['phone']?.toString() == driverPhone);
+      if (index != -1) {
+        _allDrivers[index] = Map<String, dynamic>.from(_allDrivers[index]);
+        _allDrivers[index]['isApproved'] = isApproved;
+      }
+      notifyListeners();
+    } catch (error) {
+      debugPrint('ADMIN_TOGGLE_DRIVER_ERROR: $error');
+      rethrow;
+    }
+  }
+
+  Future<void> rejectDriverApplication(
+    String driverPhone,
+    String reasonKey, {
+    String? rejectionMessageAr,
+  }) async {
+    final phone = _trimmedOrNull(_authPhone) ?? _trimmedOrNull(_customerPhone);
+    if (phone == null || !SupabaseService.isConfigured) return;
+    try {
+      await SupabaseService.rejectDriverApplication(
+        driverPhone: driverPhone,
+        reasonKey: reasonKey,
+        rejectionMessageAr: rejectionMessageAr,
+      );
+      await refreshAllDrivers();
+      notifyListeners();
+    } catch (error) {
+      debugPrint('ADMIN_REJECT_DRIVER_ERROR: $error');
       rethrow;
     }
   }

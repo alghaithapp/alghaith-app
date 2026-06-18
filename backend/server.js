@@ -61,6 +61,7 @@ const {
   saveMerchantReview,
   getAllMerchants,
   getAllCouriers,
+  getAllDrivers,
   toggleCourierApprovalStatus,
   rejectCourierApplication,
   toggleMerchantApprovalStatus,
@@ -1519,6 +1520,20 @@ app.get('/db/admin/couriers', async (req, res) => {
   } catch (error) {
     console.error('admin couriers error:', error);
     const message = error?.message || 'Failed to load couriers.';
+    const status = message.includes('Admin access') ? 403 : 500;
+    return res.status(status).json({ message });
+  }
+});
+
+app.get('/db/admin/drivers', async (req, res) => {
+  try {
+    const phone = requireAuthorizedPhone(req, res, { allowMissing: true });
+    if (!phone) return;
+    const drivers = await getAllDrivers(phone);
+    return res.json(drivers);
+  } catch (error) {
+    console.error('admin drivers error:', error);
+    const message = error?.message || 'Failed to load drivers.';
     const status = message.includes('Admin access') ? 403 : 500;
     return res.status(status).json({ message });
   }

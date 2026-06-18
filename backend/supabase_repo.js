@@ -3237,6 +3237,73 @@ async function getAllCouriers(adminPhone) {
   });
 }
 
+function mapDriverForAdmin(phone, user, profile) {
+  const name = String(profile.name ?? '').trim();
+  const contactPhone = String(profile.phone ?? phone ?? '').trim();
+  const vehicle = String(profile.vehicle ?? '').trim();
+  const plate = String(profile.plate ?? '').trim();
+  const area = String(profile.area ?? '').trim();
+
+  return {
+    phone: String(phone || '').trim(),
+    name,
+    contactPhone,
+    vehicle,
+    plate,
+    area,
+    available: profile.available !== false && profile.isSuspended !== true,
+    isSuspended: profile.isSuspended === true,
+    isApproved: isDriverApproved(profile),
+    approvalStatus: driverApprovalStatus(profile),
+    rejectionReasonKey: String(profile.rejectionReasonKey ?? '').trim() || null,
+    rejectionMessageAr: profile.rejectionMessageAr || null,
+    role: String(user?.role ?? '').trim(),
+    accountType: String(user?.account_type ?? '').trim(),
+    updatedAt: user?.updated_at ?? null,
+  };
+}
+
+async function getAllDrivers(adminPhone) {
+  await assertAdminAccess(adminPhone);
+
+  const [users, states] = await Promise.all([
+    selectMany('app_users', [], { column: 'updated_at', ascending: false }),
+    selectMany('app_state', [], { column: 'updated_at', ascending: false }),
+  ]);
+
+  const stateByPhone = {};
+  for (const row of states) {
+    const phone = String(row.phone || '').trim();
+    if (!phone) continue;
+    stateByPhone[phone] = row.state || {};
+  }
+
+  const drivers = [];
+  const seen = new Set();
+
+  for (const user of users) {
+    const phone = String(user.phone || '').trim();
+    if (!phone || seen.has(phone)) continue;
+
+    const state = stateByPhone[phone] || {};
+    const profile = readDriverProfileFromState(state);
+    if (!profile || !isDriverProfileComplete(profile)) continue;
+
+    const role = String(user.role ?? '').trim();
+    const accountType = String(user.account_type ?? '').trim();
+    const name = String(profile.name ?? '').trim();
+    const isDriverAccount =
+      role === 'driver' || accountType === 'driver' || name.length > 0;
+
+    if (!isDriverAccount) continue;
+
+    seen.add(phone);
+    drivers.push(mapDriverForAdmin(phone, user, profile));
+  }
+
+  return drivers;
+}
+
 async function getAllMerchants(adminPhone) {
   await assertAdminAccess(adminPhone);
 
@@ -4586,6 +4653,7 @@ module.exports = {
   saveMerchantReview,
   getAllMerchants,
   getAllCouriers,
+  getAllDrivers,
   toggleCourierApprovalStatus,
   rejectCourierApplication,
   toggleMerchantApprovalStatus,

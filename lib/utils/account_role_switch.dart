@@ -219,7 +219,7 @@ void showRoleSwitcher(BuildContext context, AppProvider provider) {
                 errorMsg: 'تعذر الانتقال إلى حساب المندوب حالياً.',
                 isDark: isDark,
               ),
-            if (currentRole != 'delivery' && (currentRole != 'customer' || currentRole != 'merchant'))
+            if (currentRole != 'driver' && (currentRole != 'customer' || currentRole != 'merchant'))
               const SizedBox(height: 12),
             if (currentRole != 'driver')
               _buildRoleItem(

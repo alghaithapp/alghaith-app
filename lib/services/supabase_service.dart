@@ -328,6 +328,9 @@ class SupabaseService {
   static Future<List<Map<String, dynamic>>> loadAllMerchants() =>
       _db.loadAllMerchants();
 
+  static Future<List<Map<String, dynamic>>> loadAllDrivers() =>
+      _db.loadAllDrivers();
+
   static Future<List<Map<String, dynamic>>> loadAllCouriers() =>
       _db.loadAllCouriers();
 
@@ -347,6 +350,26 @@ class SupabaseService {
       _db.toggleCourierApprovalStatus(
         courierPhone: courierPhone,
         isApproved: isApproved,
+      );
+
+  static Future<void> toggleDriverApprovalStatus({
+    required String driverPhone,
+    required bool isApproved,
+  }) =>
+      _db.toggleDriverApprovalStatus(
+        driverPhone: driverPhone,
+        isApproved: isApproved,
+      );
+
+  static Future<void> rejectDriverApplication({
+    required String driverPhone,
+    required String reasonKey,
+    String? rejectionMessageAr,
+  }) =>
+      _db.rejectDriverApplication(
+        driverPhone: driverPhone,
+        reasonKey: reasonKey,
+        rejectionMessageAr: rejectionMessageAr,
       );
 
   static Future<void> rejectCourierApplication({
