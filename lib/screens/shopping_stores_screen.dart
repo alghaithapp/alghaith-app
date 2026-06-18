@@ -869,42 +869,47 @@ class _PremiumRestaurantCard extends StatelessWidget {
 
           const SizedBox(height: 16),
 
-          // 4. Action Bar — 3 أزرار صغيرة + زر مستطيل بالعرض كامل تحتها
+          // 4. Action Bar — 3 أزرار بعرض كامل في صف + زر عرض المتجر تحتها
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
             child: Column(
               children: [
                 Row(
                   children: [
-                    _MiniActionBtn(
-                      label: 'مراسلة',
-                      icon: Icons.chat_bubble_outline_rounded,
-                      color: Colors.blueGrey,
-                      onTap: () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('ميزة المراسلة قريباً...', style: TextStyle(fontFamily: 'Cairo'))),
-                        );
-                      },
+                    Expanded(
+                      child: _FullActionBtn(
+                        label: 'مراسلة',
+                        icon: Icons.chat_bubble_outline_rounded,
+                        color: Colors.blueGrey,
+                        onTap: () {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('ميزة المراسلة قريباً...', style: TextStyle(fontFamily: 'Cairo'))),
+                          );
+                        },
+                      ),
                     ),
                     const SizedBox(width: 8),
-                    _MiniActionBtn(
-                      label: 'اتصال',
-                      icon: Icons.phone_outlined,
-                      color: Colors.green,
-                      onTap: () {
-                        if (customerPhone.isNotEmpty) AppHelpers.makePhoneCall(customerPhone);
-                      },
+                    Expanded(
+                      child: _FullActionBtn(
+                        label: 'اتصال',
+                        icon: Icons.phone_outlined,
+                        color: Colors.green,
+                        onTap: () {
+                          if (customerPhone.isNotEmpty) AppHelpers.makePhoneCall(customerPhone);
+                        },
+                      ),
                     ),
                     const SizedBox(width: 8),
-                    _MiniActionBtn(
-                      label: 'واتساب',
-                      icon: Icons.chat_outlined,
-                      color: const Color(0xFF25D366),
-                      onTap: () {
-                        if (customerWhatsApp.isNotEmpty) AppHelpers.launchWhatsApp(customerWhatsApp, 'مرحباً، أريد الاستفسار عن منتجاتكم.');
-                      },
+                    Expanded(
+                      child: _FullActionBtn(
+                        label: 'واتساب',
+                        icon: Icons.chat_outlined,
+                        color: const Color(0xFF25D366),
+                        onTap: () {
+                          if (customerWhatsApp.isNotEmpty) AppHelpers.launchWhatsApp(customerWhatsApp, 'مرحباً، أريد الاستفسار عن منتجاتكم.');
+                        },
+                      ),
                     ),
-                    const Spacer(),
                   ],
                 ),
                 const SizedBox(height: 12),
@@ -978,33 +983,37 @@ class _StatItem extends StatelessWidget {
   }
 }
 
-class _MiniActionBtn extends StatelessWidget {
+class _FullActionBtn extends StatelessWidget {
   final String label;
   final IconData icon;
   final Color color;
   final VoidCallback onTap;
 
-  const _MiniActionBtn({required this.label, required this.icon, required this.color, required this.onTap});
+  const _FullActionBtn({required this.label, required this.icon, required this.color, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    return CupertinoButton(
-      padding: EdgeInsets.zero,
-      onPressed: onTap,
+    return SizedBox(
+      height: 52,
       child: Container(
-        width: 64,
-        height: 48,
         decoration: BoxDecoration(
           color: color.withValues(alpha: 0.08),
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(14),
           border: Border.all(color: color.withValues(alpha: 0.2)),
         ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, size: 18, color: color),
-            Text(label, style: TextStyle(fontFamily: 'Cairo', fontSize: 9, fontWeight: FontWeight.bold, color: color)),
-          ],
+        child: ElevatedButton.icon(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.transparent,
+            shadowColor: Colors.transparent,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+            padding: EdgeInsets.zero,
+          ),
+          onPressed: onTap,
+          icon: Icon(icon, color: color, size: 20),
+          label: Text(
+            label,
+            style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w900, color: color, fontSize: 13),
+          ),
         ),
       ),
     );
