@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/theme/app_colors.dart';
 import '../../core/utils/phone_utils.dart';
 import '../../core/utils/western_digits_input_formatter.dart';
 import '../../providers/app_provider.dart';
@@ -286,6 +287,9 @@ class _DeliverySetupScreenState extends State<DeliverySetupScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7FB),
       appBar: AppBar(
+        backgroundColor: AppColors.primary,
+        foregroundColor: Colors.white,
+        elevation: 0,
         leading: IconButton(
           tooltip: 'رجوع',
           icon: const Icon(Icons.arrow_back_ios_new_rounded),
@@ -299,8 +303,11 @@ class _DeliverySetupScreenState extends State<DeliverySetupScreen> {
         ),
         title: Text(
           isEditing ? 'تعديل ملف المندوب' : 'تسجيل مندوب توصيل',
-          style:
-              const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w900),
+          style: const TextStyle(
+            fontFamily: 'Cairo',
+            fontWeight: FontWeight.w900,
+            fontSize: 17,
+          ),
         ),
       ),
       body: ListView(
@@ -499,9 +506,9 @@ class _DeliverySetupScreenState extends State<DeliverySetupScreen> {
           SizedBox(
             width: double.infinity,
             child: CupertinoButton(
-              color: const Color(0xFF007A7A),
+              color: AppColors.accent,
               borderRadius: BorderRadius.circular(18),
-              padding: const EdgeInsets.symmetric(vertical: 15),
+              padding: const EdgeInsets.symmetric(vertical: 16),
               onPressed: _isSaving || _isUploadingImage
                   ? null
                   : () => _save(provider, isEditing: isEditing),
