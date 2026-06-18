@@ -611,9 +611,33 @@ async function toggleMerchantApprovalStatus(adminPhone, merchantPhone, isApprove
   await assertAdminAccess(adminPhone);
 
   const phoneKey = await resolvePhoneKey(merchantPhone);
-  const profile = await getMerchantProfile(phoneKey);
+  let profile = await getMerchantProfile(phoneKey);
+
+  // إذا لم يوجد ملف تاجر في قاعدة البيانات — ننشئ له ملفاً أولياً
+  // (يحدث عندما يسجل المستخدم كـ "تاجر/مهني" لكن فشل حفظ الملف لسبب ما)
   if (!profile) {
-    throw new Error('Merchant profile not found.');
+    const appUser = await getAppUser(phoneKey);
+    const fullName = String(appUser?.full_name ?? '').trim();
+    const state = await getUserState(phoneKey);
+    const merchantStore = state?.merchantStore;
+    const storeName =
+      String(merchantStore?.name ?? '').trim() ||
+      fullName ||
+      `تاجر ${phoneKey.slice(-4)}`;
+    const professionalInfo = merchantStore?.professionalInfo ||
+      merchantStore?.professional_info || null;
+
+    profile = await saveMerchantProfile(phoneKey, {
+      store_name: storeName,
+      primary_service_id: String(merchantStore?.category ?? merchantStore?.primary_service_id ?? 'product').trim(),
+      professional_info: professionalInfo,
+      is_approved: false,
+      approval_status: 'pending',
+    });
+
+    if (!profile) {
+      throw new Error('Merchant profile not found.');
+    }
   }
 
   const patch = {
@@ -664,9 +688,32 @@ async function rejectMerchantApplication(
   const { message, key: normalizedReason } = resolved;
 
   const phoneKey = await resolvePhoneKey(merchantPhone);
-  const profile = await getMerchantProfile(phoneKey);
+  let profile = await getMerchantProfile(phoneKey);
+
+  // إذا لم يوجد ملف تاجر — ننشئ ملفاً أولياً قبل الرفض
   if (!profile) {
-    throw new Error('Merchant profile not found.');
+    const appUser = await getAppUser(phoneKey);
+    const fullName = String(appUser?.full_name ?? '').trim();
+    const state = await getUserState(phoneKey);
+    const merchantStore = state?.merchantStore;
+    const storeName =
+      String(merchantStore?.name ?? '').trim() ||
+      fullName ||
+      `تاجر ${phoneKey.slice(-4)}`;
+    const professionalInfo = merchantStore?.professionalInfo ||
+      merchantStore?.professional_info || null;
+
+    profile = await saveMerchantProfile(phoneKey, {
+      store_name: storeName,
+      primary_service_id: String(merchantStore?.category ?? merchantStore?.primary_service_id ?? 'product').trim(),
+      professional_info: professionalInfo,
+      is_approved: false,
+      approval_status: 'pending',
+    });
+
+    if (!profile) {
+      throw new Error('Merchant profile not found.');
+    }
   }
 
   await updateMerchantApprovalRecord(phoneKey, {

@@ -1,4 +1,4 @@
-const { createClient } = require('@supabase/supabase-js');
+﻿const { createClient } = require('@supabase/supabase-js');
 const WebSocket = require('ws');
 
 function normalizeSupabaseUrl(url) {
@@ -197,7 +197,7 @@ function merchantProfileDisplayName(profile) {
 
 function isMerchantApproved(profile) {
   if (!profile) return false;
-  // إذا كان هناك قرار صريح (موافقة أو رفض) نلتزم به
+  // ╪Ñ╪░╪º ┘â╪º┘å ┘ç┘å╪º┘â ┘é╪▒╪º╪▒ ╪╡╪▒┘è╪¡ (┘à┘ê╪º┘ü┘é╪⌐ ╪ú┘ê ╪▒┘ü╪╢) ┘å┘ä╪¬╪▓┘à ╪¿┘ç
   if (profile.is_approved === true || profile.isApproved === true) return true;
   if (profile.is_approved === false || profile.isApproved === false) {
     const status = String(
@@ -213,10 +213,10 @@ function isMerchantApproved(profile) {
   if (status === 'approved') return true;
   if (status === 'pending' || status === 'rejected') return false;
 
-  // حالة انتقالية: إذا لم توجد الأعمدة في قاعدة البيانات بعد
-  // نعتبر المتاجر القديمة (التي لها اسم) واصحاب المهن الذين لديهم منتجات موافق عليهم تلقائياً
+  // ╪¡╪º┘ä╪⌐ ╪º┘å╪¬┘é╪º┘ä┘è╪⌐: ╪Ñ╪░╪º ┘ä┘à ╪¬┘ê╪¼╪» ╪º┘ä╪ú╪╣┘à╪»╪⌐ ┘ü┘è ┘é╪º╪╣╪»╪⌐ ╪º┘ä╪¿┘è╪º┘å╪º╪¬ ╪¿╪╣╪»
+  // ┘å╪╣╪¬╪¿╪▒ ╪º┘ä┘à╪¬╪º╪¼╪▒ ╪º┘ä┘é╪»┘è┘à╪⌐ (╪º┘ä╪¬┘è ┘ä┘ç╪º ╪º╪│┘à) ┘ê╪º╪╡╪¡╪º╪¿ ╪º┘ä┘à┘ç┘å ╪º┘ä╪░┘è┘å ┘ä╪»┘è┘ç┘à ┘à┘å╪¬╪¼╪º╪¬ ┘à┘ê╪º┘ü┘é ╪╣┘ä┘è┘ç┘à ╪¬┘ä┘é╪º╪ª┘è╪º┘ï
   if (isProfessionalMerchantProfile(profile)) {
-    // المهنيين الجدد يحتاجون موافقة، لكن إذا كان لديهم بيانات قديمة نعتبرهم مفعّلين
+    // ╪º┘ä┘à┘ç┘å┘è┘è┘å ╪º┘ä╪¼╪»╪» ┘è╪¡╪¬╪º╪¼┘ê┘å ┘à┘ê╪º┘ü┘é╪⌐╪î ┘ä┘â┘å ╪Ñ╪░╪º ┘â╪º┘å ┘ä╪»┘è┘ç┘à ╪¿┘è╪º┘å╪º╪¬ ┘é╪»┘è┘à╪⌐ ┘å╪╣╪¬╪¿╪▒┘ç┘à ┘à┘ü╪╣┘æ┘ä┘è┘å
     const info = normalizeObject(profile.professional_info);
     return Boolean(String(info.name ?? '').trim());
   }
@@ -241,15 +241,15 @@ function merchantRejectionMessage(profile) {
 
 const MERCHANT_REJECTION_REASONS = {
   storeName:
-    'اسم المتجر غير واضح أو غير مطابق. يرجى إدخال اسم المتجر بشكل صحيح.',
+    '╪º╪│┘à ╪º┘ä┘à╪¬╪¼╪▒ ╪║┘è╪▒ ┘ê╪º╪╢╪¡ ╪ú┘ê ╪║┘è╪▒ ┘à╪╖╪º╪¿┘é. ┘è╪▒╪¼┘ë ╪Ñ╪»╪«╪º┘ä ╪º╪│┘à ╪º┘ä┘à╪¬╪¼╪▒ ╪¿╪┤┘â┘ä ╪╡╪¡┘è╪¡.',
   phone:
-    'رقم الهاتف أو واتساب غير صحيح. يرجى إدخال رقم مفعّل على واتساب.',
+    '╪▒┘é┘à ╪º┘ä┘ç╪º╪¬┘ü ╪ú┘ê ┘ê╪º╪¬╪│╪º╪¿ ╪║┘è╪▒ ╪╡╪¡┘è╪¡. ┘è╪▒╪¼┘ë ╪Ñ╪»╪«╪º┘ä ╪▒┘é┘à ┘à┘ü╪╣┘æ┘ä ╪╣┘ä┘ë ┘ê╪º╪¬╪│╪º╪¿.',
   address:
-    'عنوان المتجر أو موقعه على الخريطة غير واضح. يرجى تحديد الموقع بدقة.',
+    '╪╣┘å┘ê╪º┘å ╪º┘ä┘à╪¬╪¼╪▒ ╪ú┘ê ┘à┘ê┘é╪╣┘ç ╪╣┘ä┘ë ╪º┘ä╪«╪▒┘è╪╖╪⌐ ╪║┘è╪▒ ┘ê╪º╪╢╪¡. ┘è╪▒╪¼┘ë ╪¬╪¡╪»┘è╪» ╪º┘ä┘à┘ê┘é╪╣ ╪¿╪»┘é╪⌐.',
   images:
-    'صور المتجر (الشعار أو الغلاف) غير واضحة أو غير مناسبة. يرجى رفع صور أفضل.',
+    '╪╡┘ê╪▒ ╪º┘ä┘à╪¬╪¼╪▒ (╪º┘ä╪┤╪╣╪º╪▒ ╪ú┘ê ╪º┘ä╪║┘ä╪º┘ü) ╪║┘è╪▒ ┘ê╪º╪╢╪¡╪⌐ ╪ú┘ê ╪║┘è╪▒ ┘à┘å╪º╪│╪¿╪⌐. ┘è╪▒╪¼┘ë ╪▒┘ü╪╣ ╪╡┘ê╪▒ ╪ú┘ü╪╢┘ä.',
   description:
-    'وصف المتجر ناقص أو غير مناسب. يرجى كتابة وصف واضح لنشاطك.',
+    '┘ê╪╡┘ü ╪º┘ä┘à╪¬╪¼╪▒ ┘å╪º┘é╪╡ ╪ú┘ê ╪║┘è╪▒ ┘à┘å╪º╪│╪¿. ┘è╪▒╪¼┘ë ┘â╪¬╪º╪¿╪⌐ ┘ê╪╡┘ü ┘ê╪º╪╢╪¡ ┘ä┘å╪┤╪º╪╖┘â.',
 };
 
 function mapMerchantApprovalFields(profile) {
@@ -334,7 +334,7 @@ async function updateMerchantApprovalRecord(phoneKey, patch = {}) {
   return Array.isArray(data) && data.length > 0 ? data[0] : null;
 }
 
-/** أقسام التسوق العالمي فقط — لا تُخلط مع التسوق المحلي. */
+/** ╪ú┘é╪│╪º┘à ╪º┘ä╪¬╪│┘ê┘é ╪º┘ä╪╣╪º┘ä┘à┘è ┘ü┘é╪╖ ΓÇö ┘ä╪º ╪¬┘Å╪«┘ä╪╖ ┘à╪╣ ╪º┘ä╪¬╪│┘ê┘é ╪º┘ä┘à╪¡┘ä┘è. */
 const GLOBAL_SHOPPING_SUB_CATEGORY_IDS = new Set(['iran', 'china']);
 
 function profileHasService(profile, serviceId) {
@@ -431,12 +431,12 @@ function resolveListingProductService(row, profile) {
 
 function evaluateBazaarCustomerVisibility(profile, products = []) {
   const notes = [];
-  if (profile.is_open === false) notes.push('المتجر مغلق');
-  if (isMerchantFrozen(profile)) notes.push('الحساب مجمّد');
-  if (!canMerchantPublishInBazaar(profile)) notes.push('غير مصرّح في البازار');
+  if (profile.is_open === false) notes.push('╪º┘ä┘à╪¬╪¼╪▒ ┘à╪║┘ä┘é');
+  if (isMerchantFrozen(profile)) notes.push('╪º┘ä╪¡╪│╪º╪¿ ┘à╪¼┘à┘æ╪»');
+  if (!canMerchantPublishInBazaar(profile)) notes.push('╪║┘è╪▒ ┘à╪╡╪▒┘æ╪¡ ┘ü┘è ╪º┘ä╪¿╪º╪▓╪º╪▒');
   const services = profileServiceIds(profile);
   if (!services.includes('product') && !services.includes('restaurant')) {
-    notes.push('التاجر ليس في قسم منتجات أو مطاعم');
+    notes.push('╪º┘ä╪¬╪º╪¼╪▒ ┘ä┘è╪│ ┘ü┘è ┘é╪│┘à ┘à┘å╪¬╪¼╪º╪¬ ╪ú┘ê ┘à╪╖╪º╪╣┘à');
   }
 
   const visibleProducts = products.filter((row) =>
@@ -449,9 +449,9 @@ function evaluateBazaarCustomerVisibility(profile, products = []) {
   );
 
   if (products.length === 0) {
-    notes.push('لا توجد منتجات منشورة');
+    notes.push('┘ä╪º ╪¬┘ê╪¼╪» ┘à┘å╪¬╪¼╪º╪¬ ┘à┘å╪┤┘ê╪▒╪⌐');
   } else if (visibleProducts.length === 0) {
-    notes.push('لا يوجد منتج صالح للعرض (القسم أو التوفر)');
+    notes.push('┘ä╪º ┘è┘ê╪¼╪» ┘à┘å╪¬╪¼ ╪╡╪º┘ä╪¡ ┘ä┘ä╪╣╪▒╪╢ (╪º┘ä┘é╪│┘à ╪ú┘ê ╪º┘ä╪¬┘ê┘ü╪▒)');
   }
 
   return {
@@ -501,8 +501,8 @@ function mapStateItemToProductPayload(item = {}) {
 }
 
 /**
- * عند تفعيل البازار: تأكد أن كل منتجات التاجر المنشورة مسبقاً
- * (في merchant_products أو app_state) جاهزة للظهور في بازار ومطاعم الغيث.
+ * ╪╣┘å╪» ╪¬┘ü╪╣┘è┘ä ╪º┘ä╪¿╪º╪▓╪º╪▒: ╪¬╪ú┘â╪» ╪ú┘å ┘â┘ä ┘à┘å╪¬╪¼╪º╪¬ ╪º┘ä╪¬╪º╪¼╪▒ ╪º┘ä┘à┘å╪┤┘ê╪▒╪⌐ ┘à╪│╪¿┘é╪º┘ï
+ * (┘ü┘è merchant_products ╪ú┘ê app_state) ╪¼╪º┘ç╪▓╪⌐ ┘ä┘ä╪╕┘ç┘ê╪▒ ┘ü┘è ╪¿╪º╪▓╪º╪▒ ┘ê┘à╪╖╪º╪╣┘à ╪º┘ä╪║┘è╪½.
  */
 async function syncMerchantProductsForBazaar(merchantPhone) {
   const phoneKey = await resolvePhoneKey(merchantPhone);
@@ -664,7 +664,7 @@ async function resolvePhoneKey(phone) {
     }
   }
   const canonical = canonicalPhone(phone);
-  // مفاتيح نظامية غير رقمية (مثل إعدادات المنصة) تُحفظ كما هي.
+  // ┘à┘ü╪º╪¬┘è╪¡ ┘å╪╕╪º┘à┘è╪⌐ ╪║┘è╪▒ ╪▒┘é┘à┘è╪⌐ (┘à╪½┘ä ╪Ñ╪╣╪»╪º╪»╪º╪¬ ╪º┘ä┘à┘å╪╡╪⌐) ╪¬┘Å╪¡┘ü╪╕ ┘â┘à╪º ┘ç┘è.
   if (canonical) return canonical;
   return raw;
 }
@@ -1142,7 +1142,7 @@ async function saveCustomerAddress(phone, data = {}) {
     payload.sort_order = sortOrder;
   }
   if (await hasColumn('customer_addresses', 'label')) {
-    payload.label = String(data.label || 'عنوان محفوظ');
+    payload.label = String(data.label || '╪╣┘å┘ê╪º┘å ┘à╪¡┘ü┘ê╪╕');
   }
   if (await hasColumn('customer_addresses', 'is_default')) {
     payload.is_default = Boolean(data.is_default ?? false);
@@ -1471,12 +1471,12 @@ async function acceptDeliveryOrder(courierPhone, orderId, data = {}) {
   }
 
   const courierName =
-    String(data.courierName ?? data.courier_name ?? '').trim() || 'مندوب الغيث';
+    String(data.courierName ?? data.courier_name ?? '').trim() || '┘à┘å╪»┘ê╪¿ ╪º┘ä╪║┘è╪½';
 
   const nextOrder = {
     ...meta.payload,
     deliveryStatusKey: 'accepted',
-    deliveryStatusAr: 'المندوب في الطريق للمتجر',
+    deliveryStatusAr: '╪º┘ä┘à┘å╪»┘ê╪¿ ┘ü┘è ╪º┘ä╪╖╪▒┘è┘é ┘ä┘ä┘à╪¬╪¼╪▒',
     deliveryStatusEn: 'Courier heading to store',
     assignedCourierName: courierName,
     courierPhone: normalizedCourier,
@@ -1523,12 +1523,12 @@ async function updateCourierDeliveryStatus(courierPhone, orderId, updates = {}) 
   };
 
   if (deliveryStatusKey === 'picked_up') {
-    nextOrder.deliveryStatusAr = 'تم استلام الطلب من المتجر';
+    nextOrder.deliveryStatusAr = '╪¬┘à ╪º╪│╪¬┘ä╪º┘à ╪º┘ä╪╖┘ä╪¿ ┘à┘å ╪º┘ä┘à╪¬╪¼╪▒';
     nextOrder.deliveryStatusEn = 'Order picked up from store';
   }
 
   if (deliveryStatusKey === 'on_way') {
-    nextOrder.deliveryStatusAr = 'المندوب في الطريق للزبون';
+    nextOrder.deliveryStatusAr = '╪º┘ä┘à┘å╪»┘ê╪¿ ┘ü┘è ╪º┘ä╪╖╪▒┘è┘é ┘ä┘ä╪▓╪¿┘ê┘å';
     nextOrder.deliveryStatusEn = 'Courier on the way';
     nextOrder.estimatedArrivalMinutes = 20;
     nextOrder.estimatedArrivalAt = new Date(Date.now() + 20 * 60 * 1000).toISOString();
@@ -1536,10 +1536,10 @@ async function updateCourierDeliveryStatus(courierPhone, orderId, updates = {}) 
 
   if (deliveryStatusKey === 'delivered' || deliveryStatusKey === 'completed') {
     nextOrder.deliveryStatusKey = 'delivered';
-    nextOrder.deliveryStatusAr = 'تم التسليم — دفع نقداً';
-    nextOrder.deliveryStatusEn = 'Delivered — cash collected';
+    nextOrder.deliveryStatusAr = '╪¬┘à ╪º┘ä╪¬╪│┘ä┘è┘à ΓÇö ╪»┘ü╪╣ ┘å┘é╪»╪º┘ï';
+    nextOrder.deliveryStatusEn = 'Delivered ΓÇö cash collected';
     nextOrder.statusKey = 'completed';
-    nextOrder.statusAr = 'مكتمل';
+    nextOrder.statusAr = '┘à┘â╪¬┘à┘ä';
     nextOrder.statusEn = 'Completed';
     nextOrder.codConfirmed = true;
     nextOrder.deliveredAt = nowIso();
@@ -1750,13 +1750,13 @@ async function acceptTaxiRequest(driverPhone, requestId, data = {}) {
   }
 
   const driverName =
-    String(data.driverName ?? data.driver_name ?? '').trim() || 'سائق الغيث';
+    String(data.driverName ?? data.driver_name ?? '').trim() || '╪│╪º╪ª┘é ╪º┘ä╪║┘è╪½';
   const vehicleType = String(data.vehicleType ?? data.vehicle_type ?? '').trim();
 
   const nextRequest = {
     ...meta.payload,
     statusKey: 'accepted',
-    statusAr: 'تم القبول',
+    statusAr: '╪¬┘à ╪º┘ä┘é╪¿┘ê┘ä',
     statusEn: 'Accepted',
     assignedDriverName: driverName,
     driverPhone: normalizedDriver,
@@ -1853,7 +1853,7 @@ async function updateTaxiRequestStatus(actorPhone, requestId, updates = {}) {
   };
 
   if (statusKey === 'completed') {
-    nextRequest.statusAr = 'مكتمل';
+    nextRequest.statusAr = '┘à┘â╪¬┘à┘ä';
     nextRequest.statusEn = 'Completed';
     nextRequest.completedAt = nowIso();
   }
@@ -2106,7 +2106,7 @@ async function updateIncomingOrderStatus(merchantPhone, orderId, updates = {}) {
 
   if (nextOrder.statusKey === 'delivering') {
     nextOrder.deliveryStatusKey = 'waiting';
-    nextOrder.deliveryStatusAr = 'بانتظار مندوب التوصيل';
+    nextOrder.deliveryStatusAr = '╪¿╪º┘å╪¬╪╕╪º╪▒ ┘à┘å╪»┘ê╪¿ ╪º┘ä╪¬┘ê╪╡┘è┘ä';
     nextOrder.deliveryStatusEn = 'Waiting for courier';
   }
 
@@ -2199,7 +2199,7 @@ async function getActiveCourierPhones() {
     const isMarketplace = accountType === 'marketplace' || !accountType;
     const isDriverAccount = role === 'driver' || accountType === 'driver';
 
-    // المندوبين العاديين
+    // ╪º┘ä┘à┘å╪»┘ê╪¿┘è┘å ╪º┘ä╪╣╪º╪»┘è┘è┘å
     if (isDeliveryAccount || isMarketplace) {
       const state = await getUserState(phone);
       const profile = state?.courierProfile;
@@ -2212,7 +2212,7 @@ async function getActiveCourierPhones() {
       }
     }
 
-    // السائقين الذين فعّلوا خدمة التوصيل
+    // ╪º┘ä╪│╪º╪ª┘é┘è┘å ╪º┘ä╪░┘è┘å ┘ü╪╣┘æ┘ä┘ê╪º ╪«╪»┘à╪⌐ ╪º┘ä╪¬┘ê╪╡┘è┘ä
     if (isDriverAccount) {
       const state = await getUserState(phone);
       const profile = readDriverProfileFromState(state);
@@ -2425,7 +2425,7 @@ async function saveMerchantProduct(phone, data = {}) {
   if (!merchantProfile) {
     throw new Error('Merchant profile not found.');
   }
-  // إذا لم يعدل التاجر اسم المتجر بعد، نأخذه من البيانات الواردة (للمهنيين بشكل خاص)
+  // ╪Ñ╪░╪º ┘ä┘à ┘è╪╣╪»┘ä ╪º┘ä╪¬╪º╪¼╪▒ ╪º╪│┘à ╪º┘ä┘à╪¬╪¼╪▒ ╪¿╪╣╪»╪î ┘å╪ú╪«╪░┘ç ┘à┘å ╪º┘ä╪¿┘è╪º┘å╪º╪¬ ╪º┘ä┘ê╪º╪▒╪»╪⌐ (┘ä┘ä┘à┘ç┘å┘è┘è┘å ╪¿╪┤┘â┘ä ╪«╪º╪╡)
   const payload = {
     id:
       data.id && String(data.id).trim().length > 0
@@ -2648,7 +2648,7 @@ async function listMerchantStoresByService({
       })
     );
 
-    // يظهر المتجر فقط إن وُجد منتج واحد على الأقل يطابق القسم/النشاط.
+    // ┘è╪╕┘ç╪▒ ╪º┘ä┘à╪¬╪¼╪▒ ┘ü┘é╪╖ ╪Ñ┘å ┘ê┘Å╪¼╪» ┘à┘å╪¬╪¼ ┘ê╪º╪¡╪» ╪╣┘ä┘ë ╪º┘ä╪ú┘é┘ä ┘è╪╖╪º╪¿┘é ╪º┘ä┘é╪│┘à/╪º┘ä┘å╪┤╪º╪╖.
     if (filteredProducts.length === 0) continue;
 
     result.push({
@@ -3067,7 +3067,7 @@ async function saveMerchantReview({
   const mPhone = await resolvePhoneKey(merchantPhone);
   const cPhone = await resolvePhoneKey(customerPhone);
 
-  // 1. حفظ التقييم في جدول مخصص (إذا لم يوجد الجدول سيتم استخدام app_state للتاجر كخيار بديل)
+  // 1. ╪¡┘ü╪╕ ╪º┘ä╪¬┘é┘è┘è┘à ┘ü┘è ╪¼╪»┘ê┘ä ┘à╪«╪╡╪╡ (╪Ñ╪░╪º ┘ä┘à ┘è┘ê╪¼╪» ╪º┘ä╪¼╪»┘ê┘ä ╪│┘è╪¬┘à ╪º╪│╪¬╪«╪»╪º┘à app_state ┘ä┘ä╪¬╪º╪¼╪▒ ┘â╪«┘è╪º╪▒ ╪¿╪»┘è┘ä)
   try {
     const { data: review, error } = await supabase
       .from('merchant_reviews')
@@ -3085,7 +3085,7 @@ async function saveMerchantReview({
 
     if (error) throw error;
 
-    // 2. حساب المتوسط الجديد للتاجر
+    // 2. ╪¡╪│╪º╪¿ ╪º┘ä┘à╪¬┘ê╪│╪╖ ╪º┘ä╪¼╪»┘è╪» ┘ä┘ä╪¬╪º╪¼╪▒
     const { data: allReviews, error: fetchError } = await supabase
       .from('merchant_reviews')
       .select('stars')
@@ -3095,14 +3095,14 @@ async function saveMerchantReview({
       const totalStars = allReviews.reduce((sum, r) => sum + (Number(r.stars) || 0), 0);
       const avgRating = (totalStars / allReviews.length).toFixed(1);
 
-      // 3. تحديث ملف التاجر بالتقييم الحقيقي
+      // 3. ╪¬╪¡╪»┘è╪½ ┘à┘ä┘ü ╪º┘ä╪¬╪º╪¼╪▒ ╪¿╪º┘ä╪¬┘é┘è┘è┘à ╪º┘ä╪¡┘é┘è┘é┘è
       await supabase
         .from('merchant_profiles')
         .update({ rating: parseFloat(avgRating) })
         .eq('phone', mPhone);
     }
 
-    // 4. تحديث حالة التاجر (ليصله إشعار بالتقييم الجديد)
+    // 4. ╪¬╪¡╪»┘è╪½ ╪¡╪º┘ä╪⌐ ╪º┘ä╪¬╪º╪¼╪▒ (┘ä┘è╪╡┘ä┘ç ╪Ñ╪┤╪╣╪º╪▒ ╪¿╪º┘ä╪¬┘é┘è┘è┘à ╪º┘ä╪¼╪»┘è╪»)
     const merchantState = await getUserState(mPhone);
     if (merchantState) {
       const reviews = Array.isArray(merchantState.merchantReviews) ? merchantState.merchantReviews : [];
@@ -3124,7 +3124,7 @@ async function saveMerchantReview({
     return review;
   } catch (error) {
     console.error('saveMerchantReview error:', error);
-    // Fallback: إذا لم يوجد جدول، نكتفي بتحديث حالة التاجر
+    // Fallback: ╪Ñ╪░╪º ┘ä┘à ┘è┘ê╪¼╪» ╪¼╪»┘ê┘ä╪î ┘å┘â╪¬┘ü┘è ╪¿╪¬╪¡╪»┘è╪½ ╪¡╪º┘ä╪⌐ ╪º┘ä╪¬╪º╪¼╪▒
     return { success: false, error: error.message };
   }
 }
@@ -3154,10 +3154,10 @@ function isCourierApproved(profile) {
 }
 
 const COURIER_REJECTION_REASONS = {
-  name: 'الاسم غير صحيح. يرجى إدخال الاسم الثلاثي (الاسم الأول + الأب + العائلة) بشكل واضح.',
-  phone: 'رقم الهاتف غير صحيح. يرجى إدخال رقم مفعّل على واتساب.',
-  address: 'عنوان السكن غير واضح أو غير مكتمل. يرجى تعديل العنوان.',
-  vehicleImage: 'صورة الدراجة غير واضحة أو غير مقبولة. يرجى رفع صورة أوضح للدراجة.',
+  name: '╪º┘ä╪º╪│┘à ╪║┘è╪▒ ╪╡╪¡┘è╪¡. ┘è╪▒╪¼┘ë ╪Ñ╪»╪«╪º┘ä ╪º┘ä╪º╪│┘à ╪º┘ä╪½┘ä╪º╪½┘è (╪º┘ä╪º╪│┘à ╪º┘ä╪ú┘ê┘ä + ╪º┘ä╪ú╪¿ + ╪º┘ä╪╣╪º╪ª┘ä╪⌐) ╪¿╪┤┘â┘ä ┘ê╪º╪╢╪¡.',
+  phone: '╪▒┘é┘à ╪º┘ä┘ç╪º╪¬┘ü ╪║┘è╪▒ ╪╡╪¡┘è╪¡. ┘è╪▒╪¼┘ë ╪Ñ╪»╪«╪º┘ä ╪▒┘é┘à ┘à┘ü╪╣┘æ┘ä ╪╣┘ä┘ë ┘ê╪º╪¬╪│╪º╪¿.',
+  address: '╪╣┘å┘ê╪º┘å ╪º┘ä╪│┘â┘å ╪║┘è╪▒ ┘ê╪º╪╢╪¡ ╪ú┘ê ╪║┘è╪▒ ┘à┘â╪¬┘à┘ä. ┘è╪▒╪¼┘ë ╪¬╪╣╪»┘è┘ä ╪º┘ä╪╣┘å┘ê╪º┘å.',
+  vehicleImage: '╪╡┘ê╪▒╪⌐ ╪º┘ä╪»╪▒╪º╪¼╪⌐ ╪║┘è╪▒ ┘ê╪º╪╢╪¡╪⌐ ╪ú┘ê ╪║┘è╪▒ ┘à┘é╪¿┘ê┘ä╪⌐. ┘è╪▒╪¼┘ë ╪▒┘ü╪╣ ╪╡┘ê╪▒╪⌐ ╪ú┘ê╪╢╪¡ ┘ä┘ä╪»╪▒╪º╪¼╪⌐.',
 };
 
 function courierApprovalStatus(profile) {
@@ -3711,9 +3711,33 @@ async function toggleMerchantApprovalStatus(adminPhone, merchantPhone, isApprove
   await assertAdminAccess(adminPhone);
 
   const phoneKey = await resolvePhoneKey(merchantPhone);
-  const profile = await getMerchantProfile(phoneKey);
+  let profile = await getMerchantProfile(phoneKey);
+
+  // إذا لم يوجد ملف تاجر في قاعدة البيانات — ننشئ له ملفاً أولياً
+  // (يحدث عندما يسجل المستخدم كـ "تاجر/مهني" لكن فشل حفظ الملف لسبب ما)
   if (!profile) {
-    throw new Error('Merchant profile not found.');
+    const appUser = await getAppUser(phoneKey);
+    const fullName = String(appUser?.full_name ?? '').trim();
+    const state = await getUserState(phoneKey);
+    const merchantStore = state?.merchantStore;
+    const storeName =
+      String(merchantStore?.name ?? '').trim() ||
+      fullName ||
+      `تاجر ${phoneKey.slice(-4)}`;
+    const professionalInfo = merchantStore?.professionalInfo ||
+      merchantStore?.professional_info || null;
+
+    profile = await saveMerchantProfile(phoneKey, {
+      store_name: storeName,
+      primary_service_id: String(merchantStore?.category ?? merchantStore?.primary_service_id ?? 'product').trim(),
+      professional_info: professionalInfo,
+      is_approved: false,
+      approval_status: 'pending',
+    });
+
+    if (!profile) {
+      throw new Error('Merchant profile not found.');
+    }
   }
 
   const patch = {
@@ -3764,9 +3788,32 @@ async function rejectMerchantApplication(
   const { message, key: normalizedReason } = resolved;
 
   const phoneKey = await resolvePhoneKey(merchantPhone);
-  const profile = await getMerchantProfile(phoneKey);
+  let profile = await getMerchantProfile(phoneKey);
+
+  // إذا لم يوجد ملف تاجر — ننشئ ملفاً أولياً قبل الرفض
   if (!profile) {
-    throw new Error('Merchant profile not found.');
+    const appUser = await getAppUser(phoneKey);
+    const fullName = String(appUser?.full_name ?? '').trim();
+    const state = await getUserState(phoneKey);
+    const merchantStore = state?.merchantStore;
+    const storeName =
+      String(merchantStore?.name ?? '').trim() ||
+      fullName ||
+      `تاجر ${phoneKey.slice(-4)}`;
+    const professionalInfo = merchantStore?.professionalInfo ||
+      merchantStore?.professional_info || null;
+
+    profile = await saveMerchantProfile(phoneKey, {
+      store_name: storeName,
+      primary_service_id: String(merchantStore?.category ?? merchantStore?.primary_service_id ?? 'product').trim(),
+      professional_info: professionalInfo,
+      is_approved: false,
+      approval_status: 'pending',
+    });
+
+    if (!profile) {
+      throw new Error('Merchant profile not found.');
+    }
   }
 
   await updateMerchantApprovalRecord(phoneKey, {
@@ -4100,18 +4147,18 @@ function accountDisplayName(user, state, merchantProfile, kind) {
   ).trim();
 
   if (kind === 'merchant') {
-    return merchantName || merchantStoreName || professionalName || fullName || 'تاجر';
+    return merchantName || merchantStoreName || professionalName || fullName || '╪¬╪º╪¼╪▒';
   }
   if (kind === 'courier') {
-    return courierName || fullName || 'مندوب توصيل';
+    return courierName || fullName || '┘à┘å╪»┘ê╪¿ ╪¬┘ê╪╡┘è┘ä';
   }
   if (kind === 'driver') {
-    return driverName || fullName || 'سائق تكسي';
+    return driverName || fullName || '╪│╪º╪ª┘é ╪¬┘â╪│┘è';
   }
   if (kind === 'admin') {
-    return fullName || 'مشرف';
+    return fullName || '┘à╪┤╪▒┘ü';
   }
-  return fullName || 'زبون';
+  return fullName || '╪▓╪¿┘ê┘å';
 }
 
 function resolveAccountSuspended(state, merchantProfile) {
@@ -4419,7 +4466,7 @@ async function ensurePlatformAdminAccess(phone) {
 
   await ensureAppUser(phoneKey, {
     role: primaryRole,
-    full_name: existingUser?.full_name || 'مدير المنصة',
+    full_name: existingUser?.full_name || '┘à╪»┘è╪▒ ╪º┘ä┘à┘å╪╡╪⌐',
     account_type: existingUser?.account_type || primaryRole,
   });
 
@@ -4435,12 +4482,12 @@ async function ensurePlatformAdminAccess(phone) {
 }
 
 const DEFAULT_APP_UPDATE_POLICY = {
-  minBuildNumber: 1, // تم تعطيل التحديث الإجباري افتراضياً
+  minBuildNumber: 1, // ╪¬┘à ╪¬╪╣╪╖┘è┘ä ╪º┘ä╪¬╪¡╪»┘è╪½ ╪º┘ä╪Ñ╪¼╪¿╪º╪▒┘è ╪º┘ü╪¬╪▒╪º╪╢┘è╪º┘ï
   minVersionName: '1.0.0',
   latestBuildNumber: 0,
   latestVersionName: '',
   messageAr:
-    'يجب تحديث التطبيق للمتابعة. الرجاء التحديث من المتجر للاستمرار في استخدام الغيث.',
+    '┘è╪¼╪¿ ╪¬╪¡╪»┘è╪½ ╪º┘ä╪¬╪╖╪¿┘è┘é ┘ä┘ä┘à╪¬╪º╪¿╪╣╪⌐. ╪º┘ä╪▒╪¼╪º╪í ╪º┘ä╪¬╪¡╪»┘è╪½ ┘à┘å ╪º┘ä┘à╪¬╪¼╪▒ ┘ä┘ä╪º╪│╪¬┘à╪▒╪º╪▒ ┘ü┘è ╪º╪│╪¬╪«╪»╪º┘à ╪º┘ä╪║┘è╪½.',
   androidStoreUrl:
     'https://play.google.com/store/apps/details?id=com.alghaith.app',
   iosStoreUrl: 'https://apps.apple.com/app/id6776741811',
@@ -4538,7 +4585,7 @@ async function saveAdminAppUpdatePolicy(adminPhone, patch = {}) {
   return next;
 }
 
-// ── إعداد أقسام الصفحة الرئيسية (يتحكّم فيه الأدمن عن بُعد) ──────────────
+// ΓöÇΓöÇ ╪Ñ╪╣╪»╪º╪» ╪ú┘é╪│╪º┘à ╪º┘ä╪╡┘ü╪¡╪⌐ ╪º┘ä╪▒╪ª┘è╪│┘è╪⌐ (┘è╪¬╪¡┘â┘æ┘à ┘ü┘è┘ç ╪º┘ä╪ú╪»┘à┘å ╪╣┘å ╪¿┘Å╪╣╪») ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
 const HOME_CATEGORY_PLATFORMS = ['default', 'android', 'ios', 'web'];
 
 function normalizeCategoryOverride(value) {
