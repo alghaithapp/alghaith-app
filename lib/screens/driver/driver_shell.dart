@@ -315,7 +315,8 @@ class DriverDashboardScreen extends StatelessWidget {
               if (provider.driverAcceptsTaxi) ...[
                 _SectionTitle(
                   title: 'طلبات التكسي',
-                  subtitle: 'الطلبات المتاحة لخدمة التكسي',
+                  subtitle: '🚕 طلبات نقل الركاب — تظهر في هذه القائمة',
+                  color: AppColors.accent,
                 ),
                 const SizedBox(height: 10),
                 if (provider.visibleTaxiRequests.isEmpty)
@@ -334,7 +335,8 @@ class DriverDashboardScreen extends StatelessWidget {
                 const SizedBox(height: 12),
                 _SectionTitle(
                   title: 'طلبات المطاعم',
-                  subtitle: 'طلبات التوصيل المفعلة على حسابك',
+                  subtitle: '🛵 طلبات المطاعم والتسوق — تظهر في هذه القائمة',
+                  color: Colors.blue,
                 ),
                 const SizedBox(height: 10),
                 if (provider.visibleDeliveryIncomingOrders.isEmpty)
@@ -385,7 +387,8 @@ class DriverRequestsScreen extends StatelessWidget {
           if (provider.driverAcceptsTaxi) ...[
             _SectionTitle(
               title: 'طلبات التكسي',
-              subtitle: 'الطلبات الخاصة بنقل الزبائن',
+              subtitle: '🚕 طلبات نقل الركاب — تظهر في هذه القائمة',
+              color: AppColors.accent,
             ),
             const SizedBox(height: 10),
             if (taxiRequests.isEmpty)
@@ -405,7 +408,8 @@ class DriverRequestsScreen extends StatelessWidget {
             const SizedBox(height: 14),
             _SectionTitle(
               title: 'طلبات المطاعم',
-              subtitle: 'طلبات التوصيل المفعلة على الحساب',
+              subtitle: '🛵 طلبات المطاعم والتسوق — تظهر في هذه القائمة',
+              color: Colors.blue,
             ),
             const SizedBox(height: 10),
             if (deliveryRequests.isEmpty)
@@ -457,7 +461,8 @@ class DriverTripsScreen extends StatelessWidget {
           if (provider.driverAcceptsTaxi) ...[
             _SectionTitle(
               title: 'رحلات التكسي',
-              subtitle: 'الطلبات المقبولة أو قيد التنفيذ',
+              subtitle: '🚕 رحلات التكسي النشطة — قيد التنفيذ',
+              color: AppColors.accent,
             ),
             const SizedBox(height: 10),
             if (taxiActive.isEmpty)
@@ -477,7 +482,8 @@ class DriverTripsScreen extends StatelessWidget {
             const SizedBox(height: 14),
             _SectionTitle(
               title: 'طلبات المطاعم النشطة',
-              subtitle: 'الطلبات المقبولة أو الجاري توصيلها',
+              subtitle: '🛵 طلبات التوصيل النشطة — قيد التنفيذ',
+              color: Colors.blue,
             ),
             const SizedBox(height: 10),
             if (deliveryActive.isEmpty)
@@ -1803,32 +1809,51 @@ class _ServiceModeChip extends StatelessWidget {
 class _SectionTitle extends StatelessWidget {
   final String title;
   final String subtitle;
+  final Color? color;
 
   const _SectionTitle({
     required this.title,
     required this.subtitle,
+    this.color,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    final effectiveColor = color ?? const Color(0xFF1A1A1A);
+    return Row(
       children: [
-        Text(
-          title,
-          style: const TextStyle(
-            fontSize: 17,
-            fontWeight: FontWeight.w900,
-            fontFamily: 'Cairo',
+        Container(
+          width: 4,
+          height: 22,
+          decoration: BoxDecoration(
+            color: effectiveColor,
+            borderRadius: BorderRadius.circular(2),
           ),
         ),
-        const SizedBox(height: 4),
-        Text(
-          subtitle,
-          style: const TextStyle(
-            color: Colors.grey,
-            fontSize: 12,
-            fontFamily: 'Cairo',
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w900,
+                  fontFamily: 'Cairo',
+                  color: effectiveColor,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                subtitle,
+                style: const TextStyle(
+                  color: Colors.grey,
+                  fontSize: 12,
+                  fontFamily: 'Cairo',
+                ),
+              ),
+            ],
           ),
         ),
       ],
