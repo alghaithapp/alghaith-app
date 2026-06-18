@@ -4706,22 +4706,26 @@ class AppProvider extends ChangeNotifier {
     if (_accountType == null) _accountType = 'marketplace';
     _userRole = 'merchant';
     notifyListeners();
-    await _syncIdentityRecords();
-    await _persistAccountTypeIfNeeded();
-    if (_merchantStore != null && merchantStoreName.isNotEmpty) {
-      await _persistMerchantStoreAndState();
-      if (_items.isNotEmpty) {
-        await _persistMerchantItems();
+    try {
+      await _syncIdentityRecords();
+      await _persistAccountTypeIfNeeded();
+      if (_merchantStore != null && merchantStoreName.isNotEmpty) {
+        await _persistMerchantStoreAndState();
+        if (_items.isNotEmpty) {
+          await _persistMerchantItems();
+        }
+      } else {
+        final phone =
+            _trimmedOrNull(_authPhone) ?? _trimmedOrNull(_customerPhone);
+        if (phone != null) {
+          await SupabaseService.saveUserState(phone, _buildRemoteState());
+        }
+        await _persistLocalBackup();
       }
-    } else {
-      final phone =
-          _trimmedOrNull(_authPhone) ?? _trimmedOrNull(_customerPhone);
-      if (phone != null) {
-        await SupabaseService.saveUserState(phone, _buildRemoteState());
-      }
-      await _persistLocalBackup();
+      await _refreshMerchantIncomingOrders();
+    } catch (error) {
+      debugPrint('ACTIVATE_MERCHANT_ROLE_BACKGROUND_ERROR: $error');
     }
-    await _refreshMerchantIncomingOrders();
   }
 
   static String _roleLabelAr(String role) {

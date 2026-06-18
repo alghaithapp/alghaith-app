@@ -563,10 +563,16 @@ class _PremiumRestaurantCard extends StatelessWidget {
     final customerPhone = MerchantProfileFields.customerVisiblePhone(profile);
     final customerWhatsApp = MerchantProfileFields.customerVisibleWhatsApp(profile);
 
-    // Placeholder data for stats if not available in backend
+    // إحصائيات حقيقية من الباكند — لا بيانات وهمية
     final productsCount = profile['totalProducts'] ?? products.length;
-    final ordersCount = profile['completedOrders'] ?? '1.2K';
-    final clientsCount = profile['totalClients'] ?? '3.6K';
+    final dynamic completedOrdersRaw = profile['completedOrders'];
+    final ordersCount = (completedOrdersRaw is num && completedOrdersRaw > 0)
+        ? completedOrdersRaw.toString()
+        : '0';
+    final dynamic totalClientsRaw = profile['totalClients'];
+    final clientsCount = (totalClientsRaw is num && totalClientsRaw > 0)
+        ? totalClientsRaw.toString()
+        : '0';
 
     return Container(
       margin: const EdgeInsets.only(bottom: 20),
@@ -583,74 +589,156 @@ class _PremiumRestaurantCard extends StatelessWidget {
       ),
       child: Column(
         children: [
-          // 1. Split Header (Cover + Info)
+          // 1. Header — الغلاف كامل العرض مع معلومات التاجر
           SizedBox(
-            height: 180,
+            height: 200,
             child: Stack(
               children: [
-                // Cover Image (Left Half mostly)
-                Row(
-                  children: [
-                    Expanded(
-                      flex: 6,
-                      child: ClipRRect(
-                        borderRadius: const BorderRadius.only(
-                          topLeft: Radius.circular(28),
-                          bottomLeft: Radius.circular(0),
-                        ),
-                        child: AppImage(
-                          imageData: ImageStorageService.merchantUploadedImageRef(
-                            profile['cover_image_url'] ?? profile['coverImageBase64'],
-                          ),
-                          height: double.infinity,
-                          fit: BoxFit.cover,
-                        ),
-                      ),
+                // الغلاف — كامل المساحة
+                Positioned.fill(
+                  child: ClipRRect(
+                    borderRadius: const BorderRadius.only(
+                      topLeft: Radius.circular(28),
+                      topRight: Radius.circular(28),
                     ),
-                    const Spacer(flex: 4),
-                  ],
+                    child: AppImage(
+                      imageData: ImageStorageService.merchantUploadedImageRef(
+                        profile['cover_image_url'] ?? profile['coverImageBase64'],
+                      ),
+                      fit: BoxFit.cover,
+                    ),
+                  ),
                 ),
-                // Gradient Overlay to transition cover to info
+                // طبقة شفافة من اليمين لتحسين النص
                 Positioned.fill(
                   child: Container(
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
-                        begin: Alignment.centerLeft,
-                        end: Alignment.centerRight,
+                        begin: Alignment.centerRight,
+                        end: Alignment.centerLeft,
                         colors: [
+                          Colors.black.withValues(alpha: 0.6),
+                          Colors.black.withValues(alpha: 0.15),
                           Colors.transparent,
-                          Colors.white.withValues(alpha: 0.1),
-                          Colors.white,
                         ],
-                        stops: const [0.0, 0.4, 0.6],
+                        stops: const [0.0, 0.35, 0.65],
                       ),
                     ),
                   ),
                 ),
-                // Top Status Badge
+                // معلومات التاجر + الصورة الدائرية
+                Positioned.fill(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text(
+                                profile['store_name']?.toString() ?? 'المتجر',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontFamily: 'Cairo',
+                                  fontWeight: FontWeight.w900,
+                                  fontSize: 22,
+                                  color: Colors.white,
+                                  height: 1.2,
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                profile['description']?.toString() ?? '',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontFamily: 'Cairo',
+                                  fontSize: 12,
+                                  color: Colors.white70,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Row(
+                                children: [
+                                  Icon(Icons.location_on, color: Colors.white.withValues(alpha: 0.6), size: 12),
+                                  const SizedBox(width: 4),
+                                  Flexible(
+                                    child: Text(
+                                      MerchantProfileFields.addressFromMap(profile),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        fontFamily: 'Cairo',
+                                        fontSize: 10,
+                                        color: Colors.white.withValues(alpha: 0.6),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        // الصورة الدائرية (اللوجو)
+                        Stack(
+                          alignment: Alignment.bottomRight,
+                          children: [
+                            Container(
+                              width: 80,
+                              height: 80,
+                              padding: const EdgeInsets.all(3),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                shape: BoxShape.circle,
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withValues(alpha: 0.2),
+                                    blurRadius: 10,
+                                  ),
+                                ],
+                              ),
+                              child: ClipOval(
+                                child: AppImage(
+                                  imageData: ImageStorageService.merchantUploadedImageRef(
+                                    profile['logo_image_url'] ??
+                                        profile['logoImageBase64'] ??
+                                        profile['profile_image_base64'],
+                                  ),
+                                ),
+                              ),
+                            ),
+                            Container(
+                              padding: const EdgeInsets.all(3),
+                              decoration: const BoxDecoration(
+                                color: Colors.white,
+                                shape: BoxShape.circle,
+                              ),
+                              child: Icon(Icons.verified, color: primaryOrange, size: 20),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                // شريط الحالة — مفتوح الآن + التقييم
                 Positioned(
                   top: 16,
                   left: 16,
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                     decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.9),
+                      color: Colors.white.withValues(alpha: 0.92),
                       borderRadius: BorderRadius.circular(14),
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        if (hasRating) ...[
-                          const Icon(Icons.star, color: Colors.amber, size: 14),
-                          const SizedBox(width: 4),
-                          Text(
-                            ratingLabel,
-                            style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 12),
-                          ),
-                          const SizedBox(width: 8),
-                          Container(width: 1, height: 12, color: Colors.grey.shade300),
-                          const SizedBox(width: 8),
-                        ],
                         Container(
                           width: 8,
                           height: 8,
@@ -669,105 +757,26 @@ class _PremiumRestaurantCard extends StatelessWidget {
                             color: isOpen ? Colors.green : Colors.grey,
                           ),
                         ),
+                        if (hasRating) ...[
+                          const SizedBox(width: 8),
+                          Container(width: 1, height: 14, color: Colors.grey.shade300),
+                          const SizedBox(width: 8),
+                          const Icon(Icons.star, color: Colors.amber, size: 14),
+                          const SizedBox(width: 4),
+                          Text(
+                            ratingLabel,
+                            style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 12),
+                          ),
+                        ],
                       ],
                     ),
-                  ),
-                ),
-                // Merchant Info (Right Side)
-                Positioned(
-                  top: 16,
-                  right: 16,
-                  bottom: 0,
-                  left: 140, // Avoid overlapping cover
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      // Circular Avatar with Verification
-                      Stack(
-                        alignment: Alignment.bottomRight,
-                        children: [
-                          Container(
-                            width: 72,
-                            height: 72,
-                            padding: const EdgeInsets.all(2.5),
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              shape: BoxShape.circle,
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withValues(alpha: 0.1),
-                                  blurRadius: 10,
-                                ),
-                              ],
-                            ),
-                            child: ClipOval(
-                              child: AppImage(
-                                imageData: ImageStorageService.merchantUploadedImageRef(
-                                  profile['profile_image_base64'] ?? profile['logoImageBase64'],
-                                ),
-                              ),
-                            ),
-                          ),
-                          Container(
-                            padding: const EdgeInsets.all(2),
-                            decoration: const BoxDecoration(
-                              color: Colors.white,
-                              shape: BoxShape.circle,
-                            ),
-                            child: Icon(Icons.verified, color: primaryOrange, size: 18),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 10),
-                      Text(
-                        profile['store_name']?.toString() ?? 'المتجر',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontFamily: 'Cairo',
-                          fontWeight: FontWeight.w900,
-                          fontSize: 18,
-                          height: 1.2,
-                        ),
-                      ),
-                      Text(
-                        profile['description']?.toString() ?? 'وصف المتجر',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontFamily: 'Cairo',
-                          fontSize: 11,
-                          color: Colors.grey.shade600,
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.location_on, color: Colors.grey.shade400, size: 12),
-                          const SizedBox(width: 4),
-                          Flexible(
-                            child: Text(
-                              MerchantProfileFields.addressFromMap(profile),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontFamily: 'Cairo',
-                                fontSize: 10,
-                                color: Colors.grey.shade500,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
                   ),
                 ),
               ],
             ),
           ),
 
-          // 2. Stats Bar
+          // 2. Stats Bar — إحصائيات حقيقية من الباكند
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             child: Container(
@@ -782,9 +791,9 @@ class _PremiumRestaurantCard extends StatelessWidget {
                 children: [
                   _StatItem(label: 'منتج', value: '$productsCount', icon: Icons.shopping_bag_outlined),
                   _divider(),
-                  _StatItem(label: 'طلب', value: '$ordersCount', icon: Icons.shopping_cart_outlined),
+                  _StatItem(label: 'طلب', value: ordersCount, icon: Icons.shopping_cart_outlined),
                   _divider(),
-                  _StatItem(label: 'عميل', value: '$clientsCount', icon: Icons.groups_outlined),
+                  _StatItem(label: 'عميل', value: clientsCount, icon: Icons.groups_outlined),
                   _divider(),
                   _StatItem(label: 'التقييم', value: ratingLabel, icon: Icons.star_outline_rounded, color: Colors.amber),
                 ],
@@ -858,48 +867,55 @@ class _PremiumRestaurantCard extends StatelessWidget {
             ),
           ],
 
-          const SizedBox(height: 20),
+          const SizedBox(height: 16),
 
-          // 4. Action Bar
+          // 4. Action Bar — 3 أزرار صغيرة + زر مستطيل بالعرض كامل تحتها
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-            child: Row(
+            child: Column(
               children: [
-                _MiniActionBtn(
-                  label: 'مراسلة',
-                  icon: Icons.chat_bubble_outline_rounded,
-                  color: Colors.blueGrey,
-                  onTap: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('ميزة المراسلة قريباً...', style: TextStyle(fontFamily: 'Cairo'))),
-                    );
-                  },
+                Row(
+                  children: [
+                    _MiniActionBtn(
+                      label: 'مراسلة',
+                      icon: Icons.chat_bubble_outline_rounded,
+                      color: Colors.blueGrey,
+                      onTap: () {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('ميزة المراسلة قريباً...', style: TextStyle(fontFamily: 'Cairo'))),
+                        );
+                      },
+                    ),
+                    const SizedBox(width: 8),
+                    _MiniActionBtn(
+                      label: 'اتصال',
+                      icon: Icons.phone_outlined,
+                      color: Colors.green,
+                      onTap: () {
+                        if (customerPhone.isNotEmpty) AppHelpers.makePhoneCall(customerPhone);
+                      },
+                    ),
+                    const SizedBox(width: 8),
+                    _MiniActionBtn(
+                      label: 'واتساب',
+                      icon: Icons.chat_outlined,
+                      color: const Color(0xFF25D366),
+                      onTap: () {
+                        if (customerWhatsApp.isNotEmpty) AppHelpers.launchWhatsApp(customerWhatsApp, 'مرحباً، أريد الاستفسار عن منتجاتكم.');
+                      },
+                    ),
+                    const Spacer(),
+                  ],
                 ),
-                const SizedBox(width: 8),
-                _MiniActionBtn(
-                  label: 'اتصال',
-                  icon: Icons.phone_outlined,
-                  color: Colors.green,
-                  onTap: () {
-                    if (customerPhone.isNotEmpty) AppHelpers.makePhoneCall(customerPhone);
-                  },
-                ),
-                const SizedBox(width: 8),
-                _MiniActionBtn(
-                  label: 'واتساب',
-                  icon: Icons.chat_outlined,
-                  color: const Color(0xFF25D366),
-                  onTap: () {
-                    if (customerWhatsApp.isNotEmpty) AppHelpers.launchWhatsApp(customerWhatsApp, 'مرحباً، أريد الاستفسار عن منتجاتكم.');
-                  },
-                ),
-                const SizedBox(width: 8),
-                Expanded(
+                const SizedBox(height: 12),
+                // زر عرض المتجر — مستطيل بعرض كامل
+                SizedBox(
+                  width: double.infinity,
+                  height: 52,
                   child: Container(
-                    height: 48,
                     decoration: BoxDecoration(
                       gradient: LinearGradient(colors: [primaryOrange, const Color(0xFFFF8A00)]),
-                      borderRadius: BorderRadius.circular(16),
+                      borderRadius: BorderRadius.circular(14),
                       boxShadow: [
                         BoxShadow(
                           color: primaryOrange.withValues(alpha: 0.25),
@@ -912,14 +928,14 @@ class _PremiumRestaurantCard extends StatelessWidget {
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.transparent,
                         shadowColor: Colors.transparent,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                         padding: EdgeInsets.zero,
                       ),
                       onPressed: onTap,
                       icon: const Icon(Icons.store_outlined, color: Colors.white, size: 20),
                       label: const Text(
                         'عرض المتجر',
-                        style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w900, color: Colors.white, fontSize: 13),
+                        style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w900, color: Colors.white, fontSize: 14),
                       ),
                     ),
                   ),
