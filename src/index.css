@@ -36,6 +36,30 @@
   --radius-xl: 24px;
   --sidebar-width: 272px;
 }
+/* ── Skeleton Loading ── */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.skeleton {
+  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+  border-radius: var(--radius-sm);
+}
+
+.skeleton-text {
+  height: 14px;
+  margin-bottom: 8px;
+  width: 60%;
+}
+
+.skeleton-title {
+  height: 20px;
+  margin-bottom: 12px;
+  width: 40%;
+}
 
 * {
   box-sizing: border-box;
@@ -185,7 +209,8 @@ button {
     transform 0.15s ease,
     background-color 0.15s ease,
     border-color 0.15s ease,
-    opacity 0.15s ease;
+    opacity 0.15s ease,
+    box-shadow 0.15s ease;
 }
 
 .primary-button {
@@ -229,6 +254,29 @@ button {
   background: var(--error-bg);
   color: var(--error);
   border-color: rgba(198, 40, 40, 0.18);
+}
+
+.filter-chip {
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface-card);
+  color: var(--brand-primary-dark);
+  font-weight: 700;
+  font-size: 0.82rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.filter-chip:hover {
+  border-color: var(--brand-primary);
+  background: rgba(20, 91, 102, 0.05);
+}
+
+.filter-chip.active {
+  background: var(--brand-primary);
+  color: #fff;
+  border-color: var(--brand-primary);
 }
 
 .primary-button:hover,
@@ -602,16 +650,13 @@ button {
   padding: 16px;
   display: grid;
   gap: 14px;
-  transition:
-    transform 0.15s ease,
-    border-color 0.15s ease,
-    box-shadow 0.15s ease;
+  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
 .merchant-card:hover,
 .merchant-card.selected {
-  transform: translateY(-1px);
-  border-color: rgba(20, 91, 102, 0.35);
+  transform: translateY(-2px);
+  border-color: var(--brand-primary);
   box-shadow: var(--shadow-md);
 }
 
@@ -867,6 +912,38 @@ button {
   min-height: 160px;
 }
 
+.loading-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  padding: 48px 24px;
+  color: var(--text-muted);
+}
+
+.loading-state.compact {
+  padding: 32px 16px;
+}
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 40px 24px;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.spin {
+  animation: spin-anim 1s linear infinite;
+}
+
+@keyframes spin-anim {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
 .message {
   border-radius: var(--radius-md);
   padding: 12px 16px;
@@ -1017,20 +1094,26 @@ tbody tr:hover {
 }
 
 .account-filter-chip {
-  border: 1px solid var(--border);
-  background: var(--surface-muted);
-  color: var(--text-secondary);
+  padding: 6px 14px;
   border-radius: 999px;
-  padding: 8px 14px;
-  font-family: inherit;
+  border: 1px solid var(--border);
+  background: var(--surface-card);
+  color: var(--text-secondary);
   font-weight: 700;
+  font-size: 0.78rem;
   cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.account-filter-chip:hover {
+  border-color: var(--brand-primary);
+  color: var(--brand-primary);
 }
 
 .account-filter-chip.active {
   background: var(--brand-primary);
-  border-color: var(--brand-primary);
   color: #fff;
+  border-color: var(--brand-primary);
 }
 
 .account-card .merchant-actions {
@@ -1296,5 +1379,5 @@ tbody tr:hover {
   font-weight: 700;
   font-family: 'system-ui', sans-serif;
   white-space: nowrap;
-  color: #6b7280;
+  color: var(--text-secondary);
 }
