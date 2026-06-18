@@ -255,6 +255,10 @@ class _DriverSetupScreenState extends State<DriverSetupScreen> {
           onPressed: () {
             if (Navigator.of(context).canPop()) {
               Navigator.of(context).pop();
+            } else {
+              // إذا لم يكن هناك Route (مثلاً من main.dart مباشرة)
+              // نرجع المستخدم إلى دور الزبون
+              context.read<AppProvider>().setUserRole('customer');
             }
           },
         ),

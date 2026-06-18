@@ -676,6 +676,7 @@ class DriverAccountScreen extends StatelessWidget {
           width: double.infinity,
           child: CupertinoButton(
             color: AppColors.accent,
+            textColor: Colors.white,
             borderRadius: BorderRadius.circular(18),
             onPressed: () => _showEditProfileSheet(context),
             child: Text(
@@ -689,6 +690,7 @@ class DriverAccountScreen extends StatelessWidget {
           width: double.infinity,
           child: CupertinoButton(
             color: const Color(0xFFE040FB),
+            textColor: Colors.white,
             borderRadius: BorderRadius.circular(18),
             onPressed: () => showRoleSwitcher(context, provider),
             child: const Text(
@@ -703,6 +705,7 @@ class DriverAccountScreen extends StatelessWidget {
           width: double.infinity,
           child: CupertinoButton(
             color: Colors.black87,
+            textColor: Colors.white,
             borderRadius: BorderRadius.circular(18),
             onPressed: () => provider.resetAll(),
             child: Text(
@@ -837,6 +840,7 @@ class DriverAccountScreen extends StatelessWidget {
                         width: double.infinity,
                         child: CupertinoButton(
                           color: AppColors.accent,
+                          textColor: Colors.white,
                           borderRadius: BorderRadius.circular(18),
                           padding: const EdgeInsets.symmetric(vertical: 15),
                           onPressed: () async {
