@@ -1071,7 +1071,7 @@ class AppProvider extends ChangeNotifier {
       // التسجيل الناقص (مثل ملف المندوب) يُكمَّل تلقائياً عبر توجيه الشاشات.
       case 'marketplace':
       case 'delivery':
-        return role == 'customer' || role == 'merchant' || role == 'delivery';
+        return role == 'customer' || role == 'merchant' || role == 'delivery' || role == 'driver';
       case 'driver':
         return role == 'driver';
       default:
