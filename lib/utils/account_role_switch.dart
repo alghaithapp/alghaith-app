@@ -87,6 +87,11 @@ Future<void> switchAccountRoleWithLoading(
 
   safetyTimer = Timer(const Duration(seconds: 6), closeLoadingDialog);
 
+  // ننتظر فريم كامل لنتأكد أن الـ Dialog بُني قبل متابعة التبديل.
+  // لو ما انتظرنا، `dialogContext` يكون null ومن ثم listener ما يقدر يغلقه،
+  // وتظهر صفحة الإعداد الجديدة وفوقها الـ Dialog معلّق.
+  await Future<void>.delayed(Duration.zero);
+
   var switched = false;
   try {
     switched = await provider.setUserRole(role);
