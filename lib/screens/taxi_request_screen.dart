@@ -6,7 +6,8 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart' as geo;
 import 'package:http/http.dart' as http;
-import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
 
 import '../core/config/app_config.dart';
@@ -36,11 +37,11 @@ class _TaxiRequestScreenState extends State<TaxiRequestScreen> {
 
   double _estimatedDistanceKm = 0.0;
   bool _isCalculatingDistance = false;
-  Position _mapCenter = Position(_centerLng, _centerLat);
+  LatLng _mapCenter = LatLng(_centerLat, _centerLng);
   int _mapRefreshSeed = 0;
-  Position? _pickupPosition;
-  Position? _dropoffPosition;
-  List<Position> _routePolyline = const [];
+  LatLng? _pickupPosition;
+  LatLng? _dropoffPosition;
+  List<LatLng> _routePolyline = const [];
   bool _isLocating = false;
 
   late String _selectedVehicleId;
@@ -105,10 +106,10 @@ class _TaxiRequestScreenState extends State<TaxiRequestScreen> {
     showCupertinoDialog(context: context, builder: (c) => CupertinoAlertDialog(title: const Text('خارج نطاق الخدمة'), content: const Text('عذراً، خدمة تكسي الغيث متوفرة داخل قضاء الصويرة وبمساحة 15 كم من المركز فقط.'), actions: [CupertinoDialogAction(child: const Text('حسناً'), onPressed: () => Navigator.pop(c))]));
   }
 
-  Future<void> _handleMapTap(Position pos) async {
-    if (!_isWithinServiceArea(pos.lat.toDouble(), pos.lng.toDouble())) { _showAreaWarning(); return; }
+  Future<void> _handleMapTap(LatLng pos) async {
+    if (!_isWithinServiceArea(pos.latitude, pos.longitude)) { _showAreaWarning(); return; }
     setState(() => _isLocating = true);
-    final address = await _resolveAddress(pos.lat.toDouble(), pos.lng.toDouble());
+    final address = await _resolveAddress(pos.latitude, pos.longitude);
     setState(() {
       if (_isPickupFocused) { _pickupController.text = address ?? 'موقع مخصص'; _pickupPosition = pos; }
       else { _dropoffController.text = address ?? 'وجهة مخصصة'; _dropoffPosition = pos; }
@@ -132,15 +133,15 @@ class _TaxiRequestScreenState extends State<TaxiRequestScreen> {
     setState(() => _isCalculatingDistance = true);
     final token = AppConfig.effectiveMapboxPublicToken;
     try {
-      final uri = Uri.parse('https://api.mapbox.com/directions/v5/mapbox/driving/${_pickupPosition!.lng},${_pickupPosition!.lat};${_dropoffPosition!.lng},${_dropoffPosition!.lat}?geometries=geojson&access_token=$token');
+      final uri = Uri.parse('https://api.mapbox.com/directions/v5/mapbox/driving/${_pickupPosition!.longitude},${_pickupPosition!.latitude};${_dropoffPosition!.longitude},${_dropoffPosition!.latitude}?geometries=geojson&access_token=$token');
       final response = await http.get(uri);
       final data = jsonDecode(response.body);
       final route = data['routes'][0];
       final coords = route['geometry']['coordinates'] as List;
       setState(() {
         _estimatedDistanceKm = (route['distance'] as num) / 1000.0;
-        _routePolyline = coords.map((c) => Position(c[0].toDouble(), c[1].toDouble())).toList();
-        _mapCenter = Position((_pickupPosition!.lng + _dropoffPosition!.lng) / 2, (_pickupPosition!.lat + _dropoffPosition!.lat) / 2);
+        _routePolyline = coords.map((c) => LatLng(c[1].toDouble(), c[0].toDouble())).toList();
+        _mapCenter = LatLng((_pickupPosition!.latitude + _dropoffPosition!.latitude) / 2, (_pickupPosition!.longitude + _dropoffPosition!.longitude) / 2);
         _mapRefreshSeed++;
       });
     } catch (_) {} finally { setState(() => _isCalculatingDistance = false); }
@@ -153,8 +154,8 @@ class _TaxiRequestScreenState extends State<TaxiRequestScreen> {
     final uri = Uri.parse('https://api.mapbox.com/geocoding/v5/mapbox.places/${Uri.encodeComponent(addr)}.json?limit=1&access_token=$token');
     final response = await http.get(uri);
     final center = jsonDecode(response.body)['features'][0]['center'] as List;
-    final pos = Position(center[0].toDouble(), center[1].toDouble());
-    if (!_isWithinServiceArea(pos.lat.toDouble(), pos.lng.toDouble())) { _showAreaWarning(); return; }
+    final pos = LatLng(center[1].toDouble(), center[0].toDouble());
+    if (!_isWithinServiceArea(pos.latitude, pos.longitude)) { _showAreaWarning(); return; }
     setState(() {
       if (_isPickupFocused) { _pickupController.text = addr; _pickupPosition = pos; }
       else { _dropoffController.text = addr; _dropoffPosition = pos; }
@@ -184,7 +185,7 @@ class _TaxiRequestScreenState extends State<TaxiRequestScreen> {
           Positioned(top: 40, right: 16, child: _CircleBtn(icon: CupertinoIcons.back, onTap: () => Navigator.pop(context))),
           Positioned(left: 16, top: 40, child: _CircleBtn(icon: _isLocating ? CupertinoIcons.refresh : CupertinoIcons.location_fill, onTap: () async {
             final p = await geo.Geolocator.getCurrentPosition();
-            _handleMapTap(Position(p.longitude, p.latitude));
+            _handleMapTap(LatLng(p.latitude, p.longitude));
           })),
           DraggableScrollableSheet(
             initialChildSize: hasLocations ? 0.55 : 0.35, minChildSize: 0.25, maxChildSize: 0.85,
@@ -280,32 +281,63 @@ class _SumItem extends StatelessWidget {
 }
 
 class _TaxiMapBackdrop extends StatefulWidget {
-  final Position mapCenter; final int mapRefreshSeed; final Position? pickupPosition, dropoffPosition; final List<Position> routePolyline; final ValueChanged<Position> onMapTap;
+  final LatLng mapCenter; final int mapRefreshSeed; final LatLng? pickupPosition, dropoffPosition; final List<LatLng> routePolyline; final ValueChanged<LatLng> onMapTap;
   const _TaxiMapBackdrop({required this.mapCenter, required this.mapRefreshSeed, this.pickupPosition, this.dropoffPosition, required this.routePolyline, required this.onMapTap});
   @override State<_TaxiMapBackdrop> createState() => _TaxiMapBackdropState();
 }
 
 class _TaxiMapBackdropState extends State<_TaxiMapBackdrop> {
-  MapboxMap? _map; CircleAnnotationManager? _c; PolylineAnnotationManager? _l;
-  @override Widget build(BuildContext context) => MapWidget(
-    styleUri: 'mapbox://styles/mapbox/navigation-day-v1',
-    onMapCreated: (m) async {
-      _map = m; _c = await m.annotations.createCircleAnnotationManager(); _l = await m.annotations.createPolylineAnnotationManager(); _upd();
-    },
-    onTapListener: (p) {
-      if (p.point.coordinates.lng != null && p.point.coordinates.lat != null) {
-        widget.onMapTap(Position(p.point.coordinates.lng!.toDouble(), p.point.coordinates.lat!.toDouble()));
-      }
-    },
-  );
-  void _upd() async {
-    if (_map == null) return; await _c?.deleteAll(); await _l?.deleteAll();
-    if (widget.routePolyline.isNotEmpty) await _l?.create(PolylineAnnotationOptions(geometry: LineString(coordinates: widget.routePolyline), lineColor: AppColors.accent.value, lineWidth: 4));
-    if (widget.pickupPosition != null) await _c?.create(CircleAnnotationOptions(geometry: Point(coordinates: widget.pickupPosition!), circleColor: Colors.green.value, circleRadius: 8));
-    if (widget.dropoffPosition != null) await _c?.create(CircleAnnotationOptions(geometry: Point(coordinates: widget.dropoffPosition!), circleColor: Colors.orange.value, circleRadius: 8));
-    _map?.setCamera(CameraOptions(center: Point(coordinates: widget.mapCenter), zoom: 13));
+  final MapController _mapController = MapController();
+
+  @override
+  Widget build(BuildContext context) {
+    return FlutterMap(
+      mapController: _mapController,
+      options: MapOptions(
+        initialCenter: LatLng(32.9256, 44.7766),
+        initialZoom: 13.0,
+        onTap: (tapPos, latlng) => widget.onMapTap(latlng),
+      ),
+      children: [
+        TileLayer(
+          urlTemplate: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+          subdomains: ['a', 'b', 'c'],
+        ),
+        if (widget.routePolyline.isNotEmpty)
+          PolylineLayer(
+            polylines: [
+              Polyline(
+                points: widget.routePolyline,
+                color: AppColors.accent,
+                strokeWidth: 4.0,
+              ),
+            ],
+          ),
+        MarkerLayer(
+          markers: [
+            if (widget.pickupPosition != null)
+              Marker(
+                point: widget.pickupPosition!,
+                child: const Icon(Icons.circle, color: Colors.green, size: 16),
+              ),
+            if (widget.dropoffPosition != null)
+              Marker(
+                point: widget.dropoffPosition!,
+                child: const Icon(Icons.location_on, color: Colors.orange, size: 24),
+              ),
+          ],
+        ),
+      ],
+    );
   }
-  @override void didUpdateWidget(old) { super.didUpdateWidget(old); _upd(); }
+
+  @override
+  void didUpdateWidget(covariant _TaxiMapBackdrop old) {
+    super.didUpdateWidget(old);
+    if (widget.mapRefreshSeed != old.mapRefreshSeed) {
+      _mapController.move(widget.mapCenter, 13.0);
+    }
+  }
 }
 
 class _GeoPoint { final double latitude, longitude; const _GeoPoint(this.latitude, this.longitude); }

@@ -59,18 +59,16 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
     super.dispose();
   }
 
-  void _onMapEvent(MapEvent event) {
-    if (event is MapEventFlingAnimationEnd ||
-        event is MapEventDragEnd) {
-      final center = _mapController.camera.center;
-      if (!mounted) return;
-      setState(() {
-        _center = center;
-        if (_resolvedAddress.isNotEmpty) {
-          _resolvedAddress = '';
-        }
-      });
-    }
+  void _onPositionChanged(dynamic position, bool hasGesture) {
+    if (!hasGesture) return;
+    final center = _mapController.camera.center;
+    if (!mounted) return;
+    setState(() {
+      _center = center;
+      if (_resolvedAddress.isNotEmpty) {
+        _resolvedAddress = '';
+      }
+    });
   }
 
   String get _centerSummary =>
@@ -173,7 +171,7 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
                       options: MapOptions(
                         initialCenter: _center,
                         initialZoom: 14.0,
-                        onMapEvent: _onMapEvent,
+                        onPositionChanged: _onPositionChanged,
                       ),
                       children: [
                         TileLayer(

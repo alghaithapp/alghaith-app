@@ -1,4 +1,4 @@
-import { FormEvent, ReactNode, useEffect, useMemo, useRef, useState } from 'react';
+import React, { FormEvent, ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle,
   BadgeCheck,
@@ -233,490 +233,6 @@ function isCategoryEnabledOnPlatform(
   return DEFAULT_HOME_CATEGORY_IDS.has(categoryId);
 }
 
-function renderMerchantCard(
-  merchant: MerchantSummary,
-  activeActionKey: string,
-  accounts: AdminAccountSummary[],
-  handleMerchantApproval: (m: MerchantSummary) => Promise<void>,
-  openRejectConfirm: (target: RejectAccountTarget) => void,
-  handleMerchantAction: (m: MerchantSummary, kind: 'freeze' | 'bazaar') => Promise<void>,
-  handleBazaarSync: (m: MerchantSummary) => Promise<void>,
-  openDeleteConfirm: (target: AdminAccountSummary) => void,
-  selectedMerchantPhone: string,
-) {
-  const freezeLoading = activeActionKey === `freeze:${merchant.phone}`;
-  const bazaarLoading = activeActionKey === `bazaar:${merchant.phone}`;
-  const syncLoading = activeActionKey === `sync:${merchant.phone}`;
-  const approvalLoading = activeActionKey === `merchant-approval:${merchant.phone}`;
-  const rejectLoading = activeActionKey === `reject-account:${merchant.phone}`;
-  const isRejected = merchant.approvalStatus === 'rejected';
-  const isPending = !merchant.isApproved && !isRejected;
-  const selected = selectedMerchantPhone === merchant.phone;
-  return (
-    <article
-      key={merchant.phone}
-      className={selected ? 'merchant-card selected' : 'merchant-card'}
-      onClick={() => setSelectedMerchantPhone(merchant.phone)}
-    >
-      <div className="merchant-main">
-        <div>
-          <div className="merchant-title-row">
-            <h4>
-              {merchant.storeName ||
-                (merchant.isProfessional ||
-                merchant.primaryServiceId === 'professionals'
-                  ? 'مهني بدون اسم'
-                  : 'متجر بدون اسم')}
-            </h4>
-            {merchant.isProfessional ||
-            merchant.primaryServiceId === 'professionals' ? (
-              <span className="status-badge muted">مهني</span>
-            ) : null}
-            {merchant.isApproved ? (
-              <span className="status-badge success">مفعّل</span>
-            ) : isRejected ? (
-              <span className="status-badge danger">مرفوض</span>
-            ) : (
-              <span className="status-badge warning">
-                بانتظار الموافقة
-              </span>
-            )}
-            {merchant.isFrozen ? (
-              <span className="status-badge danger">مجمّد</span>
-            ) : !merchant.isOpen ? (
-              <span className="status-badge danger">المتجر مغلق</span>
-            ) : merchant.isBazaarMember ? (
-              <span className="status-badge success">مفعل في البازار</span>
-            ) : (
-              <span className="status-badge muted">بانتظار/خارج البازار</span>
-            )}
-            {merchant.isBazaarMember ? (
-              merchant.visibleToCustomers ? (
-                <span className="status-badge success">
-                  ظاهر للزبائن ({merchant.visibleProductCount})
-                </span>
-              ) : (
-                <span className="status-badge danger">
-                  غير ظاهر للزبائن
-                </span>
-              )
-            ) : null}
-          </div>
-          <p className="merchant-meta">
-            {merchant.fullName || 'بدون اسم مالك'} ·{' '}
-            {serviceLabel(merchant.primaryServiceId)} ·{' '}
-            <span dir="ltr">{merchant.phone}</span>
-          </p>
-          <p className="merchant-description">
-            {merchant.description || 'لا يوجد وصف محفوظ.'}
-          </p>
-          {isRejected && merchant.rejectionMessageAr ? (
-            <p className="courier-rejection-note">
-              سبب الرفض: {merchant.rejectionMessageAr}
-            </p>
-          ) : null}
-          {merchant.isBazaarMember &&
-          !merchant.visibleToCustomers &&
-          merchant.visibilityNotes?.length ? (
-            <p className="merchant-visibility-note">
-              سبب عدم الظهور:{' '}
-              {merchant.visibilityNotes.join(' · ')}
-            </p>
-          ) : null}
-        </div>
-
-        <div className="merchant-stats-inline">
-          <MiniStat
-            label="المنتجات"
-            value={merchant.totalProducts ?? 0}
-            hint={
-              merchant.availableProducts !== merchant.totalProducts
-                ? `${merchant.availableProducts ?? 0} متاح`
-                : undefined
-            }
-          />
-          <MiniStat label="الطلبات" value={merchant.totalOrders} />
-          <MiniStat
-            label="المكتمل"
-            value={merchant.completedOrders}
-          />
-          <MiniStat
-            label="الأرباح"
-            value={`${formatMoney(merchant.totalRevenue)} د.ع`}
-          />
-        </div>
-      </div>
-
-      <div className="merchant-actions">
-        <button
-          className={
-            merchant.isApproved
-              ? 'soft-button danger'
-              : 'soft-button success'
-          }
-          disabled={approvalLoading || rejectLoading}
-          onClick={(event) => {
-            event.stopPropagation();
-            handleMerchantApproval(merchant).catch(() => undefined);
-          }}
-        >
-          {approvalLoading ? (
-            <LoaderCircle className="spin" size={16} />
-          ) : (
-            <BadgeCheck size={16} />
-          )}
-          <span>
-            {merchant.isApproved
-              ? 'إلغاء تفعيل الحساب'
-              : 'موافقة وتفعيل'}
-          </span>
-        </button>
-
-        {isPending || isRejected ? (
-          <button
-            className="soft-button danger"
-            disabled={approvalLoading || rejectLoading}
-            onClick={(event) => {
-              event.stopPropagation();
-              openRejectConfirm({
-                phone: merchant.phone,
-                displayName:
-                  merchant.storeName || merchant.fullName || merchant.phone,
-                kind: 'merchant',
-              });
-            }}
-          >
-            {rejectLoading ? (
-              <LoaderCircle className="spin" size={16} />
-            ) : (
-              <XCircle size={16} />
-            )}
-            <span>رفض الطلب</span>
-          </button>
-        ) : null}
-
-        <button
-          className={merchant.isFrozen ? 'soft-button' : 'soft-button danger'}
-          disabled={freezeLoading}
-          onClick={(event) => {
-            event.stopPropagation();
-            handleMerchantAction(merchant, 'freeze').catch(() => undefined);
-          }}
-        >
-          {freezeLoading ? (
-            <LoaderCircle className="spin" size={16} />
-          ) : (
-            <AlertTriangle size={16} />
-          )}
-          <span>{merchant.isFrozen ? 'فك التجميد' : 'تجميد التاجر'}</span>
-        </button>
-
-        {canRequestBazaarApproval(merchant) ? (
-          <button
-            className={
-              merchant.isBazaarMember
-                ? 'soft-button'
-                : 'soft-button success'
-            }
-            disabled={bazaarLoading}
-            onClick={(event) => {
-              event.stopPropagation();
-              handleMerchantAction(merchant, 'bazaar').catch(
-                () => undefined,
-              );
-            }}
-          >
-            {bazaarLoading ? (
-              <LoaderCircle className="spin" size={16} />
-            ) : (
-              <BadgeCheck size={16} />
-            )}
-            <span>
-              {merchant.isBazaarMember
-                ? 'سحب الموافقة'
-                : 'موافقة على البازار'}
-            </span>
-          </button>
-        ) : (
-          <span className="status-badge muted">
-            لا ينطبق على هذا القسم
-          </span>
-        )}
-
-        {merchant.isBazaarMember &&
-        !merchant.visibleToCustomers ? (
-          <button
-            className="soft-button success"
-            disabled={syncLoading}
-            onClick={(event) => {
-              event.stopPropagation();
-              handleBazaarSync(merchant).catch(() => undefined);
-            }}
-          >
-            {syncLoading ? (
-              <LoaderCircle className="spin" size={16} />
-            ) : (
-              <Package2 size={16} />
-            )}
-            <span>إصلاح الظهور في البازار</span>
-          </button>
-        ) : null}
-
-        <button
-          className="soft-button danger"
-          disabled={approvalLoading || rejectLoading || freezeLoading}
-          onClick={(event) => {
-            event.stopPropagation();
-            openDeleteConfirm(
-              accounts.find((item) => item.phone === merchant.phone) ?? {
-                phone: merchant.phone,
-                displayName:
-                  merchant.storeName || merchant.fullName || merchant.phone,
-                fullName: merchant.fullName,
-                role: merchant.role,
-                accountType: '',
-                kind: 'merchant',
-                isSuspended: merchant.isFrozen,
-                merchantStoreName: merchant.storeName,
-                primaryServiceId: merchant.primaryServiceId,
-                courierApproved: false,
-                updatedAt: null,
-                createdAt: merchant.createdAt,
-                hasMerchantProfile: true,
-                hasCourierProfile: false,
-                hasDriverProfile: false,
-              },
-            );
-          }}
-        >
-          <Trash2 size={16} />
-          <span>حذف الحساب</span>
-        </button>
-      </div>
-    </article>
-  );
-}
-
-function renderCourierCard(
-  courier: CourierSummary,
-  activeActionKey: string,
-  accounts: AdminAccountSummary[],
-  handleCourierApproval: (c: CourierSummary) => Promise<void>,
-  openRejectConfirm: (target: RejectAccountTarget) => void,
-  handleSuspendAccount: (account: AdminAccountSummary) => Promise<void>,
-  openDeleteConfirm: (target: AdminAccountSummary) => void,
-) {
-  const approvalLoading =
-    activeActionKey === `courier:${courier.phone}`;
-  const rejectLoading =
-    activeActionKey === `reject-account:${courier.phone}`;
-  const isRejected = courier.approvalStatus === 'rejected';
-  const isPending = !courier.isApproved && !isRejected;
-  return (
-    <article key={courier.phone} className="merchant-card courier-card">
-      <div className="merchant-main">
-        <div className="courier-card-leading">
-          <div>
-            <div className="merchant-title-row">
-              <h4>{courier.name || 'مندوب بدون اسم'}</h4>
-              {courier.isApproved ? (
-                <span className="status-badge success">مفعّل</span>
-              ) : isRejected ? (
-                <span className="status-badge danger">مرفوض</span>
-              ) : (
-                <span className="status-badge danger">
-                  بانتظار الموافقة
-                </span>
-              )}
-              {courier.isSuspended ? (
-                <span className="status-badge danger">معلّق</span>
-              ) : null}
-              {courier.isApproved ? (
-                courier.available ? (
-                  <span className="status-badge success">
-                    متاح للتوصيل
-                  </span>
-                ) : (
-                  <span className="status-badge muted">غير متاح</span>
-                )
-              ) : null}
-            </div>
-            <p className="merchant-meta">
-              هاتف التواصل:{' '}
-              <span dir="ltr">
-                {courier.contactPhone || courier.phone}
-              </span>
-            </p>
-            <p className="merchant-description">
-              {courier.homeAddress || 'لا يوجد عنوان محفوظ.'}
-            </p>
-            {isRejected && courier.rejectionMessageAr ? (
-              <p className="courier-rejection-note">
-                سبب الرفض: {courier.rejectionMessageAr}
-              </p>
-            ) : null}
-          </div>
-        </div>
-
-        <div className="courier-media-panel">
-          <div className="courier-media-head">
-            <strong>صورة الدراجة</strong>
-            {courier.vehicleImage ? (
-              <a
-                className="courier-media-link"
-                href={courier.vehicleImage}
-                target="_blank"
-                rel="noreferrer"
-              >
-                <ExternalLink size={14} />
-                <span>عرض بالحجم الكامل</span>
-              </a>
-            ) : null}
-          </div>
-          {courier.vehicleImage ? (
-            <a
-              href={courier.vehicleImage}
-              target="_blank"
-              rel="noreferrer"
-              className="courier-media-frame"
-            >
-              <img
-                className="courier-media-image"
-                src={courier.vehicleImage}
-                alt={courier.name || 'صورة الدراجة'}
-                loading="lazy"
-                referrerPolicy="no-referrer"
-              />
-            </a>
-          ) : (
-            <div className="courier-media-empty">
-              <Bike size={28} />
-              <span>لم يتم رفع صورة للدراجة</span>
-            </div>
-          )}
-        </div>
-      </div>
-
-      <div className="merchant-actions">
-        <button
-          className={
-            courier.isApproved
-              ? 'soft-button danger'
-              : 'soft-button success'
-          }
-          disabled={approvalLoading || rejectLoading}
-          onClick={() => {
-            handleCourierApproval(courier).catch(() => undefined);
-          }}
-        >
-          {approvalLoading ? (
-            <LoaderCircle className="spin" size={16} />
-          ) : (
-            <BadgeCheck size={16} />
-          )}
-          <span>
-            {courier.isApproved
-              ? 'إلغاء التفعيل'
-              : 'موافقة وتفعيل'}
-          </span>
-        </button>
-
-        {isPending || isRejected ? (
-          <button
-            className="soft-button danger"
-            disabled={approvalLoading || rejectLoading}
-            onClick={() => {
-              openRejectConfirm({
-                phone: courier.phone,
-                displayName: courier.name || courier.phone,
-                kind: 'courier',
-              });
-            }}
-          >
-            {rejectLoading ? (
-              <LoaderCircle className="spin" size={16} />
-            ) : (
-              <XCircle size={16} />
-            )}
-            <span>رفض الطلب</span>
-          </button>
-        ) : null}
-
-        <button
-          className={
-            courier.isSuspended
-              ? 'soft-button success'
-              : 'soft-button danger'
-          }
-          disabled={
-            approvalLoading ||
-            rejectLoading ||
-            activeActionKey === `suspend-account:${courier.phone}`
-          }
-          onClick={() => {
-            const account =
-              accounts.find((item) => item.phone === courier.phone) ?? {
-                phone: courier.phone,
-                displayName: courier.name || courier.phone,
-                fullName: courier.name,
-                role: courier.role,
-                accountType: courier.accountType,
-                kind: 'courier' as const,
-                isSuspended: courier.isSuspended === true,
-                merchantStoreName: '',
-                primaryServiceId: '',
-                courierApproved: courier.isApproved,
-                updatedAt: courier.updatedAt,
-                createdAt: null,
-                hasMerchantProfile: false,
-                hasCourierProfile: true,
-                hasDriverProfile: false,
-              };
-            handleSuspendAccount(account).catch(() => undefined);
-          }}
-        >
-          {activeActionKey === `suspend-account:${courier.phone}` ? (
-            <LoaderCircle className="spin" size={16} />
-          ) : (
-            <UserX size={16} />
-          )}
-          <span>
-            {courier.isSuspended ? 'فك التعليق' : 'تعليق الحساب'}
-          </span>
-        </button>
-
-        <button
-          className="soft-button danger"
-          disabled={approvalLoading || rejectLoading}
-          onClick={() => {
-            openDeleteConfirm(
-              accounts.find((item) => item.phone === courier.phone) ?? {
-                phone: courier.phone,
-                displayName: courier.name || courier.phone,
-                fullName: courier.name,
-                role: courier.role,
-                accountType: courier.accountType,
-                kind: 'courier',
-                isSuspended: courier.isSuspended === true,
-                merchantStoreName: '',
-                primaryServiceId: '',
-                courierApproved: courier.isApproved,
-                updatedAt: courier.updatedAt,
-                createdAt: null,
-                hasMerchantProfile: false,
-                hasCourierProfile: true,
-                hasDriverProfile: false,
-              },
-            );
-          }}
-        >
-          <Trash2 size={16} />
-          <span>حذف الحساب</span>
-        </button>
-      </div>
-    </article>
-  );
-}
 
 function App() {
   const [token, setToken] = useState<string | null>(null);
@@ -2145,22 +1661,59 @@ function App() {
                         const pendingCouriersList = filteredCouriers.filter(c => !c.isApproved && c.approvalStatus === 'pending');
                         const approvedCouriersList = filteredCouriers.filter(c => c.isApproved);
                         const rejectedCouriersList = filteredCouriers.filter(c => !c.isApproved && c.approvalStatus === 'rejected');
-                        return (
-                          <>
-                            {pendingCouriersList.length > 0 && <>
-                              <div className="section-divider"><span>📋 مناديب بانتظار التفعيل ({pendingCouriersList.length})</span></div>
-                              {pendingCouriersList.map(courier => renderCourierCard(courier))}
-                            </>}
-                            {approvedCouriersList.length > 0 && <>
-                              <div className="section-divider"><span>✅ المناديب النشطون ({approvedCouriersList.length})</span></div>
-                              {approvedCouriersList.map(courier => renderCourierCard(courier))}
-                            </>}
-                            {rejectedCouriersList.length > 0 && <>
-                              <div className="section-divider"><span>❌ مرفوض ({rejectedCouriersList.length})</span></div>
-                              {rejectedCouriersList.map(courier => renderCourierCard(courier))}
-                            </>}
-                          </>
-                        );
+                        const couriersHaveItems = pendingCouriersList.length > 0 || approvedCouriersList.length > 0 || rejectedCouriersList.length > 0;
+                        const grouped = [...pendingCouriersList.map(c => ({ c, group: 'pending' as const })), ...approvedCouriersList.map(c => ({ c, group: 'approved' as const })), ...rejectedCouriersList.map(c => ({ c, group: 'rejected' as const }))];
+                        let lastGroup = '';
+                        return grouped.map(({ c, group }) => {
+                          const showGroup = group !== lastGroup;
+                          lastGroup = group;
+                          const approvalLoading = activeActionKey === `courier:${c.phone}`;
+                          const rejectLoading = activeActionKey === `reject-account:${c.phone}`;
+                          const isRejected = c.approvalStatus === 'rejected';
+                          const isPending = !c.isApproved && !isRejected;
+                          return (
+                            <React.Fragment key={c.phone}>
+                              {showGroup && group === 'pending' ? <div className="section-divider"><span>📋 مناديب بانتظار التفعيل ({pendingCouriersList.length})</span></div> : null}
+                              {showGroup && group === 'approved' ? <div className="section-divider"><span>✅ المناديب النشطون ({approvedCouriersList.length})</span></div> : null}
+                              {showGroup && group === 'rejected' ? <div className="section-divider"><span>❌ مرفوض ({rejectedCouriersList.length})</span></div> : null}
+                              <article className="merchant-card courier-card">
+                                <div className="merchant-main">
+                                  <div className="courier-card-leading">
+                                    <div>
+                                      <div className="merchant-title-row">
+                                        <h4>{c.name || 'مندوب بدون اسم'}</h4>
+                                        {c.isApproved ? <span className="status-badge success">مفعّل</span> : isRejected ? <span className="status-badge danger">مرفوض</span> : <span className="status-badge danger">بانتظار الموافقة</span>}
+                                        {c.isSuspended ? <span className="status-badge danger">معلّق</span> : null}
+                                        {c.isApproved ? (c.available ? <span className="status-badge success">متاح للتوصيل</span> : <span className="status-badge muted">غير متاح</span>) : null}
+                                      </div>
+                                      <p className="merchant-meta">هاتف التواصل: <span dir="ltr">{c.contactPhone || c.phone}</span></p>
+                                      <p className="merchant-description">{c.homeAddress || 'لا يوجد عنوان محفوظ.'}</p>
+                                      {isRejected && c.rejectionMessageAr ? <p className="courier-rejection-note">سبب الرفض: {c.rejectionMessageAr}</p> : null}
+                                    </div>
+                                  </div>
+                                  <div className="courier-media-panel">
+                                    <div className="courier-media-head"><strong>صورة الدراجة</strong>{c.vehicleImage ? <a className="courier-media-link" href={c.vehicleImage} target="_blank" rel="noreferrer"><ExternalLink size={14} /><span>عرض بالحجم الكامل</span></a> : null}</div>
+                                    {c.vehicleImage ? <a href={c.vehicleImage} target="_blank" rel="noreferrer" className="courier-media-frame"><img className="courier-media-image" src={c.vehicleImage} alt={c.name || 'صورة الدراجة'} loading="lazy" referrerPolicy="no-referrer" /></a> : <div className="courier-media-empty"><Bike size={28} /><span>لم يتم رفع صورة للدراجة</span></div>}
+                                  </div>
+                                </div>
+                                <div className="merchant-actions">
+                                  <button className={c.isApproved ? 'soft-button danger' : 'soft-button success'} disabled={approvalLoading || rejectLoading} onClick={() => { handleCourierApproval(c).catch(() => undefined); }}>
+                                    {approvalLoading ? <LoaderCircle className="spin" size={16} /> : <BadgeCheck size={16} />}<span>{c.isApproved ? 'إلغاء التفعيل' : 'موافقة وتفعيل'}</span>
+                                  </button>
+                                  {isPending || isRejected ? <button className="soft-button danger" disabled={approvalLoading || rejectLoading} onClick={() => { openRejectConfirm({ phone: c.phone, displayName: c.name || c.phone, kind: 'courier' }); }}>
+                                    {rejectLoading ? <LoaderCircle className="spin" size={16} /> : <XCircle size={16} />}<span>رفض الطلب</span>
+                                  </button> : null}
+                                  <button className={c.isSuspended ? 'soft-button success' : 'soft-button danger'} disabled={approvalLoading || rejectLoading || activeActionKey === `suspend-account:${c.phone}`} onClick={() => { const account = accounts.find((item) => item.phone === c.phone) ?? { phone: c.phone, displayName: c.name || c.phone, fullName: c.name, role: c.role, accountType: c.accountType, kind: 'courier' as const, isSuspended: c.isSuspended === true, merchantStoreName: '', primaryServiceId: '', courierApproved: c.isApproved, updatedAt: c.updatedAt, createdAt: null, hasMerchantProfile: false, hasCourierProfile: true, hasDriverProfile: false, }; handleSuspendAccount(account).catch(() => undefined); }}>
+                                    {activeActionKey === `suspend-account:${c.phone}` ? <LoaderCircle className="spin" size={16} /> : <UserX size={16} />}<span>{c.isSuspended ? 'فك التعليق' : 'تعليق الحساب'}</span>
+                                  </button>
+                                  <button className="soft-button danger" disabled={approvalLoading || rejectLoading} onClick={() => { openDeleteConfirm(accounts.find((item) => item.phone === c.phone) ?? { phone: c.phone, displayName: c.name || c.phone, fullName: c.name, role: c.role, accountType: c.accountType, kind: 'courier', isSuspended: c.isSuspended === true, merchantStoreName: '', primaryServiceId: '', courierApproved: c.isApproved, updatedAt: c.updatedAt, createdAt: null, hasMerchantProfile: false, hasCourierProfile: true, hasDriverProfile: false, }); }}>
+                                    <Trash2 size={16} /><span>حذف الحساب</span>
+                                  </button>
+                                </div>
+                              </article>
+                            </React.Fragment>
+                          );
+                        });
                       })()}
                       {filteredCouriers.length === 0 ? (
                         <div className="empty-state">
@@ -2196,34 +1749,81 @@ function App() {
                       </div>
                   ) : null}
                   <div className="merchant-list">
-                    {view === 'merchants'
+                    {view === 'merchants' || view === 'approvals'
                       ? (() => {
                           const items = view === 'approvals' ? approvalQueue : filteredMerchants;
                           const pendingMerchantsList = items.filter(m => !m.isApproved && m.approvalStatus === 'pending');
                           const approvedMerchantsList = items.filter(m => m.isApproved);
                           const otherMerchantsList = items.filter(m => !m.isApproved && m.approvalStatus !== 'pending');
-                          return (
-                            <>
-                              {pendingMerchantsList.length > 0 && (
-                                <>
-                                  <div className="section-divider"><span>📋 طلبات جديدة ({pendingMerchantsList.length})</span></div>
-                                  {pendingMerchantsList.map((merchant) => renderMerchantCard(merchant))}
-                                </>
-                              )}
-                              {approvedMerchantsList.length > 0 && (
-                                <>
-                                  <div className="section-divider"><span>✅ التجار المعتمدون ({approvedMerchantsList.length})</span></div>
-                                  {approvedMerchantsList.map((merchant) => renderMerchantCard(merchant))}
-                                </>
-                              )}
-                              {otherMerchantsList.length > 0 && (
-                                <>
-                                  <div className="section-divider"><span>❌ مرفوض أو متوقف ({otherMerchantsList.length})</span></div>
-                                  {otherMerchantsList.map((merchant) => renderMerchantCard(merchant))}
-                                </>
-                              )}
-                            </>
-                          );
+                          const grouped = [...pendingMerchantsList.map(m => ({ m, group: 'pending' as const })), ...approvedMerchantsList.map(m => ({ m, group: 'approved' as const })), ...otherMerchantsList.map(m => ({ m, group: 'other' as const }))];
+                          let lastGroup = '';
+                          return grouped.map(({ m, group }) => {
+                            const showGroup = group !== lastGroup;
+                            lastGroup = group;
+                            const freezeLoading = activeActionKey === `freeze:${m.phone}`;
+                            const bazaarLoading = activeActionKey === `bazaar:${m.phone}`;
+                            const syncLoading = activeActionKey === `sync:${m.phone}`;
+                            const approvalLoading = activeActionKey === `merchant-approval:${m.phone}`;
+                            const rejectLoading = activeActionKey === `reject-account:${m.phone}`;
+                            const isRejected = m.approvalStatus === 'rejected';
+                            const isPending = !m.isApproved && !isRejected;
+                            const selected = selectedMerchantPhone === m.phone;
+                            return (
+                              <React.Fragment key={m.phone}>
+                                {showGroup && group === 'pending' ? <div className="section-divider"><span>📋 طلبات جديدة ({pendingMerchantsList.length})</span></div> : null}
+                                {showGroup && group === 'approved' ? <div className="section-divider"><span>✅ التجار المعتمدون ({approvedMerchantsList.length})</span></div> : null}
+                                {showGroup && group === 'other' ? <div className="section-divider"><span>❌ مرفوض ({otherMerchantsList.length})</span></div> : null}
+                                <article
+                                  key={m.phone}
+                                  className={selected ? 'merchant-card selected' : 'merchant-card'}
+                                  onClick={() => setSelectedMerchantPhone(m.phone)}
+                                >
+                                  <div className="merchant-main">
+                                    <div>
+                                      <div className="merchant-title-row">
+                                        <h4>{m.storeName || (m.isProfessional || m.primaryServiceId === 'professionals' ? 'مهني بدون اسم' : 'متجر بدون اسم')}</h4>
+                                        {m.isProfessional || m.primaryServiceId === 'professionals' ? <span className="status-badge muted">مهني</span> : null}
+                                        {m.isApproved ? <span className="status-badge success">مفعّل</span> : isRejected ? <span className="status-badge danger">مرفوض</span> : <span className="status-badge warning">بانتظار الموافقة</span>}
+                                        {m.isFrozen ? <span className="status-badge danger">مجمّد</span> : !m.isOpen ? <span className="status-badge danger">المتجر مغلق</span> : m.isBazaarMember ? <span className="status-badge success">مفعل في البازار</span> : <span className="status-badge muted">بانتظار/خارج البازار</span>}
+                                        {m.isBazaarMember ? (m.visibleToCustomers ? <span className="status-badge success">ظاهر للزبائن ({m.visibleProductCount})</span> : <span className="status-badge danger">غير ظاهر للزبائن</span>) : null}
+                                      </div>
+                                      <p className="merchant-meta">{m.fullName || 'بدون اسم مالك'} · {serviceLabel(m.primaryServiceId)} · <span dir="ltr">{m.phone}</span></p>
+                                      <p className="merchant-description">{m.description || 'لا يوجد وصف محفوظ.'}</p>
+                                      {isRejected && m.rejectionMessageAr ? <p className="courier-rejection-note">سبب الرفض: {m.rejectionMessageAr}</p> : null}
+                                      {m.isBazaarMember && !m.visibleToCustomers && m.visibilityNotes?.length ? <p className="merchant-visibility-note">سبب عدم الظهور: {m.visibilityNotes.join(' · ')}</p> : null}
+                                    </div>
+                                    <div className="merchant-stats-inline">
+                                      <MiniStat label="المنتجات" value={m.totalProducts ?? 0} hint={m.availableProducts !== m.totalProducts ? `${m.availableProducts ?? 0} متاح` : undefined} />
+                                      <MiniStat label="الطلبات" value={m.totalOrders} />
+                                      <MiniStat label="المكتمل" value={m.completedOrders} />
+                                      <MiniStat label="الأرباح" value={`${formatMoney(m.totalRevenue)} د.ع`} />
+                                    </div>
+                                  </div>
+                                  <div className="merchant-actions">
+                                    <button className={m.isApproved ? 'soft-button danger' : 'soft-button success'} disabled={approvalLoading || rejectLoading} onClick={(event) => { event.stopPropagation(); handleMerchantApproval(m).catch(() => undefined); }}>
+                                      {approvalLoading ? <LoaderCircle className="spin" size={16} /> : <BadgeCheck size={16} />}
+                                      <span>{m.isApproved ? 'إلغاء تفعيل الحساب' : 'موافقة وتفعيل'}</span>
+                                    </button>
+                                    {isPending || isRejected ? <button className="soft-button danger" disabled={approvalLoading || rejectLoading} onClick={(event) => { event.stopPropagation(); openRejectConfirm({ phone: m.phone, displayName: m.storeName || m.fullName || m.phone, kind: 'merchant' }); }}>
+                                      {rejectLoading ? <LoaderCircle className="spin" size={16} /> : <XCircle size={16} />}<span>رفض الطلب</span>
+                                    </button> : null}
+                                    <button className={m.isFrozen ? 'soft-button' : 'soft-button danger'} disabled={freezeLoading} onClick={(event) => { event.stopPropagation(); handleMerchantAction(m, 'freeze').catch(() => undefined); }}>
+                                      {freezeLoading ? <LoaderCircle className="spin" size={16} /> : <AlertTriangle size={16} />}<span>{m.isFrozen ? 'فك التجميد' : 'تجميد التاجر'}</span>
+                                    </button>
+                                    {canRequestBazaarApproval(m) ? <button className={m.isBazaarMember ? 'soft-button' : 'soft-button success'} disabled={bazaarLoading} onClick={(event) => { event.stopPropagation(); handleMerchantAction(m, 'bazaar').catch(() => undefined); }}>
+                                      {bazaarLoading ? <LoaderCircle className="spin" size={16} /> : <BadgeCheck size={16} />}<span>{m.isBazaarMember ? 'سحب الموافقة' : 'موافقة على البازار'}</span>
+                                    </button> : <span className="status-badge muted">لا ينطبق على هذا القسم</span>}
+                                    {m.isBazaarMember && !m.visibleToCustomers ? <button className="soft-button success" disabled={syncLoading} onClick={(event) => { event.stopPropagation(); handleBazaarSync(m).catch(() => undefined); }}>
+                                      {syncLoading ? <LoaderCircle className="spin" size={16} /> : <Package2 size={16} />}<span>إصلاح الظهور في البازار</span>
+                                    </button> : null}
+                                    <button className="soft-button danger" disabled={approvalLoading || rejectLoading || freezeLoading} onClick={(event) => { event.stopPropagation(); openDeleteConfirm(accounts.find((item) => item.phone === m.phone) ?? { phone: m.phone, displayName: m.storeName || m.fullName || m.phone, fullName: m.fullName, role: m.role, accountType: '', kind: 'merchant', isSuspended: m.isFrozen, merchantStoreName: m.storeName, primaryServiceId: m.primaryServiceId, courierApproved: false, updatedAt: null, createdAt: m.createdAt, hasMerchantProfile: true, hasCourierProfile: false, hasDriverProfile: false }); }}>
+                                      <Trash2 size={16} /><span>حذف الحساب</span>
+                                    </button>
+                                  </div>
+                                </article>
+                              </React.Fragment>
+                            );
+                          });
                         })()
                       : (view === 'approvals' ? approvalQueue : filteredMerchants).map((merchant) => {
                       const freezeLoading = activeActionKey === `freeze:${merchant.phone}`;

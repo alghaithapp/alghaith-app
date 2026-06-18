@@ -6,5 +6,6 @@
   "files.trimTrailingWhitespace": true,
   "terminal.integrated.env.windows": {
     "PYTHONIOENCODING": "utf-8"
-  }
+  },
+  "CodeGPT.apiKey": "Ollama"
 }

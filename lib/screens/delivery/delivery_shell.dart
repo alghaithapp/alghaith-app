@@ -4,7 +4,8 @@ import 'dart:ui' as ui;
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart' as geo;
-import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
 
 import '../../models/app_models.dart';
@@ -1862,33 +1863,26 @@ class _DeliveryMapPreviewScreen extends StatefulWidget {
 }
 
 class _DeliveryMapPreviewScreenState extends State<_DeliveryMapPreviewScreen> {
-  MapboxMap? _map;
-  CircleAnnotationManager? _circleManager;
-  Position? _courierPosition;
+  LatLng? _courierPosition;
 
-  Position? get _customerPosition {
+  LatLng? get _customerPosition {
     final lat = widget.order.customerLatitude;
     final lng = widget.order.customerLongitude;
     if (lat == null || lng == null) return null;
-    return Position(lng, lat);
+    return LatLng(lat, lng);
   }
 
-  Position? get _merchantPosition {
+  LatLng? get _merchantPosition {
     final lat = widget.order.merchantLatitude;
     final lng = widget.order.merchantLongitude;
     if (lat == null || lng == null) return null;
-    return Position(lng, lat);
+    return LatLng(lat, lng);
   }
 
-  Position get _initialPosition =>
-      _merchantPosition ?? _customerPosition ?? Position(44.3661, 33.3152);
+  LatLng get _initialPosition =>
+      _merchantPosition ?? _customerPosition ?? const LatLng(33.3152, 44.3661);
 
-  Future<void> _onMapCreated(MapboxMap map) async {
-    _map = map;
-    try {
-      _circleManager = await map.annotations.createCircleAnnotationManager();
-      await _syncMarkers();
-    } catch (_) {}
+  void _onMapReady() {
     unawaited(_loadCourierPosition());
   }
 
@@ -1909,53 +1903,8 @@ class _DeliveryMapPreviewScreenState extends State<_DeliveryMapPreviewScreen> {
       ),
     );
     setState(() {
-      _courierPosition = Position(current.longitude, current.latitude);
+      _courierPosition = LatLng(current.latitude, current.longitude);
     });
-    await _syncMarkers();
-  }
-
-  Future<void> _syncMarkers() async {
-    final manager = _circleManager;
-    if (manager == null) return;
-    try {
-      await manager.deleteAll();
-      final merchant = _merchantPosition;
-      if (merchant != null) {
-        await manager.create(
-          CircleAnnotationOptions(
-            geometry: Point(coordinates: merchant),
-            circleColor: const Color(0xFF1976D2).value,
-            circleRadius: 9,
-            circleStrokeColor: Colors.white.value,
-            circleStrokeWidth: 2,
-          ),
-        );
-      }
-      final customer = _customerPosition;
-      if (customer != null) {
-        await manager.create(
-          CircleAnnotationOptions(
-            geometry: Point(coordinates: customer),
-            circleColor: const Color(0xFFF5A01D).value,
-            circleRadius: 9,
-            circleStrokeColor: Colors.white.value,
-            circleStrokeWidth: 2,
-          ),
-        );
-      }
-      final courier = _courierPosition;
-      if (courier != null) {
-        await manager.create(
-          CircleAnnotationOptions(
-            geometry: Point(coordinates: courier),
-            circleColor: const Color(0xFF2E7D32).value,
-            circleRadius: 8,
-            circleStrokeColor: Colors.white.value,
-            circleStrokeWidth: 2,
-          ),
-        );
-      }
-    } catch (_) {}
   }
 
   VoidCallback? _externalNavigationAction() {
@@ -1964,8 +1913,8 @@ class _DeliveryMapPreviewScreenState extends State<_DeliveryMapPreviewScreen> {
     final merchantLat = widget.order.merchantLatitude;
     final merchantLng = widget.order.merchantLongitude;
     final statusKey = widget.order.deliveryStatusKey ?? '';
-    final courierLat = _courierPosition?.lat.toDouble();
-    final courierLng = _courierPosition?.lng.toDouble();
+    final courierLat = _courierPosition?.latitude;
+    final courierLng = _courierPosition?.longitude;
 
     if (statusKey == 'accepted' && merchantLat != null && merchantLng != null) {
       return () => AppHelpers.openExternalMapNavigation(
@@ -2066,13 +2015,61 @@ class _DeliveryMapPreviewScreenState extends State<_DeliveryMapPreviewScreen> {
         child: Column(
           children: [
             Expanded(
-              child: MapWidget(
-                styleUri: 'mapbox://styles/mapbox/streets-v12',
-                cameraOptions: CameraOptions(
-                  center: Point(coordinates: _initialPosition),
-                  zoom: 14.8,
+              child: FlutterMap(
+                options: MapOptions(
+                  initialCenter: _initialPosition,
+                  initialZoom: 14.8,
+                  onMapReady: _onMapReady,
                 ),
-                onMapCreated: _onMapCreated,
+                children: [
+                  TileLayer(
+                    urlTemplate: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+                    subdomains: const ['a', 'b', 'c'],
+                  ),
+                  MarkerLayer(
+                    markers: [
+                      if (_merchantPosition != null)
+                        Marker(
+                          point: _merchantPosition!,
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF1976D2),
+                              shape: BoxShape.circle,
+                              border: Border.all(color: Colors.white, width: 2),
+                            ),
+                            width: 18,
+                            height: 18,
+                          ),
+                        ),
+                      if (_customerPosition != null)
+                        Marker(
+                          point: _customerPosition!,
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF5A01D),
+                              shape: BoxShape.circle,
+                              border: Border.all(color: Colors.white, width: 2),
+                            ),
+                            width: 18,
+                            height: 18,
+                          ),
+                        ),
+                      if (_courierPosition != null)
+                        Marker(
+                          point: _courierPosition!,
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF2E7D32),
+                              shape: BoxShape.circle,
+                              border: Border.all(color: Colors.white, width: 2),
+                            ),
+                            width: 16,
+                            height: 16,
+                          ),
+                        ),
+                    ],
+                  ),
+                ],
               ),
             ),
             Container(

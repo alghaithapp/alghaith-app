@@ -6,7 +6,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show SystemNavigator;
 import 'package:provider/provider.dart';
 import 'package:animate_do/animate_do.dart';
-import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
 import 'core/config/app_config.dart';
 import 'core/theme/app_colors.dart';
 import 'core/theme/app_theme.dart';
@@ -90,15 +89,6 @@ Future<void> main() async {
 Future<void> _bootstrapAsync() async {
   try {
     AppConfig.validate(throwOnError: false);
-    await AppConfig.ensureMapboxToken();
-    if (AppConfig.isMapboxConfigured) {
-      MapboxOptions.setAccessToken(AppConfig.effectiveMapboxPublicToken);
-      MapboxMapsOptions.setLanguage('ar');
-    } else {
-      debugPrint(
-        'Mapbox: MAPBOX_PUBLIC_TOKEN غير مضبوط — أضف pk. في Codemagic أو MAPBOX_PUBLIC_TOKEN على الخادم.',
-      );
-    }
     await SupabaseService.initialize();
     await PushNotificationService.instance.initialize();
     await configureAppSystemUi();
@@ -726,6 +716,8 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
       onTap: () {
         if (index == 0) {
           appProvider.resetHome();
+          // إرجاع جميع الصفحات داخل تبويب الرئيسية حتى يعود المستخدم مباشرة
+          _homeNavigatorKey.currentState?.popUntil((route) => route.isFirst);
         }
         setState(() => _currentIndex = index);
       },

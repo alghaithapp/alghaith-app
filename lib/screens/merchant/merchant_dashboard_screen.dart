@@ -37,9 +37,9 @@ class MerchantDashboardScreen extends StatelessWidget {
         ? provider.merchantAddress
         : '—';
     final rating = provider.merchantRating;
-    final ratingLabel =
-        rating > 0 ? rating.toStringAsFixed(1) : '—';
+    final ratingLabel = rating > 0 ? rating.toStringAsFixed(1) : '—';
     final todaySales = _todayCompletedSales(provider.merchantIncomingOrders);
+    final uniqueCustomersCount = _uniqueCustomersCount(recentOrders);
 
     return ColoredBox(
       color: _bg,
@@ -58,6 +58,7 @@ class MerchantDashboardScreen extends StatelessWidget {
                 coverImage: provider.merchantCoverImage,
                 productsCount: provider.merchantProductCount,
                 ordersCount: provider.merchantOrdersCount,
+                customersCount: uniqueCustomersCount,
                 ratingLabel: ratingLabel,
                 itemLabel: labels.itemPluralAr,
               ),
@@ -138,12 +139,11 @@ class MerchantDashboardScreen extends StatelessWidget {
           ),
           SliverToBoxAdapter(
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 22, 16, 0),
-              child: _SectionHeader(
-                title: 'آخر الطلبات',
-                icon: Icons.receipt_long_rounded,
-                actionLabel: 'عرض الكل',
-                onAction: () => Navigator.of(context).push(
+              padding: const EdgeInsets.fromLTRB(16, 22, 16, 10),
+              child: _OrdersHeaderStat(
+                ordersCount: recentOrders.length,
+                customersCount: uniqueCustomersCount,
+                onViewAll: () => Navigator.of(context).push(
                   MaterialPageRoute(
                     builder: (_) => const MerchantOrdersScreen(),
                   ),
@@ -195,14 +195,16 @@ class MerchantDashboardScreen extends StatelessWidget {
       if (raw == null || raw.isEmpty) return false;
       final dt = DateTime.tryParse(raw)?.toLocal();
       if (dt == null) return false;
-      return dt.year == now.year &&
-          dt.month == now.month &&
-          dt.day == now.day;
+      return dt.year == now.year && dt.month == now.month && dt.day == now.day;
     }
 
     return orders
         .where((o) => o.statusKey == 'completed' && isToday(o))
         .fold<int>(0, (sum, o) => sum + o.price);
+  }
+
+  static int _uniqueCustomersCount(List<ActiveOrder> orders) {
+    return orders.map((o) => o.customerNameAr.trim()).toSet().length;
   }
 }
 
@@ -216,6 +218,7 @@ class _HeroCard extends StatelessWidget {
   final String coverImage;
   final int productsCount;
   final int ordersCount;
+  final int customersCount;
   final String ratingLabel;
   final String itemLabel;
 
@@ -229,13 +232,14 @@ class _HeroCard extends StatelessWidget {
     required this.coverImage,
     required this.productsCount,
     required this.ordersCount,
+    required this.customersCount,
     required this.ratingLabel,
     required this.itemLabel,
   });
 
   DecorationImage? _coverDecoration() {
-    final cover = coverImage.trim();
-    if (cover.isEmpty) return null;
+    final cover = ImageStorageService.normalizeImageRef(coverImage)?.trim();
+    if (cover == null || cover.isEmpty) return null;
     if (ImageStorageService.isRemoteUrl(cover)) {
       return DecorationImage(
         image: NetworkImage(cover),
@@ -246,10 +250,11 @@ class _HeroCard extends StatelessWidget {
         ),
       );
     }
-    if (cover.startsWith('iVBOR') || cover.startsWith('/9j/')) {
+    final base64 = _extractBase64Payload(cover);
+    if (base64 != null) {
       try {
         return DecorationImage(
-          image: MemoryImage(base64Decode(cover)),
+          image: MemoryImage(base64Decode(base64)),
           fit: BoxFit.cover,
           colorFilter: ColorFilter.mode(
             Colors.black.withValues(alpha: 0.55),
@@ -264,127 +269,182 @@ class _HeroCard extends StatelessWidget {
     return null;
   }
 
+  String? _extractBase64Payload(String value) {
+    var payload = value.trim();
+    if (payload.isEmpty) return null;
+    if (payload.contains('base64,')) {
+      payload = payload.split('base64,').last.trim();
+    }
+    if (payload.startsWith('data:image/')) {
+      final commaIndex = payload.indexOf(',');
+      if (commaIndex != -1) {
+        payload = payload.substring(commaIndex + 1).trim();
+      }
+    }
+    if (!ImageStorageService.isBase64Image(payload)) return null;
+    return payload;
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(28),
-        gradient: const LinearGradient(
-          colors: [Color(0xFF0A0A0A), Color(0xFF1F1F1F), Color(0xFF2A1515)],
-          begin: Alignment.topRight,
-          end: Alignment.bottomLeft,
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(28),
+      child: Container(
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            colors: [Color(0xFF0A0A0A), Color(0xFF1F1F1F), Color(0xFF2A1515)],
+            begin: Alignment.topRight,
+            end: Alignment.bottomLeft,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: _brand.withValues(alpha: 0.22),
+              blurRadius: 28,
+              offset: const Offset(0, 12),
+            ),
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.18),
+              blurRadius: 20,
+              offset: const Offset(0, 8),
+            ),
+          ],
         ),
-        image: _coverDecoration(),
-        boxShadow: [
-          BoxShadow(
-            color: _brand.withValues(alpha: 0.22),
-            blurRadius: 28,
-            offset: const Offset(0, 12),
-          ),
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.18),
-            blurRadius: 20,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _StoreAvatar(imageData: profileImage),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      storeName,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 18,
-                        fontWeight: FontWeight.w900,
-                        fontFamily: 'Cairo',
-                        height: 1.2,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      description,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: Colors.white70,
-                        fontSize: 12,
-                        height: 1.45,
-                        fontFamily: 'Cairo',
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Icon(
-                          Icons.location_on_rounded,
-                          size: 14,
-                          color: Colors.white.withValues(alpha: 0.65),
-                        ),
-                        const SizedBox(width: 4),
-                        Expanded(
-                          child: Text(
-                            address,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              color: Colors.white.withValues(alpha: 0.75),
-                              fontSize: 11,
-                              height: 1.4,
-                              fontFamily: 'Cairo',
+        child: Stack(
+          children: [
+            if (_coverDecoration() != null)
+              Positioned.fill(
+                child: _buildCoverImage(),
+              ),
+            Padding(
+              padding: const EdgeInsets.all(18),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _StoreAvatar(imageData: profileImage),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              storeName,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 18,
+                                fontWeight: FontWeight.w900,
+                                fontFamily: 'Cairo',
+                                height: 1.2,
+                              ),
                             ),
-                          ),
+                            const SizedBox(height: 6),
+                            Text(
+                              description,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: Colors.white70,
+                                fontSize: 12,
+                                height: 1.45,
+                                fontFamily: 'Cairo',
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Icon(
+                                  Icons.location_on_rounded,
+                                  size: 14,
+                                  color: Colors.white.withValues(alpha: 0.65),
+                                ),
+                                const SizedBox(width: 4),
+                                Expanded(
+                                  child: Text(
+                                    address,
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      color: Colors.white.withValues(alpha: 0.75),
+                                      fontSize: 11,
+                                      height: 1.4,
+                                      fontFamily: 'Cairo',
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 10),
+                            _StoreStatusSwitch(isOpen: isOpen, onToggle: onToggleOpen),
+                          ],
                         ),
-                      ],
-                    ),
-                    const SizedBox(height: 10),
-                    _StoreStatusSwitch(isOpen: isOpen, onToggle: onToggleOpen),
-                  ],
-                ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _HeroMiniStat(
+                          label: itemLabel,
+                          value: '$productsCount',
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: _HeroMiniStat(
+                          label: 'الطلبات',
+                          value: '$ordersCount',
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: _HeroMiniStat(
+                          label: 'عميل',
+                          value: '$customersCount',
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              Expanded(
-                child: _HeroMiniStat(
-                  label: itemLabel,
-                  value: '$productsCount',
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _HeroMiniStat(
-                  label: 'الطلبات',
-                  value: '$ordersCount',
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _HeroMiniStat(
-                  label: 'التقييم',
-                  value: ratingLabel,
-                ),
-              ),
-            ],
-          ),
-        ],
+            ),
+          ],
+        ),
       ),
     );
+  }
+
+  Widget _buildCoverImage() {
+    final cover = ImageStorageService.normalizeImageRef(coverImage)?.trim();
+    if (cover == null || cover.isEmpty) return const SizedBox.shrink();
+    if (ImageStorageService.isRemoteUrl(cover)) {
+      return Image.network(
+        cover,
+        fit: BoxFit.cover,
+        color: Colors.black.withValues(alpha: 0.55),
+        colorBlendMode: BlendMode.darken,
+      );
+    }
+    final base64 = _extractBase64Payload(cover);
+    if (base64 != null) {
+      try {
+        return Image.memory(
+          base64Decode(base64),
+          fit: BoxFit.cover,
+          color: Colors.black.withValues(alpha: 0.55),
+          colorBlendMode: BlendMode.darken,
+        );
+      } catch (error) {
+        debugPrint('MERCHANT_COVER_DECODE_ERROR: $error');
+        return const SizedBox.shrink();
+      }
+    }
+    return const SizedBox.shrink();
   }
 }
 
@@ -446,28 +506,32 @@ class _StoreStatusSwitch extends StatelessWidget {
                   .withValues(alpha: 0.5),
             ),
           ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 8,
-                height: 8,
-                decoration: BoxDecoration(
-                  color: isOpen ? Colors.greenAccent : Colors.redAccent,
-                  shape: BoxShape.circle,
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerRight,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 8,
+                  height: 8,
+                  decoration: BoxDecoration(
+                    color: isOpen ? Colors.greenAccent : Colors.redAccent,
+                    shape: BoxShape.circle,
+                  ),
                 ),
-              ),
-              const SizedBox(width: 8),
-              Text(
-                isOpen ? 'مفتوح الآن' : 'مغلق',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w800,
-                  fontSize: 12,
-                  fontFamily: 'Cairo',
+                const SizedBox(width: 8),
+                Text(
+                  isOpen ? 'مفتوح الآن' : 'مغلق',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 12,
+                    fontFamily: 'Cairo',
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -699,6 +763,130 @@ class _StatCard extends StatelessWidget {
   }
 }
 
+class _OrdersHeaderStat extends StatelessWidget {
+  final int ordersCount;
+  final int customersCount;
+  final VoidCallback onViewAll;
+
+  const _OrdersHeaderStat({
+    required this.ordersCount,
+    required this.customersCount,
+    required this.onViewAll,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 14,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: _brand.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Icon(
+              Icons.receipt_long_rounded,
+              color: _brand,
+              size: 20,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'آخر الطلبات',
+                  style: const TextStyle(
+                    fontFamily: 'Cairo',
+                    fontSize: 16,
+                    fontWeight: FontWeight.w900,
+                    color: Color(0xFF1A1A1A),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    _MiniChip(
+                      icon: Icons.receipt_rounded,
+                      label: '$ordersCount طلب',
+                    ),
+                    const SizedBox(width: 12),
+                    _MiniChip(
+                      icon: Icons.person_rounded,
+                      label: '$customersCount عميل',
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          TextButton(
+            onPressed: onViewAll,
+            child: const Text(
+              'عرض الكل',
+              style: TextStyle(
+                fontFamily: 'Cairo',
+                fontWeight: FontWeight.w800,
+                color: _brand,
+                fontSize: 13,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MiniChip extends StatelessWidget {
+  final IconData icon;
+  final String label;
+
+  const _MiniChip({required this.icon, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: _brand.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 12, color: _brand),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: const TextStyle(
+              fontFamily: 'Cairo',
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              color: _brand,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _OrdersListCard extends StatelessWidget {
   final List<ActiveOrder> orders;
   final String Function(ActiveOrder) displayOrderNumber;
@@ -784,7 +972,7 @@ class _OrderRow extends StatelessWidget {
                         fontSize: 15,
                       ),
                     ),
-                    const SizedBox(height: 4),
+                    const SizedBox(height: 2),
                     Text(
                       order.customerNameAr,
                       style: const TextStyle(
@@ -793,7 +981,7 @@ class _OrderRow extends StatelessWidget {
                         fontWeight: FontWeight.w600,
                       ),
                     ),
-                    const SizedBox(height: 2),
+                    const SizedBox(height: 1),
                     Text(
                       '${order.itemsCount} منتج · ${order.dateAr}',
                       style: const TextStyle(

@@ -114,8 +114,8 @@ class _ProfessionalHeroCard extends StatelessWidget {
   });
 
   DecorationImage? _coverDecoration() {
-    final cover = coverImage.trim();
-    if (cover.isEmpty) return null;
+    final cover = ImageStorageService.normalizeImageRef(coverImage)?.trim();
+    if (cover == null || cover.isEmpty) return null;
     if (ImageStorageService.isRemoteUrl(cover)) {
       return DecorationImage(
         image: NetworkImage(cover),
@@ -126,10 +126,11 @@ class _ProfessionalHeroCard extends StatelessWidget {
         ),
       );
     }
-    if (cover.startsWith('iVBOR') || cover.startsWith('/9j/')) {
+    final base64 = _extractBase64Payload(cover);
+    if (base64 != null) {
       try {
         return DecorationImage(
-          image: MemoryImage(base64Decode(cover)),
+          image: MemoryImage(base64Decode(base64)),
           fit: BoxFit.cover,
           colorFilter: ColorFilter.mode(
             Colors.black.withValues(alpha: 0.55),
@@ -142,6 +143,22 @@ class _ProfessionalHeroCard extends StatelessWidget {
       }
     }
     return null;
+  }
+
+  String? _extractBase64Payload(String value) {
+    var payload = value.trim();
+    if (payload.isEmpty) return null;
+    if (payload.contains('base64,')) {
+      payload = payload.split('base64,').last.trim();
+    }
+    if (payload.startsWith('data:image/')) {
+      final commaIndex = payload.indexOf(',');
+      if (commaIndex != -1) {
+        payload = payload.substring(commaIndex + 1).trim();
+      }
+    }
+    if (!ImageStorageService.isBase64Image(payload)) return null;
+    return payload;
   }
 
   @override
@@ -320,30 +337,34 @@ class _StoreStatusSwitch extends StatelessWidget {
                   .withValues(alpha: 0.5),
             ),
           ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 8,
-                height: 8,
-                decoration: BoxDecoration(
-                  color: isOpen ? Colors.greenAccent : Colors.redAccent,
-                  shape: BoxShape.circle,
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerRight,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 8,
+                  height: 8,
+                  decoration: BoxDecoration(
+                    color: isOpen ? Colors.greenAccent : Colors.redAccent,
+                    shape: BoxShape.circle,
+                  ),
                 ),
-              ),
-              const SizedBox(width: 8),
-              Text(
-                isProfessional
-                    ? (isOpen ? 'متاح للعمل' : 'غير متاح للعمل')
-                    : (isOpen ? 'مفتوح الآن' : 'مغلق'),
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w800,
-                  fontSize: 12,
-                  fontFamily: 'Cairo',
+                const SizedBox(width: 8),
+                Text(
+                  isProfessional
+                      ? (isOpen ? 'متاح للعمل' : 'غير متاح للعمل')
+                      : (isOpen ? 'مفتوح الآن' : 'مغلق'),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 12,
+                    fontFamily: 'Cairo',
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
