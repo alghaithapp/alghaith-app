@@ -676,13 +676,12 @@ class DriverAccountScreen extends StatelessWidget {
           width: double.infinity,
           child: CupertinoButton(
             color: AppColors.accent,
-            textColor: Colors.white,
             borderRadius: BorderRadius.circular(18),
             onPressed: () => _showEditProfileSheet(context),
-            child: Text(
+            child: const Text(
               'تعديل الحساب',
-              style: const TextStyle(
-                  fontFamily: 'Cairo', fontWeight: FontWeight.w900),
+              style: TextStyle(
+                  fontFamily: 'Cairo', fontWeight: FontWeight.w900, color: Colors.white),
             ),
           ),
         ),
@@ -690,13 +689,12 @@ class DriverAccountScreen extends StatelessWidget {
           width: double.infinity,
           child: CupertinoButton(
             color: const Color(0xFFE040FB),
-            textColor: Colors.white,
             borderRadius: BorderRadius.circular(18),
             onPressed: () => showRoleSwitcher(context, provider),
             child: const Text(
               'تبديل الحساب (الدور)',
               style: TextStyle(
-                  fontFamily: 'Cairo', fontWeight: FontWeight.w900),
+                  fontFamily: 'Cairo', fontWeight: FontWeight.w900, color: Colors.white),
             ),
           ),
         ),
@@ -705,13 +703,12 @@ class DriverAccountScreen extends StatelessWidget {
           width: double.infinity,
           child: CupertinoButton(
             color: Colors.black87,
-            textColor: Colors.white,
             borderRadius: BorderRadius.circular(18),
             onPressed: () => provider.resetAll(),
-            child: Text(
+            child: const Text(
               'تسجيل الخروج',
-              style: const TextStyle(
-                  fontFamily: 'Cairo', fontWeight: FontWeight.w900),
+              style: TextStyle(
+                  fontFamily: 'Cairo', fontWeight: FontWeight.w900, color: Colors.white),
             ),
           ),
         ),
@@ -840,7 +837,6 @@ class DriverAccountScreen extends StatelessWidget {
                         width: double.infinity,
                         child: CupertinoButton(
                           color: AppColors.accent,
-                          textColor: Colors.white,
                           borderRadius: BorderRadius.circular(18),
                           padding: const EdgeInsets.symmetric(vertical: 15),
                           onPressed: () async {
@@ -864,6 +860,7 @@ class DriverAccountScreen extends StatelessWidget {
                             style: const TextStyle(
                               fontFamily: 'Cairo',
                               fontWeight: FontWeight.w900,
+                              color: Colors.white,
                             ),
                           ),
                         ),
