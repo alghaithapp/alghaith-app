@@ -31,6 +31,7 @@ import 'screens/merchant/merchant_pending_approval_screen.dart';
 import 'screens/merchant/merchant_shell.dart';
 import 'screens/admin/admin_dashboard_screen.dart';
 import 'core/notifications/push_notification_service.dart';
+import 'core/notifications/push_notification_inbox.dart';
 import 'services/supabase_service.dart';
 import 'widgets/app_logo.dart';
 import 'utils/role_switch_notifications.dart';
@@ -244,14 +245,76 @@ class _SplashBlob extends StatelessWidget {
   }
 }
 
-class AlGhaithApp extends StatelessWidget {
+class AlGhaithApp extends StatefulWidget {
   const AlGhaithApp({super.key});
+
+  @override
+  State<AlGhaithApp> createState() => _AlGhaithAppState();
+}
+
+class _AlGhaithAppState extends State<AlGhaithApp> {
+  final GlobalKey<NavigatorState> _navigatorKey = GlobalKey<NavigatorState>();
+
+  @override
+  void initState() {
+    super.initState();
+    // تسجيل مفتاح Root Navigator لإظهار نافذة طلب التكسي المنبثقة من الإشعارات
+    PushNotificationService.setRootNavigatorKey(_navigatorKey);
+    // عند الضغط على إشعار التكسي من شريط الإشعارات → افتح نافذة الطلب
+    PushNotificationInbox.onTaxiNotificationTapped = (requestId) {
+      debugPrint('TaxiPushAction: فتح طلب $requestId من الإشعار');
+      _showTaxiDialogForRequest(requestId);
+    };
+  }
+
+  /// فتح نافذة طلب التكسي بقبول/رفض عند الضغط على الإشعار الخارجي
+  void _showTaxiDialogForRequest(String requestId) {
+    final context = _navigatorKey.currentContext;
+    if (context == null || !context.mounted) return;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!context.mounted) return;
+
+      // نحتاج provider لتنفيذ القبول/الرفض
+      final provider = context.read<AppProvider>();
+
+      // البحث عن الطلب في القائمة
+      final request = _findTaxiRequest(provider, requestId);
+      if (request == null) {
+        debugPrint('TaxiPush: request $requestId not found yet, will try after refresh');
+        return;
+      }
+
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (dialogContext) => _TaxiRequestDialog(
+          request: request,
+          requestId: requestId,
+        ),
+      );
+    });
+  }
+
+  /// البحث عن طلب تكسي في قائمة الطلبات
+  TaxiRequest? _findTaxiRequest(AppProvider provider, String requestId) {
+    for (final request in provider.visibleTaxiIncomingRequests) {
+      if (request.id == requestId) return request;
+    }
+    for (final request in provider.visibleTaxiActiveRequests) {
+      if (request.id == requestId) return request;
+    }
+    for (final request in provider.visibleTaxiCompletedRequests) {
+      if (request.id == requestId) return request;
+    }
+    return null;
+  }
 
   @override
   Widget build(BuildContext context) {
     final appProvider = Provider.of<AppProvider>(context);
 
-    // واجهة اختيار الشاشة المناسبة بناءً على حالة الحساب
+// واجهة اختيار الشاشة المناسبة بناءً على حالة الحساب
     Widget getHome() {
       if (!appProvider.hasPhoneSession && !appProvider.isGuestMode) {
         return const ExitConfirmScope(child: PhoneLoginScreen());
@@ -301,6 +364,7 @@ class AlGhaithApp extends StatelessWidget {
     return PushNotificationLifecycleScope(
       child: MaterialApp(
         title: 'الغيث',
+        navigatorKey: _navigatorKey,
         debugShowCheckedModeBanner: false,
         themeMode: appProvider.themeMode,
         // تحديد لون الخلفية الافتراضي لمنع الشاشة الرصاصية
@@ -894,5 +958,238 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
         ],
       ),
     );
+  }
+}
+
+/// نافذة منبثقة لطلب التكسي — تظهر عند الضغط على الإشعار الخارجي
+class _TaxiRequestDialog extends StatefulWidget {
+  final TaxiRequest request;
+  final String requestId;
+
+  const _TaxiRequestDialog({
+    required this.request,
+    required this.requestId,
+  });
+
+  @override
+  State<_TaxiRequestDialog> createState() => _TaxiRequestDialogState();
+}
+
+class _TaxiRequestDialogState extends State<_TaxiRequestDialog> {
+  bool _isBusy = false;
+  String? _resultMessage;
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bgColor = isDark ? const Color(0xFF1E1E1E) : Colors.white;
+    final req = widget.request;
+
+    return AlertDialog(
+      backgroundColor: bgColor,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+      insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 40),
+      contentPadding: const EdgeInsets.fromLTRB(20, 24, 20, 8),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.orange.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: const Text('🚕', style: TextStyle(fontSize: 32)),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      req.requestNumber,
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: isDark ? Colors.white : Colors.black87,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      req.customerNameAr,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        color: Colors.grey,
+                        fontFamily: 'Cairo',
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+
+          _detailRow(Icons.trip_origin, 'نقطة الانطلاق', req.pickupAddressAr),
+          const SizedBox(height: 10),
+          _detailRow(Icons.location_on, 'الوجهة', req.dropoffAddressAr),
+          const SizedBox(height: 14),
+
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            decoration: BoxDecoration(
+              color: Colors.green.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Row(
+              children: [
+                const Text('💰', style: TextStyle(fontSize: 20)),
+                const SizedBox(width: 10),
+                Text(
+                  '${req.fare} د.ع',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: isDark ? Colors.white : Colors.black87,
+                  ),
+                ),
+                const Spacer(),
+                if (req.rideTypeAr.isNotEmpty)
+                  Text(
+                    req.rideTypeAr,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey,
+                      fontFamily: 'Cairo',
+                    ),
+                  ),
+              ],
+            ),
+          ),
+
+          if (_resultMessage != null) ...[
+            const SizedBox(height: 14),
+            Text(
+              _resultMessage!,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 14,
+                color: _resultMessage!.contains('✅')
+                    ? Colors.green
+                    : Colors.orange,
+                fontFamily: 'Cairo',
+              ),
+            ),
+          ],
+
+          const SizedBox(height: 18),
+
+          Row(
+            children: [
+              Expanded(
+                child: SizedBox(
+                  height: 50,
+                  child: OutlinedButton.icon(
+                    onPressed: _isBusy ? null : () => _reject(),
+                    icon: _isBusy
+                        ? const SizedBox(
+                            width: 18, height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.close, size: 20),
+                    label: const Text('رفض', style: TextStyle(fontSize: 15, fontFamily: 'Cairo')),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.red,
+                      side: const BorderSide(color: Colors.red, width: 1.5),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: SizedBox(
+                  height: 50,
+                  child: ElevatedButton.icon(
+                    onPressed: _isBusy ? null : () => _accept(),
+                    icon: _isBusy
+                        ? const SizedBox(
+                            width: 18, height: 18,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2, color: Colors.white,
+                            ),
+                          )
+                        : const Icon(Icons.check_circle_outline, size: 20),
+                    label: const Text('قبول', style: TextStyle(fontSize: 15, fontFamily: 'Cairo')),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.green,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _detailRow(IconData icon, String label, String value) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, size: 18, color: Colors.grey),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(label, style: const TextStyle(fontSize: 12, color: Colors.grey, fontFamily: 'Cairo')),
+              const SizedBox(height: 2),
+              Text(value, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: dark ? Colors.white70 : Colors.black87, fontFamily: 'Cairo')),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _accept() async {
+    setState(() { _isBusy = true; _resultMessage = null; });
+    try {
+      await context.read<AppProvider>().acceptTaxiRequest(widget.requestId);
+      if (!mounted) return;
+      setState(() => _resultMessage = '✅ تم قبول الطلب بنجاح');
+      await Future.delayed(const Duration(seconds: 1));
+      if (mounted) Navigator.of(context).pop();
+    } catch (e) {
+      if (!mounted) return;
+      setState(() { _resultMessage = '❌ تعذر قبول الطلب'; _isBusy = false; });
+    }
+  }
+
+  Future<void> _reject() async {
+    setState(() { _isBusy = true; _resultMessage = null; });
+    try {
+      await context.read<AppProvider>().rejectTaxiRequest(widget.requestId);
+      if (!mounted) return;
+      setState(() => _resultMessage = '⏭️ تم رفض الطلب');
+      await Future.delayed(const Duration(seconds: 1));
+      if (mounted) Navigator.of(context).pop();
+    } catch (e) {
+      if (!mounted) return;
+      setState(() { _resultMessage = '❌ تعذر رفض الطلب'; _isBusy = false; });
+    }
   }
 }

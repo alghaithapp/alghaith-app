@@ -213,7 +213,7 @@ app.use('/db', require('./routes/marketplace'));
 app.use('/db', require('./routes/delivery'));
 app.use('/db', require('./routes/taxi'));
 app.use('/db', require('./routes/admin'));
-
+app.use('/db/chat', require('./routes/chat'));
 // ── Promo code validation (kept inline) ────────────────────────────────
 
 app.post('/db/validate-promo', async (req, res) => {

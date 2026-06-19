@@ -984,9 +984,14 @@ class AppProvider extends ChangeNotifier {
       }
 
       if (merchantProfile != null) {
-        _applyMerchantStoreSnapshot(_mapMerchantProfileRow(merchantProfile));
-        if (_userRole == null) {
-          _userRole = 'merchant';
+        // حماية: لا نستبدل بيانات المتجر المحلية ببيانات فارغة أو قديمة من السحابة
+        final hasLocalStore = _merchantStore != null && merchantStoreName.isNotEmpty;
+        final remoteStoreName = (merchantProfile['store_name'] as String?)?.trim() ?? '';
+        if (!hasLocalStore || remoteStoreName.isNotEmpty) {
+          _applyMerchantStoreSnapshot(_mapMerchantProfileRow(merchantProfile));
+          if (_userRole == null) {
+            _userRole = 'merchant';
+          }
         }
       }
 
@@ -2664,7 +2669,7 @@ class AppProvider extends ChangeNotifier {
         .length;
   }
 
-  void updateMerchantStore(Map<String, dynamic> updates) {
+  Future<void> updateMerchantStore(Map<String, dynamic> updates) async {
     if (_merchantStore == null) return;
     final normalized = Map<String, dynamic>.from(updates);
     if (normalized['productSections'] is List ||
@@ -2709,15 +2714,15 @@ class AppProvider extends ChangeNotifier {
       _merchantStore!.remove('rejected_at');
     }
     notifyListeners();
-    unawaited(_persistMerchantStoreAndState());
+    await _persistMerchantStoreAndState();
   }
 
-  void toggleMerchantOpenStatus() {
+  Future<void> toggleMerchantOpenStatus() async {
     if (_merchantStore == null) return;
     _merchantStore!['isOpen'] = !isMerchantStoreOpen;
     _notificationHub.onMerchantStoreOpenChanged(isMerchantStoreOpen);
     notifyListeners();
-    unawaited(_persistMerchantStoreAndState());
+    await _persistMerchantStoreAndState();
   }
 
   Future<void> setMerchantActiveService(String serviceId) async {
@@ -2725,7 +2730,7 @@ class AppProvider extends ChangeNotifier {
     if (!merchantServiceIds.contains(serviceId)) return;
     _merchantStore!['activeServiceId'] = serviceId;
     notifyListeners();
-    unawaited(_persistMerchantStoreAndState());
+    await _persistMerchantStoreAndState();
   }
 
   Future<void> addMerchantService(String serviceId) async {
@@ -4229,7 +4234,7 @@ class AppProvider extends ChangeNotifier {
     }
   }
 
-  void updateProduct(ListItem updatedItem) {
+  Future<void> updateProduct(ListItem updatedItem) async {
     final index = _items.indexWhere((item) => item.id == updatedItem.id);
     if (index == -1) return;
     final wasAvailable = _items[index].isAvailable;
@@ -4237,18 +4242,25 @@ class AppProvider extends ChangeNotifier {
     if (wasAvailable && !updatedItem.isAvailable) {
       _notificationHub.onProductUnavailable(updatedItem.nameAr);
     }
-    unawaited(_persistMerchantItems());
-    unawaited(_persistLocalBackup());
+    await _persistMerchantItems();
+    await _persistLocalBackup();
     notifyListeners();
   }
 
-  void deleteProduct(String id) {
-    _items.removeWhere((item) => item.id == id);
+  Future<void> deleteProduct(String id) async {
+    // حذف من قاعدة البيانات أولاً — بشكل متزامن مع معالجة الأخطاء
     if (_authPhone != null && _authPhone!.isNotEmpty) {
-      unawaited(SupabaseService.deleteMerchantProduct(id, phone: _authPhone));
+      try {
+        await SupabaseService.deleteMerchantProduct(id, phone: _authPhone);
+      } catch (error) {
+        debugPrint('DELETE_PRODUCT_REMOTE_ERROR: $error');
+        // لا نمسح المنتج محلياً إذا فشل الحذف عن بعد — حتى لا يظهر وكأنه حُذف وهو موجود
+        rethrow;
+      }
     }
-    unawaited(_persistMerchantItems());
-    unawaited(_persistLocalBackup());
+    _items.removeWhere((item) => item.id == id);
+    await _persistMerchantItems();
+    await _persistLocalBackup();
     notifyListeners();
   }
 

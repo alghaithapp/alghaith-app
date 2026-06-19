@@ -169,7 +169,7 @@ class _MerchantProductsScreenState extends State<MerchantProductsScreen> {
         ],
       ),
     );
-    if (ok == true) provider.deleteProduct(item.id);
+    if (ok == true) await provider.deleteProduct(item.id);
   }
 
   String _pageSubtitle(String serviceId, MerchantServiceLabels labels) {
@@ -328,9 +328,9 @@ class _MerchantProductsScreenState extends State<MerchantProductsScreen> {
                             serviceId == 'bazar_ghaith')
                         ? provider.merchantProductSectionName(item.sectionId)
                         : null,
-                    onToggle: () {
+                    onToggle: () async {
                       item.isAvailable = !item.isAvailable;
-                      provider.updateProduct(item);
+                      await provider.updateProduct(item);
                     },
                     onEdit: () => _openEditForm(provider, item, serviceId),
                     onDelete: () => _confirmDelete(provider, item),

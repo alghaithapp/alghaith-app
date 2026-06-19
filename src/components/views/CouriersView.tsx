@@ -70,14 +70,14 @@ export default function CouriersView({
               {showGroup && group === 'pending' ? (
                 <div className="section-divider">
                   <span>
-                    📋 مناديب بانتظار التفعيل ({pendingCouriersList.length})
+                    📋 مندوبون بانتظار التفعيل ({pendingCouriersList.length})
                   </span>
                 </div>
               ) : null}
               {showGroup && group === 'approved' ? (
                 <div className="section-divider">
                   <span>
-                    ✅ المناديب النشطون ({approvedCouriersList.length})
+                    ✅ المندوبون النشطون ({approvedCouriersList.length})
                   </span>
                 </div>
               ) : null}

@@ -1,6 +1,6 @@
 name: alghaith_app
 description: "Al-Ghaith - Professional Service & Shopping App in Iraq"
-version: 1.2.59+94
+version: 1.2.63+98
 
 environment:
   sdk: '>=3.0.0 <4.0.0'
@@ -14,7 +14,6 @@ dependencies:
   cached_network_image: ^3.3.1
   intl: ^0.19.0
   supabase_flutter: ^2.6.0
-  google_sign_in: ^6.2.1
   shared_preferences: ^2.2.3
   image_picker: ^1.1.2
   animate_do: ^3.3.4

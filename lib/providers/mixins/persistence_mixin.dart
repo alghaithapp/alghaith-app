@@ -238,9 +238,14 @@ mixin PersistenceMixin on AppCoreMixin {
       }
 
       if (merchantProfile != null) {
-        _applyMerchantStoreSnapshot(_mapMerchantProfileRow(merchantProfile));
-        if (_userRole == null) {
-          _userRole = 'merchant';
+        // حماية: لا نستبدل بيانات المتجر المحلية ببيانات فارغة أو قديمة من السحابة
+        final hasLocalStore = _merchantStore != null && merchantStoreName.isNotEmpty;
+        final remoteStoreName = (merchantProfile['store_name'] as String?)?.trim() ?? '';
+        if (!hasLocalStore || remoteStoreName.isNotEmpty) {
+          _applyMerchantStoreSnapshot(_mapMerchantProfileRow(merchantProfile));
+          if (_userRole == null) {
+            _userRole = 'merchant';
+          }
         }
       }
 

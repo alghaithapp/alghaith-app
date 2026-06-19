@@ -245,6 +245,72 @@ class _TaxiRequestScreenState extends State<TaxiRequestScreen> {
                 if (latestReq != null) ...[
                   const SizedBox(height: 20),
                   Text('حالة الطلب: ${latestReq.statusAr}', style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, color: AppColors.primary)),
+                  if (latestReq.assignedDriverName != null && latestReq.assignedDriverName!.isNotEmpty) ...[
+                    const SizedBox(height: 6),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Row(
+                          children: [
+                            const Icon(CupertinoIcons.person_fill, size: 13, color: Colors.grey),
+                            const SizedBox(width: 6),
+                            Text('السائق: ${latestReq.assignedDriverName}', style: const TextStyle(fontFamily: 'Cairo', fontSize: 12, color: Colors.grey)),
+                          ],
+                        ),
+                        GestureDetector(
+                          onTap: () {
+                            showCupertinoDialog(
+                              context: context,
+                              builder: (c) => CupertinoAlertDialog(
+                                title: const Text(
+                                  'قريباً',
+                                  style: TextStyle(
+                                    fontFamily: 'Cairo',
+                                    fontWeight: FontWeight.w900,
+                                    color: AppColors.accent,
+                                  ),
+                                ),
+                                content: const Text(
+                                  'هذه الخاصية قيد التطوير وستكون متاحة قريباً.',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    fontFamily: 'Cairo',
+                                    height: 1.5,
+                                  ),
+                                ),
+                                actions: [
+                                  CupertinoDialogAction(
+                                    child: const Text(
+                                      'حسناً',
+                                      style: TextStyle(
+                                        fontFamily: 'Cairo',
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                    onPressed: () => Navigator.pop(c),
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: AppColors.primary.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: const Row(
+                              children: [
+                                Icon(CupertinoIcons.chat_bubble_fill, size: 14, color: AppColors.primary),
+                                SizedBox(width: 4),
+                                Text('قريباً', style: TextStyle(fontFamily: 'Cairo', fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.primary)),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                   const SizedBox(height: 10),
                   if (latestReq.statusKey == 'pending' || latestReq.statusKey == 'accepted') CupertinoButton(child: const Text('إلغاء الرحلة', style: TextStyle(color: Colors.red)), onPressed: () async {
                     if (await provider.cancelTaxiRequestByCustomer(latestReq.id) != 'failed') setState(() {});

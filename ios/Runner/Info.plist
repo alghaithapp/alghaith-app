@@ -36,6 +36,8 @@
 	<string>نحتاج للوصول إلى الكاميرا لالتقاط صور للمنتجات أو تحديث ملفك الشخصي.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>نحتاج للوصول إلى مكتبة الصور لاختيار صور للمنتجات.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>نحتاج للوصول إلى الميكروفون لتسجيل الرسائل الصوتية للمحادثة المباشرة.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

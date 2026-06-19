@@ -34,13 +34,25 @@ class PushNotificationInbox {
         android: androidSettings,
         iOS: iosSettings,
       ),
+      onDidReceiveNotificationResponse: _onNotificationAction,
     );
 
     if (Platform.isAndroid) {
-      await _localNotifications
+      final androidPlugin = _localNotifications
           .resolvePlatformSpecificImplementation<
-              AndroidFlutterLocalNotificationsPlugin>()
-          ?.createNotificationChannel(NotificationSound.androidChannel);
+              AndroidFlutterLocalNotificationsPlugin>();
+      await androidPlugin?.createNotificationChannel(
+        NotificationSound.androidChannel,
+      );
+      await androidPlugin?.createNotificationChannel(
+        const AndroidNotificationChannel(
+          'alghaith_taxi_requests',
+          'طلبات التكسي',
+          description: '🚕 طلبات تكسي مع أزرار قبول/رفض',
+          importance: Importance.high,
+          playSound: true,
+        ),
+      );
     }
 
     _pluginReady = true;
@@ -51,6 +63,25 @@ class PushNotificationInbox {
 
     final title = _readTitle(message);
     final body = _readBody(message);
+    final eventKey = message.data['eventKey']?.toString() ?? '';
+    final category = message.data['category']?.toString() ?? '';
+    final audience = message.data['audience']?.toString() ?? '';
+    final requestId = message.data['orderId']?.toString() ?? '';
+    final isTaxiForDriver =
+        category == 'taxi' &&
+        audience == 'driver' &&
+        (eventKey.contains(':pool_new') || eventKey.contains(':pool_returned'));
+
+    if (isTaxiForDriver && requestId.isNotEmpty) {
+      await _showTaxiNotification(
+        id: requestId.hashCode,
+        title: title,
+        body: body,
+        requestId: requestId,
+      );
+      return;
+    }
+
     if (body.isEmpty && title == 'الغيث') return;
 
     final prefs = await SharedPreferences.getInstance();
@@ -64,7 +95,7 @@ class PushNotificationInbox {
         'title': title,
         'body': body,
         'orderId': message.data['orderId'] ?? '',
-        'eventKey': message.data['eventKey'] ?? '',
+        'eventKey': eventKey,
         'receivedAt': DateTime.now().toIso8601String(),
       },
     );
@@ -80,6 +111,75 @@ class PushNotificationInbox {
       orderId: message.data['orderId'],
     );
   }
+
+  /// إظهار إشعار طلب تكسي مع أزرار قبول / رفض في الإشعار الخارجي
+  static Future<void> _showTaxiNotification({
+    required int id,
+    required String title,
+    required String body,
+    required String requestId,
+  }) async {
+    const taxiChannelId = 'alghaith_taxi_requests';
+    const taxiChannelName = 'طلبات التكسي';
+
+    final androidDetails = AndroidNotificationDetails(
+      taxiChannelId,
+      taxiChannelName,
+      channelDescription: '🚕 طلبات التكسي مع قبول/رفض',
+      importance: Importance.high,
+      priority: Priority.high,
+      playSound: true,
+      fullScreenIntent: true,
+      showWhen: true,
+    );
+
+    await _localNotifications.show(
+      id,
+      title.isNotEmpty ? title : '🚕 طلب تكسي جديد',
+      body,
+      NotificationDetails(
+        android: androidDetails,
+        iOS: const DarwinNotificationDetails(
+          presentAlert: true,
+          presentBadge: true,
+          presentSound: true,
+        ),
+      ),
+      payload: 'taxi_request:$requestId',
+    );
+
+    // تخزين الإشعار في صندوق الإشعارات أيضاً
+    final prefs = await SharedPreferences.getInstance();
+    final count = (prefs.getInt(unreadCountKey) ?? 0) + 1;
+    await prefs.setInt(unreadCountKey, count);
+    final items = _readItems(prefs);
+    items.insert(0, {
+      'title': title,
+      'body': body,
+      'orderId': requestId,
+      'eventKey': 'driver:$requestId:pool_new',
+      'receivedAt': DateTime.now().toIso8601String(),
+    });
+    if (items.length > maxStoredItems) {
+      items.removeRange(maxStoredItems, items.length);
+    }
+    await prefs.setString(inboxItemsKey, jsonEncode(items));
+  }
+
+  /// معالج الضغط على الإشعار — فتح نافذة طلب التكسي
+  static void _onNotificationAction(NotificationResponse response) {
+    final payload = response.payload ?? '';
+    if (payload.startsWith('taxi_request:')) {
+      final reqId = payload.replaceFirst('taxi_request:', '');
+      if (reqId.isNotEmpty) {
+        debugPrint('PushAction: فتح طلب تكسي $reqId من الإشعار');
+        onTaxiNotificationTapped?.call(reqId);
+      }
+    }
+  }
+
+  /// Callback عندما يضغط السائق على الإشعار لفتح نافذة الطلب
+  static void Function(String requestId)? onTaxiNotificationTapped;
 
   static Future<void> clearUnread() async {
     final prefs = await SharedPreferences.getInstance();

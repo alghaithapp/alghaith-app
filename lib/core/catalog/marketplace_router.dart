@@ -68,7 +68,7 @@ class MarketplaceRouter {
   ) {
     if (category.id == 'cars') {
       if (sub.id == 'taxi_request') {
-        Navigator.of(context).push(
+        Navigator.of(context, rootNavigator: true).push(
           CupertinoPageRoute(
             builder: (_) => const TaxiRequestScreen(),
           ),

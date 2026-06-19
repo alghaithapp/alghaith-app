@@ -3,10 +3,12 @@ import 'dart:async';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 
 import '../../firebase_options.dart';
 import '../../services/supabase_service.dart';
 import 'push_notification_inbox.dart';
+import 'taxi_push_handler.dart';
 
 @pragma('vm:entry-point')
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
@@ -163,12 +165,42 @@ class PushNotificationService {
     await PushNotificationInbox.handleIncoming(message);
     final eventKey = message.data['eventKey']?.toString() ?? '';
     final category = message.data['category']?.toString() ?? '';
+    final requestId = message.data['orderId']?.toString() ?? '';
+
     if (eventKey.contains(':approved') || eventKey.contains(':rejected')) {
       await PushNotificationInbox.onCourierStatusPush?.call();
     }
     if (category == 'taxi') {
       await PushNotificationInbox.onTaxiStatusPush?.call();
     }
+
+    // للدور driver: إشعار طلب تكسي جديد — اعرض نافذة قبول/رفض
+    final audience = message.data['audience']?.toString() ?? '';
+    if (audience == 'driver' &&
+        (eventKey.contains(':pool_new') || eventKey.contains(':pool_returned')) &&
+        requestId.isNotEmpty) {
+      final title = message.data['title']?.toString() ?? '🚕 طلب تكسي جديد';
+      final body = message.data['body']?.toString() ?? '';
+      // عرض النافذة المنبثقة — ستحتاج BuildContext
+      // نستخدم key navigator لاستخراج السياق
+      _showTaxiDialog(requestId, title, body);
+    }
+  }
+
+  /// إظهار نافذة طلب التكسي داخل التطبيق مع أزرار قبول/رفض
+  void _showTaxiDialog(String requestId, String title, String body) {
+    final context = _rootNavigatorKey?.currentContext;
+    if (context == null || !context.mounted) {
+      debugPrint('Push: cannot show taxi dialog — no context available');
+      return;
+    }
+    TaxiPushHandler.handleForegroundPush(
+      context,
+      requestId: requestId,
+      title: title,
+      body: body,
+      eventKey: 'foreground:$requestId',
+    );
   }
 
   void _handleOpenedMessage(RemoteMessage message) {
@@ -188,6 +220,14 @@ class PushNotificationService {
   }
 
   Map<String, dynamic>? _lastOpenedNotificationData;
+
+  /// مفتاح Root Navigator لإظهار النوافذ المنبثقة من الإشعارات
+  static GlobalKey<NavigatorState>? _rootNavigatorKey;
+
+  /// تعيين مفتاح Root Navigator (يُستدعى من main.dart)
+  static void setRootNavigatorKey(GlobalKey<NavigatorState> key) {
+    _rootNavigatorKey = key;
+  }
   void Function(Map<String, dynamic> data)? _onNotificationOpened;
 
   void setOnNotificationOpened(void Function(Map<String, dynamic> data) callback) {

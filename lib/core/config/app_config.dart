@@ -19,7 +19,7 @@ class AppConfig {
 
   static const String mapboxPublicToken = String.fromEnvironment(
     'MAPBOX_PUBLIC_TOKEN',
-    defaultValue: 'YOUR_MAPBOX_PUBLIC_TOKEN',
+    defaultValue: '',
   );
 
   static String? _resolvedMapboxToken;

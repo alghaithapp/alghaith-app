@@ -1,4 +1,4 @@
-﻿const { createClient } = require('@supabase/supabase-js');
+const { createClient } = require('@supabase/supabase-js');
 const WebSocket = require('ws');
 
 function normalizeSupabaseUrl(url) {
@@ -1739,6 +1739,15 @@ async function acceptTaxiRequest(driverPhone, requestId, data = {}) {
     throw new Error('Request id is required.');
   }
 
+  const state = await getUserState(normalizedDriver);
+  const driverProfile = state?.driverProfile || {};
+  if (driverProfile.cancellationBlockedUntil) {
+    const blockedUntil = new Date(driverProfile.cancellationBlockedUntil).getTime();
+    if (Date.now() < blockedUntil) {
+      throw new Error('لا يمكنك قبول طلبات حالياً، حسابك محظور مؤقتاً بسبب كثرة الإلغاء.');
+    }
+  }
+
   const row = await selectSingle('taxi_requests', 'id', id);
   if (!row) {
     throw new Error('Request not found.');
@@ -1862,6 +1871,149 @@ async function updateTaxiRequestStatus(actorPhone, requestId, updates = {}) {
     request: nextRequest,
     driver_phone: meta.driverPhone || null,
   });
+}
+
+// ==========================================
+// CHAT MESSAGES LOGIC
+// ==========================================
+
+async function getChatMessages(orderId) {
+  if (!orderId) throw new Error('Order ID is required');
+  // First, check if the table exists (fallback if migration is not applied)
+  const hasTable = await hasColumn('chat_messages', 'id').catch(() => false);
+  if (!hasTable) {
+    console.warn('Table chat_messages does not exist. Returning empty array.');
+    return [];
+  }
+  return selectMany('chat_messages', [{ method: 'eq', column: 'order_id', value: orderId }], { column: 'created_at', ascending: true });
+}
+
+async function saveChatMessage(payload) {
+  if (!payload.orderId || !payload.content || !payload.senderPhone) {
+    throw new Error('Missing required chat message fields');
+  }
+
+  const hasTable = await hasColumn('chat_messages', 'id').catch(() => false);
+  if (!hasTable) {
+    throw new Error('Chat feature is not fully initialized in the database.');
+  }
+
+  const messageData = {
+    id: payload.id || crypto.randomUUID(),
+    order_id: payload.orderId,
+    sender_phone: await resolvePhoneKey(payload.senderPhone),
+    receiver_phone: payload.receiverPhone ? await resolvePhoneKey(payload.receiverPhone) : null,
+    message_type: payload.messageType || 'text',
+    content: payload.content,
+    created_at: nowIso(),
+  };
+
+  const saved = await saveRow('chat_messages', messageData, 'id');
+
+  // Push notification to receiver
+  if (saved.receiver_phone) {
+    try {
+      const { sendPushNotification } = require('./push_notifications');
+      const title = 'رسالة جديدة';
+      const body = saved.message_type === 'audio' ? '🎵 رسالة صوتية جديدة' : saved.content;
+      await sendPushNotification(saved.receiver_phone, title, body, {
+        type: 'chat_message',
+        orderId: saved.order_id,
+        messageId: saved.id
+      });
+    } catch (e) {
+      console.error('Failed to send chat push notification', e);
+    }
+  }
+
+  return saved;
+}
+
+// ==========================================
+
+async function driverCancelTaxiRequest(driverPhone, requestId, reason = '') {
+  const normalizedDriver = await resolvePhoneKey(driverPhone);
+  const id = String(requestId || '').trim();
+  if (!id) {
+    throw new Error('Request id is required.');
+  }
+
+  if (!reason.trim()) {
+    throw new Error('يجب كتابة سبب للإلغاء.');
+  }
+
+  const row = await selectSingle('taxi_requests', 'id', id);
+  if (!row) {
+    throw new Error('Request not found.');
+  }
+
+  const meta = readTaxiMeta(row);
+  const isDriver = phonesOverlap(normalizedDriver, meta.driverPhone);
+
+  if (!isDriver) {
+    throw new Error('أنت غير مخول لإلغاء هذه الرحلة (لست السائق المُعين).');
+  }
+
+  const allowedStatuses = ['accepted', 'on_way', 'arrived'];
+  if (!allowedStatuses.includes(meta.statusKey)) {
+    throw new Error('لا يمكن إلغاء الرحلة في هذه المرحلة.');
+  }
+
+  // تسجيل الإلغاء في بروفايل السائق لحساب العقوبة
+  const state = await getUserState(normalizedDriver);
+  const driverProfile = state?.driverProfile || {};
+  const now = Date.now();
+  const twoHoursMs = 2 * 60 * 60 * 1000;
+
+  let cancellations = Array.isArray(driverProfile.recentCancellations)
+    ? driverProfile.recentCancellations
+    : [];
+
+  // إزالة الإلغاءات الأقدم من ساعتين
+  cancellations = cancellations.filter(timestamp => now - timestamp < twoHoursMs);
+
+  // إضافة الإلغاء الحالي
+  cancellations.push(now);
+
+  const updates = { recentCancellations: cancellations };
+
+  // إذا وصل العدد لـ 3، يتم وضع حظر لمدة ساعتين
+  if (cancellations.length >= 3) {
+    updates.cancellationBlockedUntil = new Date(now + twoHoursMs).toISOString();
+  }
+
+  await saveUserState(normalizedDriver, {
+    ...state,
+    driverProfile: { ...driverProfile, ...updates },
+  });
+
+  // تحديث حالة الطلب ليعود للزبون بأنه ملغى تماماً
+  const nextRequest = {
+    ...meta.payload,
+    statusKey: 'cancelled',
+    statusAr: 'أُلغي من قبل السائق',
+    statusEn: 'Cancelled by Driver',
+    driverCancelReason: reason.trim(),
+    driverPhone: null,
+    assignedDriverPhone: null,
+  };
+
+  const saved = await saveTaxiRequest(meta.customerPhone, {
+    request: nextRequest,
+    driver_phone: null,
+  });
+
+  try {
+    const { onTaxiRequestSaved } = require('./push_events');
+    // إرسال إشعار للزبون بأن السائق ألغى الطلب
+    await onTaxiRequestSaved({
+      previousMeta: meta,
+      nextMeta: readTaxiMeta(saved),
+      isNew: false,
+    });
+  } catch (err) {}
+
+  return saved;
 }
 
 async function getActiveDriverPhones() {
@@ -4712,6 +4864,9 @@ module.exports = {
   acceptTaxiRequest,
   rejectTaxiRequest,
   updateTaxiRequestStatus,
+  driverCancelTaxiRequest,
+  getChatMessages,
+  saveChatMessage,
   getActiveDriverPhones,
   getAdminReports,
   canonicalPhone,

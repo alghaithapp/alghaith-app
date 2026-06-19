@@ -103,7 +103,7 @@ mixin MerchantMixin on AppCoreMixin, AuthMixin, CustomerMixin, PersistenceMixin 
     await _persistMerchantStoreAndState();
   }
 
-  void updateMerchantStore(Map<String, dynamic> updates) {
+  Future<void> updateMerchantStore(Map<String, dynamic> updates) async {
     if (_merchantStore == null) return;
     final normalized = Map<String, dynamic>.from(updates);
     if (normalized['productSections'] is List ||
@@ -148,15 +148,15 @@ mixin MerchantMixin on AppCoreMixin, AuthMixin, CustomerMixin, PersistenceMixin 
       _merchantStore!.remove('rejected_at');
     }
     notifyListeners();
-    unawaited(_persistMerchantStoreAndState());
+    await _persistMerchantStoreAndState();
   }
 
-  void toggleMerchantOpenStatus() {
+  Future<void> toggleMerchantOpenStatus() async {
     if (_merchantStore == null) return;
     _merchantStore!['isOpen'] = !isMerchantStoreOpen;
     _notificationHub.onMerchantStoreOpenChanged(isMerchantStoreOpen);
     notifyListeners();
-    unawaited(_persistMerchantStoreAndState());
+    await _persistMerchantStoreAndState();
   }
 
   Future<void> setMerchantActiveService(String serviceId) async {
@@ -164,7 +164,7 @@ mixin MerchantMixin on AppCoreMixin, AuthMixin, CustomerMixin, PersistenceMixin 
     if (!merchantServiceIds.contains(serviceId)) return;
     _merchantStore!['activeServiceId'] = serviceId;
     notifyListeners();
-    unawaited(_persistMerchantStoreAndState());
+    await _persistMerchantStoreAndState();
   }
 
   Future<void> addMerchantService(String serviceId) async {
@@ -325,7 +325,7 @@ mixin MerchantMixin on AppCoreMixin, AuthMixin, CustomerMixin, PersistenceMixin 
     }
   }
 
-  void updateProduct(ListItem updatedItem) {
+  Future<void> updateProduct(ListItem updatedItem) async {
     final index = _items.indexWhere((item) => item.id == updatedItem.id);
     if (index == -1) return;
     final wasAvailable = _items[index].isAvailable;
@@ -333,18 +333,25 @@ mixin MerchantMixin on AppCoreMixin, AuthMixin, CustomerMixin, PersistenceMixin 
     if (wasAvailable && !updatedItem.isAvailable) {
       _notificationHub.onProductUnavailable(updatedItem.nameAr);
     }
-    unawaited(_persistMerchantItems());
-    unawaited(_persistLocalBackup());
+    await _persistMerchantItems();
+    await _persistLocalBackup();
     notifyListeners();
   }
 
-  void deleteProduct(String id) {
-    _items.removeWhere((item) => item.id == id);
+  Future<void> deleteProduct(String id) async {
+    // حذف من قاعدة البيانات أولاً — بشكل متزامن مع معالجة الأخطاء
     if (_authPhone != null && _authPhone!.isNotEmpty) {
-      unawaited(SupabaseService.deleteMerchantProduct(id, phone: _authPhone));
+      try {
+        await SupabaseService.deleteMerchantProduct(id, phone: _authPhone);
+      } catch (error) {
+        debugPrint('DELETE_PRODUCT_REMOTE_ERROR: $error');
+        // لا نمسح المنتج محلياً إذا فشل الحذف عن بعد
+        rethrow;
+      }
     }
-    unawaited(_persistMerchantItems());
-    unawaited(_persistLocalBackup());
+    _items.removeWhere((item) => item.id == id);
+    await _persistMerchantItems();
+    await _persistLocalBackup();
     notifyListeners();
   }
 

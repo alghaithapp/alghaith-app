@@ -562,11 +562,40 @@ async function onTaxiRequestSaved({ previousMeta, nextMeta, isNew }) {
   const previousDriver = previousMeta?.driverPhone || '';
   const nextDriver = nextMeta.driverPhone || '';
 
+  // استخراج تفاصيل الرحلة من الـ payload
+  const pickupAr = String(nextMeta.payload?.pickupAddressAr || nextMeta.payload?.pickupAddress || '').trim();
+  const pickupEn = String(nextMeta.payload?.pickupAddressEn || nextMeta.payload?.pickupAddressEnglish || '').trim();
+  const dropoffAr = String(nextMeta.payload?.dropoffAddressAr || nextMeta.payload?.dropoffAddress || '').trim();
+  const dropoffEn = String(nextMeta.payload?.dropoffAddressEn || nextMeta.payload?.dropoffAddressEnglish || '').trim();
+  const fare = Number(nextMeta.payload?.fare || 0);
+  const rideTypeAr = String(nextMeta.payload?.rideTypeAr || '').trim();
+  const customerName = String(nextMeta.payload?.customerNameAr || '').trim() || 'زبون الغيث';
+
+  // بناء نص الإشعار بالعربية
+  const bodyAr = [
+    `🚕 طلب تكسي جديد #${requestNumber}`,
+    pickupAr ? `📍 من: ${pickupAr}` : '',
+    dropoffAr ? `🏁 إلى: ${dropoffAr}` : '',
+    fare > 0 ? `💰 المبلغ: ${fare.toLocaleString('ar-IQ')} د.ع` : '',
+    rideTypeAr ? `🚗 ${rideTypeAr}` : '',
+  ].filter(Boolean).join('\n');
+
+  // بناء نص الإشعار بالإنجليزية
+  const bodyEn = [
+    `🚕 New Taxi Request #${requestNumber}`,
+    pickupEn ? `📍 From: ${pickupEn}` : pickupAr ? `📍 From: ${pickupAr}` : '',
+    dropoffEn ? `🏁 To: ${dropoffEn}` : dropoffAr ? `🏁 To: ${dropoffAr}` : '',
+    fare > 0 ? `💰 Fare: ${fare.toLocaleString('en-US')} IQD` : '',
+  ].filter(Boolean).join('\n');
+
+  // النص الأساسي في الإشعار (عربي لتطبيق عربي)
+  const body = bodyAr || bodyEn || `طلب ${requestNumber} متاح للقبول الآن`;
+
   if (isNew && (nextStatus === 'pending' || nextStatus === 'new')) {
     await notifyActiveDrivers(
       buildPushPayload({
-        title: 'طلب تكسي جديد',
-        body: `طلب ${requestNumber} متاح للقبول الآن`,
+        title: '🚕 طلب تكسي جديد',
+        body,
         audience: 'driver',
         orderId: requestId,
         eventKey: `driver:${requestId}:pool_new`,
@@ -690,10 +719,11 @@ async function onTaxiRequestSaved({ previousMeta, nextMeta, isNew }) {
 
   const enteredPool = isTaxiPool(nextMeta) && !isTaxiPool(previousMeta);
   if (enteredPool) {
+    const poolBody = bodyAr || bodyEn || `طلب ${requestNumber} متاح للقبول الآن`;
     await notifyActiveDrivers(
       buildPushPayload({
-        title: 'طلب تكسي جديد',
-        body: `طلب ${requestNumber} متاح للقبول الآن`,
+        title: '🚕 طلب تكسي جديد',
+        body: poolBody,
         audience: 'driver',
         orderId: requestId,
         eventKey: `driver:${requestId}:pool_new`,
@@ -709,10 +739,11 @@ async function onTaxiRequestSaved({ previousMeta, nextMeta, isNew }) {
     previousDriver &&
     !nextDriver;
   if (returnedToPool) {
+    const poolBody = bodyAr || bodyEn || `طلب ${requestNumber} متاح مجدداً للسائقين`;
     await notifyActiveDrivers(
       buildPushPayload({
-        title: 'طلب تكسي عاد للقائمة',
-        body: `الطلب ${requestNumber} متاح مجدداً للسائقين`,
+        title: '🚕 طلب تكسي عاد للقائمة',
+        body: poolBody,
         audience: 'driver',
         orderId: requestId,
         eventKey: `driver:${requestId}:pool_returned`,

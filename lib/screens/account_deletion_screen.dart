@@ -233,6 +233,7 @@ class _AccountDeletionScreenState extends State<AccountDeletionScreen> {
                     : const Text(
                         'حذف حسابي الآن',
                         style: TextStyle(
+                          color: Colors.white,
                           fontFamily: 'Cairo',
                           fontWeight: FontWeight.w800,
                           fontSize: 15,

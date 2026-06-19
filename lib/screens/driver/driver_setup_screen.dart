@@ -499,6 +499,7 @@ class _DriverSetupScreenState extends State<DriverSetupScreen> {
                   : const Text(
                       'إرسال طلب التفعيل',
                       style: TextStyle(
+                        color: Colors.white,
                         fontFamily: 'Cairo',
                         fontWeight: FontWeight.w900,
                         fontSize: 16,

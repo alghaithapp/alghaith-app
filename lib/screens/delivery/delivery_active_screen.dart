@@ -333,6 +333,7 @@ class DeliveryActiveGroupCard extends StatelessWidget {
                         provider.markDeliveryOnTheWay(group.orders.first.id),
                     child: const Text('بدء التحرك للزبون',
                         style: TextStyle(
+                            color: Colors.white,
                             fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
                   ),
                 )
@@ -347,7 +348,7 @@ class DeliveryActiveGroupCard extends StatelessWidget {
                         onPressed: () => _openMapToCustomer(context),
                         child: const Text('خرائط الزبون',
                             style:
-                                TextStyle(fontFamily: 'Cairo', fontSize: 14)),
+                                TextStyle(color: Colors.white, fontFamily: 'Cairo', fontSize: 14)),
                       ),
                     ),
                     const SizedBox(width: 10),
@@ -361,6 +362,7 @@ class DeliveryActiveGroupCard extends StatelessWidget {
                             .markDeliveryCompleted(group.orders.first.id),
                         child: const Text('تسليم وتحصيل الكاش',
                             style: TextStyle(
+                                color: Colors.white,
                                 fontFamily: 'Cairo',
                                 fontWeight: FontWeight.bold,
                                 fontSize: 14)),

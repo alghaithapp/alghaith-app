@@ -106,8 +106,13 @@ class OverviewTab extends StatelessWidget {
             label: 'التبديل لحساب الزبون',
             icon: Icons.person_search_rounded,
             onTap: () async {
-              final ok = await context.read<AppProvider>().setUserRole('customer');
-              if (!ok && context.mounted) {
+              final provider = context.read<AppProvider>();
+              final ok = await provider.setUserRole('customer');
+              if (ok && context.mounted) {
+                // 🔄 الرجوع لجذر التطبيق — getHome() في main.dart
+                // يعيد توجيه المستخدم لـ MainShell (واجهة الزبون)
+                Navigator.of(context).popUntil((route) => route.isFirst);
+              } else if (!ok && context.mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
                     content: Text('تعذر التبديل لحساب الزبون حالياً.',

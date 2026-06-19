@@ -46,6 +46,7 @@ import Sidebar from './components/Sidebar';
 import DashboardView from './components/views/DashboardView';
 import MerchantsView from './components/views/MerchantsView';
 import CouriersView from './components/views/CouriersView';
+import DriversView from './components/views/DriversView';
 import AccountsView from './components/views/AccountsView';
 import HomeCategoriesView from './components/views/HomeCategoriesView';
 import AppUpdateView from './components/views/AppUpdateView';
@@ -64,6 +65,7 @@ type AdminView =
   | 'accounts'
   | 'merchants'
   | 'couriers'
+  | 'drivers'
   | 'homeCategories'
   | 'appUpdate';
 type AccountFilter = 'all' | AdminAccountKind;
@@ -81,7 +83,7 @@ const VIEW_META: Record<
   },
   merchants: {
     eyebrow: 'إدارة التجار',
-    title: 'قائمة التجار',
+    title: 'التجار والمهنيون',
     subtitle: 'استعراض الحالة، الأرباح، الطلبات، وإجراءات التجميد والبازار.',
     showSearch: true,
   },
@@ -91,10 +93,16 @@ const VIEW_META: Record<
     subtitle: 'راجع بيانات المندوب ووافق على تفعيل حسابه قبل استقبال الطلبات.',
     showSearch: true,
   },
+  drivers: {
+    eyebrow: 'سائقو التكسي',
+    title: 'إدارة سائقي التكسي',
+    subtitle: 'راجع طلبات تفعيل سائقي التكسي وأدر حساباتهم.',
+    showSearch: true,
+  },
   accounts: {
     eyebrow: 'إدارة الحسابات',
     title: 'جميع حسابات المنصة',
-    subtitle: 'حذف أو تعليق حسابات الزبائن، التجار، المهنيين، مندوبي التوصيل، وسائقي التكسي.',
+    subtitle: 'جميع الحسابات مصنّفة حسب النوع — زبائن، تجار، مندوبين، سائقون، مشرفون.',
     showSearch: true,
   },
   appUpdate: {
@@ -383,6 +391,28 @@ export default function App() {
 
   const frozenMerchants = useMemo(() => merchants.filter((m) => m.isFrozen).length, [merchants]);
 
+  // Driver accounts derived from main accounts list
+  const driverAccounts = useMemo(() => accounts.filter((a) => a.kind === 'driver'), [accounts]);
+
+  const filteredDrivers = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    if (!query) return driverAccounts;
+    return driverAccounts.filter((d) =>
+      [d.displayName, d.fullName, d.phone].join(' ').toLowerCase().includes(query),
+    );
+  }, [driverAccounts, search]);
+
+  const pendingDriverQueue = useMemo(
+    () => driverAccounts.filter((d) => !d.isApproved && d.approvalStatus === 'pending'),
+    [driverAccounts],
+  );
+
+  // User type counts for dashboard distribution
+  const totalCustomers = useMemo(() => accounts.filter((a) => a.kind === 'customer').length, [accounts]);
+  const totalMerchantsCount = useMemo(() => accounts.filter((a) => a.kind === 'merchant').length, [accounts]);
+  const totalCouriersCount = useMemo(() => accounts.filter((a) => a.kind === 'courier').length, [accounts]);
+  const totalDriversCount = useMemo(() => accounts.filter((a) => a.kind === 'driver').length, [accounts]);
+
   // Handlers
   async function handleSendCode(event: FormEvent) {
     event.preventDefault();
@@ -585,6 +615,26 @@ export default function App() {
     } finally { setActiveActionKey(''); }
   }
 
+  // Toggle driver approval on/off (for DriversView activate/deactivate button)
+  async function handleToggleDriverApproval(account: AdminAccountSummary) {
+    if (!token) return;
+    const nextApproved = !account.isApproved;
+    setActiveActionKey(`approve-account:${account.phone}`);
+    setActionError('');
+    setSuccessMessage('');
+    try {
+      await toggleDriverApproval(token, account.phone, nextApproved);
+      setSuccessMessage(
+        nextApproved
+          ? `تمت موافقة وتفعيل حساب السائق ${account.displayName || account.phone}.`
+          : `تم إلغاء تفعيل حساب السائق ${account.displayName || account.phone}.`,
+      );
+      await refreshCoreData(token);
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : 'تعذر تحديث حالة السائق.');
+    } finally { setActiveActionKey(''); }
+  }
+
   async function handleChangeRole(account: AdminAccountSummary, newRole: string) {
     if (!token) return;
     if (account.kind === 'admin') { setActionError('لا يمكن تغيير دور مشرف محمي.'); return; }
@@ -682,6 +732,7 @@ export default function App() {
           pendingMerchantQueue={pendingMerchantQueue}
           pendingCourierQueue={pendingCourierQueue}
           approvalQueue={approvalQueue}
+          pendingDriverCount={pendingDriverQueue.length}
           sidebarOpen={sidebarOpen}
           onSwitchView={switchView}
           onLogout={handleLogout}
@@ -738,6 +789,11 @@ export default function App() {
                   pendingCourierQueue={pendingCourierQueue}
                   approvalQueue={approvalQueue}
                   frozenMerchants={frozenMerchants}
+                  pendingDriverCount={pendingDriverQueue.length}
+                  totalCustomers={totalCustomers}
+                  totalMerchants={totalMerchantsCount}
+                  totalCouriers={totalCouriersCount}
+                  totalDrivers={totalDriversCount}
                   formatMoney={formatMoney}
                   formatDate={formatDate}
                   onSwitchView={switchView}
@@ -786,7 +842,7 @@ export default function App() {
                   <div className="panel wide">
                     <div className="panel-header">
                       <div>
-                        <h3>جميع المندوبين</h3>
+                        <h3>مندوبو التوصيل</h3>
                         <p>اضغط على الإجراء المناسب لكل مندوب.</p>
                       </div>
                       <span className="panel-chip">{filteredCouriers.length}</span>
@@ -807,13 +863,39 @@ export default function App() {
                 </section>
               ) : null}
 
+              {view === 'drivers' ? (
+                <section className="main-grid couriers-only">
+                  <div className="panel wide">
+                    <div className="panel-header">
+                      <div>
+                        <h3>سائقو التكسي</h3>
+                        <p>راجع طلبات التفعيل ووافق على حسابات السائقين.</p>
+                      </div>
+                      <span className="panel-chip">{filteredDrivers.length}</span>
+                    </div>
+                    <DriversView
+                      drivers={driverAccounts}
+                      filteredDrivers={filteredDrivers}
+                      search={search}
+                      activeActionKey={activeActionKey}
+                      accounts={accounts}
+                      onSearchChange={setSearch}
+                      onApproveAccount={handleToggleDriverApproval}
+                      onOpenReject={(target) => openRejectConfirm(target)}
+                      onSuspend={handleSuspendAccount}
+                      onOpenDelete={openDeleteConfirm}
+                    />
+                  </div>
+                </section>
+              ) : null}
+
               {view === 'accounts' ? (
                 <section className="main-grid couriers-only">
                   <div className="panel wide">
                     <div className="panel-header">
                       <div>
-                        <h3>جميع الحسابات</h3>
-                        <p>يمكنك تعليق أي حساب أو حذفه نهائياً بعد التأكيد.</p>
+                        <h3>جميع حسابات المنصة</h3>
+                        <p>مصنّفة حسب نوع الحساب — اختر التبويب المناسب للبحث والفرز.</p>
                       </div>
                       <span className="panel-chip">{filteredAccounts.length}</span>
                     </div>

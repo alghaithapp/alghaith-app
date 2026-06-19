@@ -458,7 +458,7 @@ class _MerchantStoreSettingsScreenState
                   borderRadius: BorderRadius.circular(18)),
               padding: const EdgeInsets.symmetric(vertical: 14),
             ),
-            onPressed: () {
+            onPressed: () async {
               if (requiresStoreLocation &&
                   (_storeLatitude == null || _storeLongitude == null)) {
                 ScaffoldMessenger.of(context).showSnackBar(
@@ -517,7 +517,7 @@ class _MerchantStoreSettingsScreenState
                       'contact_visibility': contactVisibility,
                       'contactVisibility': contactVisibility,
                     };
-              provider.updateMerchantStore({
+              await provider.updateMerchantStore({
                 'name': _nameController.text.trim(),
                 'description': _descController.text.trim(),
                 'phone': _phoneController.text.trim(),

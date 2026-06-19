@@ -27,7 +27,7 @@ class CourierManagementTabState extends State<CourierManagementTab> {
         padding: const EdgeInsets.all(16),
         children: [
           if (pending.isNotEmpty) ...[
-            const SectionHeader(title: 'مناديب بانتظار التفعيل', color: Colors.orange),
+            const SectionHeader(title: 'مندوبون بانتظار التفعيل', color: Colors.orange),
             const SizedBox(height: 12),
             ...pending.map((c) => CourierCard(
               courier: c,
@@ -36,7 +36,7 @@ class CourierManagementTabState extends State<CourierManagementTab> {
             )),
             const SizedBox(height: 24),
           ],
-          const SectionHeader(title: 'المناديب النشطون', color: Colors.blue),
+          const SectionHeader(title: 'المندوبون النشطون', color: Colors.blue),
           const SizedBox(height: 12),
           ...approved.map((c) => CourierCard(
             courier: c,

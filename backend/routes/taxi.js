@@ -8,6 +8,7 @@ const {
   acceptTaxiRequest,
   updateTaxiRequestStatus,
   rejectTaxiRequest,
+  driverCancelTaxiRequest,
 } = require('../supabase_repo');
 const {
   requireAuthorizedPhone,
@@ -128,6 +129,26 @@ router.put('/taxi-request/reject', async (req, res) => {
     const message = error?.message || 'Failed to reject taxi request.';
     const status = message.includes('not available') ? 409 : 500;
     return res.status(status).json({ message });
+  }
+});
+
+router.put('/taxi-request/driver-cancel', async (req, res) => {
+  try {
+    const phone = requireOptionalAuthorizedPhone(req, res);
+    if (!phone) return;
+    const requestId = String(
+      req.body?.requestId || req.body?.orderId || req.body?.id || ''
+    ).trim();
+    if (!requestId) {
+      return res.status(400).json({ message: 'Request id is required.' });
+    }
+    const reason = String(req.body?.reason || '').trim();
+    const row = await driverCancelTaxiRequest(phone, requestId, reason);
+    return res.json(row);
+  } catch (error) {
+    console.error('driver-cancel taxi-request error:', error);
+    const message = error?.message || 'Failed to cancel taxi request.';
+    return res.status(500).json({ message });
   }
 });
 
