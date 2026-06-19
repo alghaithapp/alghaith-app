@@ -1,5 +1,5 @@
 import React from 'react';
-import { BadgeCheck, LoaderCircle, Lock, Shield } from 'lucide-react';
+import { BadgeCheck, LoaderCircle, Lock, Shield, MessageCircle, Smartphone } from 'lucide-react';
 
 interface LoginViewProps {
   inputPhone: string;
@@ -8,8 +8,10 @@ interface LoginViewProps {
   isSendingCode: boolean;
   isVerifyingCode: boolean;
   bootError: string;
+  authChannel: 'sms' | 'whatsapp';
   onInputPhoneChange: (value: string) => void;
   onOtpCodeChange: (value: string) => void;
+  onAuthChannelChange: (channel: 'sms' | 'whatsapp') => void;
   onSendCode: (event: React.FormEvent) => Promise<void>;
   onVerifyCode: (event: React.FormEvent) => Promise<void>;
 }
@@ -21,8 +23,10 @@ export default function LoginView({
   isSendingCode,
   isVerifyingCode,
   bootError,
+  authChannel,
   onInputPhoneChange,
   onOtpCodeChange,
+  onAuthChannelChange,
   onSendCode,
   onVerifyCode,
 }: LoginViewProps) {
@@ -54,6 +58,30 @@ export default function LoginView({
               onChange={(event) => onInputPhoneChange(event.target.value)}
             />
           </label>
+
+          {!otpSent ? (
+            <div className="auth-channel-row">
+              <span className="auth-channel-label">طريقة استلام الرمز</span>
+              <div className="auth-channel-options">
+                <button
+                  type="button"
+                  className={`channel-btn${authChannel === 'whatsapp' ? ' active' : ''}`}
+                  onClick={() => onAuthChannelChange('whatsapp')}
+                >
+                  <MessageCircle size={16} />
+                  <span>واتساب</span>
+                </button>
+                <button
+                  type="button"
+                  className={`channel-btn${authChannel === 'sms' ? ' active' : ''}`}
+                  onClick={() => onAuthChannelChange('sms')}
+                >
+                  <Smartphone size={16} />
+                  <span>SMS</span>
+                </button>
+              </div>
+            </div>
+          ) : null}
 
           {otpSent ? (
             <label>

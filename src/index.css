@@ -623,6 +623,53 @@ button {
   justify-self: start;
 }
 
+/* ── Auth channel selector ── */
+
+.auth-channel-row {
+  display: grid;
+  gap: 8px;
+}
+
+.auth-channel-label {
+  font-weight: 700;
+  color: var(--text-primary);
+  font-size: 0.92rem;
+}
+
+.auth-channel-options {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.channel-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px;
+  border-radius: var(--radius-md);
+  border: 2px solid var(--border);
+  background: var(--surface-muted);
+  color: var(--text-secondary);
+  font-weight: 700;
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.channel-btn:hover {
+  border-color: var(--brand-primary);
+  color: var(--brand-primary);
+  background: rgba(20, 91, 102, 0.05);
+}
+
+.channel-btn.active {
+  border-color: var(--brand-accent);
+  background: var(--warning-bg);
+  color: var(--brand-primary-dark);
+}
+
 /* ── Main grid ── */
 
 .main-grid {

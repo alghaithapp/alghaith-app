@@ -190,6 +190,7 @@ export default function App() {
   const [token, setToken] = useState<string | null>(null);
   const [phoneNumber, setPhoneNumber] = useState<string>('');
   const [inputPhone, setInputPhone] = useState('');
+  const [authChannel, setAuthChannel] = useState<'sms' | 'whatsapp'>('whatsapp');
   const [otpCode, setOtpCode] = useState('');
   const [otpSent, setOtpSent] = useState(false);
   const [isSendingCode, setIsSendingCode] = useState(false);
@@ -388,9 +389,9 @@ export default function App() {
     setIsSendingCode(true);
     setBootError('');
     try {
-      await sendCode(inputPhone, 'sms');
+      await sendCode(inputPhone, authChannel);
       setOtpSent(true);
-      setSuccessMessage('تم إرسال رمز التحقق إلى الرقم المدخل.');
+      setSuccessMessage(`تم إرسال رمز التحقق عبر ${authChannel === 'whatsapp' ? 'واتساب' : 'SMS'} إلى الرقم المدخل.`);
     } catch (error) {
       setBootError(error instanceof Error ? error.message : 'تعذر إرسال الرمز.');
     } finally { setIsSendingCode(false); }
@@ -661,8 +662,10 @@ export default function App() {
         isSendingCode={isSendingCode}
         isVerifyingCode={isVerifyingCode}
         bootError={bootError}
+        authChannel={authChannel}
         onInputPhoneChange={setInputPhone}
         onOtpCodeChange={setOtpCode}
+        onAuthChannelChange={setAuthChannel}
         onSendCode={handleSendCode}
         onVerifyCode={handleVerifyCode}
       />
