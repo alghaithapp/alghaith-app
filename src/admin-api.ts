@@ -11,21 +11,23 @@ import type {
   ToggleBazaarResponse,
 } from './admin-types';
 
-// Detect Tauri environment
-const isTauri = typeof window !== 'undefined' && '__TAURI__' in window;
+/**
+ * Tauri v2 blocks native fetch() from WebView.
+ * We use @tauri-apps/plugin-http.fetch() which goes through Rust's reqwest.
+ * In browser (dev mode) we fall back to native fetch.
+ *
+ * The static import is bundled by Vite but only used when in Tauri environment.
+ */
+import { fetch as tauriFetch } from '@tauri-apps/plugin-http';
 
-// Tauri's HTTP plugin fetch — bypasses WebView CORS restrictions
-// Use top-level dynamic import() that Vite handles as a static import
-function getTauriFetch(): Promise<typeof globalThis.fetch | undefined> {
-  if (!isTauri) return Promise.resolve(undefined);
-  return import('@tauri-apps/plugin-http').then(
-    (mod) => mod.fetch ?? undefined,
-    () => undefined,
-  );
+/** Are we running inside Tauri WebView? v2 exposes __TAURI_INTERNALS__ */
+const isTauri = typeof window !== 'undefined' && (window as any).__TAURI_INTERNALS__;
+
+function headersToPlain(headers: Headers): Record<string, string> {
+  const obj: Record<string, string> = {};
+  headers.forEach((value, key) => { obj[key] = value; });
+  return obj;
 }
-
-// Pre-resolve the Tauri fetch at module init
-const tauriFetchPromise = getTauriFetch();
 
 const DEFAULT_DATABASE_API_BASE = 'https://alghaith-app-production.up.railway.app';
 const DEFAULT_PHONE_AUTH_BASE = 'https://lively-wind-9d98.alghaithapp.workers.dev';
@@ -52,12 +54,6 @@ export const PHONE_AUTH_BASE_URL = resolveApiBaseUrl(
   DEFAULT_PHONE_AUTH_BASE,
 );
 
-function headersToPlain(headers: Headers): Record<string, string> {
-  const obj: Record<string, string> = {};
-  headers.forEach((value, key) => { obj[key] = value; });
-  return obj;
-}
-
 async function request<T>(
   baseUrl: string,
   path: string,
@@ -70,13 +66,19 @@ async function request<T>(
   }
 
   const url = `${baseUrl}${path}`;
-  const tf = await tauriFetchPromise;
-  const init: RequestInit = { ...options, headers: tf ? headersToPlain(headers) : headers };
+  let response: Response;
 
-  // Use Tauri HTTP plugin when available, native fetch otherwise
-  const response = tf
-    ? await tf(url, init)
-    : await globalThis.fetch(url, init);
+  if (isTauri) {
+    // Tauri plugin-http expects plain header objects
+    try {
+      response = await tauriFetch(url, { ...options, headers: headersToPlain(headers) });
+    } catch {
+      // Plugin fetch failed — fall back to native WebView fetch
+      response = await globalThis.fetch(url, { ...options, headers });
+    }
+  } else {
+    response = await globalThis.fetch(url, { ...options, headers });
+  }
 
   const text = await response.text();
   let payload: unknown = null;
@@ -116,10 +118,7 @@ export async function sendCode(phone: string, channel = 'sms') {
   });
 }
 
-export async function verifyCode(
-  phone: string,
-  code: string,
-): Promise<AdminSession> {
+export async function verifyCode(phone: string, code: string): Promise<AdminSession> {
   return request<AdminSession>(PHONE_AUTH_BASE_URL, '/auth/verify-code', {
     method: 'POST',
     body: JSON.stringify({ phone, code }),
@@ -138,23 +137,17 @@ export async function loadCouriers(token: string): Promise<CourierSummary[]> {
   return request<CourierSummary[]>(DATABASE_API_BASE_URL, '/db/admin/couriers', { token });
 }
 
-export async function loadAdminAccounts(
-  token: string,
-): Promise<AdminAccountSummary[]> {
+export async function loadAdminAccounts(token: string): Promise<AdminAccountSummary[]> {
   return request<AdminAccountSummary[]>(DATABASE_API_BASE_URL, '/db/admin/accounts', { token });
 }
 
-export async function suspendAdminAccount(
-  token: string, accountPhone: string, isSuspended: boolean,
-) {
+export async function suspendAdminAccount(token: string, accountPhone: string, isSuspended: boolean) {
   return request(DATABASE_API_BASE_URL, '/db/admin/account-suspend', {
     method: 'PUT', token, body: JSON.stringify({ accountPhone, isSuspended }),
   });
 }
 
-export async function updateAdminAccountRole(
-  token: string, accountPhone: string, role: string,
-) {
+export async function updateAdminAccountRole(token: string, accountPhone: string, role: string) {
   return request(DATABASE_API_BASE_URL, '/db/admin/account-role', {
     method: 'PUT', token, body: JSON.stringify({ accountPhone, role }),
   });
@@ -166,41 +159,32 @@ export async function deleteAdminAccount(token: string, accountPhone: string) {
   });
 }
 
-export async function toggleCourierApproval(
-  token: string, courierPhone: string, isApproved: boolean,
-) {
+export async function toggleCourierApproval(token: string, courierPhone: string, isApproved: boolean) {
   return request(DATABASE_API_BASE_URL, '/db/admin/courier-approval', {
     method: 'PUT', token, body: JSON.stringify({ courierPhone, isApproved }),
   });
 }
 
-export async function rejectCourierApplication(
-  token: string, courierPhone: string, rejectionMessageAr: string, reasonKey = 'custom',
-) {
+export async function rejectCourierApplication(token: string, courierPhone: string, rejectionMessageAr: string, reasonKey = 'custom') {
   return request(DATABASE_API_BASE_URL, '/db/admin/courier-rejection', {
     method: 'PUT', token, body: JSON.stringify({ courierPhone, reasonKey, rejectionMessageAr }),
   });
 }
 
-export async function toggleDriverApproval(
-  token: string, driverPhone: string, isApproved: boolean,
-) {
+export async function toggleDriverApproval(token: string, driverPhone: string, isApproved: boolean) {
   return request(DATABASE_API_BASE_URL, '/db/admin/driver-approval', {
     method: 'PUT', token, body: JSON.stringify({ driverPhone, isApproved }),
   });
 }
 
-export async function rejectDriverApplication(
-  token: string, driverPhone: string, rejectionMessageAr: string, reasonKey = 'custom',
-) {
+export async function rejectDriverApplication(token: string, driverPhone: string, rejectionMessageAr: string, reasonKey = 'custom') {
   return request(DATABASE_API_BASE_URL, '/db/admin/driver-rejection', {
     method: 'PUT', token, body: JSON.stringify({ driverPhone, reasonKey, rejectionMessageAr }),
   });
 }
 
 export async function loadMerchantDetails(token: string, merchantPhone: string): Promise<MerchantDetails> {
-  const query = new URLSearchParams({ merchantPhone });
-  return request<MerchantDetails>(DATABASE_API_BASE_URL, `/db/admin/merchant-details?${query}`, { token });
+  return request<MerchantDetails>(DATABASE_API_BASE_URL, `/db/admin/merchant-details?${new URLSearchParams({ merchantPhone })}`, { token });
 }
 
 export async function toggleMerchantApproval(token: string, merchantPhone: string, isApproved: boolean) {
