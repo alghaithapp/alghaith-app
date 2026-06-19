@@ -27,3 +27,4 @@ ios/Runner/GoogleService-Info.plist
 
 .vercel
 .env*
+.refact/

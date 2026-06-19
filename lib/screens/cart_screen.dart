@@ -1,11 +1,11 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart' as geo;
 import 'package:http/http.dart' as http;
 
 import 'package:provider/provider.dart';
-import 'dart:convert';
 import '../providers/app_provider.dart';
 import '../core/config/app_config.dart';
 import '../core/navigation/customer_navigation.dart';
@@ -13,16 +13,9 @@ import '../core/ui/app_bottom_nav_style.dart';
 import '../models/app_models.dart';
 import '../utils/extensions.dart';
 import '../utils/guest_gate.dart';
-import '../widgets/app_image.dart';
 import '../widgets/location_picker_screen.dart';
 import 'catalog_search_screen.dart';
-
-const _brandRed = Color(0xFFF5A01D);
-const _brandRedGradient = LinearGradient(
-  colors: [_brandRed, Color(0xFFFF3D00)],
-  begin: Alignment.centerLeft,
-  end: Alignment.centerRight,
-);
+import 'cart_shared_widgets.dart';
 
 class CartScreen extends StatefulWidget {
   const CartScreen({super.key});
@@ -134,12 +127,12 @@ class _CartScreenState extends State<CartScreen> {
     return '';
   }
 
-  _GeoPoint? _merchantLocation(List<dynamic> cart) {
+  CartGeoPoint? _merchantLocation(List<dynamic> cart) {
     for (final item in cart) {
       final lat = (item.merchantLatitude as num?)?.toDouble();
       final lng = (item.merchantLongitude as num?)?.toDouble();
       if (lat != null && lng != null) {
-        return _GeoPoint(lat, lng);
+        return CartGeoPoint(lat, lng);
       }
     }
     return null;
@@ -148,8 +141,8 @@ class _CartScreenState extends State<CartScreen> {
   Future<double?> _fetchRoadDistanceKm({
     required String merchantAddress,
     required String customerAddress,
-    required _GeoPoint? merchantLocation,
-    required _GeoPoint? customerLocation,
+    required CartGeoPoint? merchantLocation,
+    required CartGeoPoint? customerLocation,
   }) async {
     final baseUrl = AppConfig.normalizedDatabaseUrl;
     if (baseUrl.isEmpty) return null;
@@ -183,7 +176,7 @@ class _CartScreenState extends State<CartScreen> {
     }
   }
 
-  double? _straightLineDistanceKm(_GeoPoint? origin, _GeoPoint? destination) {
+  double? _straightLineDistanceKm(CartGeoPoint? origin, CartGeoPoint? destination) {
     if (origin == null || destination == null) return null;
     final meters = geo.Geolocator.distanceBetween(
       origin.latitude,
@@ -215,7 +208,7 @@ class _CartScreenState extends State<CartScreen> {
     final customerAddress = appProvider.customerAddress.trim();
     final customerLocation = (appProvider.customerLatitude != null &&
             appProvider.customerLongitude != null)
-        ? _GeoPoint(
+        ? CartGeoPoint(
             appProvider.customerLatitude!, appProvider.customerLongitude!)
         : null;
 
@@ -248,7 +241,7 @@ class _CartScreenState extends State<CartScreen> {
         final representative = appProvider.cart.first;
         final mLoc = (representative.merchantLatitude != null &&
                 representative.merchantLongitude != null)
-            ? _GeoPoint(representative.merchantLatitude!,
+            ? CartGeoPoint(representative.merchantLatitude!,
                 representative.merchantLongitude!)
             : null;
         final mAddr = representative.merchantAddress ?? '';
@@ -273,7 +266,7 @@ class _CartScreenState extends State<CartScreen> {
 
           final mLoc = (first.merchantLatitude != null &&
                   first.merchantLongitude != null)
-              ? _GeoPoint(first.merchantLatitude!, first.merchantLongitude!)
+              ? CartGeoPoint(first.merchantLatitude!, first.merchantLongitude!)
               : null;
           final mAddr = first.merchantAddress ?? '';
 
@@ -308,8 +301,8 @@ class _CartScreenState extends State<CartScreen> {
   Future<double?> _calculateSingleDistance(
     String mAddr,
     String cAddr,
-    _GeoPoint? mLoc,
-    _GeoPoint? cLoc,
+    CartGeoPoint? mLoc,
+    CartGeoPoint? cLoc,
   ) async {
     if (mAddr.isEmpty && mLoc == null) return null;
 
@@ -589,7 +582,7 @@ class _CartScreenState extends State<CartScreen> {
                           controller: _scrollController,
                           padding: const EdgeInsets.fromLTRB(20, 0, 20, 170),
                           children: [
-                            ...cart.map((item) => _CartItemCard(
+                            ...cart.map((item) => CartItemCard(
                                   item: item,
                                   isFavorite: appProvider.isFavoriteId(item.id),
                                   onIncrement: () =>
@@ -656,7 +649,7 @@ class _CartScreenState extends State<CartScreen> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          _CircleIconButton(
+          CartCircleIconButton(
             icon: Icons.arrow_forward_ios_rounded,
             onTap: () => goToCustomerHome(context),
           ),
@@ -697,7 +690,7 @@ class _CartScreenState extends State<CartScreen> {
           Stack(
             clipBehavior: Clip.none,
             children: [
-              _CircleIconButton(
+              CartCircleIconButton(
                 icon: Icons.shopping_cart_outlined,
                 onTap: () => _onHeaderCartTap(provider),
               ),
@@ -708,7 +701,7 @@ class _CartScreenState extends State<CartScreen> {
                   child: Container(
                     padding: const EdgeInsets.all(5),
                     decoration: const BoxDecoration(
-                      color: _brandRed,
+                      color: cartBrandRed,
                       shape: BoxShape.circle,
                     ),
                     child: Text(
@@ -780,7 +773,7 @@ class _CartScreenState extends State<CartScreen> {
                             ),
                             child: Icon(
                               Icons.location_searching_rounded,
-                              color: _brandRed.withValues(alpha: 0.7),
+                              color: cartBrandRed.withValues(alpha: 0.7),
                               size: 28,
                             ),
                           ),
@@ -813,7 +806,7 @@ class _CartScreenState extends State<CartScreen> {
                             ),
                             child: const Icon(
                               Icons.location_on_rounded,
-                              color: _brandRed,
+                              color: cartBrandRed,
                               size: 28,
                             ),
                           ),
@@ -842,14 +835,14 @@ class _CartScreenState extends State<CartScreen> {
                           ],
                         ],
                         const SizedBox(height: 16),
-                        _PillButton(
+                        CartPillButton(
                           label: 'تحديد موقعي',
                           filled: true,
                           isLoading: _isLocating,
                           onTap: () => _detectCurrentLocation(appProvider),
                         ),
                         const SizedBox(height: 8),
-                        _PillButton(
+                        CartPillButton(
                           label: 'اختيار من الخريطة',
                           filled: false,
                           onTap: () => _pickLocationFromMap(appProvider),
@@ -860,7 +853,7 @@ class _CartScreenState extends State<CartScreen> {
                 ),
                 Expanded(
                   flex: 2,
-                  child: _MiniMapPreview(
+                  child: CartMiniMapPreview(
                     latitude: appProvider.customerLatitude,
                     longitude: appProvider.customerLongitude,
                     distanceKm: _deliveryDistanceKm,
@@ -903,7 +896,7 @@ class _CartScreenState extends State<CartScreen> {
         Row(
           children: [
             Expanded(
-              child: _DeliveryOptionCard(
+              child: CartDeliveryOptionCard(
                 title: 'توصيل عادي',
                 selected: _deliveryOption == 1,
                 onTap: () => setState(() => _deliveryOption = 1),
@@ -911,7 +904,7 @@ class _CartScreenState extends State<CartScreen> {
             ),
             const SizedBox(width: 12),
             Expanded(
-              child: _DeliveryOptionCard(
+              child: CartDeliveryOptionCard(
                 title: 'توصيل سريع',
                 selected: _deliveryOption == 2,
                 onTap: () => setState(() => _deliveryOption = 2),
@@ -967,11 +960,11 @@ class _CartScreenState extends State<CartScreen> {
               const SizedBox(width: 8),
               SizedBox(
                 width: 72,
-                child: _SmallButton(
+                child: CartSmallButton(
                   label: provider.appliedCartPromo != null ? 'إزالة' : 'تطبيق',
                   color: provider.appliedCartPromo != null
                       ? Colors.grey.shade100
-                      : _brandRed,
+                      : cartBrandRed,
                   textColor: provider.appliedCartPromo != null
                       ? Colors.black87
                       : Colors.white,
@@ -1074,18 +1067,18 @@ class _CartScreenState extends State<CartScreen> {
           ),
           child: Column(
             children: [
-              _SummaryRow(
+              CartSummaryRow(
                   label: 'مجموع سعر المنتجات', value: '${subtotal.toPrice()} د.ع'),
               if (promoDiscount > 0) ...[
                 const SizedBox(height: 14),
-                _SummaryRow(
+                CartSummaryRow(
                   label: promoLabel ?? '\u062e\u0635\u0645',
                   value: '-${promoDiscount.toPrice()} د.ع',
                   valueColor: const Color(0xFF15803D),
                 ),
               ],
               const SizedBox(height: 14),
-              _SummaryRow(
+              CartSummaryRow(
                 label: 'رسوم التوصيل',
                 value:
                     delivery > 0 ? '${delivery.toPrice()} د.ع' : 'حدد الموقع',
@@ -1095,11 +1088,11 @@ class _CartScreenState extends State<CartScreen> {
                 padding: EdgeInsets.symmetric(vertical: 16),
                 child: Divider(height: 1),
               ),
-              _SummaryRow(
+              CartSummaryRow(
                 label: 'المجموع الكلي',
                 value: '${total.toPrice()} د.ع',
                 isLarge: true,
-                valueColor: _brandRed,
+                valueColor: cartBrandRed,
               ),
             ],
           ),
@@ -1161,11 +1154,11 @@ class _CartScreenState extends State<CartScreen> {
           child: Container(
             height: 84,
             decoration: BoxDecoration(
-              gradient: _brandRedGradient,
+              gradient: cartBrandRedGradient,
               borderRadius: BorderRadius.circular(42),
               boxShadow: [
                 BoxShadow(
-                  color: _brandRed.withValues(alpha: 0.45),
+                  color: cartBrandRed.withValues(alpha: 0.45),
                   blurRadius: 24,
                   offset: const Offset(0, 12),
                 ),
@@ -1274,7 +1267,7 @@ class _CartScreenState extends State<CartScreen> {
                       shape: BoxShape.circle,
                       boxShadow: [
                         BoxShadow(
-                          color: _brandRed.withValues(alpha: 0.08),
+                          color: cartBrandRed.withValues(alpha: 0.08),
                           blurRadius: 30,
                           offset: const Offset(0, 12),
                         ),
@@ -1283,7 +1276,7 @@ class _CartScreenState extends State<CartScreen> {
                     child: Icon(
                       Icons.shopping_cart_outlined,
                       size: 88,
-                      color: _brandRed.withValues(alpha: 0.35),
+                      color: cartBrandRed.withValues(alpha: 0.35),
                     ),
                   ),
                   const SizedBox(height: 32),
@@ -1322,641 +1315,4 @@ class _CartScreenState extends State<CartScreen> {
       ],
     );
   }
-}
-
-class _CartItemCard extends StatelessWidget {
-  final CartItem item;
-  final bool isFavorite;
-  final VoidCallback onIncrement;
-  final VoidCallback onDecrement;
-  final VoidCallback onFavorite;
-
-  const _CartItemCard({
-    required this.item,
-    required this.isFavorite,
-    required this.onIncrement,
-    required this.onDecrement,
-    required this.onFavorite,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final description = (item.descriptionAr?.trim().isNotEmpty == true)
-        ? item.descriptionAr!.trim()
-        : (item.optionAr?.trim().isNotEmpty == true
-            ? item.optionAr!.trim()
-            : '');
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(28),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.06),
-            blurRadius: 24,
-            offset: const Offset(0, 10),
-          ),
-        ],
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          Stack(
-            children: [
-              ClipRRect(
-                borderRadius: const BorderRadius.horizontal(
-                  right: Radius.circular(28),
-                ),
-                child: SizedBox(
-                  width: 118,
-                  height: 118,
-                  child: AppImage(imageData: item.image),
-                ),
-              ),
-              Positioned(
-                top: 8,
-                right: 8,
-                child: GestureDetector(
-                  onTap: onFavorite,
-                  child: Container(
-                    padding: const EdgeInsets.all(7),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.1),
-                          blurRadius: 6,
-                        ),
-                      ],
-                    ),
-                    child: Icon(
-                      isFavorite
-                          ? Icons.favorite_rounded
-                          : Icons.favorite_border_rounded,
-                      color: isFavorite ? _brandRed : Colors.grey.shade500,
-                      size: 16,
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    item.nameAr,
-                    style: const TextStyle(
-                      fontFamily: 'Cairo',
-                      fontWeight: FontWeight.w900,
-                      fontSize: 16,
-                      color: Color(0xFF1A1A1A),
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  if (description.isNotEmpty) ...[
-                    const SizedBox(height: 4),
-                    Text(
-                      description,
-                      style: TextStyle(
-                        fontFamily: 'Cairo',
-                        fontSize: 11,
-                        color: Colors.grey.shade600,
-                        height: 1.35,
-                      ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                  const SizedBox(height: 10),
-                  Text(
-                    '${item.price.toPrice()} د.ع',
-                    style: const TextStyle(
-                      fontFamily: 'Cairo',
-                      fontWeight: FontWeight.w900,
-                      color: _brandRed,
-                      fontSize: 16,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.only(left: 12, right: 14),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                _QtyBtn(
-                  icon: Icons.add_rounded,
-                  onTap: onIncrement,
-                  isPrimary: true,
-                ),
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                  child: AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 220),
-                    transitionBuilder: (child, animation) => ScaleTransition(
-                      scale: animation,
-                      child: child,
-                    ),
-                    child: Text(
-                      '${item.count}',
-                      key: ValueKey<int>(item.count),
-                      style: const TextStyle(
-                        fontFamily: 'Cairo',
-                        fontWeight: FontWeight.w900,
-                        fontSize: 17,
-                      ),
-                    ),
-                  ),
-                ),
-                _QtyBtn(
-                  icon: item.count > 1
-                      ? Icons.remove_rounded
-                      : Icons.delete_outline_rounded,
-                  onTap: onDecrement,
-                  isPrimary: false,
-                  isDestructive: item.count <= 1,
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _QtyBtn extends StatelessWidget {
-  final IconData icon;
-  final VoidCallback onTap;
-  final bool isPrimary;
-  final bool isDestructive;
-
-  const _QtyBtn({
-    required this.icon,
-    required this.onTap,
-    this.isPrimary = false,
-    this.isDestructive = false,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final bg = isPrimary
-        ? _brandRed
-        : isDestructive
-            ? const Color(0xFFFFF1F2)
-            : Colors.white;
-    final iconColor = isPrimary
-        ? Colors.white
-        : isDestructive
-            ? _brandRed
-            : Colors.black87;
-
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        width: 36,
-        height: 36,
-        decoration: BoxDecoration(
-          color: bg,
-          shape: BoxShape.circle,
-          border: isPrimary
-              ? null
-              : Border.all(
-                  color: isDestructive
-                      ? _brandRed.withValues(alpha: 0.25)
-                      : Colors.grey.shade200,
-                ),
-          boxShadow: isPrimary
-              ? [
-                  BoxShadow(
-                    color: _brandRed.withValues(alpha: 0.28),
-                    blurRadius: 8,
-                    offset: const Offset(0, 3),
-                  ),
-                ]
-              : null,
-        ),
-        child: Icon(icon, size: 18, color: iconColor),
-      ),
-    );
-  }
-}
-
-class _DeliveryOptionCard extends StatelessWidget {
-  final String title;
-  final String? time;
-  final bool selected;
-  final VoidCallback onTap;
-
-  const _DeliveryOptionCard({
-    required this.title,
-    this.time,
-    required this.selected,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 220),
-        padding: const EdgeInsets.all(18),
-        decoration: BoxDecoration(
-          color: selected ? const Color(0xFFFFF1F2) : Colors.white,
-          borderRadius: BorderRadius.circular(24),
-          border: Border.all(
-            color: selected ? _brandRed : Colors.grey.shade200,
-            width: selected ? 2 : 1,
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: selected ? 0.04 : 0.05),
-              blurRadius: 16,
-              offset: const Offset(0, 6),
-            ),
-          ],
-        ),
-        child: Column(
-          children: [
-            Row(
-              children: [
-                Container(
-                  width: 20,
-                  height: 20,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      color: selected ? _brandRed : Colors.grey.shade400,
-                      width: 2,
-                    ),
-                    color: selected ? _brandRed : Colors.transparent,
-                  ),
-                  child: selected
-                      ? Center(
-                          child: Container(
-                            width: 8,
-                            height: 8,
-                            decoration: const BoxDecoration(
-                              color: Colors.white,
-                              shape: BoxShape.circle,
-                            ),
-                          ),
-                        )
-                      : null,
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    title,
-                    style: TextStyle(
-                      fontFamily: 'Cairo',
-                      fontWeight: FontWeight.w900,
-                      fontSize: 14,
-                      color: selected ? _brandRed : Colors.black87,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            if (time != null && time!.isNotEmpty) ...[
-              const SizedBox(height: 6),
-              Text(
-                time!,
-                style: TextStyle(
-                  fontFamily: 'Cairo',
-                  fontSize: 12,
-                  color: selected
-                      ? _brandRed.withValues(alpha: 0.75)
-                      : Colors.grey.shade600,
-                ),
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _SummaryRow extends StatelessWidget {
-  final String label;
-  final String value;
-  final bool isLarge;
-  final Color? valueColor;
-
-  const _SummaryRow(
-      {required this.label,
-      required this.value,
-      this.isLarge = false,
-      this.valueColor});
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Text(
-          label,
-          style: TextStyle(
-            fontFamily: 'Cairo',
-            fontWeight: isLarge ? FontWeight.w900 : FontWeight.w700,
-            fontSize: isLarge ? 18 : 14,
-            color: isLarge ? Colors.black : Colors.grey.shade600,
-          ),
-        ),
-        Text(
-          value,
-          style: TextStyle(
-            fontFamily: 'Cairo',
-            fontWeight: FontWeight.w900,
-            fontSize: isLarge ? 22 : 16,
-            color: valueColor ?? Colors.black87,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _CircleIconButton extends StatelessWidget {
-  final IconData icon;
-  final VoidCallback onTap;
-
-  const _CircleIconButton({required this.icon, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: 44,
-        height: 44,
-        decoration: BoxDecoration(
-          color: Colors.grey.shade50,
-          shape: BoxShape.circle,
-          border: Border.all(color: Colors.grey.shade100),
-        ),
-        child: Icon(icon, size: 20, color: Colors.black87),
-      ),
-    );
-  }
-}
-
-class _SmallButton extends StatelessWidget {
-  final String label;
-  final Color color;
-  final Color textColor;
-  final bool border;
-  final bool isLoading;
-  final VoidCallback onTap;
-
-  const _SmallButton({
-    required this.label,
-    required this.color,
-    required this.textColor,
-    this.border = false,
-    this.isLoading = false,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 10),
-        decoration: BoxDecoration(
-          color: color,
-          borderRadius: BorderRadius.circular(12),
-          border: border ? Border.all(color: Colors.grey.shade300) : null,
-        ),
-        alignment: Alignment.center,
-        child: isLoading
-            ? const SizedBox(
-                width: 16,
-                height: 16,
-                child: CircularProgressIndicator(
-                    strokeWidth: 2, color: Colors.white))
-            : Text(
-                label,
-                style: TextStyle(
-                    fontFamily: 'Cairo',
-                    fontWeight: FontWeight.bold,
-                    fontSize: 11,
-                    color: textColor),
-              ),
-      ),
-    );
-  }
-}
-
-class _PillButton extends StatelessWidget {
-  final String label;
-  final bool filled;
-  final bool isLoading;
-  final VoidCallback onTap;
-
-  const _PillButton({
-    required this.label,
-    required this.filled,
-    this.isLoading = false,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: isLoading ? null : onTap,
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(vertical: 12),
-        decoration: BoxDecoration(
-          color: filled ? _brandRed : Colors.white,
-          borderRadius: BorderRadius.circular(999),
-          border: filled ? null : Border.all(color: Colors.grey.shade300),
-        ),
-        alignment: Alignment.center,
-        child: isLoading
-            ? SizedBox(
-                width: 18,
-                height: 18,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: filled ? Colors.white : _brandRed,
-                ),
-              )
-            : Text(
-                label,
-                style: TextStyle(
-                  fontFamily: 'Cairo',
-                  fontWeight: FontWeight.w800,
-                  fontSize: 12,
-                  color: filled ? Colors.white : Colors.black87,
-                ),
-              ),
-      ),
-    );
-  }
-}
-
-class _MiniMapPreview extends StatelessWidget {
-  final double? latitude;
-  final double? longitude;
-  final double? distanceKm;
-  final bool isCalculating;
-
-  const _MiniMapPreview({
-    required this.latitude,
-    required this.longitude,
-    required this.distanceKm,
-    required this.isCalculating,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final hasCoords = latitude != null && longitude != null;
-
-    return ColoredBox(
-      color: const Color(0xFFECEFF3),
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          if (hasCoords)
-            _StaticMapTile(latitude: latitude!, longitude: longitude!)
-          else
-            Container(
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [Color(0xFFECEFF3), Color(0xFFDDE3EA)],
-                ),
-              ),
-            ),
-          Center(
-            child: Container(
-              padding: const EdgeInsets.all(6),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                shape: BoxShape.circle,
-                boxShadow: [
-                  BoxShadow(
-                    color: _brandRed.withValues(alpha: 0.25),
-                    blurRadius: 10,
-                  ),
-                ],
-              ),
-              child: const Icon(
-                Icons.location_on_rounded,
-                color: _brandRed,
-                size: 28,
-              ),
-            ),
-          ),
-          if (isCalculating)
-            Container(
-              color: Colors.white.withValues(alpha: 0.55),
-              alignment: Alignment.center,
-              child: const CupertinoActivityIndicator(),
-            ),
-          if (distanceKm != null)
-            Positioned(
-              bottom: 10,
-              left: 10,
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(999),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.08),
-                      blurRadius: 8,
-                    ),
-                  ],
-                ),
-                child: Text(
-                  '${distanceKm!.toStringAsFixed(1)} كم',
-                  style: const TextStyle(
-                    fontFamily: 'Cairo',
-                    fontSize: 11,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-}
-
-/// خريطة ثابتة تعمل على جميع المنصات (ويب وأندرويد وiOS)
-/// باستخدام Google Maps Static API — لا تحتاج Plugin نيتيف.
-class _StaticMapTile extends StatelessWidget {
-  final double latitude;
-  final double longitude;
-
-  const _StaticMapTile({
-    required this.latitude,
-    required this.longitude,
-  });
-
-  String get _url {
-    final lat = latitude.toStringAsFixed(6);
-    final lng = longitude.toStringAsFixed(6);
-    // مفتاح Google Maps العام (نفس المفتاح المستخدم في web/index.html)
-    const apiKey = 'AIzaSyBX720zCrccLT6ZKrc_o7r9tr0TAHDsy8c';
-    return 'https://maps.googleapis.com/maps/api/staticmap'
-        '?center=$lat,$lng'
-        '&zoom=14'
-        '&size=400x200'
-        '&scale=2'
-        '&markers=color:red%7C$lat,$lng'
-        '&key=$apiKey';
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Image.network(
-      _url,
-      fit: BoxFit.cover,
-      errorBuilder: (_, __, ___) => Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [Color(0xFFECEFF3), Color(0xFFDDE3EA)],
-          ),
-        ),
-      ),
-      loadingBuilder: (_, child, progress) {
-        if (progress == null) return child;
-        return Container(
-          color: const Color(0xFFECEFF3),
-          alignment: Alignment.center,
-          child: const CupertinoActivityIndicator(),
-        );
-      },
-    );
-  }
-}
-
-class _GeoPoint {
-  final double latitude;
-  final double longitude;
-  const _GeoPoint(this.latitude, this.longitude);
 }
