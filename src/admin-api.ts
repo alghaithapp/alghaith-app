@@ -11,6 +11,16 @@ import type {
   ToggleBazaarResponse,
 } from './admin-types';
 
+// Use Tauri's HTTP plugin when running as desktop app, fallback to native fetch in browser
+async function resolveFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+  try {
+    const { fetch: tauriFetch } = await import('@tauri-apps/plugin-http');
+    return tauriFetch(input, init);
+  } catch {
+    return globalThis.fetch(input, init);
+  }
+}
+
 const DEFAULT_DATABASE_API_BASE = 'https://alghaith-app-production.up.railway.app';
 const DEFAULT_PHONE_AUTH_BASE = 'https://lively-wind-9d98.alghaithapp.workers.dev';
 
@@ -49,7 +59,7 @@ async function request<T>(
     headers.set('Authorization', `Bearer ${options.token}`);
   }
 
-  const response = await fetch(`${baseUrl}${path}`, {
+  const response = await resolveFetch(`${baseUrl}${path}`, {
     ...options,
     headers,
   });
