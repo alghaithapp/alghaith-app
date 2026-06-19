@@ -183,10 +183,17 @@ class _TaxiRequestScreenState extends State<TaxiRequestScreen> {
         body: Stack(children: [
           Positioned.fill(child: _TaxiMapBackdrop(mapCenter: _mapCenter, mapRefreshSeed: _mapRefreshSeed, pickupPosition: _pickupPosition, dropoffPosition: _dropoffPosition, routePolyline: _routePolyline, onMapTap: _handleMapTap)),
           Positioned(top: 40, right: 16, child: _CircleBtn(icon: CupertinoIcons.back, onTap: () => Navigator.pop(context))),
-          Positioned(left: 16, top: 40, child: _CircleBtn(icon: _isLocating ? CupertinoIcons.refresh : CupertinoIcons.location_fill, onTap: () async {
-            final p = await geo.Geolocator.getCurrentPosition();
-            _handleMapTap(LatLng(p.latitude, p.longitude));
-          })),
+          Positioned(
+            left: 16,
+            top: 40,
+            child: _LocateMeButton(
+              isLoading: _isLocating,
+              onTap: () async {
+                final p = await geo.Geolocator.getCurrentPosition();
+                _handleMapTap(LatLng(p.latitude, p.longitude));
+              },
+            ),
+          ),
           DraggableScrollableSheet(
             initialChildSize: hasLocations ? 0.55 : 0.35, minChildSize: 0.25, maxChildSize: 0.85,
             builder: (c, s) => Container(
@@ -258,6 +265,52 @@ class _CircleBtn extends StatelessWidget {
   @override Widget build(BuildContext context) => CupertinoButton(padding: EdgeInsets.zero, onPressed: onTap, child: Container(width: 44, height: 44, decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle, boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 10)]), child: Icon(icon, color: AppColors.primary, size: 22)));
 }
 
+class _LocateMeButton extends StatelessWidget {
+  final bool isLoading;
+  final VoidCallback onTap;
+
+  const _LocateMeButton({required this.isLoading, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 10)],
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                isLoading ? CupertinoIcons.refresh : CupertinoIcons.location_fill,
+                color: AppColors.accent,
+                size: 18,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                'تحديد موقعك',
+                style: const TextStyle(
+                  fontFamily: 'Cairo',
+                  fontWeight: FontWeight.w800,
+                  fontSize: 13,
+                  color: AppColors.accent,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _SearchField extends StatelessWidget {
   final TextEditingController controller; final FocusNode focus; final String hint; final IconData icon; final Color color;
   const _SearchField({required this.controller, required this.focus, required this.hint, required this.icon, required this.color});
@@ -295,42 +348,52 @@ class _TaxiMapBackdropState extends State<_TaxiMapBackdrop> {
 
   @override
   Widget build(BuildContext context) {
-    return FlutterMap(
-      mapController: _mapController,
-      options: MapOptions(
-        initialCenter: LatLng(32.9256, 44.7766),
-        initialZoom: 13.0,
-        onTap: (tapPos, latlng) => widget.onMapTap(latlng),
-      ),
+    return Stack(
       children: [
-        TileLayer(
-          urlTemplate: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-          subdomains: ['a', 'b', 'c'],
-          userAgentPackageName: 'AlGhaithApp/1.2.59 (com.alghaith.app)',
-        ),
-        if (widget.routePolyline.isNotEmpty)
-          PolylineLayer(
-            polylines: [
-              Polyline(
-                points: widget.routePolyline,
-                color: AppColors.accent,
-                strokeWidth: 4.0,
-              ),
-            ],
+        FlutterMap(
+          mapController: _mapController,
+          options: MapOptions(
+            initialCenter: LatLng(32.9256, 44.7766),
+            initialZoom: 13.0,
+            onTap: (tapPos, latlng) => widget.onMapTap(latlng),
           ),
-        MarkerLayer(
-          markers: [
-            if (widget.pickupPosition != null)
-              Marker(
-                point: widget.pickupPosition!,
-                child: const Icon(Icons.circle, color: Colors.green, size: 16),
+          children: [
+            TileLayer(
+              urlTemplate: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+              subdomains: ['a', 'b', 'c'],
+              userAgentPackageName: 'AlGhaithApp/1.2.59 (com.alghaith.app)',
+            ),
+            if (widget.routePolyline.isNotEmpty)
+              PolylineLayer(
+                polylines: [
+                  Polyline(
+                    points: widget.routePolyline,
+                    color: AppColors.accent,
+                    strokeWidth: 4.0,
+                  ),
+                ],
               ),
-            if (widget.dropoffPosition != null)
-              Marker(
-                point: widget.dropoffPosition!,
-                child: const Icon(Icons.location_on, color: Colors.orange, size: 24),
-              ),
+            MarkerLayer(
+              markers: [
+                if (widget.pickupPosition != null)
+                  Marker(
+                    point: widget.pickupPosition!,
+                    child: const _MapPin(color: Colors.green, label: 'انطلاق'),
+                  ),
+                if (widget.dropoffPosition != null)
+                  Marker(
+                    point: widget.dropoffPosition!,
+                    child: const _MapPin(color: Colors.red, label: 'وجهة'),
+                  ),
+              ],
+            ),
           ],
+        ),
+        // دبوس مركزي — يشير أن النقر على الخريطة يحدد الموقع
+        const IgnorePointer(
+          child: Center(
+            child: _CenterCrosshair(),
+          ),
         ),
       ],
     );
@@ -342,6 +405,63 @@ class _TaxiMapBackdropState extends State<_TaxiMapBackdrop> {
     if (widget.mapRefreshSeed != old.mapRefreshSeed) {
       _mapController.move(widget.mapCenter, 13.0);
     }
+  }
+}
+
+/// دبوس مركزي في منتصف الخريطة — يوضح أن الخريطة قابلة للنقر للتحديد
+class _CenterCrosshair extends StatelessWidget {
+  const _CenterCrosshair();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 40,
+      height: 40,
+      decoration: BoxDecoration(
+        color: AppColors.accent.withValues(alpha: 0.2),
+        shape: BoxShape.circle,
+        border: Border.all(color: AppColors.accent, width: 3),
+      ),
+      child: const Center(
+        child: Icon(Icons.my_location, color: AppColors.accent, size: 18),
+      ),
+    );
+  }
+}
+
+/// علامة موقع على الخريطة — مثل دبوس مع نص توضيحي
+class _MapPin extends StatelessWidget {
+  final Color color;
+  final String label;
+
+  const _MapPin({required this.color, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+          decoration: BoxDecoration(
+            color: color,
+            borderRadius: BorderRadius.circular(8),
+            boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 4)],
+          ),
+          child: Text(
+            label,
+            style: const TextStyle(
+              fontFamily: 'Cairo',
+              fontSize: 9,
+              fontWeight: FontWeight.w800,
+              color: Colors.white,
+            ),
+          ),
+        ),
+        const SizedBox(height: 2),
+        Icon(Icons.location_on, color: color, size: 28),
+      ],
+    );
   }
 }
 
