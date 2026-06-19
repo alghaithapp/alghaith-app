@@ -11,6 +11,11 @@ import type {
   ToggleBazaarResponse,
 } from './admin-types';
 
+/**
+ * Tauri v2 with csp: null + http:default permission = native fetch() works.
+ * No need for tauri-plugin-http — it causes HTML response issues.
+ */
+
 const DEFAULT_DATABASE_API_BASE = 'https://alghaith-app-production.up.railway.app';
 const DEFAULT_PHONE_AUTH_BASE = 'https://lively-wind-9d98.alghaithapp.workers.dev';
 
@@ -43,54 +48,47 @@ async function request<T>(
 ): Promise<T> {
   const url = `${baseUrl}${path}`;
   const headers: Record<string, string> = {
-    Accept: 'application/json',
+    Accept: 'application/json, text/plain, */*',
     'Content-Type': 'application/json',
   };
   if (options.token) {
     headers['Authorization'] = `Bearer ${options.token}`;
   }
 
-  let response: Response;
-
-  // Try Tauri HTTP plugin first (bypasses WebView restrictions)
-  try {
-    const { fetch: tauriFetch } = await import('@tauri-apps/plugin-http');
-    response = await tauriFetch(url, { method: options.method || 'GET', headers, body: options.body });
-  } catch {
-    // Fallback to native fetch (browser or Tauri without plugin)
-    response = await globalThis.fetch(url, { method: options.method || 'GET', headers, body: options.body });
-  }
+  const response = await globalThis.fetch(url, {
+    method: options.method || 'GET',
+    headers,
+    body: options.body,
+  });
 
   const text = await response.text();
 
+  // No content
   if (!text) {
     if (!response.ok) throw new Error(`Request failed (${response.status})`);
     return null as T;
   }
 
-  // Check for HTML response (server returning website instead of API)
+  // HTML response detection
   if (/^\s*</.test(text)) {
-    // Try to detect if it's a Railway maintenance or error page
-    const snippet = text.substring(0, 200).replace(/\s+/g, ' ').trim();
+    const snippet = text.substring(0, 300).replace(/\s+/g, ' ').trim();
     throw new Error(
-      `الخادم أعاد صفحة HTML. ${snippet}`,
+      `الخادم أعاد صفحة HTML بدل JSON: ${snippet}`,
     );
   }
 
+  // JSON parse
   let payload: unknown;
   try {
     payload = JSON.parse(text);
   } catch {
-    throw new Error('استجابة غير متوقعة من الخادم.');
+    throw new Error(`استجابة غير متوقعة من الخادم: ${text.substring(0, 100)}`);
   }
 
+  // Error response
   if (!response.ok) {
     const message =
-      payload &&
-      typeof payload === 'object' &&
-      payload !== null &&
-      'message' in payload &&
-      typeof (payload as Record<string, unknown>).message === 'string'
+      payload && typeof payload === 'object' && 'message' in (payload as Record<string, unknown>)
         ? (payload as { message: string }).message
         : `Request failed (${response.status})`;
     throw new Error(message);
@@ -211,7 +209,7 @@ export async function loadAppUpdatePolicy(token: string): Promise<AppUpdatePolic
   return request<AppUpdatePolicy>(DATABASE_API_BASE_URL, '/db/admin/app-update-policy', { token });
 }
 
-export async function saveAppUpdatePolicy(token: string, policy: Pick<AppUpdatePolicy, keyof AppUpdatePolicy>) {
+export async function saveAppUpdatePolicy(token: string, policy: Record<string, unknown>) {
   return request<{ success: boolean; policy: AppUpdatePolicy }>(DATABASE_API_BASE_URL, '/db/admin/app-update-policy', {
     method: 'PUT', token, body: JSON.stringify(policy),
   });
