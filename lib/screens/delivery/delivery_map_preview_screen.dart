@@ -8,6 +8,8 @@ import 'package:latlong2/latlong.dart';
 
 import '../../models/app_models.dart';
 import '../../utils/helpers.dart';
+import '../../core/config/app_config.dart';
+
 import 'delivery_shared_widgets.dart';
 
 class DeliveryMapPreviewScreen extends StatefulWidget {
@@ -181,8 +183,7 @@ class _DeliveryMapPreviewScreenState extends State<DeliveryMapPreviewScreen> {
                 ),
                 children: [
                   TileLayer(
-                    urlTemplate: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-                    subdomains: const ['a', 'b', 'c'],
+                    urlTemplate: 'https://api.mapbox.com/styles/v1/mapbox/light-v11/tiles/256/{z}/{x}/{y}@2x?access_token=${AppConfig.effectiveMapboxPublicToken}',
                     userAgentPackageName: 'AlGhaithApp/1.2.59 (com.alghaith.app)',
                   ),
                   MarkerLayer(

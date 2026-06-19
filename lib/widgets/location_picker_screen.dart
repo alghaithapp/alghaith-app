@@ -176,8 +176,7 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
                       children: [
                         TileLayer(
                           urlTemplate:
-                              'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-                          subdomains: const ['a', 'b', 'c'],
+                              'https://api.mapbox.com/styles/v1/mapbox/light-v11/tiles/256/{z}/{x}/{y}@2x?access_token=${AppConfig.effectiveMapboxPublicToken}',
                           userAgentPackageName: 'AlGhaithApp/1.2.59 (com.alghaith.app)',
                         ),
                       ],
