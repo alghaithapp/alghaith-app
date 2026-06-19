@@ -105,7 +105,17 @@ class OverviewTab extends StatelessWidget {
           ModernWideButton(
             label: 'التبديل لحساب الزبون',
             icon: Icons.person_search_rounded,
-            onTap: () => provider.setUserRole('customer'),
+            onTap: () async {
+              final ok = await context.read<AppProvider>().setUserRole('customer');
+              if (!ok && context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('تعذر التبديل لحساب الزبون حالياً.',
+                        style: TextStyle(fontFamily: 'Cairo')),
+                  ),
+                );
+              }
+            },
             color: const Color(0xFF1A1A1A),
           ),
           const SizedBox(height: 12),
