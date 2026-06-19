@@ -181,8 +181,9 @@ class _DeliveryMapPreviewScreenState extends State<DeliveryMapPreviewScreen> {
                 ),
                 children: [
                   TileLayer(
-                    urlTemplate: 'https://tiles.openfreemap.org/{z}/{x}/{y}.png',
-                    userAgentPackageName: 'com.alghaith.app',
+                    urlTemplate: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+                    subdomains: const ['a', 'b', 'c'],
+                    userAgentPackageName: 'AlGhaithApp/1.2.59 (com.alghaith.app)',
                   ),
                   MarkerLayer(
                     markers: [
