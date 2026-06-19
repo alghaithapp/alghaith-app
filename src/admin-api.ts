@@ -36,6 +36,24 @@ export const PHONE_AUTH_BASE_URL = resolveApiBaseUrl(
   DEFAULT_PHONE_AUTH_BASE,
 );
 
+let tauriInvoke: ((cmd: string, args?: Record<string, unknown>) => Promise<unknown>) | null = null;
+
+async function getTauriInvoke() {
+  if (tauriInvoke === undefined) {
+    try {
+      const mod = await import('@tauri-apps/api/core');
+      if (mod && typeof mod.invoke === 'function') {
+        tauriInvoke = mod.invoke;
+      } else {
+        tauriInvoke = null;
+      }
+    } catch {
+      tauriInvoke = null;
+    }
+  }
+  return tauriInvoke;
+}
+
 async function request<T>(
   baseUrl: string,
   path: string,
@@ -50,6 +68,48 @@ async function request<T>(
     headers['Authorization'] = `Bearer ${options.token}`;
   }
 
+  const invoke = await getTauriInvoke();
+
+  if (invoke) {
+    // Use Rust backend via Tauri IPC — no CORS issues
+    const raw = await invoke('api_request', {
+      url,
+      method: options.method || 'GET',
+      headers,
+      body: options.body as string | null,
+    }) as string;
+
+    const newlineIdx = raw.indexOf('\n');
+    const statusCode = parseInt(raw.substring(0, newlineIdx), 10);
+    const body = raw.substring(newlineIdx + 1);
+
+    if (!body) {
+      if (statusCode >= 400) throw new Error(`Request failed (${statusCode})`);
+      return null as T;
+    }
+
+    if (/^\s*</.test(body)) {
+      throw new Error('الخادم أعاد صفحة HTML بدل JSON.');
+    }
+
+    let payload: unknown;
+    try {
+      payload = JSON.parse(body);
+    } catch {
+      throw new Error('استجابة غير متوقعة من الخادم.');
+    }
+
+    if (statusCode >= 400) {
+      const msg = payload && typeof payload === 'object' && 'message' in (payload as Record<string, unknown>)
+        ? (payload as { message: string }).message
+        : `Request failed (${statusCode})`;
+      throw new Error(msg);
+    }
+
+    return payload as T;
+  }
+
+  // Browser fallback — use native fetch
   const response = await fetch(url, {
     method: options.method || 'GET',
     headers,
@@ -64,23 +124,21 @@ async function request<T>(
   }
 
   if (/^\s*</.test(text)) {
-    const snippet = text.substring(0, 300).replace(/\s+/g, ' ').trim();
-    throw new Error(`الخادم أعاد صفحة HTML بدل JSON: ${snippet}`);
+    throw new Error('الخادم أعاد صفحة HTML بدل JSON.');
   }
 
   let payload: unknown;
   try {
     payload = JSON.parse(text);
   } catch {
-    throw new Error(`استجابة غير متوقعة من الخادم: ${text.substring(0, 100)}`);
+    throw new Error('استجابة غير متوقعة من الخادم.');
   }
 
   if (!response.ok) {
-    const message =
-      payload && typeof payload === 'object' && 'message' in (payload as Record<string, unknown>)
-        ? (payload as { message: string }).message
-        : `Request failed (${response.status})`;
-    throw new Error(message);
+    const msg = payload && typeof payload === 'object' && 'message' in (payload as Record<string, unknown>)
+      ? (payload as { message: string }).message
+      : `Request failed (${response.status})`;
+    throw new Error(msg);
   }
 
   return payload as T;
