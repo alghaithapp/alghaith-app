@@ -140,9 +140,18 @@ function buildCorsHeaders(request, env) {
     .filter(Boolean);
   const requestOrigin = request.headers.get('Origin') || '';
   let allowOrigin = '*';
+  const tauriOrigins = /^tauri:\/\/localhost(:\d+)?$/i;
+  const tauriV2Origins = /^https:\/\/tauri\.localhost(:\d+)?$/i;
+  const localOrigins = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i;
 
   if (allowedOrigins.length > 0) {
-    allowOrigin = allowedOrigins.includes(requestOrigin) ? requestOrigin : 'null';
+    if (allowedOrigins.includes(requestOrigin)) {
+      allowOrigin = requestOrigin;
+    } else if (tauriOrigins.test(requestOrigin) || tauriV2Origins.test(requestOrigin) || localOrigins.test(requestOrigin)) {
+      allowOrigin = requestOrigin;
+    } else {
+      allowOrigin = 'null';
+    }
   }
 
   return {

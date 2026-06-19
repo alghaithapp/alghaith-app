@@ -54,7 +54,18 @@ function isAllowedCorsOrigin(origin) {
   if (corsAllowedOrigins.length === 0 || corsAllowedOrigins.includes(origin)) {
     return true;
   }
-  return /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/i.test(origin);
+  // Allow localhost / local-dev origins
+  if (/^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/i.test(origin)) {
+    return true;
+  }
+  // Allow Tauri desktop app origins (v1 uses tauri://localhost, v2 uses https://tauri.localhost)
+  if (/^tauri:\/\/localhost(:\d+)?$/i.test(origin)) {
+    return true;
+  }
+  if (/^https:\/\/tauri\.localhost(:\d+)?$/i.test(origin)) {
+    return true;
+  }
+  return false;
 }
 
 app.use(helmet());

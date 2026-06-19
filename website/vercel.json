@@ -3,19 +3,5 @@
   "framework": null,
   "installCommand": null,
   "buildCommand": null,
-  "outputDirectory": ".",
-  "rewrites": [
-    {
-      "source": "/admin/assets/:path*",
-      "destination": "/admin/assets/:path*"
-    },
-    {
-      "source": "/admin/:path*",
-      "destination": "/admin/index.html"
-    },
-    {
-      "source": "/admin",
-      "destination": "/admin/index.html"
-    }
-  ]
+  "outputDirectory": "."
 }
