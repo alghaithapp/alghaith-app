@@ -7,13 +7,6 @@
   ],
   "permissions": [
     "core:default",
-    {
-      "identifier": "http:default",
-      "allow": [
-        { "url": "https://alghaith-app-production.up.railway.app/**" },
-        { "url": "https://lively-wind-9d98.alghaithapp.workers.dev/**" },
-        { "url": "http://localhost:5173/**" }
-      ]
-    }
+    "http:default"
   ]
 }

@@ -11,24 +11,6 @@ import type {
   ToggleBazaarResponse,
 } from './admin-types';
 
-/**
- * Tauri v2 blocks native fetch() from WebView.
- * We use @tauri-apps/plugin-http.fetch() which goes through Rust's reqwest.
- * In browser (dev mode) we fall back to native fetch.
- *
- * The static import is bundled by Vite but only used when in Tauri environment.
- */
-import { fetch as tauriFetch } from '@tauri-apps/plugin-http';
-
-/** Are we running inside Tauri WebView? v2 exposes __TAURI_INTERNALS__ */
-const isTauri = typeof window !== 'undefined' && (window as any).__TAURI_INTERNALS__;
-
-function headersToPlain(headers: Headers): Record<string, string> {
-  const obj: Record<string, string> = {};
-  headers.forEach((value, key) => { obj[key] = value; });
-  return obj;
-}
-
 const DEFAULT_DATABASE_API_BASE = 'https://alghaith-app-production.up.railway.app';
 const DEFAULT_PHONE_AUTH_BASE = 'https://lively-wind-9d98.alghaithapp.workers.dev';
 
@@ -59,41 +41,47 @@ async function request<T>(
   path: string,
   options: RequestInit & { token?: string } = {},
 ): Promise<T> {
-  const headers = new Headers(options.headers || {});
-  headers.set('Content-Type', 'application/json');
+  const url = `${baseUrl}${path}`;
+  const headers: Record<string, string> = {
+    Accept: 'application/json',
+    'Content-Type': 'application/json',
+  };
   if (options.token) {
-    headers.set('Authorization', `Bearer ${options.token}`);
+    headers['Authorization'] = `Bearer ${options.token}`;
   }
 
-  const url = `${baseUrl}${path}`;
   let response: Response;
 
-  if (isTauri) {
-    // Tauri plugin-http expects plain header objects
-    try {
-      response = await tauriFetch(url, { ...options, headers: headersToPlain(headers) });
-    } catch {
-      // Plugin fetch failed — fall back to native WebView fetch
-      response = await globalThis.fetch(url, { ...options, headers });
-    }
-  } else {
-    response = await globalThis.fetch(url, { ...options, headers });
+  // Try Tauri HTTP plugin first (bypasses WebView restrictions)
+  try {
+    const { fetch: tauriFetch } = await import('@tauri-apps/plugin-http');
+    response = await tauriFetch(url, { method: options.method || 'GET', headers, body: options.body });
+  } catch {
+    // Fallback to native fetch (browser or Tauri without plugin)
+    response = await globalThis.fetch(url, { method: options.method || 'GET', headers, body: options.body });
   }
 
   const text = await response.text();
-  let payload: unknown = null;
-  if (text) {
-    try {
-      payload = JSON.parse(text);
-    } catch {
-      const looksLikeHtml = /^\s*</.test(text);
-      if (looksLikeHtml) {
-        throw new Error(
-          'الخادم أعاد صفحة HTML بدل JSON. تأكد أن لوحة الإدارة تتصل بخادم Railway وليس بموقع alghaithst.com.',
-        );
-      }
-      throw new Error('استجابة غير متوقعة من الخادم.');
-    }
+
+  if (!text) {
+    if (!response.ok) throw new Error(`Request failed (${response.status})`);
+    return null as T;
+  }
+
+  // Check for HTML response (server returning website instead of API)
+  if (/^\s*</.test(text)) {
+    // Try to detect if it's a Railway maintenance or error page
+    const snippet = text.substring(0, 200).replace(/\s+/g, ' ').trim();
+    throw new Error(
+      `الخادم أعاد صفحة HTML. ${snippet}`,
+    );
+  }
+
+  let payload: unknown;
+  try {
+    payload = JSON.parse(text);
+  } catch {
+    throw new Error('استجابة غير متوقعة من الخادم.');
   }
 
   if (!response.ok) {
@@ -102,7 +90,7 @@ async function request<T>(
       typeof payload === 'object' &&
       payload !== null &&
       'message' in payload &&
-      typeof (payload as { message?: unknown }).message === 'string'
+      typeof (payload as Record<string, unknown>).message === 'string'
         ? (payload as { message: string }).message
         : `Request failed (${response.status})`;
     throw new Error(message);
@@ -223,7 +211,7 @@ export async function loadAppUpdatePolicy(token: string): Promise<AppUpdatePolic
   return request<AppUpdatePolicy>(DATABASE_API_BASE_URL, '/db/admin/app-update-policy', { token });
 }
 
-export async function saveAppUpdatePolicy(token: string, policy: Pick<AppUpdatePolicy, 'minBuildNumber' | 'minVersionName' | 'latestBuildNumber' | 'latestVersionName' | 'messageAr' | 'androidStoreUrl' | 'iosStoreUrl'>) {
+export async function saveAppUpdatePolicy(token: string, policy: Pick<AppUpdatePolicy, keyof AppUpdatePolicy>) {
   return request<{ success: boolean; policy: AppUpdatePolicy }>(DATABASE_API_BASE_URL, '/db/admin/app-update-policy', {
     method: 'PUT', token, body: JSON.stringify(policy),
   });
