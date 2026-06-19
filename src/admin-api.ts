@@ -11,11 +11,6 @@ import type {
   ToggleBazaarResponse,
 } from './admin-types';
 
-/**
- * Tauri v2 with csp: null + http:default permission = native fetch() works.
- * No need for tauri-plugin-http — it causes HTML response issues.
- */
-
 const DEFAULT_DATABASE_API_BASE = 'https://alghaith-app-production.up.railway.app';
 const DEFAULT_PHONE_AUTH_BASE = 'https://lively-wind-9d98.alghaithapp.workers.dev';
 
@@ -55,29 +50,24 @@ async function request<T>(
     headers['Authorization'] = `Bearer ${options.token}`;
   }
 
-  const response = await globalThis.fetch(url, {
+  const response = await fetch(url, {
     method: options.method || 'GET',
     headers,
-    body: options.body,
+    body: options.body as string | undefined,
   });
 
   const text = await response.text();
 
-  // No content
   if (!text) {
     if (!response.ok) throw new Error(`Request failed (${response.status})`);
     return null as T;
   }
 
-  // HTML response detection
   if (/^\s*</.test(text)) {
     const snippet = text.substring(0, 300).replace(/\s+/g, ' ').trim();
-    throw new Error(
-      `الخادم أعاد صفحة HTML بدل JSON: ${snippet}`,
-    );
+    throw new Error(`الخادم أعاد صفحة HTML بدل JSON: ${snippet}`);
   }
 
-  // JSON parse
   let payload: unknown;
   try {
     payload = JSON.parse(text);
@@ -85,7 +75,6 @@ async function request<T>(
     throw new Error(`استجابة غير متوقعة من الخادم: ${text.substring(0, 100)}`);
   }
 
-  // Error response
   if (!response.ok) {
     const message =
       payload && typeof payload === 'object' && 'message' in (payload as Record<string, unknown>)
