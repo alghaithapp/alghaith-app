@@ -205,7 +205,11 @@ class _TaxiRequestScreenState extends State<TaxiRequestScreen> {
                   const SizedBox(height: 10),
                   Wrap(spacing: 8, children: IraqNeighborhoods.suwayraNeighborhoods.take(6).map<Widget>((n) => GestureDetector(
                     onTap: () { if (_isPickupFocused) _pickupController.text = n; else _dropoffController.text = n; _updateRoute(); },
-                    child: Chip(label: Text(n, style: const TextStyle(fontFamily: 'Cairo', fontSize: 11))),
+                    child: Chip(
+                      label: Text(n, style: const TextStyle(fontFamily: 'Cairo', fontSize: 11, color: Colors.white)),
+                      backgroundColor: AppColors.accent,
+                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                    ),
                   )).toList()),
                   const SizedBox(height: 10),
                   CupertinoButton(child: const Text('الرحلات السابقة', style: TextStyle(fontFamily: 'Cairo')), onPressed: () {
