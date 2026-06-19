@@ -300,8 +300,8 @@ class _TaxiMapBackdropState extends State<_TaxiMapBackdrop> {
       ),
       children: [
         TileLayer(
-          urlTemplate: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-          subdomains: ['a', 'b', 'c'],
+          urlTemplate: 'https://tiles.openfreemap.org/{z}/{x}/{y}.png',
+          userAgentPackageName: 'com.alghaith.app',
         ),
         if (widget.routePolyline.isNotEmpty)
           PolylineLayer(

@@ -176,8 +176,7 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
                       children: [
                         TileLayer(
                           urlTemplate:
-                              'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-                          subdomains: const ['a', 'b', 'c'],
+                              'https://tiles.openfreemap.org/{z}/{x}/{y}.png',
                           userAgentPackageName: 'com.alghaith.app',
                         ),
                       ],
