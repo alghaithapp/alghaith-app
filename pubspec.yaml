@@ -1,6 +1,6 @@
 name: alghaith_app
 description: "Al-Ghaith - Professional Service & Shopping App in Iraq"
-version: 1.2.63+98
+version: 1.2.64+99
 
 environment:
   sdk: '>=3.0.0 <4.0.0'
