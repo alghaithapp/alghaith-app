@@ -11,14 +11,30 @@ import type {
   ToggleBazaarResponse,
 } from './admin-types';
 
-// Use Tauri's HTTP plugin when running as desktop app, fallback to native fetch in browser
-async function resolveFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
-  try {
-    const { fetch: tauriFetch } = await import('@tauri-apps/plugin-http');
-    return tauriFetch(input, init);
-  } catch {
-    return globalThis.fetch(input, init);
+// Tauri v2 HTTP plugin to bypass WebView restrictions on cross-origin fetch.
+// We use a memoized static import pattern — import() only once at module init.
+let tauriFetchModule: { fetch: typeof globalThis.fetch } | null = null;
+let tauriFetchAttempted = false;
+
+async function getTauriFetch(): Promise<typeof globalThis.fetch | null> {
+  if (!tauriFetchAttempted) {
+    tauriFetchAttempted = true;
+    try {
+      // This import succeeds only when running inside Tauri (plugin registered).
+      const mod = await import('@tauri-apps/plugin-http');
+      tauriFetchModule = mod;
+    } catch {
+      // Browser / non-Tauri environment — use native fetch.
+      tauriFetchModule = null;
+    }
   }
+  return tauriFetchModule?.fetch ?? null;
+}
+
+function headersToObject(headers: Headers): Record<string, string> {
+  const obj: Record<string, string> = {};
+  headers.forEach((value, key) => { obj[key] = value; });
+  return obj;
 }
 
 const DEFAULT_DATABASE_API_BASE = 'https://alghaith-app-production.up.railway.app';
@@ -59,9 +75,13 @@ async function request<T>(
     headers.set('Authorization', `Bearer ${options.token}`);
   }
 
-  const response = await resolveFetch(`${baseUrl}${path}`, {
+  // Get the correct fetch implementation
+  const fetchFn = await getTauriFetch() ?? globalThis.fetch.bind(globalThis);
+
+  const response = await fetchFn(`${baseUrl}${path}`, {
     ...options,
-    headers,
+    // Tauri plugin-http expects plain header objects
+    headers: headersToObject(headers),
   });
 
   const text = await response.text();
