@@ -138,7 +138,7 @@ class DriverCard extends StatelessWidget {
     final vehicle = driver['vehicle'] ?? '';
     final plate = driver['plate'] ?? '';
     final hasDocs = DriverProfileFields.hasRequiredUploads(
-      driver is Map<String, dynamic> ? driver : Map<String, dynamic>.from(driver as Map),
+      Map<String, dynamic>.from(driver),
     );
 
     return Container(
