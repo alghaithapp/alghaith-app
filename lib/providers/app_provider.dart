@@ -50,6 +50,7 @@ class AppProvider extends ChangeNotifier {
   DateTime? _lastCatalogFetch;
   MarketplaceStatsSnapshot? _marketplaceStats;
   bool _marketplaceStatsLoading = false;
+  bool _skippedCustomerSetup = false;
   List<CartItem> _cart = [];
   CartPromoDefinition? _appliedCartPromo;
   List<ActiveOrder> _orders = [];
@@ -227,6 +228,13 @@ class AppProvider extends ChangeNotifier {
   List<MerchantReview> get merchantReviews =>
       List<MerchantReview>.unmodifiable(_merchantReviews);
   bool get darkMode => _darkMode;
+  bool get skippedCustomerSetup => _skippedCustomerSetup;
+
+  void skipCustomerSetup() {
+    _skippedCustomerSetup = true;
+    _persistLocalBackup();
+    notifyListeners();
+  }
   bool get inAppAlertsEnabled => _inAppAlertsEnabled;
   bool get isReady => _isReady;
   bool get isHydrating => _isHydrating;
@@ -752,6 +760,7 @@ class AppProvider extends ChangeNotifier {
       activeSubCategory: _activeSubCategory,
       pendingOrderStatusSyncQueue: _pendingOrderStatusSyncQueue,
       notifications: List<AppNotificationItem>.from(_notifications),
+      skippedCustomerSetup: _skippedCustomerSetup,
     );
   }
 
@@ -782,6 +791,7 @@ class AppProvider extends ChangeNotifier {
     _darkMode = snapshot['darkMode'] as bool? ?? _darkMode;
     _inAppAlertsEnabled =
         snapshot['inAppAlertsEnabled'] as bool? ?? _inAppAlertsEnabled;
+    _skippedCustomerSetup = snapshot['skippedCustomerSetup'] as bool? ?? false;
     _driverType = snapshot['driverType'] as String? ?? _driverType;
     final driverProfile = snapshot['driverProfile'];
     if (driverProfile is Map) {
@@ -1165,48 +1175,44 @@ class AppProvider extends ChangeNotifier {
   }
 
   void _inferRoleFromRestoredData() {
-    if (_userRole != null && _userRole!.trim().isNotEmpty) {
-      if (_userRole == 'admin') {
+    final storedRole = appUserView.role;
+
+    // دائماً فضّل الدور القادم من السيرفر إذا كان موجوداً
+    if (storedRole != null && isRoleAllowedForAccount(storedRole)) {
+      if (storedRole == 'admin') {
         _userRole = 'customer';
         _hasAdminAccess = true;
+      } else {
+        _userRole = storedRole;
       }
       return;
     }
 
-    final storedRole = appUserView.role;
-    if (storedRole == 'admin') {
-      _userRole = 'customer';
-      _hasAdminAccess = true;
-      return;
+    // إذا لم يوجد دور في السيرفر، أو كان الدور الحالي هو 'customer' افتراضي،
+    // نحاول الاستنتاج من الملفات الشخصية المتوفرة.
+    if (_userRole == null || _userRole == 'customer') {
+      if (_merchantStore != null &&
+          (_merchantStore?['name']?.toString().trim().isNotEmpty ?? false)) {
+        _userRole = 'merchant';
+        return;
+      }
+
+      if (_accountType == 'delivery' || hasCourierProfile) {
+        _userRole = 'delivery';
+        return;
+      }
+
+      if (_accountType == 'driver' &&
+          _driverProfile != null &&
+          _driverProfile!.isNotEmpty) {
+        _userRole = 'driver';
+        return;
+      }
     }
 
-    if (storedRole != null && isRoleAllowedForAccount(storedRole)) {
-      _userRole = storedRole;
+    if (_userRole != null && _userRole!.trim().isNotEmpty) {
       return;
     }
-
-    if (_merchantStore != null &&
-        (_merchantStore?['name']?.toString().trim().isNotEmpty ?? false)) {
-      _userRole = 'merchant';
-      return;
-    }
-
-    if (_customerName.trim().isNotEmpty) {
-      _userRole = 'customer';
-      return;
-    }
-
-    if (_accountType == 'delivery' || hasCourierProfile) {
-      _userRole = 'delivery';
-      return;
-    }
-
-    if (_accountType == 'driver' &&
-        _driverProfile != null &&
-        _driverProfile!.isNotEmpty) {
-      _userRole = 'driver';
-    }
-  }
 
   String? _trimmedOrNull(String? value) {
     final trimmed = value?.trim();
@@ -1691,6 +1697,7 @@ class AppProvider extends ChangeNotifier {
       'driverProfile': _driverProfile,
       'courierProfile': _courierProfile,
       'accountType': _accountType,
+      'skippedCustomerSetup': _skippedCustomerSetup,
       'customerPhone': _customerPhone,
       'customerLatitude': _customerLatitude,
       'customerLongitude': _customerLongitude,
@@ -1841,6 +1848,7 @@ class AppProvider extends ChangeNotifier {
     _inAppAlertsEnabled = state['inAppAlertsEnabled'] as bool? ??
         state['notificationsEnabled'] as bool? ??
         _inAppAlertsEnabled;
+    _skippedCustomerSetup = state['skippedCustomerSetup'] as bool? ?? false;
     _driverType = state['driverType'] as String? ?? _driverType;
     final previousDriverProfile = _driverProfile == null
         ? null

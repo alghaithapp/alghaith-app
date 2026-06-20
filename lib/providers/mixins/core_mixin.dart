@@ -42,6 +42,7 @@ mixin AppCoreMixin on ChangeNotifier {
   DateTime? _lastCatalogFetch;
   MarketplaceStatsSnapshot? _marketplaceStats;
   bool _marketplaceStatsLoading = false;
+  bool _skippedCustomerSetup = false;
   List<CartItem> _cart = [];
   CartPromoDefinition? _appliedCartPromo;
   List<ActiveOrder> _orders = [];
@@ -156,8 +157,14 @@ mixin AppCoreMixin on ChangeNotifier {
   List<MerchantReview> get merchantReviews =>
       List<MerchantReview>.unmodifiable(_merchantReviews);
   bool get darkMode => _darkMode;
+  bool get skippedCustomerSetup => _skippedCustomerSetup;
   bool get inAppAlertsEnabled => _inAppAlertsEnabled;
   bool get isReady => _isReady;
+
+  void skipCustomerSetup() {
+    _skippedCustomerSetup = true;
+    notifyListeners();
+  }
   bool get isHydrating => _isHydrating;
   String get customerName => _customerName;
   String get customerPhone => _customerPhone;

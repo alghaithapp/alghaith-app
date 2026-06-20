@@ -342,6 +342,7 @@ mixin PersistenceMixin on AppCoreMixin {
       activeSubCategory: _activeSubCategory,
       pendingOrderStatusSyncQueue: _pendingOrderStatusSyncQueue,
       notifications: List<AppNotificationItem>.from(_notifications),
+      skippedCustomerSetup: _skippedCustomerSetup,
     );
   }
 
@@ -372,6 +373,7 @@ mixin PersistenceMixin on AppCoreMixin {
     _darkMode = snapshot['darkMode'] as bool? ?? _darkMode;
     _inAppAlertsEnabled =
         snapshot['inAppAlertsEnabled'] as bool? ?? _inAppAlertsEnabled;
+    _skippedCustomerSetup = snapshot['skippedCustomerSetup'] as bool? ?? false;
     _driverType = snapshot['driverType'] as String? ?? _driverType;
     final driverProfile = snapshot['driverProfile'];
     if (driverProfile is Map) {

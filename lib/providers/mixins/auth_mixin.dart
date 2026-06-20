@@ -47,13 +47,21 @@ mixin AuthMixin on AppCoreMixin {
       _hydrateCustomerIdentityFromRestoredData();
     } finally {
       _isLoggingIn = false;
-      _isRestoring = false;
+      _isRestoring = true; // نُبقي حالة الاستعادة نشطة حتى انتهاء التحميل من السيرفر
       _isHydrating = false;
-      _isReady = true;
+      _isReady = false; // لا نعتبر التطبيق جاهزاً حتى نحصل على البيانات الكاملة
       notifyListeners();
+
       _notificationHub.onLoginSuccess();
       _notificationHub.onAppBootWelcome(_customerName);
-      unawaited(_completeLoginRemoteRestore(normalized));
+
+      // ننتظر انتهاء الاستعادة السحابية قبل إعلان الجاهزية
+      await _completeLoginRemoteRestore(normalized);
+
+      _isRestoring = false;
+      _isReady = true;
+      notifyListeners();
+
       unawaited(PushNotificationService.instance.bindToUser(normalized));
     }
   }

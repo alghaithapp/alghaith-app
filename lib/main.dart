@@ -318,7 +318,8 @@ class _AlGhaithAppState extends State<AlGhaithApp> {
 
       if (appProvider.isCustomer &&
           !appProvider.hasCompletedCustomerProfile &&
-          !appProvider.isGuestMode) {
+          !appProvider.isGuestMode &&
+          !appProvider.skippedCustomerSetup) {
         return const ExitConfirmScope(child: CustomerSetupScreen());
       }
 

@@ -156,6 +156,21 @@ class _CustomerSetupScreenState extends State<CustomerSetupScreen> {
             fontWeight: FontWeight.w800,
           ),
         ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              context.read<AppProvider>().skipCustomerSetup();
+            },
+            child: const Text(
+              'تخطي',
+              style: TextStyle(
+                fontFamily: 'Cairo',
+                fontWeight: FontWeight.w700,
+                color: CupertinoColors.systemGrey,
+              ),
+            ),
+          ),
+        ],
       ),
       body: SafeArea(
         child: ListView(
@@ -270,6 +285,25 @@ class _CustomerSetupScreenState extends State<CustomerSetupScreen> {
                                   fontSize: 16,
                                 ),
                               ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  SizedBox(
+                    width: double.infinity,
+                    child: CupertinoButton(
+                      padding: EdgeInsets.zero,
+                      onPressed: () {
+                        context.read<AppProvider>().skipCustomerSetup();
+                      },
+                      child: const Text(
+                        'إكمال الملف لاحقاً (تخطي)',
+                        style: TextStyle(
+                          color: Color(0xFF8E8E93),
+                          fontFamily: 'Cairo',
+                          fontWeight: FontWeight.w700,
+                          fontSize: 14,
+                        ),
                       ),
                     ),
                   ),

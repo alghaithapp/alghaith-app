@@ -30,6 +30,7 @@ class AccountSnapshot {
     this.activeSubCategory,
     this.pendingOrderStatusSyncQueue = const [],
     this.notifications = const [],
+    this.skippedCustomerSetup = false,
   });
 
   final String? userRole;
@@ -57,6 +58,7 @@ class AccountSnapshot {
   final String? activeSubCategory;
   final List<Map<String, dynamic>> pendingOrderStatusSyncQueue;
   final List<AppNotificationItem> notifications;
+  final bool skippedCustomerSetup;
 
   Map<String, dynamic> toJson() {
     return {
@@ -85,6 +87,7 @@ class AccountSnapshot {
       'activeSubCategory': activeSubCategory,
       'pendingOrderStatusSyncQueue': pendingOrderStatusSyncQueue,
       'notifications': notifications.map((e) => e.toMap()).toList(),
+      'skippedCustomerSetup': skippedCustomerSetup,
     };
   }
 
@@ -125,6 +128,7 @@ class AccountSnapshot {
         json['pendingOrderStatusSyncQueue'],
       ),
       notifications: _parseNotifications(json['notifications']),
+      skippedCustomerSetup: json['skippedCustomerSetup'] as bool? ?? false,
     );
   }
 
