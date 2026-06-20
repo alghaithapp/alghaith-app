@@ -50,16 +50,12 @@ mixin AppCoreMixin on ChangeNotifier {
   List<ActiveOrder> _courierPoolOrders = [];
   List<ActiveOrder> _courierAssignedOrders = [];
   Map<String, dynamic>? _adminReports;
-  List<TaxiRequest> _taxiRequests = [];
-  List<TaxiRequest> _taxiPoolRequests = [];
-  List<TaxiRequest> _taxiDriverAssignedRequests = [];
   List<String> _addresses = [];
   final List<AppNotificationItem> _notifications = [];
   late final NotificationHub _notificationHub =
       NotificationHub(_emitNotification);
   List<ActiveOrder> _courierPoolSnapshot = [];
   List<ActiveOrder> _courierAssignedSnapshot = [];
-  Map<String, TaxiRequest> _taxiSnapshot = {};
   int _lastCartActivityMs = 0;
   final Set<String> _customerTimerEmitted = {};
   String? _pendingUnreadPromptRole;
@@ -553,7 +549,6 @@ mixin AppCoreMixin on ChangeNotifier {
             order.statusKey != 'cancelled',
       )
       .length;
-  List<TaxiRequest> get taxiRequests => _taxiRequests;
   List<String> get addresses => List<String>.unmodifiable(_addresses);
   List<AppNotificationItem> get notifications {
     final audience = notificationAudienceForRole(_userRole);

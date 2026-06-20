@@ -3,9 +3,8 @@ import 'dart:async';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart' as geo;
-import 'package:flutter_map/flutter_map.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart' as gmaps;
 import 'package:latlong2/latlong.dart';
-
 import '../../models/app_models.dart';
 import '../../utils/helpers.dart';
 import '../../core/config/app_config.dart';
@@ -24,6 +23,7 @@ class DeliveryMapPreviewScreen extends StatefulWidget {
 
 class _DeliveryMapPreviewScreenState extends State<DeliveryMapPreviewScreen> {
   LatLng? _courierPosition;
+  gmaps.GoogleMapController? _mapController;
 
   LatLng? get _customerPosition {
     final lat = widget.order.customerLatitude;
@@ -175,61 +175,53 @@ class _DeliveryMapPreviewScreenState extends State<DeliveryMapPreviewScreen> {
         child: Column(
           children: [
             Expanded(
-              child: FlutterMap(
-                options: MapOptions(
-                  initialCenter: _initialPosition,
-                  initialZoom: 14.8,
-                  onMapReady: _onMapReady,
+              child: gmaps.GoogleMap(
+                initialCameraPosition: gmaps.CameraPosition(
+                  target: gmaps.LatLng(
+                    _initialPosition.latitude,
+                    _initialPosition.longitude,
+                  ),
+                  zoom: 14.8,
                 ),
-                children: [
-                  TileLayer(
-                    urlTemplate: 'https://api.mapbox.com/styles/v1/mapbox/light-v11/tiles/256/{z}/{x}/{y}@2x?access_token=${AppConfig.effectiveMapboxPublicToken}',
-                    userAgentPackageName: 'AlGhaithApp/1.2.59 (com.alghaith.app)',
-                  ),
-                  MarkerLayer(
-                    markers: [
-                      if (_merchantPosition != null)
-                        Marker(
-                          point: _merchantPosition!,
-                          child: Container(
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF1976D2),
-                              shape: BoxShape.circle,
-                              border: Border.all(color: Colors.white, width: 2),
-                            ),
-                            width: 18,
-                            height: 18,
-                          ),
-                        ),
-                      if (_customerPosition != null)
-                        Marker(
-                          point: _customerPosition!,
-                          child: Container(
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFF5A01D),
-                              shape: BoxShape.circle,
-                              border: Border.all(color: Colors.white, width: 2),
-                            ),
-                            width: 18,
-                            height: 18,
-                          ),
-                        ),
-                      if (_courierPosition != null)
-                        Marker(
-                          point: _courierPosition!,
-                          child: Container(
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF2E7D32),
-                              shape: BoxShape.circle,
-                              border: Border.all(color: Colors.white, width: 2),
-                            ),
-                            width: 16,
-                            height: 16,
-                          ),
-                        ),
-                    ],
-                  ),
-                ],
+                onMapCreated: (controller) {
+                  _mapController = controller;
+                  _onMapReady();
+                },
+                markers: {
+                  if (_merchantPosition != null)
+                    gmaps.Marker(
+                      markerId: const gmaps.MarkerId('merchant'),
+                      position: gmaps.LatLng(
+                        _merchantPosition!.latitude,
+                        _merchantPosition!.longitude,
+                      ),
+                      icon: gmaps.BitmapDescriptor.defaultMarkerWithHue(
+                        gmaps.BitmapDescriptor.hueBlue,
+                      ),
+                    ),
+                  if (_customerPosition != null)
+                    gmaps.Marker(
+                      markerId: const gmaps.MarkerId('customer'),
+                      position: gmaps.LatLng(
+                        _customerPosition!.latitude,
+                        _customerPosition!.longitude,
+                      ),
+                      icon: gmaps.BitmapDescriptor.defaultMarkerWithHue(
+                        gmaps.BitmapDescriptor.hueOrange,
+                      ),
+                    ),
+                  if (_courierPosition != null)
+                    gmaps.Marker(
+                      markerId: const gmaps.MarkerId('courier'),
+                      position: gmaps.LatLng(
+                        _courierPosition!.latitude,
+                        _courierPosition!.longitude,
+                      ),
+                      icon: gmaps.BitmapDescriptor.defaultMarkerWithHue(
+                        gmaps.BitmapDescriptor.hueGreen,
+                      ),
+                    ),
+                },
               ),
             ),
             Container(

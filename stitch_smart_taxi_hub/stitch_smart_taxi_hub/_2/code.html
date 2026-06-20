@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+
+<html dir="rtl" lang="ar"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Driver Home - TaxiLink</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-secondary-fixed-variant": "#544600",
+                        "on-background": "#1a1c1c",
+                        "inverse-surface": "#2f3131",
+                        "outline-variant": "#cfc4c5",
+                        "on-secondary": "#ffffff",
+                        "tertiary-fixed": "#94f990",
+                        "tertiary": "#000000",
+                        "on-tertiary": "#ffffff",
+                        "on-primary": "#ffffff",
+                        "on-tertiary-container": "#32963b",
+                        "secondary-fixed-dim": "#e9c400",
+                        "primary-container": "#1b1b1b",
+                        "error": "#ba1a1a",
+                        "on-primary-fixed": "#1b1b1b",
+                        "surface": "#f9f9f9",
+                        "on-secondary-container": "#6e5c00",
+                        "tertiary-fixed-dim": "#78dc77",
+                        "on-error-container": "#93000a",
+                        "primary": "#000000",
+                        "on-surface": "#1a1c1c",
+                        "secondary": "#705d00",
+                        "on-secondary-fixed": "#221b00",
+                        "secondary-container": "#fcd400",
+                        "surface-container-lowest": "#ffffff",
+                        "tertiary-container": "#002204",
+                        "surface-dim": "#dadada",
+                        "inverse-primary": "#c6c6c6",
+                        "primary-fixed-dim": "#c6c6c6",
+                        "background": "#f9f9f9",
+                        "outline": "#7e7576",
+                        "primary-fixed": "#e2e2e2",
+                        "on-primary-container": "#848484",
+                        "surface-bright": "#f9f9f9",
+                        "on-tertiary-fixed-variant": "#005313",
+                        "on-surface-variant": "#4c4546",
+                        "surface-container-highest": "#e2e2e2",
+                        "inverse-on-surface": "#f1f1f1",
+                        "surface-tint": "#5e5e5e",
+                        "surface-container": "#eeeeee",
+                        "on-primary-fixed-variant": "#474747",
+                        "on-tertiary-fixed": "#002204",
+                        "error-container": "#ffdad6",
+                        "surface-container-high": "#e8e8e8",
+                        "surface-container-low": "#f3f3f3",
+                        "on-error": "#ffffff",
+                        "surface-variant": "#e2e2e2",
+                        "secondary-fixed": "#ffe16d"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "md": "16px",
+                        "sm": "8px",
+                        "xl": "32px",
+                        "lg": "24px",
+                        "gutter": "12px",
+                        "base": "4px",
+                        "edge-margin": "20px",
+                        "xs": "4px"
+                    },
+                    "fontFamily": {
+                        "body-md": ["IBM Plex Sans"],
+                        "display-lg-mobile": ["IBM Plex Sans"],
+                        "headline-md": ["IBM Plex Sans"],
+                        "display-lg": ["IBM Plex Sans"],
+                        "title-sm": ["IBM Plex Sans"],
+                        "body-sm": ["IBM Plex Sans"],
+                        "label-bold": ["IBM Plex Sans"],
+                        "label-md": ["IBM Plex Sans"]
+                    },
+                    "fontSize": {
+                        "body-md": ["16px", { "lineHeight": "24px", "fontWeight": "400" }],
+                        "display-lg-mobile": ["28px", { "lineHeight": "36px", "letterSpacing": "-0.01em", "fontWeight": "700" }],
+                        "headline-md": ["24px", { "lineHeight": "32px", "fontWeight": "600" }],
+                        "display-lg": ["32px", { "lineHeight": "40px", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+                        "title-sm": ["18px", { "lineHeight": "24px", "fontWeight": "600" }],
+                        "body-sm": ["14px", { "lineHeight": "20px", "fontWeight": "400" }],
+                        "label-bold": ["12px", { "lineHeight": "16px", "fontWeight": "700" }],
+                        "label-md": ["12px", { "lineHeight": "16px", "fontWeight": "500" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        .map-bg {
+            background-color: #e5e3df;
+            background-image: 
+                linear-gradient(45deg, #d4d1cc 25%, transparent 25%, transparent 75%, #d4d1cc 75%, #d4d1cc), 
+                linear-gradient(45deg, #d4d1cc 25%, transparent 25%, transparent 75%, #d4d1cc 75%, #d4d1cc);
+            background-size: 20px 20px;
+            background-position: 0 0, 10px 10px;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background text-on-background font-body-md h-screen w-full overflow-hidden relative">
+<!-- Map Background -->
+<div class="absolute inset-0 map-bg z-0" data-location="Baghdad" style="">
+<!-- Mock Map Routes / Highlights -->
+<svg class="absolute inset-0 w-full h-full opacity-30" preserveaspectratio="none" viewbox="0 0 100 100">
+<path d="M 10 90 C 30 70, 50 80, 80 20" fill="none" stroke="#fcd400" stroke-width="2"></path>
+<path d="M 20 10 C 40 30, 60 20, 90 80" fill="none" stroke="#1b1b1b" stroke-width="1"></path>
+</svg>
+</div>
+<!-- TopAppBar -->
+<header class="fixed top-0 w-full z-50 bg-surface dark:bg-on-background shadow-md flex items-center justify-between px-edge-margin h-16">
+<div class="flex items-center gap-sm">
+<button class="p-2 hover:bg-surface-container-high transition-colors active:scale-95 duration-100 rounded-full text-primary dark:text-primary-fixed">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">menu</span>
+</button>
+<h1 class="font-display-lg-mobile text-display-lg-mobile text-primary dark:text-secondary-fixed">TaxiLink</h1>
+</div>
+<!-- Online/Offline Toggle -->
+<div class="flex items-center gap-xs bg-surface-container-highest rounded-full p-1 cursor-pointer shadow-inner">
+<div class="bg-tertiary-container text-on-tertiary px-lg py-sm rounded-full font-title-sm text-title-sm shadow-sm transition-all">
+                متصل
+            </div>
+<div class="px-md py-sm text-on-surface-variant font-title-sm text-title-sm">
+                غير متصل
+            </div>
+</div>
+<div class="w-10 h-10 rounded-full overflow-hidden border-2 border-outline-variant">
+<img class="w-full h-full object-cover" data-alt="A close-up portrait of a professional taxi driver in a clean, brightly lit modern setting. The driver has a friendly, confident expression. The lighting is soft and neutral, consistent with a high-quality light-mode UI avatar. The background is slightly out of focus, emphasizing the subject." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAua9x-wkQrHkDdKaiUQO_RvglczmHDr8eP-WVSZqgl-pOsIG4RTGPGvnTmX3k7BkwJhvVViWOFh794bBWkAy4Q2hdvIy_s0o5fQSgkzPlePjYvziwbbU9w6bllun2UDkSfYhmhL_KtrJTY2zXBTNsZeKcs3zIztorXEFgQRJjEwJI-56QTwQEwNH0SwejNONNhwzhLABJwr9wAhzIIzikdZO_igxWy41UIzSwIIYNxVXp_ZlB8ZxAYfrAO3wNiv7DREgTpcEVc7s-4"/>
+</div>
+</header>
+<!-- Floating Stats Widget -->
+<div class="absolute top-24 left-edge-margin right-edge-margin z-40 bg-surface/90 backdrop-blur-md rounded-xl shadow-lg border border-outline-variant p-md flex justify-between items-center">
+<div class="flex items-center gap-sm">
+<div class="bg-secondary-container text-on-secondary-container p-2 rounded-full flex items-center justify-center">
+<span class="material-symbols-outlined">directions_car</span>
+</div>
+<div>
+<p class="font-label-md text-label-md text-on-surface-variant">رحلات اليوم</p>
+<p class="font-title-sm text-title-sm text-primary">12</p>
+</div>
+</div>
+<div class="h-8 w-px bg-outline-variant"></div>
+<div class="flex items-center gap-sm">
+<div class="bg-tertiary-fixed text-on-tertiary-container p-2 rounded-full flex items-center justify-center">
+<span class="material-symbols-outlined">payments</span>
+</div>
+<div class="text-left">
+<p class="font-label-md text-label-md text-on-surface-variant">أرباح اليوم</p>
+<p class="font-title-sm text-title-sm text-primary">45,000 د.ع</p>
+</div>
+</div>
+</div>
+<!-- Map Center Indicator -->
+<div class="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-10 flex flex-col items-center">
+<div class="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center animate-pulse">
+<div class="w-8 h-8 bg-primary rounded-full border-4 border-surface shadow-md relative">
+<div class="absolute inset-0 bg-secondary-container rounded-full w-2 h-2 m-auto"></div>
+</div>
+</div>
+</div>
+<!-- Recenter FAB -->
+<button class="absolute bottom-28 left-edge-margin z-40 w-12 h-12 bg-primary text-on-primary rounded-full shadow-[0_4px_20px_rgba(0,0,0,0.1)] flex items-center justify-center hover:bg-on-primary-fixed-variant transition-colors active:scale-95">
+<span class="material-symbols-outlined">my_location</span>
+</button>
+<!-- New Request Overlay Card -->
+<div class="absolute bottom-24 left-edge-margin right-edge-margin z-50 bg-surface rounded-xl shadow-[0_-4px_20px_rgba(0,0,0,0.15)] border-t-4 border-secondary-container overflow-hidden animate-[slideUp_0.3s_ease-out]">
+<div class="p-lg">
+<div class="flex justify-between items-start mb-md">
+<div class="flex items-center gap-sm">
+<span class="material-symbols-outlined text-secondary-container text-3xl">notifications_active</span>
+<h2 class="font-headline-md text-headline-md text-primary">طلب جديد</h2>
+</div>
+<div class="bg-surface-container-high px-3 py-1 rounded-full font-label-bold text-label-bold text-on-surface-variant">
+                    3.5 كم
+                </div>
+</div>
+<div class="flex flex-col gap-md relative">
+<!-- Route Line -->
+<div class="absolute right-[11px] top-6 bottom-6 w-0.5 bg-outline-variant z-0"></div>
+<!-- Pickup -->
+<div class="flex items-center gap-md relative z-10">
+<div class="w-6 h-6 rounded-full bg-primary flex items-center justify-center border-2 border-surface">
+<div class="w-2 h-2 bg-surface rounded-full"></div>
+</div>
+<div>
+<p class="font-label-md text-label-md text-on-surface-variant">نقطة الانطلاق</p>
+<p class="font-title-sm text-title-sm text-primary">حي العامل</p>
+</div>
+</div>
+<!-- Dropoff -->
+<div class="flex items-center gap-md relative z-10">
+<div class="w-6 h-6 bg-secondary-container flex items-center justify-center border-2 border-surface">
+<div class="w-2 h-2 bg-primary rounded-full"></div>
+</div>
+<div>
+<p class="font-label-md text-label-md text-on-surface-variant">نقطة الوصول</p>
+<p class="font-title-sm text-title-sm text-primary">شارع فلسطين</p>
+</div>
+</div>
+</div>
+<div class="mt-lg pt-md border-t border-outline-variant flex justify-between items-center">
+<div>
+<p class="font-label-md text-label-md text-on-surface-variant">الأجرة المقدرة (اقتصادي)</p>
+<p class="font-display-lg-mobile text-display-lg-mobile text-primary">5,000 د.ع</p>
+</div>
+</div>
+<div class="mt-lg flex gap-md">
+<button class="flex-1 bg-surface-container-high text-error font-title-sm text-title-sm py-md rounded-lg flex items-center justify-center gap-sm hover:bg-error-container transition-colors active:scale-95">
+<span class="material-symbols-outlined">close</span>
+                    رفض
+                </button>
+<button class="flex-1 bg-tertiary-container text-on-tertiary font-title-sm text-title-sm py-md rounded-lg flex items-center justify-center gap-sm shadow-md hover:bg-tertiary transition-colors active:scale-95">
+<span class="material-symbols-outlined">check</span>
+                    قبول
+                </button>
+</div>
+</div>
+</div>
+<!-- BottomNavBar -->
+<nav class="fixed bottom-0 w-full z-50 rounded-t-xl bg-surface dark:bg-surface-container shadow-[0_-4px_20px_rgba(0,0,0,0.1)] flex justify-around items-center h-20 pb-safe px-4">
+<div class="flex flex-col items-center justify-center bg-secondary-container dark:bg-secondary text-on-secondary-container dark:text-on-secondary rounded-full px-4 py-1 hover:opacity-80 transition-opacity active:scale-90 duration-200 cursor-pointer">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">directions_car</span>
+<span class="font-label-md text-label-md mt-1">Home</span>
+</div>
+<div class="flex flex-col items-center justify-center text-on-surface-variant dark:text-outline-variant hover:opacity-80 transition-opacity active:scale-90 duration-200 cursor-pointer">
+<span class="material-symbols-outlined">history</span>
+<span class="font-label-md text-label-md mt-1">Activity</span>
+</div>
+<div class="flex flex-col items-center justify-center text-on-surface-variant dark:text-outline-variant hover:opacity-80 transition-opacity active:scale-90 duration-200 cursor-pointer">
+<span class="material-symbols-outlined">payments</span>
+<span class="font-label-md text-label-md mt-1">Earnings</span>
+</div>
+<div class="flex flex-col items-center justify-center text-on-surface-variant dark:text-outline-variant hover:opacity-80 transition-opacity active:scale-90 duration-200 cursor-pointer">
+<span class="material-symbols-outlined">person</span>
+<span class="font-label-md text-label-md mt-1">Profile</span>
+</div>
+</nav>
+<style>
+        @keyframes slideUp {
+            from { transform: translateY(100%); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+        .pb-safe { padding-bottom: env(safe-area-inset-bottom); }
+    </style>
+</body></html>

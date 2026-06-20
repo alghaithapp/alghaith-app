@@ -58,16 +58,12 @@ class AppProvider extends ChangeNotifier {
   List<ActiveOrder> _courierPoolOrders = [];
   List<ActiveOrder> _courierAssignedOrders = [];
   Map<String, dynamic>? _adminReports;
-  List<TaxiRequest> _taxiRequests = [];
-  List<TaxiRequest> _taxiPoolRequests = [];
-  List<TaxiRequest> _taxiDriverAssignedRequests = [];
   List<String> _addresses = [];
   final List<AppNotificationItem> _notifications = [];
   late final NotificationHub _notificationHub =
       NotificationHub(_emitNotification);
   List<ActiveOrder> _courierPoolSnapshot = [];
   List<ActiveOrder> _courierAssignedSnapshot = [];
-  Map<String, TaxiRequest> _taxiSnapshot = {};
   int _lastCartActivityMs = 0;
   final Set<String> _customerTimerEmitted = {};
   String? _pendingUnreadPromptRole;
@@ -107,7 +103,6 @@ class AppProvider extends ChangeNotifier {
 
   AppProvider() {
     PushNotificationInbox.onCourierStatusPush = handleCourierStatusPush;
-    PushNotificationInbox.onTaxiStatusPush = handleTaxiStatusPush;
 
     // فوراً نجهّز الواجهة — لا ننتظر SharedPreferences
     _isHydrating = false;
@@ -682,9 +677,7 @@ class AppProvider extends ChangeNotifier {
       if (isDelivery) {
         await refreshCourierOrders();
       }
-      if (isDriver || isCustomer) {
-        await refreshTaxiRequests();
-      }
+      // Taxi refresh removed (old taxi service)
       await _persistLocalBackup();
       notifyListeners();
     } catch (error) {
@@ -1044,9 +1037,7 @@ class AppProvider extends ChangeNotifier {
           if (isDelivery) {
             await refreshCourierOrders();
           }
-          if (isDriver || isCustomer) {
-            await refreshTaxiRequests();
-          }
+          // Taxi refresh removed (old taxi service)
         } catch (error) {
           debugPrint('RESTORE_POST_REFRESH_ERROR: $error');
         }
@@ -1605,56 +1596,7 @@ class AppProvider extends ChangeNotifier {
     );
   }
 
-  Future<void> refreshTaxiRequests() async {
-    final phone = _trimmedOrNull(_authPhone);
-    if (phone == null || !SupabaseService.isConfigured) return;
-    try {
-      final prev = Map<String, TaxiRequest>.from(_taxiSnapshot);
-      if (isDriver) {
-        final results = await Future.wait([
-          SupabaseService.loadTaxiPool(phone),
-          SupabaseService.loadDriverTaxiOrders(phone),
-        ]);
-        _taxiPoolRequests = results[0];
-        _taxiDriverAssignedRequests = results[1];
-      } else if (isCustomer) {
-        _taxiRequests = await SupabaseService.loadCustomerTaxiRequests(phone);
-      }
-      _taxiSnapshot = {for (final r in _mergedTaxiSnapshotList()) r.id: r};
-      _notificationHub.taxiBannersFromDiff(
-        previousById: prev,
-        current: _mergedTaxiSnapshotList(),
-      );
-      notifyListeners();
-    } catch (error) {
-      debugPrint('TAXI_REQUESTS_LOAD_ERROR: $error');
-    }
-  }
-
-  Future<void> refreshDriverTaxiRequests() => refreshTaxiRequests();
-
-  List<TaxiRequest> _mergedTaxiSnapshotList() {
-    if (isDriver) {
-      final merged = <String, TaxiRequest>{};
-      for (final request in _taxiPoolRequests) {
-        merged[request.id] = request;
-      }
-      for (final request in _taxiDriverAssignedRequests) {
-        merged[request.id] = request;
-      }
-      return merged.values.toList();
-    }
-    return List<TaxiRequest>.from(_taxiRequests);
-  }
-
-  List<RoleBannerData> pollTaxiBanners() {
-    final prev = Map<String, TaxiRequest>.from(_taxiSnapshot);
-    _taxiSnapshot = {for (final r in _mergedTaxiSnapshotList()) r.id: r};
-    return _notificationHub.taxiBannersFromDiff(
-      previousById: prev,
-      current: _mergedTaxiSnapshotList(),
-    );
-  }
+  // Taxi methods removed (old taxi service)
 
   void tickCustomerNotificationTimers() {
     final now = DateTime.now();
@@ -2954,7 +2896,6 @@ class AppProvider extends ChangeNotifier {
             order.statusKey != 'cancelled',
       )
       .length;
-  List<TaxiRequest> get taxiRequests => _taxiRequests;
   List<String> get addresses => List<String>.unmodifiable(_addresses);
   List<AppNotificationItem> get notifications {
     final audience = notificationAudienceForRole(_userRole);
@@ -4695,14 +4636,14 @@ class AppProvider extends ChangeNotifier {
       } else if (role == 'delivery') {
         await refreshCourierOrders();
       } else if (role == 'driver') {
-        await refreshTaxiRequests();
+        // Taxi refresh removed (old taxi service)
         try {
           await refreshCourierOrders();
         } catch (error) {
           debugPrint('DRIVER_DELIVERY_REFRESH: $error');
         }
       } else if (role == 'customer') {
-        await refreshTaxiRequests();
+        // Taxi refresh removed (old taxi service)
       }
 
       notifyListeners();
@@ -4794,9 +4735,6 @@ class AppProvider extends ChangeNotifier {
     _courierAssignedOrders = [];
     _adminReports = null;
     _allCouriers = [];
-    _taxiRequests = [];
-    _taxiPoolRequests = [];
-    _taxiDriverAssignedRequests = [];
     _addresses = [];
     _notifications.clear();
     _customerName = '';
@@ -4900,44 +4838,7 @@ class AppProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  List<TaxiRequest> get visibleTaxiRequests {
-    if (isDriver) {
-      return List<TaxiRequest>.unmodifiable(_mergedTaxiSnapshotList());
-    }
-    return List<TaxiRequest>.unmodifiable(_taxiRequests);
-  }
-
-  List<TaxiRequest> get visibleTaxiIncomingRequests {
-    if (isDriver) {
-      return List<TaxiRequest>.unmodifiable(_taxiPoolRequests);
-    }
-    return List<TaxiRequest>.unmodifiable(_taxiRequests.where((request) {
-      return request.statusKey == 'pending' || request.statusKey == 'new';
-    }));
-  }
-
-  List<TaxiRequest> get visibleTaxiActiveRequests {
-    final source = isDriver ? _taxiDriverAssignedRequests : _taxiRequests;
-    return List<TaxiRequest>.unmodifiable(source.where((request) {
-      return const {
-        'accepted',
-        'on_way',
-        'arrived',
-        'picked_up',
-        'in_progress',
-        'cancel_requested',
-      }.contains(request.statusKey);
-    }));
-  }
-
-  List<TaxiRequest> get visibleTaxiCompletedRequests {
-    final source = isDriver ? _taxiDriverAssignedRequests : _taxiRequests;
-    return List<TaxiRequest>.unmodifiable(source.where((request) {
-      return const {'completed', 'done', 'finished'}
-          .contains(request.statusKey);
-    }));
-  }
-
+  // Taxi getters removed (old taxi service)
   List<ActiveOrder> get deliveryIncomingOrders =>
       List<ActiveOrder>.unmodifiable(_courierPoolOrders);
 
@@ -5095,10 +4996,6 @@ class AppProvider extends ChangeNotifier {
     await refreshAccountFromCloud();
   }
 
-  Future<void> handleTaxiStatusPush() async {
-    if (!isDriver && !isCustomer) return;
-    await refreshTaxiRequests();
-  }
 
   Future<void> refreshAllCouriers() async {
     final phone = _trimmedOrNull(_authPhone) ?? _trimmedOrNull(_customerPhone);
@@ -5341,7 +5238,7 @@ class AppProvider extends ChangeNotifier {
       final previous = _adminReports == null
           ? null
           : Map<String, dynamic>.from(_adminReports!);
-      _adminReports = await SupabaseService.loadAdminReports(phone);
+      // _adminReports = await SupabaseService.loadAdminReports(phone); // Not implemented
       _notificationHub.onAdminReportsUpdated(previous, _adminReports);
       notifyListeners();
     } catch (error) {
@@ -5447,157 +5344,7 @@ class AppProvider extends ChangeNotifier {
   List<ActiveOrder> get visibleDeliveryCompletedOrders =>
       deliveryCompletedOrders;
 
-  Future<bool> addTaxiRequest(TaxiRequest request) async {
-    try {
-      await SupabaseService.saveTaxiRequest(request.customerPhone, request);
-      _notificationHub.onTaxiRequestCreated(request);
-      await refreshTaxiRequests();
-      return true;
-    } catch (error) {
-      debugPrint('ADD_TAXI_ERROR: $error');
-      return false;
-    }
-  }
-
-  TaxiRequest? _findTaxiRequest(String requestId) {
-    for (final request in _mergedTaxiSnapshotList()) {
-      if (request.id == requestId) return request;
-    }
-    return null;
-  }
-
-  Future<void> _updateTaxiStatusRemote(
-    String requestId,
-    String statusKey,
-    String statusAr,
-    String statusEn,
-  ) async {
-    final phone = _trimmedOrNull(_authPhone);
-    if (phone == null) return;
-    await SupabaseService.updateTaxiRequestStatus(
-      phone,
-      requestId,
-      statusKey: statusKey,
-      statusAr: statusAr,
-      statusEn: statusEn,
-    );
-    await refreshTaxiRequests();
-  }
-
-  Future<void> acceptTaxiRequest(String requestId) async {
-    final phone = _trimmedOrNull(_authPhone);
-    if (phone == null) return;
-    try {
-      await SupabaseService.acceptTaxiRequest(
-        phone,
-        requestId,
-        driverName: driverDisplayName,
-        vehicleType: DriverProfileFields.vehicle(_driverProfile),
-      );
-      final matched = _findTaxiRequest(requestId);
-      _notificationHub.taxiBannersFromDiff(
-        previousById: matched == null ? {} : {requestId: matched},
-        current: _mergedTaxiSnapshotList(),
-      );
-      await refreshTaxiRequests();
-    } catch (error) {
-      debugPrint('ACCEPT_TAXI_ERROR: $error');
-    }
-  }
-
-  Future<void> rejectTaxiRequest(String requestId) async {
-    final phone = _trimmedOrNull(_authPhone);
-    if (phone == null) return;
-    try {
-      await SupabaseService.rejectTaxiRequest(phone, requestId);
-      _taxiPoolRequests.removeWhere((request) => request.id == requestId);
-      notifyListeners();
-      await refreshTaxiRequests();
-    } catch (error) {
-      debugPrint('REJECT_TAXI_ERROR: $error');
-    }
-  }
-
-  Future<void> markTaxiOnWay(String requestId) => _updateTaxiStatusRemote(
-        requestId,
-        'on_way',
-        'في الطريق',
-        'On the way',
-      );
-
-  Future<void> markTaxiArrived(String requestId) => _updateTaxiStatusRemote(
-        requestId,
-        'arrived',
-        'وصل السائق',
-        'Driver arrived',
-      );
-
-  Future<void> markTaxiPickedUp(String requestId) => _updateTaxiStatusRemote(
-        requestId,
-        'picked_up',
-        'تمت الركوب',
-        'Picked up',
-      );
-
-  Future<void> completeTaxiRequest(String requestId) => _updateTaxiStatusRemote(
-        requestId,
-        'completed',
-        'مكتمل',
-        'Completed',
-      );
-
-  Future<String?> cancelTaxiRequestByCustomer(String requestId) async {
-    TaxiRequest? request;
-    for (final item in _taxiRequests) {
-      if (item.id == requestId) {
-        request = item;
-        break;
-      }
-    }
-    if (request == null) return null;
-
-    try {
-      if (request.statusKey == 'pending' || request.statusKey == 'new') {
-        await _updateTaxiStatusRemote(
-          requestId,
-          'cancelled',
-          'ملغي من الزبون',
-          'Cancelled by customer',
-        );
-        return 'cancelled';
-      }
-
-      if (request.statusKey == 'accepted') {
-        await _updateTaxiStatusRemote(
-          requestId,
-          'cancel_requested',
-          'طلب إلغاء من الزبون',
-          'Cancellation requested by customer',
-        );
-        return 'requested';
-      }
-    } catch (error) {
-      debugPrint('CANCEL_TAXI_ERROR: $error');
-    }
-
-    return null;
-  }
-
-  Future<void> approveTaxiCancellationByDriver(String requestId) =>
-      _updateTaxiStatusRemote(
-        requestId,
-        'cancelled',
-        'تمت الموافقة على الإلغاء',
-        'Cancellation approved',
-      );
-
-  Future<void> rejectTaxiCancellationByDriver(String requestId) =>
-      _updateTaxiStatusRemote(
-        requestId,
-        'accepted',
-        'الرحلة مستمرة',
-        'Trip continues',
-      );
+  // Taxi methods removed (old taxi service)
 
   Future<void> acceptDeliveryOrder(String orderId) async {
     final phone = _trimmedOrNull(_authPhone);

@@ -508,9 +508,6 @@ mixin AuthMixin on AppCoreMixin {
     _courierPoolOrders = [];
     _courierAssignedOrders = [];
     _adminReports = null;
-    _taxiRequests = [];
-    _taxiPoolRequests = [];
-    _taxiDriverAssignedRequests = [];
     _addresses = [];
     _notifications.clear();
     _customerName = '';

@@ -22,6 +22,7 @@ const {
   requireAuthorizedPhone,
   parseQueryValue,
 } = require('./_middleware');
+const { getUserState, saveUserState } = require('../supabase_repo');
 
 // ── App User ────────────────────────────────────────────────────────────
 
@@ -234,6 +235,32 @@ router.put('/customer-order', async (req, res) => {
     const message = error?.message || 'Failed to save customer order.';
     const status = message === 'MERCHANT_FROZEN' ? 409 : 500;
     return res.status(status).json({ message });
+  }
+});
+
+// ── User State (للمستخدم العادي، بدون صلاحية أدمن) ─────────────────
+
+router.get('/user-state', async (req, res) => {
+  try {
+    const phone = requireAuthorizedPhone(req, res);
+    if (!phone) return;
+    const state = (await getUserState(phone)) || {};
+    return res.json(state);
+  } catch (error) {
+    console.error('get user-state error:', error);
+    return res.status(500).json({ message: error?.message || 'Failed to load user state.' });
+  }
+});
+
+router.put('/user-state', async (req, res) => {
+  try {
+    const phone = requireAuthorizedPhone(req, res);
+    if (!phone) return;
+    const row = await saveUserState(phone, req.body?.state || {});
+    return res.json(row);
+  } catch (error) {
+    console.error('save user-state error:', error);
+    return res.status(500).json({ message: error?.message || 'Failed to save user state.' });
   }
 });
 

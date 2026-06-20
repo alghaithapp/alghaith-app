@@ -1177,6 +1177,42 @@ a { color: inherit; }
   flex-wrap: nowrap;
 }
 
+/* ── Dropdown ── */
+.relative-dropdown {
+  position: relative;
+}
+
+.dropdown-menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 6px;
+  background: var(--surface-elevated);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  z-index: 100;
+  min-width: 180px;
+  overflow: hidden;
+  display: grid;
+}
+
+.dropdown-menu button {
+  padding: 10px 14px;
+  background: transparent;
+  border: 0;
+  color: var(--text-primary);
+  font-size: 0.82rem;
+  font-weight: 700;
+  text-align: right;
+  transition: background 0.15s ease;
+  width: 100%;
+}
+
+.dropdown-menu button:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
 /* ══════════════════════════════════════════════
    SECTION DIVIDER
    ══════════════════════════════════════════════ */

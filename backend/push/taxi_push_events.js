@@ -1,0 +1,143 @@
+/**
+ * Taxi Push Events
+ * 
+ * دوال إرسال الإشعارات الخاصة بخدمة التكسي.
+ */
+
+const { sendPushToPhone, getDeviceTokensForPhone } = require('../push_notifications');
+const { getActiveDriverPhonesByTaxiType } = require('../supabase_repo/taxi');
+
+/**
+ * بناء payload موحد للإشعارات
+ */
+function buildPushPayload({ title, body, data = {} }) {
+  return {
+    title,
+    body,
+    data: {
+      category: 'taxi',
+      ...data,
+    },
+  };
+}
+
+/**
+ * إرسال إشعار لأقرب 5 سائقين بوجود طلب تكسي جديد
+ * 
+ * @param {object} requestMeta - بيانات الطلب (تحتوي على requestId, pickupAddress, dropoffAddress, fare, distanceKm)
+ * @param {object[]} nearbyDrivers - قائمة السائقين القريبين
+ */
+async function notifyNewTaxiRequest(requestMeta, nearbyDrivers = []) {
+  const requestId = String(requestMeta?.id || requestMeta?.requestId || '').trim();
+  if (!requestId) return;
+
+  const payload = buildPushPayload({
+    title: '🚕 طلب تكسي جديد',
+    body: `من: ${requestMeta.pickupAddress || 'غير محدد'} → إلى: ${requestMeta.dropoffAddress || 'غير محدد'}`,
+    data: {
+      eventKey: 'taxi:pool_new',
+      requestId,
+      pickupAddress: String(requestMeta.pickupAddress || '').trim(),
+      dropoffAddress: String(requestMeta.dropoffAddress || '').trim(),
+      fare: String(requestMeta.fare || '0'),
+      distanceKm: String(requestMeta.distanceKm || '0'),
+    },
+  });
+
+  // إرسال لأول 5 سائقين فقط
+  const targetDrivers = Array.isArray(nearbyDrivers) ? nearbyDrivers.slice(0, 5) : [];
+
+  for (const driver of targetDrivers) {
+    const phone = String(driver?.driverPhone || driver?.phone || '').trim();
+    if (!phone) continue;
+    try {
+      await sendPushToPhone(phone, payload);
+    } catch (error) {
+      console.error(`taxi push notifyNewTaxiRequest error for ${phone}:`, error?.message || error);
+    }
+  }
+}
+
+/**
+ * إشعار الزبون بقبول السائق
+ */
+async function notifyDriverAccepted(customerPhone, driverName, vehicleInfo) {
+  if (!customerPhone) return;
+
+  const payload = buildPushPayload({
+    title: '✅ تم قبول طلبك',
+    body: `السائق ${driverName || 'سائق'} في الطريق إليك`,
+    data: {
+      eventKey: 'taxi:driver_accepted',
+      driverName: String(driverName || '').trim(),
+      vehicleInfo: String(vehicleInfo || '').trim(),
+    },
+  });
+
+  await sendPushToPhone(customerPhone, payload);
+}
+
+/**
+ * إشعار الزبون بوصول السائق
+ */
+async function notifyDriverArrived(customerPhone) {
+  if (!customerPhone) return;
+
+  const payload = buildPushPayload({
+    title: '🚗 وصل السائق',
+    body: 'السائق في مكان الالتقاء',
+    data: {
+      eventKey: 'taxi:driver_arrived',
+    },
+  });
+
+  await sendPushToPhone(customerPhone, payload);
+}
+
+/**
+ * إشعار الطرفين باكتمال الرحلة
+ */
+async function notifyTripCompleted(customerPhone, driverPhone, fare) {
+  const payload = buildPushPayload({
+    title: '✅ اكتملت الرحلة',
+    body: `شكراً لك. الأجرة: ${Number(fare || 0).toLocaleString()} د.ع`,
+    data: {
+      eventKey: 'taxi:trip_completed',
+      fare: String(fare || '0'),
+    },
+  });
+
+  const targets = [customerPhone, driverPhone].filter(Boolean);
+  for (const phone of targets) {
+    try {
+      await sendPushToPhone(phone, payload);
+    } catch (error) {
+      console.error(`taxi push notifyTripCompleted error for ${phone}:`, error?.message || error);
+    }
+  }
+}
+
+/**
+ * إشعار السائق بأنه تم رفضه (لن يُستخدم حالياً ولكن للتوثيق)
+ */
+async function notifyDriverRejected(driverPhone) {
+  if (!driverPhone) return;
+
+  const payload = buildPushPayload({
+    title: '❌ تم رفضك',
+    body: 'عذراً، تم تعيين سائق آخر لهذا الطلب',
+    data: {
+      eventKey: 'taxi:driver_rejected',
+    },
+  });
+
+  await sendPushToPhone(driverPhone, payload);
+}
+
+module.exports = {
+  notifyNewTaxiRequest,
+  notifyDriverAccepted,
+  notifyDriverArrived,
+  notifyTripCompleted,
+  notifyDriverRejected,
+};

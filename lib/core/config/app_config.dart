@@ -19,7 +19,7 @@ class AppConfig {
 
   static const String mapboxPublicToken = String.fromEnvironment(
     'MAPBOX_PUBLIC_TOKEN',
-    defaultValue: '',
+    defaultValue: 'YOUR_MAPBOX_PUBLIC_TOKEN',
   );
 
   static String? _resolvedMapboxToken;
@@ -88,10 +88,35 @@ class AppConfig {
     }
   }
 
-  /// تسعيرة التكسي الحالية: كل 3 كم = 1000 د.ع
-  static const double taxiFareStepDistanceKm = 3;
-  static const int taxiFareStepPriceIqd = 1000;
-  static const int taxiFareOfficialIncrementIqd = 250;
+  /// تسعيرة التكسي: أول 1 كم = 1,000 د.ع، كل كم إضافي = 500 د.ع
+  static const int taxiFareFirstKmIqd = 1000;
+  static const int taxiFareExtraKmPriceIqd = 500;
+  static const int taxiFareRoundingStepIqd = 250;
+
+  /// التقريب للأعلى لأقرب 250 (1,100→1,250 / 1,300→1,500)
+  static int roundFareToNearestStep(int raw) =>
+      (raw / taxiFareRoundingStepIqd).ceil() * taxiFareRoundingStepIqd;
+
+  static int calculateTaxiFare(double distanceKm, {double multiplier = 1.0}) {
+    final safeDistance = distanceKm.isFinite && distanceKm > 0 ? distanceKm : 0;
+
+    int rawFare;
+    if (safeDistance <= 1.0) {
+      rawFare = taxiFareFirstKmIqd;
+    } else {
+      rawFare = taxiFareFirstKmIqd +
+          ((safeDistance - 1.0) * taxiFareExtraKmPriceIqd).round();
+    }
+
+    // تطبيق الـ multiplier (1.0 للاقتصادي، 1.30 للسوبر)
+    rawFare = (rawFare * multiplier).round();
+
+    // تقريب للأعلى لأقرب 250
+    final roundedFare = roundFareToNearestStep(rawFare);
+
+    if (roundedFare <= 0) return taxiFareRoundingStepIqd;
+    return roundedFare;
+  }
 
   /// تسعيرة التوصيل: الكيلومتر الأول بـ 1000 د.ع، وكل كيلومتر إضافي بـ 500 د.ع.
   static const int deliveryFeeFirstKmIqd = 1000;
@@ -108,14 +133,6 @@ class AppConfig {
   /// المسافة المستقيمة بهذا المعامل لتقريبها من المسافة الحقيقية.
   static const double straightLineRoadFactor = 1.3;
 
-  static int calculateTaxiFare(double distanceKm) {
-    final safeDistance = distanceKm.isFinite && distanceKm > 0 ? distanceKm : 0;
-    final rawFare = (safeDistance / taxiFareStepDistanceKm) * taxiFareStepPriceIqd;
-    final roundedFare = (rawFare / taxiFareOfficialIncrementIqd).ceil() *
-        taxiFareOfficialIncrementIqd;
-    if (roundedFare <= 0) return taxiFareOfficialIncrementIqd;
-    return roundedFare;
-  }
 
   static int calculateDeliveryFee(double distanceKm) {
     if (!distanceKm.isFinite || distanceKm <= 0) return 0;

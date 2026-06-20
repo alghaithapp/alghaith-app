@@ -153,14 +153,17 @@ function CustomerTable({
   activeActionKey,
   onOpenDelete,
   onSuspend,
+  onRoleChange,
 }: {
   accounts: AdminAccountSummary[];
   activeActionKey: string;
   onOpenDelete: (a: AdminAccountSummary) => void;
   onSuspend: (a: AdminAccountSummary) => Promise<void>;
+  onRoleChange: (a: AdminAccountSummary, role: string) => Promise<void>;
 }) {
   const { field, dir, toggle } = useSort('createdAt');
   const sorted = useSorted(accounts, field, dir);
+  const [roleMenuOpen, setRoleMenuOpen] = useState<string | null>(null);
 
   if (accounts.length === 0) {
     return (
@@ -188,6 +191,8 @@ function CustomerTable({
           {sorted.map((a) => {
             const suspendLoading = activeActionKey === `suspend-account:${a.phone}`;
             const deleteLoading = activeActionKey === `delete-account:${a.phone}`;
+            const roleLoading = activeActionKey === `role:${a.phone}`;
+
             return (
               <tr key={a.phone}>
                 <td className="td-name">{a.displayName || a.fullName || 'بدون اسم'}</td>
@@ -203,18 +208,40 @@ function CustomerTable({
                 </td>
                 <td>
                   <div className="table-actions">
+                    {/* Role Change Dropdown */}
+                    <div className="relative-dropdown">
+                      <button
+                        className="soft-button info"
+                        disabled={roleLoading}
+                        onClick={() => setRoleMenuOpen(roleMenuOpen === a.phone ? null : a.phone)}
+                        title="تغيير نوع الحساب"
+                      >
+                        {roleLoading ? <LoaderCircle className="spin" size={14} /> : <RefreshCw size={14} />}
+                        <span>تحويل</span>
+                        <ChevronDown size={12} />
+                      </button>
+
+                      {roleMenuOpen === a.phone && (
+                        <div className="dropdown-menu">
+                          <button onClick={() => { onRoleChange(a, 'driver'); setRoleMenuOpen(null); }}>🚕 تحويل لسائق تكسي</button>
+                          <button onClick={() => { onRoleChange(a, 'merchant'); setRoleMenuOpen(null); }}>🏪 تحويل لتاجر</button>
+                          <button onClick={() => { onRoleChange(a, 'delivery'); setRoleMenuOpen(null); }}>🛵 تحويل لمندوب</button>
+                        </div>
+                      )}
+                    </div>
+
                     <button
                       className={a.isSuspended ? 'soft-button success' : 'soft-button danger'}
-                      disabled={suspendLoading || deleteLoading}
+                      disabled={suspendLoading || deleteLoading || roleLoading}
                       onClick={() => onSuspend(a).catch(() => undefined)}
                       title={a.isSuspended ? 'فك التعليق' : 'تعليق الحساب'}
                     >
                       {suspendLoading ? <LoaderCircle className="spin" size={14} /> : <UserX size={14} />}
-                      <span>{a.isSuspended ? 'فك التعليق' : 'تعليق'}</span>
+                      <span>{a.isSuspended ? 'فك' : 'تعليق'}</span>
                     </button>
                     <button
                       className="soft-button danger"
-                      disabled={suspendLoading || deleteLoading}
+                      disabled={suspendLoading || deleteLoading || roleLoading}
                       onClick={() => onOpenDelete(a)}
                       title="حذف الحساب"
                     >

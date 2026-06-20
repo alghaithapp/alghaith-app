@@ -31,8 +31,36 @@ class _DriverSetupScreenState extends State<DriverSetupScreen> {
   String? _idFrontImageRef;
   String? _idBackImageRef;
   String? _residenceCardImageRef;
+  String? _vehicleRegFrontImageRef;
+  String? _vehicleRegBackImageRef;
   bool _isUploadingImage = false;
   bool _isSaving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final profile = context.read<AppProvider>().driverProfile;
+      if (profile != null) {
+        _nameController.text = profile['name']?.toString() ?? '';
+        _phoneController.text = profile['phone']?.toString() ?? '';
+        _homeAddressController.text = profile['homeAddress']?.toString() ?? '';
+        _mukhtarNameController.text = profile['mukhtarName']?.toString() ?? '';
+        _plateController.text = profile['plate']?.toString() ?? '';
+        _vehicleController.text = profile['vehicle']?.toString() ?? '';
+        _areaController.text = profile['area']?.toString() ?? '';
+        _profileImageRef = profile['profileImage']?.toString();
+        _carImageRef = profile['carImage']?.toString();
+        _idFrontImageRef = profile['idFrontImage']?.toString();
+        _idBackImageRef = profile['idBackImage']?.toString();
+        _residenceCardImageRef = profile['residenceCardImage']?.toString();
+        _vehicleRegFrontImageRef = profile['vehicleRegFrontImage']?.toString();
+        _vehicleRegBackImageRef = profile['vehicleRegBackImage']?.toString();
+        setState(() {});
+      }
+    });
+  }
 
   @override
   void dispose() {
@@ -131,6 +159,40 @@ class _DriverSetupScreenState extends State<DriverSetupScreen> {
     }
   }
 
+  Future<void> _pickVehicleRegFrontImage() async {
+    final picked = await AppHelpers.pickImage(context);
+    if (picked == null || !mounted) return;
+    setState(() => _isUploadingImage = true);
+    try {
+      final url = await context.read<AppProvider>().uploadImage(File(picked.path));
+      if (!mounted) return;
+      if (url == null || url.trim().isEmpty) {
+        _showMessage('تعذر رفع صورة سنوية السيارة (الوجه)، حاول مرة أخرى');
+        return;
+      }
+      setState(() => _vehicleRegFrontImageRef = url.trim());
+    } finally {
+      if (mounted) setState(() => _isUploadingImage = false);
+    }
+  }
+
+  Future<void> _pickVehicleRegBackImage() async {
+    final picked = await AppHelpers.pickImage(context);
+    if (picked == null || !mounted) return;
+    setState(() => _isUploadingImage = true);
+    try {
+      final url = await context.read<AppProvider>().uploadImage(File(picked.path));
+      if (!mounted) return;
+      if (url == null || url.trim().isEmpty) {
+        _showMessage('تعذر رفع صورة سنوية السيارة (الظهر)، حاول مرة أخرى');
+        return;
+      }
+      setState(() => _vehicleRegBackImageRef = url.trim());
+    } finally {
+      if (mounted) setState(() => _isUploadingImage = false);
+    }
+  }
+
   void _showMessage(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -139,7 +201,7 @@ class _DriverSetupScreenState extends State<DriverSetupScreen> {
     );
   }
 
-  Future<void> _save(AppProvider provider) async {
+  Future<void> _save(AppProvider provider, {required bool isEditing}) async {
     final name = _nameController.text.trim();
     final phone = PhoneUtils.digitsOnly(_phoneController.text);
     final homeAddress = _homeAddressController.text.trim();
@@ -152,6 +214,8 @@ class _DriverSetupScreenState extends State<DriverSetupScreen> {
     final idFrontImage = _idFrontImageRef?.trim() ?? '';
     final idBackImage = _idBackImageRef?.trim() ?? '';
     final residenceCardImage = _residenceCardImageRef?.trim() ?? '';
+    final vehicleRegFrontImage = _vehicleRegFrontImageRef?.trim() ?? '';
+    final vehicleRegBackImage = _vehicleRegBackImageRef?.trim() ?? '';
 
     if (name.isEmpty) {
       _showMessage('أدخل الاسم الرباعي');
@@ -201,13 +265,23 @@ class _DriverSetupScreenState extends State<DriverSetupScreen> {
       _showMessage('أضف صورة بطاقة السكن');
       return;
     }
+    if (vehicleRegFrontImage.isEmpty) {
+      _showMessage('أضف صورة سنوية السيارة (الوجه الأمامي)');
+      return;
+    }
+    if (vehicleRegBackImage.isEmpty) {
+      _showMessage('أضف صورة سنوية السيارة (الوجه الخلفي)');
+      return;
+    }
 
     setState(() => _isSaving = true);
     try {
       provider.setDriverType('taxi');
+      // احتفظ بالخدمات الحالية إذا كانت موجودة (لعدم إعادة تعيينها عند التعديل)
+      final existingServices = provider.driverProfile?['services'];
       await provider.setDriverProfile({
         'type': 'taxi',
-        'services': {'taxi': true, 'delivery': true},
+        'services': existingServices ?? {'taxi': true, 'delivery': false},
         'name': name,
         'phone': phone,
         'homeAddress': homeAddress,
@@ -220,9 +294,16 @@ class _DriverSetupScreenState extends State<DriverSetupScreen> {
         'idFrontImage': idFrontImage,
         'idBackImage': idBackImage,
         'residenceCardImage': residenceCardImage,
+        'vehicleRegFrontImage': vehicleRegFrontImage,
+        'vehicleRegBackImage': vehicleRegBackImage,
       });
       if (!mounted) return;
-      _showMessage('تم إرسال طلبك. سيتم تفعيل حسابك بعد موافقة الإدارة.');
+      if (isEditing && Navigator.of(context).canPop()) {
+        Navigator.of(context).pop();
+        _showMessage('تم حفظ التعديلات');
+      } else {
+        _showMessage('تم إرسال طلبك. سيتم تفعيل حسابك بعد موافقة الإدارة.');
+      }
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }
@@ -252,15 +333,19 @@ class _DriverSetupScreenState extends State<DriverSetupScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final provider = context.watch<AppProvider>();
+    final profile = provider.driverProfile;
+    final isEditing = profile != null && profile.isNotEmpty;
+
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7FB),
       appBar: AppBar(
         backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
         elevation: 0,
-        title: const Text(
-          'تسجيل سائق تكسي',
-          style: TextStyle(
+        title: Text(
+          isEditing ? 'تعديل ملف السائق' : 'تسجيل سائق تكسي',
+          style: const TextStyle(
             fontFamily: 'Cairo',
             fontWeight: FontWeight.w900,
             fontSize: 17,
@@ -306,11 +391,11 @@ class _DriverSetupScreenState extends State<DriverSetupScreen> {
                       color: Colors.white, size: 30),
                 ),
                 const SizedBox(width: 12),
-                const Expanded(
+                Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
+                      const Text(
                         'حساب سائق تكسي',
                         style: TextStyle(
                           color: Colors.white,
@@ -319,10 +404,12 @@ class _DriverSetupScreenState extends State<DriverSetupScreen> {
                           fontFamily: 'Cairo',
                         ),
                       ),
-                      SizedBox(height: 4),
+                      const SizedBox(height: 4),
                       Text(
-                        'الاسم الرباعي، العنوان، رقم اللوحة، والمستندات الثبوتية مطلوبة للتفعيل.',
-                        style: TextStyle(
+                        isEditing
+                            ? 'أكمل البيانات والمستندات الناقصة لتفعيل حسابك.'
+                            : 'الاسم الرباعي، العنوان، رقم اللوحة، والمستندات الثبوتية مطلوبة للتفعيل.',
+                        style: const TextStyle(
                           color: Colors.white70,
                           fontSize: 12,
                           height: 1.4,
@@ -423,6 +510,30 @@ class _DriverSetupScreenState extends State<DriverSetupScreen> {
             children: [
               Expanded(
                 child: MerchantImageUploadSlot(
+                  title: 'سنوية السيارة (الوجه)',
+                  subtitle: 'الوجه الأمامي لإجازة السنوية',
+                  imageRef: _vehicleRegFrontImageRef,
+                  icon: Icons.description_rounded,
+                  onTap: _isUploadingImage ? () {} : _pickVehicleRegFrontImage,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: MerchantImageUploadSlot(
+                  title: 'سنوية السيارة (الظهر)',
+                  subtitle: 'الوجه الخلفي لإجازة السنوية',
+                  imageRef: _vehicleRegBackImageRef,
+                  icon: Icons.description_rounded,
+                  onTap: _isUploadingImage ? () {} : _pickVehicleRegBackImage,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: MerchantImageUploadSlot(
                   title: 'البطاقة الموحدة (الوجه)',
                   subtitle: 'الوجه الأمامي',
                   imageRef: _idFrontImageRef,
@@ -454,7 +565,9 @@ class _DriverSetupScreenState extends State<DriverSetupScreen> {
               (_residenceCardImageRef != null &&
                   _residenceCardImageRef!.isNotEmpty) ||
               (_idFrontImageRef != null && _idFrontImageRef!.isNotEmpty) ||
-              (_idBackImageRef != null && _idBackImageRef!.isNotEmpty)) ...[
+              (_idBackImageRef != null && _idBackImageRef!.isNotEmpty) ||
+              (_vehicleRegFrontImageRef != null && _vehicleRegFrontImageRef!.isNotEmpty) ||
+              (_vehicleRegBackImageRef != null && _vehicleRegBackImageRef!.isNotEmpty)) ...[
             const SizedBox(height: 16),
             const Text(
               'معاينة الصور المرفوعة:',
@@ -480,6 +593,10 @@ class _DriverSetupScreenState extends State<DriverSetupScreen> {
                     _previewThumb(_idFrontImageRef!, 'موحدة-وجه'),
                   if (_idBackImageRef != null)
                     _previewThumb(_idBackImageRef!, 'موحدة-ظهر'),
+                  if (_vehicleRegFrontImageRef != null)
+                    _previewThumb(_vehicleRegFrontImageRef!, 'سنوية-وجه'),
+                  if (_vehicleRegBackImageRef != null)
+                    _previewThumb(_vehicleRegBackImageRef!, 'سنوية-ظهر'),
                 ],
               ),
             ),
@@ -492,13 +609,14 @@ class _DriverSetupScreenState extends State<DriverSetupScreen> {
               color: AppColors.accent,
               borderRadius: BorderRadius.circular(18),
               padding: const EdgeInsets.symmetric(vertical: 16),
-              onPressed:
-                  _isSaving || _isUploadingImage ? null : () => _save(context.read<AppProvider>()),
+              onPressed: _isSaving || _isUploadingImage
+                  ? null
+                  : () => _save(context.read<AppProvider>(), isEditing: isEditing),
               child: _isSaving
                   ? const CupertinoActivityIndicator(color: Colors.white)
-                  : const Text(
-                      'إرسال طلب التفعيل',
-                      style: TextStyle(
+                  : Text(
+                      isEditing ? 'حفظ التعديلات' : 'إرسال طلب التفعيل',
+                      style: const TextStyle(
                         color: Colors.white,
                         fontFamily: 'Cairo',
                         fontWeight: FontWeight.w900,

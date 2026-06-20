@@ -19,7 +19,7 @@ class DriverAccountScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final provider = context.watch<AppProvider>();
     final profile = provider.driverProfile ?? const {};
-    const typeLabel = 'سائق تكسي';
+    const typeLabel = 'سائق';
     final isAvailable = profile['available'] as bool? ?? true;
 
     return ListView(
@@ -79,7 +79,7 @@ class DriverAccountScreen extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'حساب سائق التكسي',
+                      'حساب السائق',
                       style: const TextStyle(
                         color: Colors.white,
                         fontSize: 18,
@@ -89,7 +89,7 @@ class DriverAccountScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      'نقل الزبائن — لا يشمل توصيل الطلبات',
+                      'توصيل الطلبات والمطاعم',
                       style: const TextStyle(
                         color: Colors.white70,
                         fontSize: 12,
@@ -161,8 +161,8 @@ class DriverAccountScreen extends StatelessWidget {
           ),
           subtitle: Text(
             isAvailable
-                ? 'تستقبل طلبات التكسي الآن'
-                : 'مؤقتًا لا تستقبل طلبات التكسي',
+                ? 'تستقبل الطلبات الآن'
+                : 'مؤقتًا لا تستقبل الطلبات',
             style: const TextStyle(fontFamily: 'Cairo'),
           ),
         ),

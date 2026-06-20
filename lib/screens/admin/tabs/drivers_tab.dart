@@ -2,6 +2,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../providers/app_provider.dart';
+import '../../../utils/driver_profile_fields.dart';
 import '../widgets/section_header.dart';
 import '../widgets/quick_action_button.dart';
 import '../widgets/status_badge.dart';
@@ -136,6 +137,9 @@ class DriverCard extends StatelessWidget {
     final phone = driver['phone'] ?? '';
     final vehicle = driver['vehicle'] ?? '';
     final plate = driver['plate'] ?? '';
+    final hasDocs = DriverProfileFields.hasRequiredUploads(
+      driver is Map<String, dynamic> ? driver : Map<String, dynamic>.from(driver as Map),
+    );
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -160,11 +164,20 @@ class DriverCard extends StatelessWidget {
                   Text('$phone', style: const TextStyle(fontSize: 11, color: Colors.grey, fontFamily: 'Cairo')),
                   if (vehicle.isNotEmpty)
                     Text('$vehicle | $plate', style: const TextStyle(fontSize: 10, color: Colors.grey, fontFamily: 'Cairo')),
+                  if (!hasDocs)
+                    const Text('⚠️ مستندات ناقصة', style: TextStyle(fontSize: 10, color: Colors.red, fontFamily: 'Cairo')),
                 ]),
               ),
-              StatusBadge(
-                label: isApproved ? 'مفعّل' : (driver['approvalStatus'] == 'rejected' ? 'مرفوض' : 'معلق'),
-                color: isApproved ? Colors.green : (driver['approvalStatus'] == 'rejected' ? Colors.red : Colors.orange),
+              Column(
+                children: [
+                  StatusBadge(
+                    label: isApproved ? 'مفعّل' : (driver['approvalStatus'] == 'rejected' ? 'مرفوض' : 'معلق'),
+                    color: isApproved ? Colors.green : (driver['approvalStatus'] == 'rejected' ? Colors.red : Colors.orange),
+                  ),
+                  if (!hasDocs && isApproved) const SizedBox(height: 4),
+                  if (!hasDocs && isApproved)
+                    const Text('ناقص', style: TextStyle(fontSize: 9, color: Colors.red, fontFamily: 'Cairo')),
+                ],
               ),
             ],
           ),

@@ -10,10 +10,10 @@ const users = require('./users');
 const customer_data = require('./customer_data');
 const merchants = require('./merchants');
 const orders = require('./orders');
-const taxi = require('./taxi');
 const couriers_drivers = require('./couriers_drivers');
 const admin = require('./admin');
 const push_notifications = require('./push_notifications');
+const taxi = require('./taxi');
 
 module.exports = {
   // Common / Config
@@ -31,9 +31,6 @@ module.exports = {
   // Orders & Delivery
   ...orders,
 
-  // Taxi
-  ...taxi,
-
   // Couriers & Drivers helpers
   ...couriers_drivers,
 
@@ -42,5 +39,8 @@ module.exports = {
 
   // Push notifications
   ...push_notifications,
+
+  // Taxi
+  ...taxi,
 
 };

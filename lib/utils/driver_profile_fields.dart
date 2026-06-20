@@ -47,6 +47,23 @@ class DriverProfileFields {
   static String residenceCardImage(Map<String, dynamic>? profile) =>
       profile?['residenceCardImage']?.toString().trim() ?? '';
 
+  static String vehicleRegFrontImage(Map<String, dynamic>? profile) =>
+      profile?['vehicleRegFrontImage']?.toString().trim() ?? '';
+
+  static String vehicleRegBackImage(Map<String, dynamic>? profile) =>
+      profile?['vehicleRegBackImage']?.toString().trim() ?? '';
+
+  /// هل جميع المستندات المطلوبة مرفوعة؟
+  static bool hasRequiredUploads(Map<String, dynamic>? profile) {
+    return profileImage(profile).isNotEmpty &&
+        carImage(profile).isNotEmpty &&
+        idFrontImage(profile).isNotEmpty &&
+        idBackImage(profile).isNotEmpty &&
+        residenceCardImage(profile).isNotEmpty &&
+        vehicleRegFrontImage(profile).isNotEmpty &&
+        vehicleRegBackImage(profile).isNotEmpty;
+  }
+
   static bool isTripleName(String name) {
     final parts =
         name.trim().split(RegExp(r'\s+')).where((part) => part.isNotEmpty);

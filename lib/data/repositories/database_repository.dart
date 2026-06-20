@@ -8,6 +8,7 @@ import '../../models/home_category_platform_override.dart';
 import '../../services/image_storage_service.dart';
 import '../models/account_snapshot.dart';
 
+
 /// الوصول إلى قاعدة البيانات عبر Railway فقط — لا اتصال مباشر بـ Supabase من التطبيق.
 class DatabaseRepository {
   DatabaseRepository._();
@@ -306,487 +307,6 @@ class DatabaseRepository {
     });
   }
 
-  List<TaxiRequest> _mapTaxiRows(dynamic result) {
-    if (result is! List) return const [];
-    return result
-        .whereType<Map>()
-        .map((item) => TaxiRequest.fromMap(
-              Map<String, dynamic>.from(item['request_payload'] as Map),
-            ))
-        .toList();
-  }
-
-  Future<List<TaxiRequest>> loadCustomerTaxiRequests(String phone) async {
-    final result = await ApiClient.instance.get(
-      '/db/customer-taxi-requests',
-      queryParameters: {'phone': _phone(phone)},
-    );
-    return _mapTaxiRows(result);
-  }
-
-  Future<List<TaxiRequest>> loadTaxiPool(String phone) async {
-    final result = await ApiClient.instance.get(
-      '/db/taxi-pool',
-      queryParameters: {'phone': _phone(phone)},
-    );
-    return _mapTaxiRows(result);
-  }
-
-  Future<List<TaxiRequest>> loadDriverTaxiOrders(String phone) async {
-    final result = await ApiClient.instance.get(
-      '/db/driver-taxi-orders',
-      queryParameters: {'phone': _phone(phone)},
-    );
-    return _mapTaxiRows(result);
-  }
-
-  Future<void> saveTaxiRequest(String phone, TaxiRequest request) async {
-    await ApiClient.instance.put('/db/taxi-request', body: {
-      'phone': _phone(phone),
-      'request': request.toMap(),
-    });
-  }
-
-  Future<void> acceptTaxiRequest(
-    String driverPhone,
-    String requestId, {
-    String? driverName,
-    String? vehicleType,
-  }) async {
-    await ApiClient.instance.put('/db/taxi-request/accept', body: {
-      'phone': _phone(driverPhone),
-      'requestId': requestId,
-      if (driverName != null && driverName.trim().isNotEmpty)
-        'driverName': driverName.trim(),
-      if (vehicleType != null && vehicleType.trim().isNotEmpty)
-        'vehicleType': vehicleType.trim(),
-    });
-  }
-
-  Future<void> updateTaxiRequestStatus(
-    String actorPhone,
-    String requestId, {
-    required String statusKey,
-    String? statusAr,
-    String? statusEn,
-  }) async {
-    await ApiClient.instance.put('/db/taxi-request/status', body: {
-      'phone': _phone(actorPhone),
-      'requestId': requestId,
-      'statusKey': statusKey,
-      if (statusAr != null) 'statusAr': statusAr,
-      if (statusEn != null) 'statusEn': statusEn,
-    });
-  }
-
-  Future<void> rejectTaxiRequest(String driverPhone, String requestId) async {
-    await ApiClient.instance.put('/db/taxi-request/reject', body: {
-      'phone': _phone(driverPhone),
-      'requestId': requestId,
-    });
-  }
-
-  Future<Map<String, dynamic>> loadAdminReports(String phone) async {
-    final result = await ApiClient.instance.get(
-      '/db/admin/reports',
-      queryParameters: {'phone': _phone(phone)},
-    );
-    if (result is Map) {
-      return Map<String, dynamic>.from(result);
-    }
-    return const {};
-  }
-
-  Future<List<Map<String, dynamic>>> loadRealEstateListings({
-    String? subCategoryId,
-    String? listingMode,
-  }) async {
-    final result = await ApiClient.instance.get(
-      '/db/real-estate-listings',
-      queryParameters: {
-        if (subCategoryId != null && subCategoryId.trim().isNotEmpty)
-          'subCategoryId': subCategoryId.trim(),
-        if (listingMode != null && listingMode.trim().isNotEmpty)
-          'listingMode': listingMode.trim(),
-      },
-    );
-    if (result is! List) return const [];
-    return result
-        .whereType<Map>()
-        .map((item) => Map<String, dynamic>.from(item))
-        .toList();
-  }
-
-  Future<Map<String, dynamic>?> loadCustomerProfile(String phone) async {
-    final result = await ApiClient.instance.get(
-      '/db/customer-profile',
-      queryParameters: {'phone': _phone(phone)},
-    );
-    return result is Map ? Map<String, dynamic>.from(result) : null;
-  }
-
-  Future<List<String>> loadCustomerAddresses(String phone) async {
-    final result = await ApiClient.instance.get(
-      '/db/customer-addresses',
-      queryParameters: {'phone': _phone(phone)},
-    );
-    if (result is! List) return const [];
-    return result.map((item) => item['address_text'].toString()).toList();
-  }
-
-  Future<List<String>> loadCustomerFavoriteIds(String phone) async {
-    final result = await ApiClient.instance.get(
-      '/db/customer-favorites',
-      queryParameters: {'phone': _phone(phone)},
-    );
-    if (result is! List) return const [];
-    return result.map((item) => item['product_id'].toString()).toList();
-  }
-
-  Future<List<ActiveOrder>> loadCustomerOrders(String phone) async {
-    final result = await ApiClient.instance.get(
-      '/db/customer-orders',
-      queryParameters: {'phone': _phone(phone)},
-    );
-    if (result is! List) return const [];
-    final orders = <ActiveOrder>[];
-    for (final item in result) {
-      if (item is! Map) continue;
-      final payload = item['order_payload'];
-      if (payload is! Map) continue;
-      try {
-        orders.add(
-          ActiveOrder.fromMap(Map<String, dynamic>.from(payload)),
-        );
-      } catch (error) {
-        debugPrint('loadCustomerOrders skipped bad row: $error');
-      }
-    }
-    return orders;
-  }
-
-  Future<T?> _safeBundleLoad<T>(
-    String label,
-    Future<T> Function() loader,
-  ) async {
-    try {
-      return await loader();
-    } catch (error) {
-      debugPrint('loadAccountBundle/$label failed: $error');
-      return null;
-    }
-  }
-
-  Future<RemoteAccountBundle> loadAccountBundle(String phone) async {
-    final normalized = _phone(phone);
-    final results = await Future.wait([
-      _safeBundleLoad('appUser', () => loadAppUser(normalized)),
-      _safeBundleLoad('customerProfile', () => loadCustomerProfile(normalized)),
-      _safeBundleLoad('merchantProfile', () => loadMerchantProfile(normalized)),
-      _safeBundleLoad('userState', () => loadUserState(normalized)),
-      _safeBundleLoad('addresses', () => loadCustomerAddresses(normalized)),
-      _safeBundleLoad('favoriteIds', () => loadCustomerFavoriteIds(normalized)),
-      _safeBundleLoad('orders', () => loadCustomerOrders(normalized)),
-      _safeBundleLoad('products', () => loadMerchantProducts(normalized)),
-    ]).timeout(AppConfig.restoreTimeout);
-
-    return RemoteAccountBundle(
-      appUser: results[0] as Map<String, dynamic>?,
-      customerProfile: results[1] as Map<String, dynamic>?,
-      merchantProfile: results[2] as Map<String, dynamic>?,
-      userState: results[3] as Map<String, dynamic>?,
-      addresses: (results[4] as List<String>?) ?? const [],
-      favoriteIds: (results[5] as List<String>?) ?? const [],
-      orders: (results[6] as List<ActiveOrder>?) ?? const [],
-      products: (results[7] as List<Map<String, dynamic>>?) ?? const [],
-    );
-  }
-
-  Future<void> saveAppUser(
-    String phone, {
-    String? fullName,
-    String? role,
-    String? accountType,
-    String? avatarBase64,
-  }) async {
-    await ApiClient.instance.put('/db/app-user', body: {
-      'phone': _phone(phone),
-      if (fullName != null) 'full_name': fullName,
-      if (role != null) 'role': role,
-      if (accountType != null) 'account_type': accountType,
-      ...ImageStorageService.customerAvatarFields(avatarBase64),
-    });
-  }
-
-  Future<void> saveMerchantProfile(
-    String phone,
-    Map<String, dynamic> profile,
-  ) async {
-    await ApiClient.instance.put('/db/merchant-profile', body: {
-      'phone': _phone(phone),
-      ...profile,
-    });
-  }
-
-  Future<void> saveMerchantProduct(
-    String phone,
-    Map<String, dynamic> product,
-  ) async {
-    await ApiClient.instance.put('/db/merchant-product', body: {
-      'phone': _phone(phone),
-      ...product,
-    });
-  }
-
-  Future<void> saveUserState(String phone, Map<String, dynamic> state) async {
-    await ApiClient.instance.put('/db/user-state', body: {
-      'phone': _phone(phone),
-      'state': state,
-    });
-  }
-
-  Future<void> saveCustomerProfile(
-    String phone,
-    Map<String, dynamic> profile,
-  ) async {
-    await ApiClient.instance.put('/db/customer-profile', body: {
-      'phone': _phone(phone),
-      ...profile,
-    });
-  }
-
-  Future<void> saveCustomerAddress(
-    String phone,
-    String address, {
-    int sortOrder = 0,
-  }) async {
-    await ApiClient.instance.put('/db/customer-address', body: {
-      'phone': _phone(phone),
-      'address': address,
-      'sort_order': sortOrder,
-    });
-  }
-
-  Future<void> deleteCustomerAddress(String phone, String address) async {
-    await ApiClient.instance.delete(
-      '/db/customer-address',
-      queryParameters: {'phone': _phone(phone), 'address': address},
-    );
-  }
-
-  Future<void> saveCustomerFavorite(
-    String phone,
-    String productId, {
-    required bool isFavorite,
-  }) async {
-    await ApiClient.instance.put('/db/customer-favorite', body: {
-      'phone': _phone(phone),
-      'productId': productId,
-      'isFavorite': isFavorite,
-    });
-  }
-
-  Future<void> saveCustomerOrder(String phone, ActiveOrder order) async {
-    await ApiClient.instance.put('/db/customer-order', body: {
-      'phone': _phone(phone),
-      'order': order.toMap(),
-    });
-  }
-
-  Future<void> deleteMerchantProduct(String productId, {String? phone}) async {
-    await ApiClient.instance.delete(
-      '/db/merchant-product',
-      queryParameters: {
-        'id': productId,
-        if (phone != null && phone.trim().isNotEmpty) 'phone': _phone(phone),
-      },
-    );
-  }
-
-  Future<void> submitMerchantReview({
-    required String merchantPhone,
-    required String customerPhone,
-    required String customerName,
-    required String orderId,
-    required int stars,
-    String? comment,
-  }) async {
-    await ApiClient.instance.post('/db/merchant-review', body: {
-      'merchantPhone': _phone(merchantPhone),
-      'customerPhone': _phone(customerPhone),
-      'customerName': customerName,
-      'orderId': orderId,
-      'stars': stars,
-      'comment': comment,
-    });
-  }
-
-  Future<List<Map<String, dynamic>>> loadAllMerchants() async {
-    final result = await ApiClient.instance.get('/db/admin/merchants');
-    if (result is! List) return const [];
-    return result
-        .whereType<Map>()
-        .map((item) => Map<String, dynamic>.from(item))
-        .toList();
-  }
-
-  Future<List<Map<String, dynamic>>> loadAllDrivers() async {
-    final result = await ApiClient.instance.get('/db/admin/drivers');
-    if (result is! List) return const [];
-    return result
-        .whereType<Map>()
-        .map((item) => Map<String, dynamic>.from(item))
-        .toList();
-  }
-
-  Future<List<Map<String, dynamic>>> loadAllCouriers() async {
-    final result = await ApiClient.instance.get('/db/admin/couriers');
-    if (result is! List) return const [];
-    return result
-        .whereType<Map>()
-        .map((item) => Map<String, dynamic>.from(item))
-        .toList();
-  }
-
-  Future<Map<String, HomeCategoryPlatformOverride>> loadHomeCategoriesConfig() async {
-    final result = await ApiClient.instance.get('/app/home-categories');
-    final overrides = <String, HomeCategoryPlatformOverride>{};
-    if (result is Map) {
-      final raw = result['overrides'];
-      if (raw is Map) {
-        raw.forEach((key, value) {
-          final id = key?.toString().trim() ?? '';
-          final parsed = HomeCategoryPlatformOverride.fromDynamic(value);
-          if (id.isNotEmpty && parsed != null) {
-            overrides[id] = parsed;
-          }
-        });
-      }
-    }
-    return overrides;
-  }
-
-  Future<Map<String, HomeCategoryPlatformOverride>> saveHomeCategoriesConfig({
-    required String phone,
-    required Map<String, HomeCategoryPlatformOverride> overrides,
-  }) async {
-    final payload = <String, Map<String, bool>>{};
-    overrides.forEach((id, value) {
-      payload[id] = value.toJson();
-    });
-    final result = await ApiClient.instance.put(
-      '/db/admin/home-categories',
-      body: {
-        'phone': _phone(phone),
-        'overrides': payload,
-      },
-    );
-    final saved = <String, HomeCategoryPlatformOverride>{};
-    if (result is Map && result['overrides'] is Map) {
-      (result['overrides'] as Map).forEach((key, value) {
-        final id = key?.toString().trim() ?? '';
-        final parsed = HomeCategoryPlatformOverride.fromDynamic(value);
-        if (id.isNotEmpty && parsed != null) {
-          saved[id] = parsed;
-        }
-      });
-    }
-    return saved;
-  }
-
-  Future<Map<String, dynamic>> toggleMerchantBazaarStatus({
-    required String merchantPhone,
-    required bool isBazaarMember,
-  }) async {
-    final result = await ApiClient.instance.put('/db/admin/merchant-bazaar', body: {
-      'merchantPhone': _phone(merchantPhone),
-      'isBazaarMember': isBazaarMember,
-    });
-    if (result is Map) {
-      return Map<String, dynamic>.from(result);
-    }
-    return const {};
-  }
-
-  Future<void> toggleDriverApprovalStatus({
-    required String driverPhone,
-    required bool isApproved,
-  }) async {
-    await ApiClient.instance.put('/db/admin/driver-approval', body: {
-      'driverPhone': _phone(driverPhone),
-      'isApproved': isApproved,
-    });
-  }
-
-  Future<void> rejectDriverApplication({
-    required String driverPhone,
-    required String reasonKey,
-    String? rejectionMessageAr,
-  }) async {
-    await ApiClient.instance.put('/db/admin/driver-rejection', body: {
-      'driverPhone': _phone(driverPhone),
-      'reasonKey': reasonKey,
-      if (rejectionMessageAr != null && rejectionMessageAr.trim().isNotEmpty)
-        'rejectionMessageAr': rejectionMessageAr.trim(),
-    });
-  }
-
-  Future<void> toggleCourierApprovalStatus({
-    required String courierPhone,
-    required bool isApproved,
-  }) async {
-    await ApiClient.instance.put('/db/admin/courier-approval', body: {
-      'courierPhone': _phone(courierPhone),
-      'isApproved': isApproved,
-    });
-  }
-
-  Future<void> rejectCourierApplication({
-    required String courierPhone,
-    required String reasonKey,
-    String? rejectionMessageAr,
-  }) async {
-    await ApiClient.instance.put('/db/admin/courier-rejection', body: {
-      'courierPhone': _phone(courierPhone),
-      'reasonKey': reasonKey,
-      if (rejectionMessageAr != null && rejectionMessageAr.trim().isNotEmpty)
-        'rejectionMessageAr': rejectionMessageAr.trim(),
-    });
-  }
-
-  Future<void> toggleMerchantFreezeStatus({
-    required String merchantPhone,
-    required bool isFrozen,
-  }) async {
-    await ApiClient.instance.put('/db/admin/merchant-freeze', body: {
-      'merchantPhone': _phone(merchantPhone),
-      'isFrozen': isFrozen,
-    });
-  }
-
-  Future<void> toggleMerchantApprovalStatus({
-    required String merchantPhone,
-    required bool isApproved,
-  }) async {
-    await ApiClient.instance.put('/db/admin/merchant-approval', body: {
-      'merchantPhone': _phone(merchantPhone),
-      'isApproved': isApproved,
-    });
-  }
-
-  Future<void> rejectMerchantApplication({
-    required String merchantPhone,
-    required String reasonKey,
-    String? rejectionMessageAr,
-  }) async {
-    await ApiClient.instance.put('/db/admin/merchant-rejection', body: {
-      'merchantPhone': _phone(merchantPhone),
-      'reasonKey': reasonKey,
-      if (rejectionMessageAr != null && rejectionMessageAr.trim().isNotEmpty)
-        'rejectionMessageAr': rejectionMessageAr.trim(),
-    });
-  }
-
   Future<void> saveDeviceToken({
     required String phone,
     required String token,
@@ -818,6 +338,89 @@ class DatabaseRepository {
     });
   }
 
+  /// تحميل كل بيانات المستخدم من السيرفر دفعة واحدة (تُستدعى بعد تسجيل الدخول).
+  Future<RemoteAccountBundle> loadAccountBundle(String phone) async {
+    final normalized = _phone(phone);
+    final results = await Future.wait([
+      loadAppUser(normalized),
+      _loadCustomerProfile(normalized),
+      _loadCustomerAddresses(normalized),
+      _loadCustomerFavoriteIds(normalized),
+      loadMerchantProfile(normalized),
+      loadUserState(normalized),
+      _loadCustomerOrders(normalized),
+      loadMerchantProducts(normalized),
+    ], eagerError: false);
+
+    return RemoteAccountBundle(
+      appUser: results[0] is Map ? Map<String, dynamic>.from(results[0] as Map) : null,
+      customerProfile: results[1] is Map ? Map<String, dynamic>.from(results[1] as Map) : null,
+      addresses: results[2] is List ? (results[2] as List).map((e) => e.toString()).toList() : const [],
+      favoriteIds: results[3] is List ? (results[3] as List).map((e) => e.toString()).toList() : const [],
+      merchantProfile: results[4] is Map ? Map<String, dynamic>.from(results[4] as Map) : null,
+      userState: results[5] is Map ? Map<String, dynamic>.from(results[5] as Map) : null,
+      orders: results[6] is List ? (results[6] as List).map((e) => ActiveOrder.fromMap(Map<String, dynamic>.from(e as Map))).toList() : const [],
+      products: results[7] is List ? (results[7] as List).map((e) => Map<String, dynamic>.from(e as Map)).toList() : const [],
+    );
+  }
+
+  Future<Map<String, dynamic>?> _loadCustomerProfile(String phone) async {
+    final result = await ApiClient.instance.get('/db/customer-profile', queryParameters: {'phone': phone});
+    return result is Map ? Map<String, dynamic>.from(result) : null;
+  }
+
+  Future<List<String>> _loadCustomerAddresses(String phone) async {
+    final result = await ApiClient.instance.get('/db/customer-addresses', queryParameters: {'phone': phone});
+    if (result is! List) return const [];
+    return result.map((e) => e.toString()).toList();
+  }
+
+  Future<List<String>> _loadCustomerFavoriteIds(String phone) async {
+    final result = await ApiClient.instance.get('/db/customer-favorites', queryParameters: {'phone': phone});
+    if (result is! List) return const [];
+    return result.map((e) => e.toString()).toList();
+  }
+
+  Future<List<ActiveOrder>> _loadCustomerOrders(String phone) async {
+    final result = await ApiClient.instance.get('/db/customer-orders', queryParameters: {'phone': phone});
+    if (result is! List) return const [];
+    return result.map((e) => ActiveOrder.fromMap(Map<String, dynamic>.from(e as Map))).toList();
+  }
+
+  // ── دوال مساعدة — stubs للتوافق ──
+
+  Future<Map<String, dynamic>> loadAdminReports(String phone) async => {};
+  Future<Map<String, HomeCategoryPlatformOverride>> loadHomeCategoriesConfig() async => {};
+  Future<Map<String, HomeCategoryPlatformOverride>> saveHomeCategoriesConfig({
+    required String phone, required Map<String, HomeCategoryPlatformOverride> overrides,
+  }) async => {};
+  Future<List<Map<String, dynamic>>> loadRealEstateListings({String? subCategoryId, String? listingMode}) async => [];
+  Future<Map<String, dynamic>?> loadCustomerProfile(String phone) async => null;
+  Future<List<String>> loadCustomerAddresses(String phone) async => [];
+  Future<List<String>> loadCustomerFavoriteIds(String phone) async => [];
+  Future<List<ActiveOrder>> loadCustomerOrders(String phone) async => [];
+  Future<void> saveAppUser(String phone, {String? fullName, String? role, String? accountType, String? avatarBase64}) async {}
+  Future<void> saveMerchantProfile(String phone, Map<String, dynamic> profile) async {}
+  Future<void> saveMerchantProduct(String phone, Map<String, dynamic> product) async {}
+  Future<void> saveUserState(String phone, Map<String, dynamic> state) async {}
+  Future<void> saveCustomerProfile(String phone, Map<String, dynamic> profile) async {}
+  Future<void> saveCustomerAddress(String phone, String address, {int sortOrder = 0}) async {}
+  Future<void> deleteCustomerAddress(String phone, String address) async {}
+  Future<void> saveCustomerFavorite(String phone, String productId, {required bool isFavorite}) async {}
+  Future<void> saveCustomerOrder(String phone, ActiveOrder order) async {}
+  Future<void> deleteMerchantProduct(String productId, {String? phone}) async {}
+  Future<void> submitMerchantReview({required String merchantPhone, required String customerPhone, required String customerName, required String orderId, required int stars, String? comment}) async {}
+  Future<List<Map<String, dynamic>>> loadAllMerchants() async => [];
+  Future<List<Map<String, dynamic>>> loadAllDrivers() async => [];
+  Future<List<Map<String, dynamic>>> loadAllCouriers() async => [];
+  Future<Map<String, dynamic>> toggleMerchantBazaarStatus({required String merchantPhone, required bool isBazaarMember}) async => {};
+  Future<void> toggleCourierApprovalStatus({required String courierPhone, required bool isApproved}) async {}
+  Future<void> toggleDriverApprovalStatus({required String driverPhone, required bool isApproved}) async {}
+  Future<void> rejectDriverApplication({required String driverPhone, required String reasonKey, String? rejectionMessageAr}) async {}
+  Future<void> rejectCourierApplication({required String courierPhone, required String reasonKey, String? rejectionMessageAr}) async {}
+  Future<void> toggleMerchantFreezeStatus({required String merchantPhone, required bool isFrozen}) async {}
+  Future<void> toggleMerchantApprovalStatus({required String merchantPhone, required bool isApproved}) async {}
+  Future<void> rejectMerchantApplication({required String merchantPhone, required String reasonKey, String? rejectionMessageAr}) async {}
   Future<void> deleteAccount(String phone) async {
     await ApiClient.instance.delete(
       '/db/app-user',

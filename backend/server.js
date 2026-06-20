@@ -211,9 +211,10 @@ app.use('/db', require('./routes/users'));
 app.use('/db', require('./routes/merchants'));
 app.use('/db', require('./routes/marketplace'));
 app.use('/db', require('./routes/delivery'));
-app.use('/db', require('./routes/taxi'));
 app.use('/db', require('./routes/admin'));
 app.use('/db/chat', require('./routes/chat'));
+app.use('/db/taxi', require('./routes/taxi'));
+
 // ── Promo code validation (kept inline) ────────────────────────────────
 
 app.post('/db/validate-promo', async (req, res) => {

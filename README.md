@@ -53,12 +53,14 @@ npm run dev
 ## Key directories
 
 - `lib/` — Flutter source code (models, providers, screens, widgets, services)
-- `backend/` — Node.js server (push notifications, promo codes, Supabase repo)
+- `backend/` — Node.js server (push notifications, promo codes, Supabase repo, taxi services)
+- `backend/services/` — Business logic services (taxi pricing, taxi matching)
+- `backend/push/` — Push notification modules per feature (taxi push events)
 - `src/` — React (Vite) admin dashboard
 - `website/` — Public marketing site, privacy policy, support pages
 - `supabase/` — Database migrations and SQL scripts
 - `scripts/` — Utility scripts (deploy, compress images, generate keystore, etc.)
-- `docs/` — Documentation (FCM setup, chat API, encoding notes)
+- `docs/` — Documentation (FCM setup, chat API, taxi API, encoding notes)
 - `test/` — Flutter widget tests
 
 ## Version

@@ -4165,9 +4165,21 @@ async function toggleDriverApprovalStatus(adminPhone, driverPhone, isApproved) {
 
   const phoneKey = await resolvePhoneKey(driverPhone);
   const state = (await getUserState(phoneKey)) || {};
-  const profile = readDriverProfileFromState(state);
-  if (!profile || !isDriverProfileComplete(profile)) {
-    throw new Error('Driver profile not found.');
+  let profile = readDriverProfileFromState(state);
+
+  // إذا لم يكمل السائق بياناته — ننشئ له ملفاً أولياً لكي يتمكن الأدمن من تفعيله
+  if (!profile) {
+    const user = await getAppUser(phoneKey);
+    profile = {
+      name: user?.full_name || 'سائق الغيث',
+      phone: phoneKey,
+      vehicle: 'سيارة خصوصي',
+      plate: '00000',
+      area: 'العراق',
+      available: true,
+      isApproved: false,
+      approvalStatus: 'pending',
+    };
   }
 
   const nextProfile = {
@@ -4217,9 +4229,20 @@ async function rejectDriverApplication(
 
   const phoneKey = await resolvePhoneKey(driverPhone);
   const state = (await getUserState(phoneKey)) || {};
-  const profile = readDriverProfileFromState(state);
-  if (!profile || !isDriverProfileComplete(profile)) {
-    throw new Error('Driver profile not found.');
+  let profile = readDriverProfileFromState(state);
+
+  if (!profile) {
+    const user = await getAppUser(phoneKey);
+    profile = {
+      name: user?.full_name || 'سائق الغيث',
+      phone: phoneKey,
+      vehicle: 'سيارة خصوصي',
+      plate: '00000',
+      area: 'العراق',
+      available: false,
+      isApproved: false,
+      approvalStatus: 'pending',
+    };
   }
 
   const nextProfile = {

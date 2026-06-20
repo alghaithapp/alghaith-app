@@ -19,7 +19,9 @@ This is a **multi-platform e-commerce app** (Flutter mobile + web dashboard + No
 ## Key directories
 
 - `lib/` — Flutter source code (models, providers, screens, widgets, services)
-- `backend/` — Node.js server (push notifications, promo codes, Supabase repo)
+- `backend/` — Node.js server (push notifications, promo codes, Supabase repo, taxi services)
+- `backend/services/` — Business logic services (taxi pricing, taxi matching)
+- `backend/push/` — Push notification modules per feature (taxi push events)
 - `src/` — React (Vite) admin dashboard
 - `website/` — Public marketing site, privacy policy, support pages
 - `supabase/` — Database migrations and SQL scripts

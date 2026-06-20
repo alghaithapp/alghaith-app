@@ -2,7 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_map/flutter_map.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart' as gmaps;
 import 'package:geolocator/geolocator.dart' as geo;
 import 'package:http/http.dart' as http;
 import 'package:latlong2/latlong.dart';
@@ -40,7 +40,7 @@ class LocationPickerScreen extends StatefulWidget {
 class _LocationPickerScreenState extends State<LocationPickerScreen> {
   static final LatLng _defaultCenter = LatLng(33.3152, 44.3661);
 
-  final MapController _mapController = MapController();
+  gmaps.GoogleMapController? _mapController;
   LatLng _center = _defaultCenter;
   bool _isResolving = false;
   String _resolvedAddress = '';
@@ -55,16 +55,15 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
 
   @override
   void dispose() {
-    _mapController.dispose();
+    _mapController?.dispose();
     super.dispose();
   }
 
-  void _onPositionChanged(dynamic position, bool hasGesture) {
-    if (!hasGesture) return;
-    final center = _mapController.camera.center;
+  void _onCameraMove(gmaps.CameraPosition position) {
+    final target = position.target;
     if (!mounted) return;
     setState(() {
-      _center = center;
+      _center = LatLng(target.latitude, target.longitude);
       if (_resolvedAddress.isNotEmpty) {
         _resolvedAddress = '';
       }
@@ -146,7 +145,12 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
     setState(() {
       _center = target;
     });
-    _mapController.move(target, 15.0);
+    _mapController?.animateCamera(
+      gmaps.CameraUpdate.newLatLngZoom(
+        gmaps.LatLng(current.latitude, current.longitude),
+        15.0,
+      ),
+    );
   }
 
   @override
@@ -164,22 +168,21 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
             Expanded(
               child: Stack(
                 children: [
-                  // الخريطة — OpenStreetMap مجاناً بدون مفتاح
+                  // الخريطة — Google Maps
                   Positioned.fill(
-                    child: FlutterMap(
-                      mapController: _mapController,
-                      options: MapOptions(
-                        initialCenter: _center,
-                        initialZoom: 14.0,
-                        onPositionChanged: _onPositionChanged,
+                    child: gmaps.GoogleMap(
+                      mapType: gmaps.MapType.normal,
+                      initialCameraPosition: gmaps.CameraPosition(
+                        target: gmaps.LatLng(_center.latitude, _center.longitude),
+                        zoom: 14.0,
                       ),
-                      children: [
-                        TileLayer(
-                          urlTemplate:
-                              'https://api.mapbox.com/styles/v1/mapbox/light-v11/tiles/256/{z}/{x}/{y}@2x?access_token=${AppConfig.effectiveMapboxPublicToken}',
-                          userAgentPackageName: 'AlGhaithApp/1.2.59 (com.alghaith.app)',
-                        ),
-                      ],
+                      onCameraMove: _onCameraMove,
+                      myLocationEnabled: false,
+                      myLocationButtonEnabled: false,
+                      zoomControlsEnabled: false,
+                      onMapCreated: (controller) {
+                        _mapController = controller;
+                      },
                     ),
                   ),
                   // الدبوس في منتصف الخريطة

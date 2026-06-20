@@ -9,8 +9,7 @@ import '../../screens/professionals_directory_screen.dart';
 import '../../screens/real_estate_deal_hub_screen.dart';
 import '../../screens/shopping_stores_screen.dart';
 import '../../screens/shopping_shared_widgets.dart';
-import '../../screens/car_request_hub_screen.dart';
-import '../../screens/taxi_request_screen.dart';
+import '../../features/taxi/screens/customer/taxi_request_screen.dart';
 import 'marketplace_catalog.dart';
 
 class MarketplaceRouter {
@@ -71,14 +70,6 @@ class MarketplaceRouter {
         Navigator.of(context, rootNavigator: true).push(
           CupertinoPageRoute(
             builder: (_) => const TaxiRequestScreen(),
-          ),
-        );
-        return;
-      }
-      if (sub.id == 'car_request') {
-        Navigator.of(context).push(
-          CupertinoPageRoute(
-            builder: (_) => const CarRequestHubScreen(),
           ),
         );
         return;

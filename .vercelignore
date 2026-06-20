@@ -1,23 +1,34 @@
+# المجلدات الضخمة والفرعية
+node_modules/
+.git/
+.idea/
+.vscode/
+
+# Tauri (السبب الرئيسي لضخامة الحجم)
+src-tauri/target/
+src-tauri/node_modules/
+
+# ملفات Flutter (غير مطلوبة للوحة الإدارة)
+lib/
 android/
 ios/
 build/
-lib/
-test/
-assets/
-supabase/
-backend/
-scripts/vercel_install.sh
-scripts/vercel_build.sh
-*.ps1
-README.md
-pubspec.*
-codemagic.yaml
-analysis_options.yaml
-metadata.json
-tsconfig.json
-wrangler.toml
 .dart_tool/
-.idea/
-.vscode/
-node_modules/
+assets/
+test/
+
+# ملفات الـ Backend
+backend/
+
+# ملفات البناء المحلية
 dist/
+.next/
+out/
+
+# ملفات أخرى غير ضرورية
+*.ps1
+temp_chat.js
+stitch_smart_taxi_hub/
+*.log
+*.zip
+*.tar.gz

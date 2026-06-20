@@ -39,9 +39,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
             order.statusKey != 'rejected' &&
             order.statusKey != 'cancelled')
         .toList();
-    final latestTaxiRequest =
-        appProvider.taxiRequests.isNotEmpty ? appProvider.taxiRequests.first : null;
-
+    // Taxi request status removed (old taxi service)
     return CupertinoPageScaffold(
       backgroundColor: const Color(0xFFF2F2F7),
       navigationBar: const CupertinoNavigationBar(
@@ -78,13 +76,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
                 ),
               ),
             ),
-            if (latestTaxiRequest != null)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-                child: _TaxiRequestStatusBanner(
-                  request: latestTaxiRequest,
-                ),
-              ),
+            // Taxi request banner removed (old taxi service)
             Expanded(
               child: _selectedSegment == 0
                   ? currentOrders.isEmpty
@@ -783,146 +775,8 @@ class _OrdersScreenState extends State<OrdersScreen> {
   }
 }
 
-class _TaxiRequestStatusBanner extends StatelessWidget {
-  final TaxiRequest request;
 
-  const _TaxiRequestStatusBanner({
-    required this.request,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final details = _getTaxiNotice(request.statusKey);
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: details.colors,
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: details.colors.first.withValues(alpha: 0.18),
-            blurRadius: 18,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 42,
-            height: 42,
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.16),
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: Icon(details.icon, color: Colors.white, size: 22),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  details.title,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w900,
-                    fontSize: 14,
-                    fontFamily: 'Cairo',
-                  ),
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  details.subtitle,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 11,
-                    height: 1.35,
-                    fontFamily: 'Cairo',
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.18),
-              borderRadius: BorderRadius.circular(999),
-            ),
-            child: Text(
-              request.statusAr,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 11,
-                fontWeight: FontWeight.w800,
-                fontFamily: 'Cairo',
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  _TaxiNoticeDetails _getTaxiNotice(String statusKey) {
-    switch (statusKey) {
-      case 'accepted':
-        return _TaxiNoticeDetails(
-          title: 'تم قبول الطلب',
-          subtitle: 'السائق بدأ تجهيز نفسه للانطلاق',
-          colors: [Colors.blue.shade700, Colors.blue.shade500],
-          icon: CupertinoIcons.checkmark_alt_circle_fill,
-        );
-      case 'on_way':
-        return _TaxiNoticeDetails(
-          title: 'السائق في الطريق',
-          subtitle: 'الرحلة تتقدم نحو موقعك',
-          colors: [Colors.orange.shade700, Colors.deepOrange.shade400],
-          icon: CupertinoIcons.car_fill,
-        );
-      case 'arrived':
-        return _TaxiNoticeDetails(
-          title: 'وصل للموقع',
-          subtitle: 'السائق ينتظر عند نقطة الانطلاق',
-          colors: [Colors.purple.shade700, Colors.purple.shade400],
-          icon: CupertinoIcons.location_solid,
-        );
-      case 'picked_up':
-        return _TaxiNoticeDetails(
-          title: 'استلام الزبون',
-          subtitle: 'تم بدء الرحلة مع السائق',
-          colors: [Colors.teal.shade700, Colors.teal.shade400],
-          icon: CupertinoIcons.person_crop_circle_badge_checkmark,
-        );
-      case 'completed':
-        return _TaxiNoticeDetails(
-          title: 'تم الوصول',
-          subtitle: 'انتهت الرحلة بنجاح',
-          colors: [Colors.green.shade700, Colors.green.shade400],
-          icon: CupertinoIcons.check_mark_circled_solid,
-        );
-      case 'rejected':
-        return _TaxiNoticeDetails(
-          title: 'تم رفض الطلب',
-          subtitle: 'يمكنك إرسال طلب جديد الآن',
-          colors: [Colors.red.shade700, Colors.red.shade400],
-          icon: CupertinoIcons.xmark_circle_fill,
-        );
-      default:
-        return _TaxiNoticeDetails(
-          title: 'بانتظار السائق',
-          subtitle: 'سيظهر طلبك عند أول سائق متاح',
-          colors: [Colors.blueGrey.shade700, Colors.blueGrey.shade500],
-          icon: CupertinoIcons.time,
-        );
-    }
-  }
-}
+// Taxi request status banner removed (old taxi service)
 
 class _PendingApprovalCountdown extends StatefulWidget {
   final ActiveOrder order;
@@ -968,16 +822,5 @@ class _PendingApprovalCountdownState extends State<_PendingApprovalCountdown> {
   }
 }
 
-class _TaxiNoticeDetails {
-  final String title;
-  final String subtitle;
-  final List<Color> colors;
-  final IconData icon;
 
-  const _TaxiNoticeDetails({
-    required this.title,
-    required this.subtitle,
-    required this.colors,
-    required this.icon,
-  });
-}
+// Taxi notice details removed (old taxi service)

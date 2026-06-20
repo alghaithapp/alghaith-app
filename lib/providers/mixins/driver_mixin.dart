@@ -27,7 +27,9 @@ mixin DriverMixin on AppCoreMixin, PersistenceMixin {
     final wasApproved = DriverProfileFields.isApproved(_driverProfile);
     final normalized = Map<String, dynamic>.from(profile);
     normalized['type'] = 'taxi';
-    normalized['services'] = {'taxi': true, 'delivery': false};
+    normalized['services'] = profile['services'] ??
+        _driverProfile?['services'] ??
+        {'taxi': true, 'delivery': false};
     _driverType = 'taxi';
     normalized.remove('isApproved');
     normalized.remove('approvalStatus');

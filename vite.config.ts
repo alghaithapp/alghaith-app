@@ -7,9 +7,9 @@ export default defineConfig(() => {
   return {
     plugins: [react(), tailwindcss()],
     clearScreen: false,
-    base: '/',
+    base: '/admin/',
     build: {
-      outDir: 'dist',
+      outDir: 'dist/admin',
       emptyOutDir: true,
     },
     resolve: {

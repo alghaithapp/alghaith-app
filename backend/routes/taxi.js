@@ -1,154 +1,146 @@
 const express = require('express');
 const router = express.Router();
-const {
-  getCustomerTaxiRequests,
-  saveTaxiRequest,
-  getTaxiPoolOrders,
-  getDriverTaxiOrders,
-  acceptTaxiRequest,
-  updateTaxiRequestStatus,
-  rejectTaxiRequest,
-  driverCancelTaxiRequest,
-} = require('../supabase_repo');
-const {
-  requireAuthorizedPhone,
-  requireOptionalAuthorizedPhone,
-} = require('./_middleware');
+const repo = require('../supabase_repo/taxi');
+const { requireAuthorizedPhone } = require('./_middleware');
 
-router.get('/customer-taxi-requests', async (req, res) => {
+// POST /db/taxi/create - إنشاء طلب جديد (يحسب السعر تلقائياً)
+router.post('/create', async (req, res) => {
   try {
     const phone = requireAuthorizedPhone(req, res);
     if (!phone) return;
-    const rows = await getCustomerTaxiRequests(phone);
-    return res.json(rows);
+    const result = await repo.createTaxiRequest(phone, req.body || {});
+    return res.json(result);
   } catch (error) {
-    console.error('get customer-taxi-requests error:', error);
-    return res.status(500).json({ message: error?.message || 'Failed to load taxi requests.' });
+    console.error('taxi create error:', error);
+    return res.status(500).json({ message: error?.message || 'Failed to create taxi request.' });
   }
 });
 
-router.put('/taxi-request', async (req, res) => {
+// POST /db/taxi/accept - قبول السائق
+router.post('/accept', async (req, res) => {
   try {
     const phone = requireAuthorizedPhone(req, res);
     if (!phone) return;
-    const row = await saveTaxiRequest(phone, req.body || {});
-    return res.json(row);
+    const { requestId, driverName, vehicleModel, plateNumber } = req.body || {};
+    const result = await repo.acceptTaxiRequest(phone, requestId, { driverName, vehicleModel, plateNumber });
+    return res.json(result);
   } catch (error) {
-    console.error('save taxi-request error:', error);
-    return res.status(500).json({ message: error?.message || 'Failed to save taxi request.' });
+    console.error('taxi accept error:', error);
+    return res.status(500).json({ message: error?.message || 'Failed to accept taxi request.' });
   }
 });
 
-router.get('/taxi-pool', async (req, res) => {
+// POST /db/taxi/reject - رفض السائق
+router.post('/reject', async (req, res) => {
   try {
-    const phone = requireOptionalAuthorizedPhone(req, res);
+    const phone = requireAuthorizedPhone(req, res);
     if (!phone) return;
-    const rows = await getTaxiPoolOrders(phone);
-    return res.json(rows);
+    const { requestId } = req.body || {};
+    const result = await repo.rejectTaxiRequest(phone, requestId);
+    return res.json(result);
   } catch (error) {
-    console.error('get taxi-pool error:', error);
-    return res.status(500).json({ message: error?.message || 'Failed to load taxi pool.' });
+    console.error('taxi reject error:', error);
+    return res.status(500).json({ message: error?.message || 'Failed to reject taxi request.' });
   }
 });
 
-router.get('/driver-taxi-orders', async (req, res) => {
+// POST /db/taxi/cancel - إلغاء من الزبون
+router.post('/cancel', async (req, res) => {
   try {
-    const phone = requireOptionalAuthorizedPhone(req, res);
+    const phone = requireAuthorizedPhone(req, res);
     if (!phone) return;
-    const rows = await getDriverTaxiOrders(phone);
-    return res.json(rows);
+    const { requestId, reason } = req.body || {};
+    const result = await repo.cancelTaxiRequest(phone, requestId, reason);
+    return res.json(result);
   } catch (error) {
-    console.error('get driver-taxi-orders error:', error);
-    return res.status(500).json({ message: error?.message || 'Failed to load driver taxi orders.' });
+    console.error('taxi cancel error:', error);
+    return res.status(500).json({ message: error?.message || 'Failed to cancel taxi request.' });
   }
 });
 
-router.put('/taxi-request/accept', async (req, res) => {
+// POST /db/taxi/status - تحديث حالة الرحلة
+router.post('/status', async (req, res) => {
   try {
-    const phone = requireOptionalAuthorizedPhone(req, res);
+    const phone = requireAuthorizedPhone(req, res);
     if (!phone) return;
-    const requestId = String(
-      req.body?.requestId || req.body?.orderId || req.body?.id || ''
-    ).trim();
-    if (!requestId) {
-      return res.status(400).json({ message: 'Request id is required.' });
-    }
-    const row = await acceptTaxiRequest(phone, requestId, req.body || {});
-    return res.json(row);
+    const { requestId, statusKey } = req.body || {};
+    const result = await repo.updateTaxiRequestStatus(phone, requestId, statusKey);
+    return res.json(result);
   } catch (error) {
-    console.error('accept taxi-request error:', error);
-    const message = error?.message || 'Failed to accept taxi request.';
-    const status = message.includes('not available') ? 409 : 500;
-    return res.status(status).json({ message });
+    console.error('taxi status error:', error);
+    return res.status(500).json({ message: error?.message || 'Failed to update taxi request status.' });
   }
 });
 
-router.put('/taxi-request/status', async (req, res) => {
+// GET /db/taxi/active - الطلب النشط للزبون
+router.get('/active', async (req, res) => {
   try {
-    const phone = requireOptionalAuthorizedPhone(req, res);
+    const phone = requireAuthorizedPhone(req, res);
     if (!phone) return;
-    const requestId = String(
-      req.body?.requestId || req.body?.orderId || req.body?.id || ''
-    ).trim();
-    if (!requestId) {
-      return res.status(400).json({ message: 'Request id is required.' });
-    }
-    const row = await updateTaxiRequestStatus(phone, requestId, {
-      statusKey: req.body?.statusKey,
-      statusAr: req.body?.statusAr,
-      statusEn: req.body?.statusEn,
-      assignedDriverName: req.body?.assignedDriverName,
-      vehicleType: req.body?.vehicleType,
-    });
-    return res.json(row);
+    const request = await repo.getCustomerActiveRequest(phone);
+    return res.json(request);
   } catch (error) {
-    console.error('update taxi-request status error:', error);
-    const message = error?.message || 'Failed to update taxi status.';
-    const status =
-      message.includes('not assigned') || message.includes('not authorized')
-        ? 403
-        : 500;
-    return res.status(status).json({ message });
+    console.error('taxi active error:', error);
+    return res.status(500).json({ message: error?.message || 'Failed to get active request.' });
   }
 });
 
-router.put('/taxi-request/reject', async (req, res) => {
+// GET /db/taxi/driver-active - الطلب النشط للسائق
+router.get('/driver-active', async (req, res) => {
   try {
-    const phone = requireOptionalAuthorizedPhone(req, res);
+    const phone = requireAuthorizedPhone(req, res);
     if (!phone) return;
-    const requestId = String(
-      req.body?.requestId || req.body?.orderId || req.body?.id || ''
-    ).trim();
-    if (!requestId) {
-      return res.status(400).json({ message: 'Request id is required.' });
-    }
-    const row = await rejectTaxiRequest(phone, requestId);
-    return res.json(row);
+    const request = await repo.getDriverActiveRequest(phone);
+    return res.json(request);
   } catch (error) {
-    console.error('reject taxi-request error:', error);
-    const message = error?.message || 'Failed to reject taxi request.';
-    const status = message.includes('not available') ? 409 : 500;
-    return res.status(status).json({ message });
+    console.error('taxi driver-active error:', error);
+    return res.status(500).json({ message: error?.message || 'Failed to get driver active request.' });
   }
 });
 
-router.put('/taxi-request/driver-cancel', async (req, res) => {
+// GET /db/taxi/history - تاريخ رحلات الزبون
+router.get('/history', async (req, res) => {
   try {
-    const phone = requireOptionalAuthorizedPhone(req, res);
+    const phone = requireAuthorizedPhone(req, res);
     if (!phone) return;
-    const requestId = String(
-      req.body?.requestId || req.body?.orderId || req.body?.id || ''
-    ).trim();
-    if (!requestId) {
-      return res.status(400).json({ message: 'Request id is required.' });
-    }
-    const reason = String(req.body?.reason || '').trim();
-    const row = await driverCancelTaxiRequest(phone, requestId, reason);
-    return res.json(row);
+    const requests = await repo.getCustomerHistory(phone);
+    return res.json(requests);
   } catch (error) {
-    console.error('driver-cancel taxi-request error:', error);
-    const message = error?.message || 'Failed to cancel taxi request.';
-    return res.status(500).json({ message });
+    console.error('taxi history error:', error);
+    return res.status(500).json({ message: error?.message || 'Failed to get history.' });
+  }
+});
+
+// GET /db/taxi/driver-history - تاريخ رحلات السائق
+router.get('/driver-history', async (req, res) => {
+  try {
+    const phone = requireAuthorizedPhone(req, res);
+    if (!phone) return;
+    const requests = await repo.getDriverHistory(phone);
+    return res.json(requests);
+  } catch (error) {
+    console.error('taxi driver-history error:', error);
+    return res.status(500).json({ message: error?.message || 'Failed to get driver history.' });
+  }
+});
+
+// GET /db/taxi/nearby-drivers - البحث عن سائقين قريبين
+router.get('/nearby-drivers', async (req, res) => {
+  try {
+    const { lat, lng, taxiType } = req.query;
+    const pickupLat = Number(req.query.pickupLat ?? lat ?? 0);
+    const pickupLng = Number(req.query.pickupLng ?? lng ?? 0);
+    const drivers = await repo.getNearbyDrivers(
+      pickupLat,
+      pickupLng,
+      String(taxiType || 'economic').trim(),
+      [],
+      10
+    );
+    return res.json(drivers);
+  } catch (error) {
+    console.error('taxi nearby-drivers error:', error);
+    return res.status(500).json({ message: error?.message || 'Failed to get nearby drivers.' });
   }
 });
 

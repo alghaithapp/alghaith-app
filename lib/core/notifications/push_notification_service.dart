@@ -8,7 +8,6 @@ import 'package:flutter/widgets.dart';
 import '../../firebase_options.dart';
 import '../../services/supabase_service.dart';
 import 'push_notification_inbox.dart';
-import 'taxi_push_handler.dart';
 
 @pragma('vm:entry-point')
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
@@ -181,26 +180,9 @@ class PushNotificationService {
         requestId.isNotEmpty) {
       final title = message.data['title']?.toString() ?? '🚕 طلب تكسي جديد';
       final body = message.data['body']?.toString() ?? '';
-      // عرض النافذة المنبثقة — ستحتاج BuildContext
-      // نستخدم key navigator لاستخراج السياق
-      _showTaxiDialog(requestId, title, body);
+      // سيتم معالجة طلب التكسي الجديد من خلال الـ Provider
+      debugPrint('Push: taxi request $requestId — handled via provider');
     }
-  }
-
-  /// إظهار نافذة طلب التكسي داخل التطبيق مع أزرار قبول/رفض
-  void _showTaxiDialog(String requestId, String title, String body) {
-    final context = _rootNavigatorKey?.currentContext;
-    if (context == null || !context.mounted) {
-      debugPrint('Push: cannot show taxi dialog — no context available');
-      return;
-    }
-    TaxiPushHandler.handleForegroundPush(
-      context,
-      requestId: requestId,
-      title: title,
-      body: body,
-      eventKey: 'foreground:$requestId',
-    );
   }
 
   void _handleOpenedMessage(RemoteMessage message) {
