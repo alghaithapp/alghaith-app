@@ -65,7 +65,7 @@ npm run dev
 
 ## Version
 
-Current version: **1.2.60+95** (see `pubspec.yaml`)
+Current version: **1.2.73+108** (see `pubspec.yaml`)
 
 ## Environment & secrets
 
