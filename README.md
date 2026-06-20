@@ -58,7 +58,7 @@ npm run dev
 - `website/` — Public marketing site, privacy policy, support pages
 - `supabase/` — Database migrations and SQL scripts
 - `scripts/` — Utility scripts (deploy, compress images, generate keystore, etc.)
-- `docs/` — Documentation (FCM setup, encoding notes)
+- `docs/` — Documentation (FCM setup, chat API, encoding notes)
 - `test/` — Flutter widget tests
 
 ## Version

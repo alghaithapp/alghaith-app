@@ -42,4 +42,5 @@ module.exports = {
 
   // Push notifications
   ...push_notifications,
+
 };
