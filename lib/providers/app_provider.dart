@@ -261,8 +261,15 @@ class AppProvider extends ChangeNotifier {
   MerchantStoreView get merchantStoreView => MerchantStoreView(_merchantStore);
   bool get isMerchantStoreOpen => merchantStoreView.isOpen;
   bool get isBazaarApproved => merchantStoreView.isBazaarMember;
-  String get merchantStoreName =>
-      (_merchantStore?['name'] as String?)?.trim() ?? '';
+  String get merchantStoreName {
+    final raw = _merchantStore;
+    if (raw == null) return '';
+    return (raw['store_name']?.toString() ??
+            raw['storeName']?.toString() ??
+            raw['name']?.toString() ??
+            '')
+        .trim();
+  }
   String get merchantCategoryId =>
       (_merchantStore?['category'] as String?)?.trim() ?? '';
   List<String> get merchantServiceIds {
@@ -1191,8 +1198,7 @@ class AppProvider extends ChangeNotifier {
     // إذا لم يوجد دور في السيرفر، أو كان الدور الحالي هو 'customer' افتراضي،
     // نحاول الاستنتاج من الملفات الشخصية المتوفرة.
     if (_userRole == null || _userRole == 'customer') {
-      if (_merchantStore != null &&
-          (_merchantStore?['name']?.toString().trim().isNotEmpty ?? false)) {
+      if (_merchantStore != null && merchantStoreName.isNotEmpty) {
         _userRole = 'merchant';
         return;
       }
