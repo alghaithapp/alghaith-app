@@ -58,6 +58,11 @@ class AppProvider extends ChangeNotifier {
   List<ActiveOrder> _courierPoolOrders = [];
   List<ActiveOrder> _courierAssignedOrders = [];
   Map<String, dynamic>? _adminReports;
+  String? _adminReportsError;
+  List<Map<String, dynamic>> _allMerchants = [];
+  List<Map<String, dynamic>> _allDrivers = [];
+  List<Map<String, dynamic>> _allCouriers = [];
+  Map<String, dynamic>? _bazaarState;
   List<String> _addresses = [];
   final List<AppNotificationItem> _notifications = [];
   late final NotificationHub _notificationHub =
@@ -4921,6 +4926,7 @@ class AppProvider extends ChangeNotifier {
   int get courierCompletedCount => deliveryCompletedOrders.length;
 
   Map<String, dynamic>? get adminReports => _adminReports;
+  String? get adminReportsError => _adminReportsError;
   List<Map<String, dynamic>> _allMerchants = [];
   List<Map<String, dynamic>> _allCouriers = [];
   List<Map<String, dynamic>> get allMerchants =>
@@ -5031,6 +5037,19 @@ class AppProvider extends ChangeNotifier {
       notifyListeners();
     } catch (error) {
       debugPrint('ADMIN_DRIVERS_ERROR: $error');
+    }
+  }
+
+  Future<void> deleteDriverAccount(String driverPhone) async {
+    final phone = _trimmedOrNull(_authPhone) ?? _trimmedOrNull(_customerPhone);
+    if (phone == null || !SupabaseService.isConfigured) return;
+    try {
+      await SupabaseService.deleteDriverAccount(phone, driverPhone);
+      await refreshAllDrivers();
+      notifyListeners();
+    } catch (error) {
+      debugPrint('ADMIN_DELETE_DRIVER_ERROR: $error');
+      rethrow;
     }
   }
 
@@ -5248,16 +5267,19 @@ class AppProvider extends ChangeNotifier {
 
   Future<void> refreshAdminReports() async {
     final phone = _trimmedOrNull(_authPhone) ?? _trimmedOrNull(_customerPhone);
-    if (phone == null) return;
+    if (phone == null || !SupabaseService.isConfigured) return;
     try {
+      _adminReportsError = null;
       final previous = _adminReports == null
           ? null
           : Map<String, dynamic>.from(_adminReports!);
-      // _adminReports = await SupabaseService.loadAdminReports(phone); // Not implemented
+      _adminReports = await SupabaseService.loadAdminReports(phone);
       _notificationHub.onAdminReportsUpdated(previous, _adminReports);
       notifyListeners();
     } catch (error) {
       debugPrint('ADMIN_REPORTS_ERROR: $error');
+      _adminReportsError = error.toString();
+      notifyListeners();
     }
   }
 
