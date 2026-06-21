@@ -207,7 +207,7 @@ async function selectSingle(table, column, value) {
   return data || null;
 }
 
-async function selectMany(table, filters = [], orderBy = null) {
+async function selectMany(table, filters = [], orderBy = null, limit = null) {
   const supabase = assertSupabaseAdmin();
   let query = supabase.from(table).select();
   for (const filter of filters) {
@@ -215,6 +215,9 @@ async function selectMany(table, filters = [], orderBy = null) {
   }
   if (orderBy) {
     query = query.order(orderBy.column, { ascending: orderBy.ascending });
+  }
+  if (limit !== null && Number.isInteger(limit) && limit > 0) {
+    query = query.limit(limit);
   }
   const { data, error } = await query;
   if (error) throw new Error(error.message);

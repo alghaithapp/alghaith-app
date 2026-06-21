@@ -127,6 +127,57 @@ async function saveCustomerOrder(phone, data = {}, options = {}) {
 }
 
 function readOrderMeta(row) {
+/**
+ * تحويل صف الطلب الخام من قاعدة البيانات إلى كائن camelCase مُسطّح
+ * لاستخدامه في نقاط API المخصصة للمستخدم (مثل /customer-orders بحيث
+ * تكون الحقول camelCase على المستوى الأعلى بدلاً من داخل order_payload).
+ */
+function mapOrderRow(row) {
+  const meta = readOrderMeta(row);
+  const p = meta.payload || {};
+  return {
+    id: meta.id,
+    phone: meta.customerPhone,
+    orderNumber: p.orderNumber ?? row.order_number ?? '',
+    statusKey: meta.statusKey || 'pending',
+    statusAr: p.statusAr ?? '',
+    statusEn: p.statusEn ?? '',
+    deliveryStatusKey: meta.deliveryStatusKey || '',
+    deliveryStatusAr: p.deliveryStatusAr ?? '',
+    deliveryStatusEn: p.deliveryStatusEn ?? '',
+    merchantPhone: meta.merchantPhone || '',
+    courierPhone: meta.courierPhone || '',
+    merchantStoreName: p.merchantStoreName ?? '',
+    customerNameAr: p.customerNameAr ?? '',
+    customerNameEn: p.customerNameEn ?? '',
+    customerPhone: meta.customerPhone,
+    items: Array.isArray(p.items) ? p.items : [],
+    itemsNameAr: p.itemsNameAr ?? '',
+    itemsNameEn: p.itemsNameEn ?? '',
+    itemsCount: p.itemsCount ?? (Array.isArray(p.items) ? p.items.length : 0),
+    price: Number(p.price ?? 0),
+    originalPrice: Number(p.originalPrice ?? 0),
+    itemsSubtotalIqd: Number(p.itemsSubtotalIqd ?? 0),
+    deliveryFeeIqd: Number(p.deliveryFeeIqd ?? 0),
+    promoDiscountIqd: Number(p.promoDiscountIqd ?? 0),
+    deliveryFee: Number(p.deliveryFee ?? 0),
+    noteAr: p.noteAr ?? '',
+    noteEn: p.noteEn ?? '',
+    rejectionReason: p.rejectionReason ?? '',
+    rejectedAt: p.rejectedAt ?? null,
+    completedAt: p.completedAt ?? null,
+    deliveredAt: p.deliveredAt ?? null,
+    isPriceLocked: p.isPriceLocked === true,
+    assignedCourierName: p.assignedCourierName ?? '',
+    codConfirmed: p.codConfirmed === true,
+    latitude: p.latitude ?? null,
+    longitude: p.longitude ?? null,
+    address: p.address ?? '',
+    area: p.area ?? '',
+    createdAt: row.created_at ?? p.createdAt ?? null,
+    updatedAt: row.updated_at ?? p.updatedAt ?? null,
+  };
+}
   const payload = normalizeObject(row.order_payload);
   return {
     row,
@@ -521,6 +572,7 @@ module.exports = {
   getCustomerOrders,
   saveCustomerOrder,
   readOrderMeta,
+  mapOrderRow,
   isDeliveryPoolOrder,
   getDeliveryPoolOrders,
   getCourierAssignedOrders,

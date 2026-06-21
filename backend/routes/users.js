@@ -13,6 +13,7 @@ const {
   getCustomerFavorites,
   saveCustomerFavorite,
   getCustomerOrders,
+  mapOrderRow,
   saveCustomerOrder,
   saveDeviceToken,
   deleteDeviceToken,
@@ -217,7 +218,10 @@ router.get('/customer-orders', async (req, res) => {
     const phone = requireAuthorizedPhone(req, res);
     if (!phone) return;
     const rows = await getCustomerOrders(phone);
-    return res.json(rows);
+    // تحويل كل صف من تنسيق قاعدة البيانات (snake_case + order_payload)
+    // إلى تنسيق camelCase مسطّح ليتوافق مع نموذج ActiveOrder في Flutter
+    const mapped = rows.map(mapOrderRow);
+    return res.json(mapped);
   } catch (error) {
     console.error('get customer-orders error:', error);
     return res.status(500).json({ message: error?.message || 'Failed to load customer orders.' });

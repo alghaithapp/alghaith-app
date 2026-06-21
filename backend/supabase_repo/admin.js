@@ -68,8 +68,9 @@ const {
 async function getAdminReports(phone) {
   await assertAdminAccess(phone);
 
+  // تحديد عدد محدود من أحدث الطلبات لتقليل وقت التحميل وتحسين أداء لوحة التحكم
   const [orders, merchants, users, products] = await Promise.all([
-    selectMany('customer_orders', [], { column: 'updated_at', ascending: false }),
+    selectMany('customer_orders', [], { column: 'updated_at', ascending: false }, 200),
     selectMany('merchant_profiles', []),
     selectMany('app_users', []),
     selectMany('merchant_products', []),
@@ -137,7 +138,8 @@ async function getAllMerchants(adminPhone) {
 
   const [merchants, orders, products] = await Promise.all([
     selectMany('merchant_profiles', [], { column: 'store_name', ascending: true }),
-    selectMany('customer_orders', [], { column: 'updated_at', ascending: false }),
+    // تحديث: نحدد عدد الطلبات إلى 500 لتقليل وقت التحميل مع الاحتفاظ بإحصائيات كافية
+    selectMany('customer_orders', [], { column: 'updated_at', ascending: false }, 500),
     selectMany('merchant_products', [], { column: 'created_at', ascending: false }),
   ]);
   const userPhones = merchants.map((m) => m.phone).filter(Boolean);
@@ -1074,6 +1076,8 @@ async function getAllAdminAccounts(adminPhone) {
     selectMany('app_users', [], { column: 'updated_at', ascending: false }),
     selectMany('app_state', [], { column: 'updated_at', ascending: false }),
     selectMany('merchant_profiles', []),
+    // ملاحظة: getAllAdminAccounts يحتاج كل الحسابات لعرض قائمة كاملة،
+    // لكن يمكن إضافة ترقيم الصفحات (pagination) مستقبلاً للتحسين أكثر
   ]);
 
   const stateByPhone = {};
