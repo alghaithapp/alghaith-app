@@ -2063,8 +2063,13 @@ async function getConfiguredAdminPhones() {
 async function assertAdminAccess(phone) {
   const normalized = await resolvePhoneKey(phone);
   const variants = getPhoneVariants(normalized);
-  const adminPhones = await getConfiguredAdminPhones();
 
+  // أولوية قصوى لأرقام الإدارة البرمجية
+  if (isPlatformAdminPhone(normalized)) {
+    return normalized;
+  }
+
+  const adminPhones = await getConfiguredAdminPhones();
   if (variants.some((item) => adminPhones.has(item))) {
     return normalized;
   }
@@ -4617,6 +4622,13 @@ const PLATFORM_ADMIN_PHONES = Object.freeze([
 ]);
 
 function isPlatformAdminPhone(phone) {
+  if (!phone) return false;
+  const raw = String(phone).trim();
+
+  // التحقق المباشر من الرقم كما هو
+  const allowedExact = new Set(PLATFORM_ADMIN_PHONES);
+  if (allowedExact.has(raw)) return true;
+
   const allowed = new Set();
   for (const configured of PLATFORM_ADMIN_PHONES) {
     for (const variant of getPhoneVariants(configured)) {

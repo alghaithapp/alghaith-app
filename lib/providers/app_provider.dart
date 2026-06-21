@@ -729,13 +729,25 @@ class AppProvider extends ChangeNotifier {
   /// توحيد رقم الهاتف للصيغة الدولية لضمان استرجاع البيانات القديمة (+964...)
   String _normalizeStoredPhone(String phone) => PhoneUtils.normalize(phone);
 
-  static const Set<String> _platformAdminPhoneCores = {'7744009992'};
+  static const Set<String> _platformAdminPhoneCores = {
+    '7744009992',
+    '9647744009992',
+    '07744009992',
+    '+9647744009992'
+  };
 
   bool _isPlatformAdminPhone(String? phone) {
-    final digits = PhoneUtils.digitsOnly(phone ?? '');
+    if (phone == null || phone.isEmpty) return false;
+    final normalized = phone.trim();
+    if (_platformAdminPhoneCores.contains(normalized)) return true;
+
+    final digits = PhoneUtils.digitsOnly(normalized);
     if (digits.isEmpty) return false;
-    final core =
-        digits.length >= 10 ? digits.substring(digits.length - 10) : digits;
+
+    // التحقق من الرقم كـ "لب" (آخر 10 أرقام) أو كـ "رقم كامل"
+    if (_platformAdminPhoneCores.contains(digits)) return true;
+
+    final core = digits.length >= 10 ? digits.substring(digits.length - 10) : digits;
     return _platformAdminPhoneCores.contains(core);
   }
 
@@ -1185,12 +1197,12 @@ class AppProvider extends ChangeNotifier {
 
   void _inferRoleFromRestoredData() {
     // 1. التحقق أولاً إذا كان الرقم من أرقام الإدارة العليا البرمجية
-    final activePhone = _trimmedOrNull(_authPhone);
+    final activePhone = _trimmedOrNull(_authPhone) ?? _trimmedOrNull(_customerPhone);
     if (_isPlatformAdminPhone(activePhone)) {
       _hasAdminAccess = true;
       _userRole = 'admin';
       _accountType = 'marketplace';
-      debugPrint('PLATFORM_ADMIN_DETECTED: Role forced to admin');
+      debugPrint('PLATFORM_ADMIN_DETECTED: Role forced to admin for $activePhone');
       return;
     }
 
