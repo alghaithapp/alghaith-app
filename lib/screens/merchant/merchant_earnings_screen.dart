@@ -768,7 +768,13 @@ class _SimplifiedChartCard extends StatelessWidget {
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          for (final tick in [1000000, 750000, 500000, 250000, 0])
+                          for (final tick in [
+                            chartMax,
+                            (chartMax * 0.75).toInt(),
+                            (chartMax * 0.5).toInt(),
+                            (chartMax * 0.25).toInt(),
+                            0
+                          ])
                             Text(
                               tick == 0
                                   ? '0'
@@ -898,9 +904,10 @@ class _SimplifiedChartCard extends StatelessWidget {
 
   int _niceChartMax(int value) {
     if (value <= 0) return 1000000;
+    if (value < 10) return 10;
     final mag = math.pow(10, (math.log(value) / math.ln10).floor()).toInt();
-    final step = mag ~/ 4;
-    return ((value / step).ceil() * step).clamp(step, 1000000);
+    final step = math.max(1, mag ~/ 4);
+    return ((value / step).ceil() * step);
   }
 
   String _formatCompact(int v) {
