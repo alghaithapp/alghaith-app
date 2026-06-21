@@ -1,6 +1,7 @@
-import React from 'react';
-import { Bike, BadgeCheck, XCircle, UserX, Trash2, LoaderCircle, ExternalLink } from 'lucide-react';
+import React, { useState } from 'react';
+import { Bike, BadgeCheck, XCircle, UserX, Trash2, LoaderCircle, ExternalLink, Images } from 'lucide-react';
 import type { CourierSummary, AdminAccountSummary } from '../../admin-types';
+import DocumentsModal from '../DocumentsModal';
 
 interface CouriersViewProps {
   couriers: CourierSummary[];
@@ -31,6 +32,11 @@ export default function CouriersView({
   onSuspend,
   onOpenDelete,
 }: CouriersViewProps) {
+  const [selectedDocumentsTarget, setSelectedDocumentsTarget] = useState<{
+    displayName: string;
+    documents: Record<string, string>;
+  } | null>(null);
+
   return (
     <div className="merchant-list">
       {(() => {
@@ -174,6 +180,20 @@ export default function CouriersView({
                   </div>
                 </div>
                 <div className="merchant-actions">
+                  {/* View Documents */}
+                  {c.documents && Object.values(c.documents).some(url => url && url.trim() !== '') ? (
+                    <button
+                      className="soft-button secondary"
+                      onClick={() => setSelectedDocumentsTarget({
+                        displayName: c.name || c.phone || 'مندوب بدون اسم',
+                        documents: c.documents!
+                      })}
+                    >
+                      <Images size={16} />
+                      <span>عرض المستندات</span>
+                    </button>
+                  ) : null}
+
                   <button
                     className={
                       c.isApproved
@@ -298,6 +318,14 @@ export default function CouriersView({
           <p>لا يوجد مندوبو توصيل مطابقون للبحث الحالي.</p>
         </div>
       ) : null}
+
+      {selectedDocumentsTarget && (
+        <DocumentsModal
+          displayName={selectedDocumentsTarget.displayName}
+          documents={selectedDocumentsTarget.documents}
+          onClose={() => setSelectedDocumentsTarget(null)}
+        />
+      )}
     </div>
   );
 }

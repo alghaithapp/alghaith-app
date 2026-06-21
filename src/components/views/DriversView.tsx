@@ -1,6 +1,7 @@
-import React from 'react';
-import { Car, BadgeCheck, XCircle, UserX, Trash2, LoaderCircle } from 'lucide-react';
+import React, { useState } from 'react';
+import { Car, BadgeCheck, XCircle, UserX, Trash2, LoaderCircle, Images } from 'lucide-react';
 import type { AdminAccountSummary } from '../../admin-types';
+import DocumentsModal from '../DocumentsModal';
 
 interface DriversViewProps {
   drivers: AdminAccountSummary[];
@@ -36,6 +37,10 @@ export default function DriversView({
   onSuspend,
   onOpenDelete,
 }: DriversViewProps) {
+  const [selectedDocumentsTarget, setSelectedDocumentsTarget] = useState<{
+    displayName: string;
+    documents: Record<string, string>;
+  } | null>(null);
 
   const pendingList   = filteredDrivers.filter((d) => !d.isApproved && d.approvalStatus === 'pending');
   const approvedList  = filteredDrivers.filter((d) => d.isApproved);
@@ -132,6 +137,20 @@ export default function DriversView({
 
               {/* Actions */}
               <div className="merchant-actions">
+                {/* View Documents */}
+                {d.documents && Object.values(d.documents).some(url => url && url.trim() !== '') ? (
+                  <button
+                    className="soft-button secondary"
+                    onClick={() => setSelectedDocumentsTarget({
+                      displayName: d.displayName || d.fullName || 'سائق بدون اسم',
+                      documents: d.documents!
+                    })}
+                  >
+                    <Images size={15} />
+                    <span>عرض المستندات</span>
+                  </button>
+                ) : null}
+
                 {/* Approve / deactivate */}
                 <button
                   className={d.isApproved ? 'soft-button danger' : 'soft-button success'}
@@ -164,14 +183,14 @@ export default function DriversView({
                     ) : (
                       <XCircle size={15} />
                     )}
-                    <span>رفض مع سبب</span>
+                    <span>رفض</span>
                   </button>
                 ) : null}
 
-                {/* Suspend */}
+                {/* Suspend / Unsuspend */}
                 <button
-                  className={d.isSuspended ? 'soft-button success' : 'soft-button danger'}
-                  disabled={approvalLoading || rejectLoading || suspendLoading || deleteLoading}
+                  className="soft-button secondary"
+                  disabled={suspendLoading || deleteLoading}
                   onClick={() => onSuspend(d).catch(() => undefined)}
                 >
                   {suspendLoading ? (
@@ -179,13 +198,13 @@ export default function DriversView({
                   ) : (
                     <UserX size={15} />
                   )}
-                  <span>{d.isSuspended ? 'فك التعليق' : 'تعليق الحساب'}</span>
+                  <span>{d.isSuspended ? 'إلغاء التعليق' : 'تجميد الحساب'}</span>
                 </button>
 
                 {/* Delete */}
                 <button
                   className="soft-button danger"
-                  disabled={approvalLoading || rejectLoading || suspendLoading || deleteLoading}
+                  disabled={deleteLoading || suspendLoading}
                   onClick={() => onOpenDelete(d)}
                 >
                   {deleteLoading ? (
@@ -200,6 +219,14 @@ export default function DriversView({
           </React.Fragment>
         );
       })}
+
+      {selectedDocumentsTarget && (
+        <DocumentsModal
+          displayName={selectedDocumentsTarget.displayName}
+          documents={selectedDocumentsTarget.documents}
+          onClose={() => setSelectedDocumentsTarget(null)}
+        />
+      )}
     </div>
   );
 }

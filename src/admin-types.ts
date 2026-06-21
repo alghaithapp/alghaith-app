@@ -204,6 +204,15 @@ export interface AdminAccountSummary {
   hasMerchantProfile: boolean;
   hasCourierProfile: boolean;
   hasDriverProfile: boolean;
+  documents?: {
+    profileImage?: string;
+    vehicleImage?: string;
+    idFrontImage?: string;
+    idBackImage?: string;
+    residenceCardImage?: string;
+    vehicleRegFrontImage?: string;
+    vehicleRegBackImage?: string;
+  };
 }
 
 export interface CourierSummary {
@@ -221,6 +230,13 @@ export interface CourierSummary {
   role: string;
   accountType: string;
   updatedAt: string | null;
+  documents?: {
+    profileImage?: string;
+    vehicleImage?: string;
+    idFrontImage?: string;
+    idBackImage?: string;
+    residenceCardImage?: string;
+  };
 }
 
 export const MERCHANT_REJECTION_REASONS: Array<{

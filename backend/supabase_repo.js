@@ -3360,6 +3360,13 @@ function mapCourierForAdmin(phone, user, profile) {
     role: String(user?.role ?? '').trim(),
     accountType: String(user?.account_type ?? '').trim(),
     updatedAt: user?.updated_at ?? null,
+    documents: {
+      profileImage: String(profile.profileImage ?? ''),
+      vehicleImage,
+      idFrontImage: String(profile.idFrontImage ?? ''),
+      idBackImage: String(profile.idBackImage ?? ''),
+      residenceCardImage: String(profile.residenceCardImage ?? ''),
+    },
   };
 }
 
@@ -4408,6 +4415,15 @@ function mapAdminAccountSummary(user, state, merchantProfile) {
     hasMerchantProfile: Boolean(merchantProfile),
     hasCourierProfile: isCourierProfileComplete(courierProfile),
     hasDriverProfile: isDriverProfileComplete(driverProfile),
+    documents: {
+      profileImage: String(driverProfile?.profileImage || courierProfile?.profileImage || ''),
+      vehicleImage: String(driverProfile?.carImage || courierProfile?.vehicleImage || courierProfile?.bikeImage || ''),
+      idFrontImage: String(driverProfile?.idFrontImage || courierProfile?.idFrontImage || ''),
+      idBackImage: String(driverProfile?.idBackImage || courierProfile?.idBackImage || ''),
+      residenceCardImage: String(driverProfile?.residenceCardImage || courierProfile?.residenceCardImage || ''),
+      vehicleRegFrontImage: String(driverProfile?.vehicleRegFrontImage || ''),
+      vehicleRegBackImage: String(driverProfile?.vehicleRegBackImage || ''),
+    },
   };
 }
 
