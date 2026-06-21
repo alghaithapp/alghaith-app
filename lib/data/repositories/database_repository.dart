@@ -341,26 +341,34 @@ class DatabaseRepository {
   /// تحميل كل بيانات المستخدم من السيرفر دفعة واحدة (تُستدعى بعد تسجيل الدخول).
   Future<RemoteAccountBundle> loadAccountBundle(String phone) async {
     final normalized = _phone(phone);
-    final results = await Future.wait([
-      loadAppUser(normalized),
-      _loadCustomerProfile(normalized),
-      _loadCustomerAddresses(normalized),
-      _loadCustomerFavoriteIds(normalized),
-      loadMerchantProfile(normalized),
-      loadUserState(normalized),
-      _loadCustomerOrders(normalized),
-      loadMerchantProducts(normalized),
-    ], eagerError: false);
+    
+    Future<T> safe<T>(Future<T> request, T fallback) async {
+      try {
+        return await request;
+      } catch (e) {
+        debugPrint('loadAccountBundle safe fetch error: $e');
+        return fallback;
+      }
+    }
+
+    final appUser = await safe(loadAppUser(normalized), null);
+    final customerProfile = await safe(_loadCustomerProfile(normalized), null);
+    final addresses = await safe(_loadCustomerAddresses(normalized), <String>[]);
+    final favoriteIds = await safe(_loadCustomerFavoriteIds(normalized), <String>[]);
+    final merchantProfile = await safe(loadMerchantProfile(normalized), null);
+    final userState = await safe(loadUserState(normalized), null);
+    final orders = await safe(_loadCustomerOrders(normalized), <ActiveOrder>[]);
+    final products = await safe(loadMerchantProducts(normalized), <Map<String, dynamic>>[]);
 
     return RemoteAccountBundle(
-      appUser: results[0] is Map ? Map<String, dynamic>.from(results[0] as Map) : null,
-      customerProfile: results[1] is Map ? Map<String, dynamic>.from(results[1] as Map) : null,
-      addresses: results[2] is List ? (results[2] as List).map((e) => e.toString()).toList() : const [],
-      favoriteIds: results[3] is List ? (results[3] as List).map((e) => e.toString()).toList() : const [],
-      merchantProfile: results[4] is Map ? Map<String, dynamic>.from(results[4] as Map) : null,
-      userState: results[5] is Map ? Map<String, dynamic>.from(results[5] as Map) : null,
-      orders: results[6] is List ? (results[6] as List).map((e) => ActiveOrder.fromMap(Map<String, dynamic>.from(e as Map))).toList() : const [],
-      products: results[7] is List ? (results[7] as List).map((e) => Map<String, dynamic>.from(e as Map)).toList() : const [],
+      appUser: appUser,
+      customerProfile: customerProfile,
+      addresses: addresses,
+      favoriteIds: favoriteIds,
+      merchantProfile: merchantProfile,
+      userState: userState,
+      orders: orders,
+      products: products,
     );
   }
 
