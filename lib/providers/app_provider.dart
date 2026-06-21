@@ -1186,11 +1186,9 @@ class AppProvider extends ChangeNotifier {
 
     // دائماً فضّل الدور القادم من السيرفر إذا كان موجوداً
     if (storedRole != null && isRoleAllowedForAccount(storedRole)) {
+      _userRole = storedRole;
       if (storedRole == 'admin') {
-        _userRole = 'customer';
         _hasAdminAccess = true;
-      } else {
-        _userRole = storedRole;
       }
       return;
     }
@@ -5252,7 +5250,7 @@ class AppProvider extends ChangeNotifier {
       final previous = _adminReports == null
           ? null
           : Map<String, dynamic>.from(_adminReports!);
-      // _adminReports = await SupabaseService.loadAdminReports(phone); // Not implemented
+      _adminReports = await SupabaseService.loadAdminReports(phone);
       _notificationHub.onAdminReportsUpdated(previous, _adminReports);
       notifyListeners();
     } catch (error) {

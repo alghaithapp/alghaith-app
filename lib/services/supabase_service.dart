@@ -172,9 +172,8 @@ class SupabaseService {
   ) =>
       _db.rejectDeliveryOrder(courierPhone, orderId);
 
-  // Taxi methods removed (old taxi service)
-  // static Future<Map<String, dynamic>> loadAdminReports(String phone) =>
-  //     _db.loadAdminReports(phone); // Not implemented
+  static Future<Map<String, dynamic>> loadAdminReports(String phone) =>
+      _db.loadAdminReports(phone);
 
   static Future<Map<String, HomeCategoryPlatformOverride>> loadHomeCategoriesConfig() =>
       _db.loadHomeCategoriesConfig();

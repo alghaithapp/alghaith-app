@@ -389,7 +389,13 @@ class DatabaseRepository {
 
   // ── دوال مساعدة — stubs للتوافق ──
 
-  Future<Map<String, dynamic>> loadAdminReports(String phone) async => {};
+  Future<Map<String, dynamic>> loadAdminReports(String phone) async {
+    final result = await ApiClient.instance.get(
+      '/db/admin/reports',
+      queryParameters: {'phone': _phone(phone)},
+    );
+    return result is Map ? Map<String, dynamic>.from(result) : const {};
+  }
   Future<Map<String, HomeCategoryPlatformOverride>> loadHomeCategoriesConfig() async => {};
   Future<Map<String, HomeCategoryPlatformOverride>> saveHomeCategoriesConfig({
     required String phone, required Map<String, HomeCategoryPlatformOverride> overrides,
