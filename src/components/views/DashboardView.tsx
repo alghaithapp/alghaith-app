@@ -26,7 +26,7 @@ interface DashboardViewProps {
   totalMerchants: number;
   totalCouriers: number;
   totalDrivers: number;
-  onSwitchView: (view: string) => void;
+  onSwitchView: (view: any) => void;
   onSetMerchantFilter: (filter: string) => void;
   formatMoney: (value: number) => string;
   formatDate: (value: string | null | undefined) => string;
@@ -218,7 +218,10 @@ export default function DashboardView({
           count={approvalQueue.length}
           buttonLabel="مراجعة البازار"
           buttonClass={approvalQueue.length > 0 ? 'warning' : ''}
-          onClick={() => onSwitchView('approvals')}
+          onClick={() => {
+            onSetMerchantFilter('bazaar');
+            onSwitchView('merchants');
+          }}
         />
         <QuickActionCard
           icon={<Bike size={15} />}
