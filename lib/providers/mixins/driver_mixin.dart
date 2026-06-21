@@ -50,6 +50,7 @@ mixin DriverMixin on AppCoreMixin, PersistenceMixin {
     }
     if (_authPhone != null && _authPhone!.isNotEmpty) {
       await SupabaseService.saveUserState(_authPhone!, _buildRemoteState());
+      await _persistLocalBackup();
     }
     notifyListeners();
   }
