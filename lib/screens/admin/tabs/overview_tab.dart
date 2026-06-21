@@ -43,22 +43,23 @@ class OverviewTab extends StatelessWidget {
         children: [
           if (isEmpty)
             Container(
-              padding: const EdgeInsets.all(16),
-              margin: const EdgeInsets.only(bottom: 16),
-              decoration: BoxDecoration(
-                color: Colors.amber.shade50,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.amber.shade200),
-              ),
-              child: Row(
-                children: const [
-                  Icon(Icons.sync_problem_rounded, color: Colors.amber),
-                  SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      'جاري تحميل البيانات أو تعذر الاتصال بالسيرفر. اسحب للأسفل للتحديث.',
-                      style: TextStyle(fontFamily: 'Cairo', fontSize: 13, color: Colors.black87),
-                    ),
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(color: Colors.red.shade50, borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.red.shade100)),
+              child: Column(
+                children: [
+                  const Icon(Icons.error_outline, color: Colors.red, size: 48),
+                  const SizedBox(height: 16),
+                  Text(
+                    provider.adminReportsError ?? 'جاري تحميل البيانات أو تعذر الاتصال بالسيرفر. اسحب للأسفل للتحديث.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontFamily: 'Cairo', color: Colors.red.shade700, fontSize: 16),
+                  ),
+                  const SizedBox(height: 16),
+                  ElevatedButton.icon(
+                    onPressed: () => provider.refreshAdminReports(),
+                    icon: const Icon(Icons.refresh),
+                    label: const Text('إعادة المحاولة', style: TextStyle(fontFamily: 'Cairo')),
+                    style: ElevatedButton.styleFrom(backgroundColor: Colors.red.shade700, foregroundColor: Colors.white),
                   ),
                 ],
               ),

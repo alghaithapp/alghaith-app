@@ -21,8 +21,10 @@ mixin AdminMixin on AppCoreMixin, PersistenceMixin, CustomerMixin {
 
   List<Map<String, dynamic>> get allDrivers =>
       List<Map<String, dynamic>>.unmodifiable(_allDrivers);
-
+  Map<String, dynamic>? _adminReports;
+  String? _adminReportsError;
   Map<String, dynamic>? get adminReports => _adminReports;
+  String? get adminReportsError => _adminReportsError;
 
   Future<void> refreshAllMerchants() async {
     final phone = _trimmedOrNull(_authPhone) ?? _trimmedOrNull(_customerPhone);
@@ -59,8 +61,9 @@ mixin AdminMixin on AppCoreMixin, PersistenceMixin, CustomerMixin {
 
   Future<void> refreshAdminReports() async {
     final phone = _trimmedOrNull(_authPhone) ?? _trimmedOrNull(_customerPhone);
-    if (phone == null) return;
+    if (phone == null || !SupabaseService.isConfigured) return;
     try {
+      _adminReportsError = null;
       final previous = _adminReports == null
           ? null
           : Map<String, dynamic>.from(_adminReports!);
@@ -69,6 +72,8 @@ mixin AdminMixin on AppCoreMixin, PersistenceMixin, CustomerMixin {
       notifyListeners();
     } catch (error) {
       debugPrint('ADMIN_REPORTS_ERROR: $error');
+      _adminReportsError = error.toString();
+      notifyListeners();
     }
   }
 
@@ -219,6 +224,19 @@ mixin AdminMixin on AppCoreMixin, PersistenceMixin, CustomerMixin {
       notifyListeners();
     } catch (error) {
       debugPrint('ADMIN_REJECT_DRIVER_ERROR: $error');
+      rethrow;
+    }
+  }
+
+  Future<void> deleteDriverAccount(String driverPhone) async {
+    final phone = _trimmedOrNull(_authPhone) ?? _trimmedOrNull(_customerPhone);
+    if (phone == null || !SupabaseService.isConfigured) return;
+    try {
+      await SupabaseService.deleteDriverAccount(phone, driverPhone);
+      await refreshAllDrivers();
+      notifyListeners();
+    } catch (error) {
+      debugPrint('ADMIN_DELETE_DRIVER_ERROR: $error');
       rethrow;
     }
   }

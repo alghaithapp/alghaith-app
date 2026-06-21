@@ -4218,7 +4218,36 @@ async function toggleDriverApprovalStatus(adminPhone, driverPhone, isApproved) {
   return { success: true, driver: mapped };
 }
 
-async function rejectDriverApplication(
+async function deleteDriverAccount(adminPhone, driverPhone) {
+  await assertAdminAccess(adminPhone);
+  const phoneKey = await resolvePhoneKey(driverPhone);
+  const state = await getUserState(phoneKey);
+  
+  if (!state) return { success: false, message: 'Driver state not found.' };
+
+  const hasCustomer = !!(await selectSingleByPhone('customer_profiles', phoneKey));
+  const hasMerchant = !!(await selectSingleByPhone('merchant_profiles', phoneKey));
+  
+  if (!hasCustomer && !hasMerchant) {
+    // If they have NO customer profile and NO merchant profile, delete entire app_users row
+    return { success: true, partial: false, result: await deleteAppUser(phoneKey) };
+  }
+
+  // Otherwise, they have other profiles. Just clear the driver data.
+  const nextState = { ...state };
+  nextState.driverProfile = null;
+  
+  // Set role to merchant or customer
+  if (nextState.userRole === 'driver') {
+    nextState.userRole = hasMerchant ? 'merchant' : 'customer';
+  }
+  if (nextState.user_role === 'driver') {
+    nextState.user_role = hasMerchant ? 'merchant' : 'customer';
+  }
+
+  await saveUserState(phoneKey, nextState);
+  return { success: true, partial: true };
+}async function rejectDriverApplication(
   adminPhone,
   driverPhone,
   reasonKey = '',
@@ -4916,6 +4945,7 @@ module.exports = {
   rejectMerchantApplication,
   toggleDriverApprovalStatus,
   rejectDriverApplication,
+  deleteDriverAccount,
   getAdminMerchantDetails,
   toggleBazaarMemberStatus,
   toggleMerchantFreezeStatus,

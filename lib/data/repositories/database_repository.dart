@@ -431,6 +431,12 @@ class DatabaseRepository {
   Future<void> toggleCourierApprovalStatus({required String courierPhone, required bool isApproved}) async {}
   Future<void> toggleDriverApprovalStatus({required String driverPhone, required bool isApproved}) async {}
   Future<void> rejectDriverApplication({required String driverPhone, required String reasonKey, String? rejectionMessageAr}) async {}
+  Future<void> deleteDriverAccount(String adminPhone, String driverPhone) async {
+    await ApiClient.instance.delete(
+      '/db/admin/driver',
+      queryParameters: {'phone': _phone(adminPhone), 'driverPhone': _phone(driverPhone)},
+    );
+  }
   Future<void> rejectCourierApplication({required String courierPhone, required String reasonKey, String? rejectionMessageAr}) async {}
   Future<void> toggleMerchantFreezeStatus({required String merchantPhone, required bool isFrozen}) async {}
   Future<void> toggleMerchantApprovalStatus({required String merchantPhone, required bool isApproved}) async {}

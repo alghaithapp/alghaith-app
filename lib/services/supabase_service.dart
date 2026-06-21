@@ -283,12 +283,12 @@ class SupabaseService {
 
   static Future<List<Map<String, dynamic>>> loadAllMerchants() =>
       _db.loadAllMerchants();
-
-  static Future<List<Map<String, dynamic>>> loadAllDrivers() =>
-      _db.loadAllDrivers();
-
   static Future<List<Map<String, dynamic>>> loadAllCouriers() =>
       _db.loadAllCouriers();
+  static Future<List<Map<String, dynamic>>> loadAllDrivers() =>
+      _db.loadAllDrivers();
+  static Future<void> deleteDriverAccount(String adminPhone, String driverPhone) =>
+      _db.deleteDriverAccount(adminPhone, driverPhone);
 
   static Future<Map<String, dynamic>> toggleMerchantBazaarStatus({
     required String merchantPhone,

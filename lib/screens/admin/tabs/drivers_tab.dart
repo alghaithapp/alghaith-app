@@ -72,6 +72,9 @@ class DriverManagementTabState extends State<DriverManagementTab> {
       } else if (action == 'reject') {
         _showRejectDialog(context, provider, d);
         return;
+      } else if (action == 'delete') {
+        _showDeleteDialog(context, provider, d);
+        return;
       }
     } catch (error) {
       if (context.mounted) {
@@ -113,6 +116,40 @@ class DriverManagementTabState extends State<DriverManagementTab> {
     }
     setState(() { _busyDriverPhone = null; _busyAction = null; });
     controller.dispose();
+  }
+
+  Future<void> _showDeleteDialog(BuildContext context, AppProvider provider, Map driver) async {
+    final phone = driver['phone']?.toString() ?? '';
+    final name = driver['name'] ?? 'السائق';
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('تأكيد الحذف', style: TextStyle(fontFamily: 'Cairo', color: Colors.red)),
+        content: Text('هل أنت متأكد من حذف حساب $name؟ سيتم حذف بيانات سائق التكسي فقط ولن تتأثر حساباته الأخرى (الزبون/التاجر).', style: const TextStyle(fontFamily: 'Cairo')),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('إلغاء')),
+          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('حذف', style: TextStyle(color: Colors.red))),
+        ],
+      ),
+    );
+    if (confirmed == true) {
+      setState(() { _busyDriverPhone = phone; _busyAction = 'delete'; });
+      try {
+        await provider.deleteDriverAccount(phone);
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('تم حذف حساب السائق بنجاح', style: TextStyle(fontFamily: 'Cairo'))),
+          );
+        }
+      } catch (error) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('فشل الحذف: $error', style: const TextStyle(fontFamily: 'Cairo'))),
+          );
+        }
+      }
+      setState(() { _busyDriverPhone = null; _busyAction = null; });
+    }
   }
 }
 
@@ -202,6 +239,12 @@ class DriverCard extends StatelessWidget {
                   isLoading: isBusy && busyAction == 'stop',
                 )),
               ],
+              const SizedBox(width: 8),
+              Expanded(child: QuickActionBtn(
+                label: 'حذف', icon: Icons.delete_outline, color: Colors.red.shade900,
+                onTap: () => onAction('delete'),
+                isLoading: isBusy && busyAction == 'delete',
+              )),
             ],
           ),
         ],

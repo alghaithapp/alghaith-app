@@ -94,6 +94,25 @@ router.get('/admin/drivers', async (req, res) => {
   }
 });
 
+router.delete('/admin/driver', async (req, res) => {
+  try {
+    const adminPhone = requireOptionalAuthorizedPhone(req, res);
+    if (!adminPhone) return;
+    const driverPhone = String(parseQueryValue(req.query.driverPhone) || '').trim();
+    if (!driverPhone) {
+      return res.status(400).json({ message: 'Driver phone is required.' });
+    }
+    const { deleteDriverAccount } = require('../supabase_repo');
+    const result = await deleteDriverAccount(adminPhone, driverPhone);
+    return res.json(result);
+  } catch (error) {
+    console.error('admin delete-driver error:', error);
+    const message = error?.message || 'Failed to delete driver account.';
+    const status = message.includes('Admin access') ? 403 : 500;
+    return res.status(status).json({ message });
+  }
+});
+
 router.get('/admin/merchant-details', async (req, res) => {
   try {
     const phone = requireOptionalAuthorizedPhone(req, res);
