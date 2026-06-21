@@ -279,6 +279,11 @@ class _AlGhaithAppState extends State<AlGhaithApp> {
         return const ExitConfirmScope(child: PhoneLoginScreen());
       }
 
+      // أولوية قصوى لمدير المنصة: تجاوز كل شيء والذهاب لمركز التحكم
+      if (appProvider.isAdmin) {
+        return const ExitConfirmScope(child: AdminDashboardScreen());
+      }
+
       if (!appProvider.hasSelectedRole) {
         return const ExitConfirmScope(child: RoleSelectionScreen());
       }
@@ -312,8 +317,6 @@ class _AlGhaithAppState extends State<AlGhaithApp> {
           return const ExitConfirmScope(child: DeliveryPendingApprovalScreen());
         }
         return const ExitConfirmScope(child: DeliveryShell());
-      if (appProvider.isAdmin) {
-        return const ExitConfirmScope(child: AdminDashboardScreen());
       }
 
       if (appProvider.isCustomer &&

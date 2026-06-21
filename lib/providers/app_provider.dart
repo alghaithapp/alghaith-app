@@ -1185,12 +1185,12 @@ class AppProvider extends ChangeNotifier {
 
   void _inferRoleFromRestoredData() {
     // 1. التحقق أولاً إذا كان الرقم من أرقام الإدارة العليا البرمجية
-    if (_isPlatformAdminPhone(_authPhone)) {
+    final activePhone = _trimmedOrNull(_authPhone);
+    if (_isPlatformAdminPhone(activePhone)) {
       _hasAdminAccess = true;
-      // إذا لم يكن هناك دور محدد أو كان الدور 'customer' فنجبره على 'admin'
-      if (_userRole == null || _userRole == 'customer') {
-        _userRole = 'admin';
-      }
+      _userRole = 'admin';
+      _accountType = 'marketplace';
+      debugPrint('PLATFORM_ADMIN_DETECTED: Role forced to admin');
       return;
     }
 
@@ -5264,8 +5264,10 @@ class AppProvider extends ChangeNotifier {
           : Map<String, dynamic>.from(_adminReports!);
 
       final reports = await SupabaseService.loadAdminReports(phone);
-      if (reports.isEmpty) {
-        debugPrint('ADMIN_REPORTS_WARNING: Backend returned empty reports.');
+      if (reports.isEmpty || (reports['totalUsers'] ?? 0) == 0) {
+        debugPrint('ADMIN_REPORTS_EMPTY: Retrying in 3 seconds...');
+        Future.delayed(const Duration(seconds: 3), () => refreshAdminReports());
+        return;
       }
 
       _adminReports = reports;
@@ -5274,7 +5276,7 @@ class AppProvider extends ChangeNotifier {
     } catch (error) {
       debugPrint('ADMIN_REPORTS_ERROR: $error');
       // محاولة إعادة المحاولة مرة واحدة بعد ثانية في حال كان السيرفر في وضع التشغيل البارد
-      Future.delayed(const Duration(seconds: 2), () => refreshAdminReports());
+      Future.delayed(const Duration(seconds: 5), () => refreshAdminReports());
     }
   }
 
