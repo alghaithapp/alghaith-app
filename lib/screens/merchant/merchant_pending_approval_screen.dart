@@ -63,10 +63,12 @@ class _MerchantPendingApprovalScreenState
       if (!mounted) return;
       final approved = context.read<AppProvider>().isMerchantApproved;
       if (!wasApproved && approved) {
-        final isProfessional =
-            context.read<AppProvider>().merchantServiceIds.contains('professionals') ||
-                context.read<AppProvider>().merchantActiveServiceId ==
-                    'professionals';
+        final isProfessional = context
+                .read<AppProvider>()
+                .merchantServiceIds
+                .contains('professionals') ||
+            context.read<AppProvider>().merchantActiveServiceId ==
+                'professionals';
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
@@ -89,8 +91,9 @@ class _MerchantPendingApprovalScreenState
     final provider = context.watch<AppProvider>();
     final store = provider.merchantStore;
     final storeName = provider.merchantStoreName;
-    final isProfessional = provider.merchantServiceIds.contains('professionals') ||
-        provider.merchantActiveServiceId == 'professionals';
+    final isProfessional =
+        provider.merchantServiceIds.contains('professionals') ||
+            provider.merchantActiveServiceId == 'professionals';
     final isRejected = MerchantProfileFields.isRejected(store);
     final rejectionMessage = MerchantProfileFields.rejectionMessage(store);
     final accountLabel = isProfessional ? 'حساب المهني' : 'حساب التاجر';
@@ -101,7 +104,8 @@ class _MerchantPendingApprovalScreenState
       appBar: AppBar(
         title: Text(
           isRejected ? 'طلبك يحتاج تعديلاً' : 'بانتظار الموافقة',
-          style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w900),
+          style:
+              const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w900),
         ),
         actions: [
           IconButton(
@@ -241,7 +245,8 @@ class _MerchantPendingApprovalScreenState
               icon: const Icon(Icons.support_agent_rounded),
               label: const Text(
                 'تواصل مع الدعم',
-                style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w700),
+                style:
+                    TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w700),
               ),
               style: FilledButton.styleFrom(
                 backgroundColor: const Color(0xFFF5A01D),
@@ -250,6 +255,26 @@ class _MerchantPendingApprovalScreenState
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(14),
                 ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              onPressed: () {
+                context.read<AppProvider>().setUserRole('customer');
+              },
+              icon: const Icon(Icons.person_rounded),
+              label: const Text(
+                'العودة لحساب الزبون',
+                style:
+                    TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w700),
+              ),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: Colors.grey.shade800,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                side: BorderSide(color: Colors.grey.shade400),
               ),
             ),
           ],

@@ -91,7 +91,8 @@ class _DeliveryPendingApprovalScreenState
       appBar: AppBar(
         title: Text(
           isRejected ? 'طلبك يحتاج تعديلاً' : 'بانتظار الموافقة',
-          style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w900),
+          style:
+              const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w900),
         ),
         actions: [
           IconButton(
@@ -216,7 +217,8 @@ class _DeliveryPendingApprovalScreenState
               icon: const Icon(Icons.support_agent_rounded),
               label: const Text(
                 'تواصل مع الدعم',
-                style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w700),
+                style:
+                    TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w700),
               ),
               style: FilledButton.styleFrom(
                 backgroundColor: const Color(0xFF007A7A),
@@ -224,6 +226,26 @@ class _DeliveryPendingApprovalScreenState
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(14),
                 ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              onPressed: () {
+                context.read<AppProvider>().setUserRole('customer');
+              },
+              icon: const Icon(Icons.person_rounded),
+              label: const Text(
+                'العودة لحساب الزبون',
+                style:
+                    TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w700),
+              ),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: Colors.grey.shade800,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                side: BorderSide(color: Colors.grey.shade400),
               ),
             ),
           ],

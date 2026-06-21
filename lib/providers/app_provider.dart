@@ -578,6 +578,7 @@ class AppProvider extends ChangeNotifier {
     if (driverAcceptsDelivery) return 'سائق توصيل';
     return 'سائق تكسي';
   }
+
   String get driverServiceModeLabelEn {
     if (_userRole != 'driver') return '';
     if (driverAcceptsBoth) return 'Taxi + Delivery';
@@ -991,8 +992,10 @@ class AppProvider extends ChangeNotifier {
 
       if (merchantProfile != null) {
         // حماية: لا نستبدل بيانات المتجر المحلية ببيانات فارغة أو قديمة من السحابة
-        final hasLocalStore = _merchantStore != null && merchantStoreName.isNotEmpty;
-        final remoteStoreName = (merchantProfile['store_name'] as String?)?.trim() ?? '';
+        final hasLocalStore =
+            _merchantStore != null && merchantStoreName.isNotEmpty;
+        final remoteStoreName =
+            (merchantProfile['store_name'] as String?)?.trim() ?? '';
         if (!hasLocalStore || remoteStoreName.isNotEmpty) {
           _applyMerchantStoreSnapshot(_mapMerchantProfileRow(merchantProfile));
           if (_userRole == null) {
@@ -1094,7 +1097,10 @@ class AppProvider extends ChangeNotifier {
       // التسجيل الناقص (مثل ملف المندوب) يُكمَّل تلقائياً عبر توجيه الشاشات.
       case 'marketplace':
       case 'delivery':
-        return role == 'customer' || role == 'merchant' || role == 'delivery' || role == 'driver';
+        return role == 'customer' ||
+            role == 'merchant' ||
+            role == 'delivery' ||
+            role == 'driver';
       case 'driver':
         return role == 'driver';
       default:
@@ -1873,6 +1879,9 @@ class AppProvider extends ChangeNotifier {
         wasRejected: wasDriverRejected,
         previousRejectionMessage: previousDriverRejectionMessage,
       );
+    } else if (state.containsKey('driverProfile') && driverProfile == null) {
+      _driverProfile = null;
+      if (_userRole == 'driver') _userRole = 'customer';
     }
     final courierProfile = state['courierProfile'];
     if (courierProfile is Map) {
@@ -1882,6 +1891,9 @@ class AppProvider extends ChangeNotifier {
         wasRejected: wasCourierRejected,
         previousRejectionMessage: previousRejectionMessage,
       );
+    } else if (state.containsKey('courierProfile') && courierProfile == null) {
+      _courierProfile = null;
+      if (_userRole == 'delivery') _userRole = 'customer';
     }
     _accountType = _trimmedOrNull(
           state['accountType']?.toString() ?? state['account_type']?.toString(),
@@ -1941,6 +1953,9 @@ class AppProvider extends ChangeNotifier {
     if (storedMerchant is Map &&
         (_merchantStore == null || merchantStoreName.isEmpty)) {
       _applyMerchantStoreSnapshot(Map<String, dynamic>.from(storedMerchant));
+    } else if (state.containsKey('merchantStore') && storedMerchant == null) {
+      _merchantStore = null;
+      if (_userRole == 'merchant') _userRole = 'customer';
     }
     final statusQueue = state['pendingOrderStatusSyncQueue'];
     if (statusQueue is List) {
@@ -2362,7 +2377,8 @@ class AppProvider extends ChangeNotifier {
     if (_userRole != 'driver' || _driverProfile == null) return;
     _driverType = 'taxi';
     final currentServices = _driverProfile?['services'];
-    final deliveryEnabled = currentServices is Map && currentServices['delivery'] == true;
+    final deliveryEnabled =
+        currentServices is Map && currentServices['delivery'] == true;
     _driverProfile = {
       ..._driverProfile!,
       'type': 'taxi',
@@ -5014,7 +5030,6 @@ class AppProvider extends ChangeNotifier {
     await refreshAccountFromCloud();
   }
 
-
   Future<void> refreshAllCouriers() async {
     final phone = _trimmedOrNull(_authPhone) ?? _trimmedOrNull(_customerPhone);
     if (phone == null || !SupabaseService.isConfigured) return;
@@ -5167,8 +5182,8 @@ class AppProvider extends ChangeNotifier {
         driverPhone: driverPhone,
         isApproved: isApproved,
       );
-      final index = _allDrivers
-          .indexWhere((d) => d['phone']?.toString() == driverPhone);
+      final index =
+          _allDrivers.indexWhere((d) => d['phone']?.toString() == driverPhone);
       if (index != -1) {
         _allDrivers[index] = Map<String, dynamic>.from(_allDrivers[index]);
         _allDrivers[index]['isApproved'] = isApproved;

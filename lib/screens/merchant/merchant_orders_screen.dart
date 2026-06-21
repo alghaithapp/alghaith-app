@@ -82,9 +82,7 @@ class _MerchantOrdersScreenState extends State<MerchantOrdersScreen> {
       if (ta == null && tb == null) return 0;
       if (ta == null) return 1;
       if (tb == null) return -1;
-      return _sort == _OrdersSort.newest
-          ? tb.compareTo(ta)
-          : ta.compareTo(tb);
+      return _sort == _OrdersSort.newest ? tb.compareTo(ta) : ta.compareTo(tb);
     });
     return list;
   }
@@ -791,9 +789,7 @@ class _FilterTabs extends StatelessWidget {
                 color: active ? _brand : Colors.white,
                 borderRadius: BorderRadius.circular(999),
                 border: Border.all(
-                  color: active
-                      ? _brand
-                      : const Color(0xFFE5E5EA),
+                  color: active ? _brand : const Color(0xFFE5E5EA),
                 ),
                 boxShadow: active ? _shadowPill : null,
               ),
@@ -970,6 +966,54 @@ class _PremiumOrderCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 18),
+          if (order.customerPhone.trim().isNotEmpty &&
+              order.customerPhone != '07700000000') ...[
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () =>
+                        AppHelpers.makePhoneCall(order.customerPhone),
+                    icon: const Icon(CupertinoIcons.phone_fill, size: 16),
+                    label: const Text('اتصال بالزبون',
+                        style: TextStyle(
+                            fontFamily: 'Cairo',
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold)),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.green,
+                      side: const BorderSide(color: Colors.green),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10)),
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () => AppHelpers.launchWhatsApp(
+                        order.customerPhone,
+                        'مرحباً، بخصوص طلبك (رقم ${order.id.length >= 5 ? order.id.substring(0, 5) : order.id}).'),
+                    icon: const Icon(Icons.chat_bubble_outline, size: 16),
+                    label: const Text('واتساب',
+                        style: TextStyle(
+                            fontFamily: 'Cairo',
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold)),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: const Color(0xFF25D366),
+                      side: const BorderSide(color: Color(0xFF25D366)),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10)),
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+          ],
           _OrderActions(
             order: order,
             onDetails: onDetails,
@@ -986,7 +1030,9 @@ class _PremiumOrderCard extends StatelessWidget {
 
   static String _paymentLabel(String raw) {
     final t = raw.trim();
-    if (t.contains('نقد') || t.contains('كاش') || t.toLowerCase().contains('cash')) {
+    if (t.contains('نقد') ||
+        t.contains('كاش') ||
+        t.toLowerCase().contains('cash')) {
       return 'كاش عند الاستلام';
     }
     return 'دفع إلكتروني';
@@ -1080,9 +1126,11 @@ class _StatusBadge extends StatelessWidget {
   static _BadgeStyle _badgeStyle(ActiveOrder order) {
     switch (order.statusKey) {
       case 'accepted':
-        return _BadgeStyle('مقبول', const Color(0xFFEDE7F6), const Color(0xFF7B1FA2));
+        return _BadgeStyle(
+            'مقبول', const Color(0xFFEDE7F6), const Color(0xFF7B1FA2));
       case 'delivering':
-        return _BadgeStyle('جاهز للتوصيل', const Color(0xFFE3F2FD), const Color(0xFF1565C0));
+        return _BadgeStyle(
+            'جاهز للتوصيل', const Color(0xFFE3F2FD), const Color(0xFF1565C0));
       case 'adjustment_pending':
         return _BadgeStyle(
           'بانتظار الزبون',
@@ -1090,18 +1138,23 @@ class _StatusBadge extends StatelessWidget {
           const Color(0xFFEF6C00),
         );
       case 'cancel_requested':
-        return _BadgeStyle('طلب إلغاء', const Color(0xFFF3E5F5), const Color(0xFF8E24AA));
+        return _BadgeStyle(
+            'طلب إلغاء', const Color(0xFFF3E5F5), const Color(0xFF8E24AA));
       case 'completed':
-        return _BadgeStyle('مكتمل', const Color(0xFFE8F5E9), const Color(0xFF2E7D32));
+        return _BadgeStyle(
+            'مكتمل', const Color(0xFFE8F5E9), const Color(0xFF2E7D32));
       case 'cancelled':
-        final rejected = order.statusAr.contains('رفض') ||
-            order.noteAr.contains('رفض');
+        final rejected =
+            order.statusAr.contains('رفض') || order.noteAr.contains('رفض');
         if (rejected) {
-          return _BadgeStyle('مرفوض', const Color(0xFFFFEBEE), const Color(0xFFC62828));
+          return _BadgeStyle(
+              'مرفوض', const Color(0xFFFFEBEE), const Color(0xFFC62828));
         }
-        return _BadgeStyle('ملغي', const Color(0xFFFFEBEE), const Color(0xFFD32F2F));
+        return _BadgeStyle(
+            'ملغي', const Color(0xFFFFEBEE), const Color(0xFFD32F2F));
       default:
-        return _BadgeStyle('جديد', const Color(0xFFFFF3E0), const Color(0xFFE65100));
+        return _BadgeStyle(
+            'جديد', const Color(0xFFFFF3E0), const Color(0xFFE65100));
     }
   }
 }
@@ -1287,7 +1340,8 @@ class _PillButton extends StatelessWidget {
     } else if (destructive && outlined) {
       bg = Colors.white;
       fg = const Color(0xFFFF3B30);
-      border = Border.all(color: const Color(0xFFFF3B30).withValues(alpha: 0.4));
+      border =
+          Border.all(color: const Color(0xFFFF3B30).withValues(alpha: 0.4));
     } else if (!outlined) {
       bg = const Color(0xFF1C1C1E);
       fg = Colors.white;

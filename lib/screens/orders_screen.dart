@@ -43,8 +43,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
     return CupertinoPageScaffold(
       backgroundColor: const Color(0xFFF2F2F7),
       navigationBar: const CupertinoNavigationBar(
-        middle: Text('طلباتي',
-            style: TextStyle(fontWeight: FontWeight.bold)),
+        middle: Text('طلباتي', style: TextStyle(fontWeight: FontWeight.bold)),
         border: null,
       ),
       child: SafeArea(
@@ -138,8 +137,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                      "طلب $displayIndex",
+                  Text("طلب $displayIndex",
                       style: const TextStyle(
                           fontWeight: FontWeight.bold, fontSize: 15)),
                   Text(order.dateAr,
@@ -218,12 +216,14 @@ class _OrdersScreenState extends State<OrdersScreen> {
               ),
             ),
           ],
-          if (order.statusKey == 'cancelled' && order.noteAr.trim().isNotEmpty) ...[
+          if (order.statusKey == 'cancelled' &&
+              order.noteAr.trim().isNotEmpty) ...[
             const SizedBox(height: 8),
             Align(
               alignment: Alignment.centerLeft,
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                 decoration: BoxDecoration(
                   color: Colors.red.withValues(alpha: 0.08),
                   borderRadius: BorderRadius.circular(10),
@@ -247,7 +247,8 @@ class _OrdersScreenState extends State<OrdersScreen> {
             Align(
               alignment: Alignment.centerLeft,
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                 decoration: BoxDecoration(
                   color: Colors.blue.withValues(alpha: 0.08),
                   borderRadius: BorderRadius.circular(10),
@@ -294,9 +295,11 @@ class _OrdersScreenState extends State<OrdersScreen> {
                         style: TextStyle(
                           fontSize: 12,
                           fontFamily: 'Cairo',
-                          decoration:
-                              item.isAvailable ? null : TextDecoration.lineThrough,
-                          color: item.isAvailable ? Colors.black87 : Colors.grey,
+                          decoration: item.isAvailable
+                              ? null
+                              : TextDecoration.lineThrough,
+                          color:
+                              item.isAvailable ? Colors.black87 : Colors.grey,
                         ),
                       ),
                     ),
@@ -450,6 +453,53 @@ class _OrdersScreenState extends State<OrdersScreen> {
               ),
             ],
           ),
+          if ((order.merchantPhone ?? '').isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () =>
+                        AppHelpers.makePhoneCall(order.merchantPhone!),
+                    icon: const Icon(CupertinoIcons.phone_fill, size: 16),
+                    label: const Text('اتصال بالتاجر',
+                        style: TextStyle(
+                            fontFamily: 'Cairo',
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold)),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.green,
+                      side: const BorderSide(color: Colors.green),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10)),
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () => AppHelpers.launchWhatsApp(
+                        order.merchantPhone!,
+                        'مرحباً، بخصوص طلبي (رقم ${order.id.length >= 5 ? order.id.substring(0, 5) : order.id}) من متجركم.'),
+                    icon: const Icon(Icons.chat_bubble_outline, size: 16),
+                    label: const Text('واتساب',
+                        style: TextStyle(
+                            fontFamily: 'Cairo',
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold)),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: const Color(0xFF25D366),
+                      side: const BorderSide(color: Color(0xFF25D366)),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10)),
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
         ],
       ),
     );
@@ -500,9 +550,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
       SnackBar(
         content: Text(
           ok
-              ? (approve
-                  ? 'تم قبول الطلب المعدّل.'
-                  : 'تم إلغاء الطلب.')
+              ? (approve ? 'تم قبول الطلب المعدّل.' : 'تم إلغاء الطلب.')
               : 'تعذر تنفيذ العملية. حاول مجدداً.',
         ),
       ),
@@ -558,21 +606,24 @@ class _OrdersScreenState extends State<OrdersScreen> {
 
   Widget _buildPreviousOrders() {
     final appProvider = Provider.of<AppProvider>(context);
-    final pastOrders = appProvider.orders.where((o) => 
-      o.statusKey == 'completed' ||
-      o.statusKey == 'rejected' ||
-      o.statusKey == 'cancelled'
-    ).toList();
+    final pastOrders = appProvider.orders
+        .where((o) =>
+            o.statusKey == 'completed' ||
+            o.statusKey == 'rejected' ||
+            o.statusKey == 'cancelled')
+        .toList();
 
     if (pastOrders.isEmpty) {
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(CupertinoIcons.archivebox, size: 60, color: CupertinoColors.systemGrey4),
+            const Icon(CupertinoIcons.archivebox,
+                size: 60, color: CupertinoColors.systemGrey4),
             const SizedBox(height: 12),
             const Text("لا يوجد سجل طلبات بعد",
-                style: TextStyle(color: CupertinoColors.systemGrey, fontFamily: 'Cairo')),
+                style: TextStyle(
+                    color: CupertinoColors.systemGrey, fontFamily: 'Cairo')),
           ],
         ),
       );
@@ -590,7 +641,8 @@ class _OrdersScreenState extends State<OrdersScreen> {
 
   Widget _buildHistoryItem(ActiveOrder order) {
     final appProvider = context.read<AppProvider>();
-    final isRejected = order.statusKey == 'rejected' || order.statusKey == 'cancelled';
+    final isRejected =
+        order.statusKey == 'rejected' || order.statusKey == 'cancelled';
     final isCompleted = order.statusKey == 'completed';
 
     return Container(
@@ -619,7 +671,9 @@ class _OrdersScreenState extends State<OrdersScreen> {
                   style: TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 14,
-                      color: isRejected ? Colors.red : CupertinoColors.systemGreen)),
+                      color: isRejected
+                          ? Colors.red
+                          : CupertinoColors.systemGreen)),
             ],
           ),
           const SizedBox(height: 12),
@@ -708,20 +762,27 @@ class _OrdersScreenState extends State<OrdersScreen> {
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) => CupertinoAlertDialog(
-          title: const Text('تقييم المتجر', style: TextStyle(fontFamily: 'Cairo')),
+          title:
+              const Text('تقييم المتجر', style: TextStyle(fontFamily: 'Cairo')),
           content: Column(
             children: [
               const SizedBox(height: 12),
-              Text(order.merchantStoreName ?? 'المتجر', style: const TextStyle(fontFamily: 'Cairo')),
+              Text(order.merchantStoreName ?? 'المتجر',
+                  style: const TextStyle(fontFamily: 'Cairo')),
               const SizedBox(height: 16),
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: List.generate(5, (index) {
                   return GestureDetector(
-                    onTap: () => setDialogState(() => selectedStars = index + 1),
+                    onTap: () =>
+                        setDialogState(() => selectedStars = index + 1),
                     child: Icon(
-                      index < selectedStars ? CupertinoIcons.star_fill : CupertinoIcons.star,
-                      color: index < selectedStars ? Colors.amber : Colors.grey.shade400,
+                      index < selectedStars
+                          ? CupertinoIcons.star_fill
+                          : CupertinoIcons.star,
+                      color: index < selectedStars
+                          ? Colors.amber
+                          : Colors.grey.shade400,
                       size: 28,
                     ),
                   );
@@ -743,30 +804,32 @@ class _OrdersScreenState extends State<OrdersScreen> {
             ),
             CupertinoDialogAction(
               isDefaultAction: true,
-              onPressed: isSubmitting ? null : () async {
-                setDialogState(() => isSubmitting = true);
-                try {
-                  await context.read<AppProvider>().submitMerchantReview(
-                    orderId: order.id,
-                    stars: selectedStars,
-                    comment: commentController.text.trim(),
-                  );
-                  if (context.mounted) {
-                    Navigator.pop(context);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('شكراً لتقييمك!')),
-                    );
-                  }
-                } catch (e) {
-                  setDialogState(() => isSubmitting = false);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('خطأ: $e')),
-                  );
-                }
-              },
-              child: isSubmitting 
-                ? const CupertinoActivityIndicator() 
-                : const Text('إرسال', style: TextStyle(fontFamily: 'Cairo')),
+              onPressed: isSubmitting
+                  ? null
+                  : () async {
+                      setDialogState(() => isSubmitting = true);
+                      try {
+                        await context.read<AppProvider>().submitMerchantReview(
+                              orderId: order.id,
+                              stars: selectedStars,
+                              comment: commentController.text.trim(),
+                            );
+                        if (context.mounted) {
+                          Navigator.pop(context);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('شكراً لتقييمك!')),
+                          );
+                        }
+                      } catch (e) {
+                        setDialogState(() => isSubmitting = false);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('خطأ: $e')),
+                        );
+                      }
+                    },
+              child: isSubmitting
+                  ? const CupertinoActivityIndicator()
+                  : const Text('إرسال', style: TextStyle(fontFamily: 'Cairo')),
             ),
           ],
         ),
@@ -774,7 +837,6 @@ class _OrdersScreenState extends State<OrdersScreen> {
     );
   }
 }
-
 
 // Taxi request status banner removed (old taxi service)
 
@@ -784,7 +846,8 @@ class _PendingApprovalCountdown extends StatefulWidget {
   const _PendingApprovalCountdown({required this.order});
 
   @override
-  State<_PendingApprovalCountdown> createState() => _PendingApprovalCountdownState();
+  State<_PendingApprovalCountdown> createState() =>
+      _PendingApprovalCountdownState();
 }
 
 class _PendingApprovalCountdownState extends State<_PendingApprovalCountdown> {
@@ -807,8 +870,9 @@ class _PendingApprovalCountdownState extends State<_PendingApprovalCountdown> {
 
   @override
   Widget build(BuildContext context) {
-    final label =
-        context.read<AppProvider>().pendingApprovalRemainingLabelAr(widget.order);
+    final label = context
+        .read<AppProvider>()
+        .pendingApprovalRemainingLabelAr(widget.order);
     if (label == null) return const SizedBox.shrink();
     return Text(
       label,
@@ -821,6 +885,5 @@ class _PendingApprovalCountdownState extends State<_PendingApprovalCountdown> {
     );
   }
 }
-
 
 // Taxi notice details removed (old taxi service)
