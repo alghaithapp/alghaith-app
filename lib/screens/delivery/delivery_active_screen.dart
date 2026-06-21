@@ -327,7 +327,7 @@ class DeliveryActiveGroupCard extends StatelessWidget {
                 SizedBox(
                   width: double.infinity,
                   child: CupertinoButton(
-                    color: Colors.blue,
+                    color: Colors.red,
                     borderRadius: BorderRadius.circular(12),
                     onPressed: () =>
                         provider.markDeliveryOnTheWay(group.orders.first.id),
