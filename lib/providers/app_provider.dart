@@ -4927,13 +4927,10 @@ class AppProvider extends ChangeNotifier {
 
   Map<String, dynamic>? get adminReports => _adminReports;
   String? get adminReportsError => _adminReportsError;
-  List<Map<String, dynamic>> _allMerchants = [];
-  List<Map<String, dynamic>> _allCouriers = [];
   List<Map<String, dynamic>> get allMerchants =>
       List<Map<String, dynamic>>.unmodifiable(_allMerchants);
   List<Map<String, dynamic>> get allCouriers =>
       List<Map<String, dynamic>>.unmodifiable(_allCouriers);
-  List<Map<String, dynamic>> _allDrivers = [];
   List<Map<String, dynamic>> get allDrivers =>
       List<Map<String, dynamic>>.unmodifiable(_allDrivers);
 
