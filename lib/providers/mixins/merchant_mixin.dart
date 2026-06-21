@@ -33,6 +33,9 @@ mixin MerchantMixin on AppCoreMixin, AuthMixin, CustomerMixin, PersistenceMixin 
     final longitude = _toDoubleValue(storeData['longitude']) ??
         _toDoubleValue(storeData['lng']);
     final nextStore = {
+      // نبدأ بـ ...storeData أولاً ثم نكتب الحقول المنقّحة فوقها
+      // حتى لا تتمكن البيانات الخام من تجاوز التنقيحات
+      ...storeData,
       'name': (storeData['name'] as String?)?.trim() ?? '',
       'description': (storeData['description'] as String?)?.trim() ?? '',
       'category': category,
@@ -81,7 +84,6 @@ mixin MerchantMixin on AppCoreMixin, AuthMixin, CustomerMixin, PersistenceMixin 
           (storeData['professionalInfo'] as Map)['professionId'] != null)
         'professionalCategoryId':
             (storeData['professionalInfo'] as Map)['professionId'],
-      ...storeData,
     };
     _merchantStore = {
       ...nextStore,
@@ -776,6 +778,9 @@ mixin MerchantMixin on AppCoreMixin, AuthMixin, CustomerMixin, PersistenceMixin 
 
   Map<String, dynamic> _mapMerchantProfileRow(Map<String, dynamic> row) {
     return {
+      // نبدأ بـ ...row أولاً ثم نكتب الحقول المعيّنة فوقها
+      // حتى لا تتسرّب أسماء الأعمدة snake_case إلى خريطة المتجر
+      ...row,
       'name': row['store_name']?.toString() ?? '',
       'description': row['description']?.toString() ?? '',
       'category': _resolveMerchantPrimaryCategoryFromRow(row),
@@ -826,7 +831,6 @@ mixin MerchantMixin on AppCoreMixin, AuthMixin, CustomerMixin, PersistenceMixin 
         ),
       ),
       'product_sections': row['product_sections'] ?? row['productSections'],
-      ...row,
     };
   }
 
