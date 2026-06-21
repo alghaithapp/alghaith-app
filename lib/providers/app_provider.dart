@@ -211,6 +211,9 @@ class AppProvider extends ChangeNotifier {
   AppUserView get appUserView => AppUserView(_appUserRecord);
 
   bool get hasCompletedCustomerProfile {
+    // إذا كان هذا الرقم هو مدير المنصة، نعتبر الملف مكتملاً دائماً للسماح بالدخول لمركز التحكم
+    if (_isPlatformAdminPhone(_authPhone)) return true;
+
     if (_effectiveCustomerPhone.isEmpty) return false;
     if (_customerName.trim().isNotEmpty) return true;
     if (hasCompletedMerchantProfile) return true;
