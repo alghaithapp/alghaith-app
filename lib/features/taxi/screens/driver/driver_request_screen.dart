@@ -5,7 +5,8 @@ import '../../../../core/theme/app_colors.dart';
 import '../../providers/taxi_provider.dart';
 import '../../models/taxi_request.dart';
 
-/// شاشة تفاصيل الطلب للسائق — تظهر عند الضغط على "عرض التفاصيل"
+/// شاشة طلبات السائق — تعرض الطلبات الواردة كقائمة
+/// إذا تم تمرير [request] تظهر تفاصيل طلب محدد، وإلا تعرض قائمة بجميع الطلبات المعلقة.
 class DriverRequestScreen extends StatelessWidget {
   final TaxiRequest? request;
 
@@ -15,6 +16,233 @@ class DriverRequestScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final provider = context.watch<TaxiProvider>();
 
+    // إذا كان هناك طلب محدد (مثلاً من ضغطة على عنصر) → اعرض التفاصيل
+    if (request != null) {
+      return _RequestDetailView(
+        request: request!,
+        provider: provider,
+      );
+    }
+
+    // وضع التاب — اعرض قائمة الطلبات المعلقة من TaxiProvider
+    final pending = provider.pendingRequests;
+
+    return Scaffold(
+      backgroundColor: AppColors.scaffold,
+      appBar: AppBar(
+        title: const Text(
+          'الطلبات',
+          style: TextStyle(
+            fontFamily: 'Cairo',
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        centerTitle: true,
+        backgroundColor: Colors.white,
+        foregroundColor: Colors.black,
+        elevation: 0,
+      ),
+      body: pending.isEmpty
+          ? _buildEmptyState()
+          : ListView.builder(
+              padding: const EdgeInsets.all(16),
+              itemCount: pending.length,
+              itemBuilder: (context, index) => _buildRequestCard(
+                context, provider, pending[index]),
+            ),
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return const Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.inbox_rounded, size: 64, color: Colors.grey),
+          SizedBox(height: 16),
+          Text(
+            'لا توجد طلبات حالياً',
+            style: TextStyle(
+              fontFamily: 'Cairo',
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
+              color: Colors.grey,
+            ),
+          ),
+          SizedBox(height: 8),
+          Text(
+            'سيتم إعلامك عند وصول طلب جديد',
+            style: TextStyle(
+              fontFamily: 'Cairo',
+              fontSize: 13,
+              color: Colors.grey,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRequestCard(
+    BuildContext context,
+    TaxiProvider provider,
+    TaxiRequest req,
+  ) {
+    return GestureDetector(
+      onTap: () {
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => DriverRequestScreen(request: req),
+          ),
+        );
+      },
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: const Border(
+            top: BorderSide(color: AppColors.accent, width: 3),
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.06),
+              blurRadius: 12,
+              offset: const Offset(0, 3),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.notifications_active_rounded,
+                    color: AppColors.accent, size: 20),
+                const SizedBox(width: 8),
+                Text(
+                  'طلب جديد — ${req.taxiTypeLabelAr}',
+                  style: const TextStyle(
+                    fontFamily: 'Cairo',
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const Spacer(),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade100,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    '${req.distanceKm.toStringAsFixed(1)} كم',
+                    style: const TextStyle(
+                      fontFamily: 'Cairo',
+                      fontSize: 11,
+                      color: Colors.grey,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                const Icon(Icons.trip_origin_rounded, size: 16, color: Colors.black),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    req.pickupAddress,
+                    style: const TextStyle(
+                      fontFamily: 'Cairo',
+                      fontSize: 13,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Row(
+              children: [
+                const Icon(Icons.flag_rounded, size: 16, color: AppColors.accent),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    req.dropoffAddress,
+                    style: const TextStyle(
+                      fontFamily: 'Cairo',
+                      fontSize: 13,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Text(
+                  '${req.fare} د.ع',
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w900,
+                    fontFamily: 'Cairo',
+                    color: Colors.black,
+                  ),
+                ),
+                const Spacer(),
+                _buildMiniButton(
+                  'رفض', Colors.red, () => provider.rejectRequest(req.id)),
+                const SizedBox(width: 8),
+                _buildMiniButton(
+                  'قبول', AppColors.success, () => provider.acceptRequest(req.id)),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMiniButton(String label, Color color, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: color.withValues(alpha: 0.3)),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontFamily: 'Cairo',
+            fontSize: 13,
+            fontWeight: FontWeight.w700,
+            color: color,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// عرض تفاصيل طلب محدد (بقبول/رفض)
+class _RequestDetailView extends StatelessWidget {
+  final TaxiRequest request;
+  final TaxiProvider provider;
+
+  const _RequestDetailView({
+    required this.request,
+    required this.provider,
+  });
+
+  @override
+  Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.scaffold,
       appBar: AppBar(
@@ -36,57 +264,43 @@ class DriverRequestScreen extends StatelessWidget {
       ),
       body: Column(
         children: [
-          // خريطة توضح نقطة الانطلاق والوصول
-          _buildMapPreview(request!),
-
-          // معلومات الطلب
+          _buildMapPreview(request),
           Expanded(
             child: SingleChildScrollView(
               padding: const EdgeInsets.all(16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // نوع الخدمة
-                  _buildServiceTypeChip(request!),
+                  _buildServiceTypeChip(request),
                   const SizedBox(height: 16),
-
-                  // المسافة
                   _buildDetailRow(
                     Icons.straighten_rounded,
                     'المسافة',
-                    '${request!.distanceKm.toStringAsFixed(1)} كم',
+                    '${request.distanceKm.toStringAsFixed(1)} كم',
                   ),
                   const SizedBox(height: 12),
-
-                  // عنوان الانطلاق
                   _buildDetailRow(
                     Icons.trip_origin_rounded,
                     'عنوان الانطلاق',
-                    request!.pickupAddress,
+                    request.pickupAddress,
                     iconColor: Colors.black,
                   ),
                   const SizedBox(height: 12),
-
-                  // عنوان الوصول
                   _buildDetailRow(
                     Icons.flag_rounded,
                     'عنوان الوصول',
-                    request!.dropoffAddress,
+                    request.dropoffAddress,
                     iconColor: AppColors.accent,
                   ),
                   const SizedBox(height: 12),
-
-                  // الأجرة
-                  _buildFareCard(request!),
+                  _buildFareCard(request),
                   const SizedBox(height: 24),
-
-                  // أزرار القبول / الرفض
                   Row(
                     children: [
                       Expanded(
                         child: GestureDetector(
                           onTap: () {
-                            provider.rejectRequest(request!.id);
+                            provider.rejectRequest(request.id);
                             Navigator.of(context).pop();
                           },
                           child: Container(
@@ -122,13 +336,13 @@ class DriverRequestScreen extends StatelessWidget {
                       Expanded(
                         child: GestureDetector(
                           onTap: () {
-                            provider.acceptRequest(request!.id);
+                            provider.acceptRequest(request.id);
                             Navigator.of(context).pop();
                           },
                           child: Container(
                             padding: const EdgeInsets.symmetric(vertical: 14),
                             decoration: BoxDecoration(
-                              gradient: LinearGradient(
+                              gradient: const LinearGradient(
                                 colors: [
                                   Color(0xFF2E7D32),
                                   Color(0xFF4CAF50),

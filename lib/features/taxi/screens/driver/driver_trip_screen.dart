@@ -5,7 +5,8 @@ import '../../../../core/theme/app_colors.dart';
 import '../../providers/taxi_provider.dart';
 import '../../models/taxi_request.dart';
 
-/// شاشة الرحلة النشطة للسائق — تعرض تفاصيل الرحلة وحالة المسار
+/// شاشة رحلات السائق — تعرض الرحلة النشطة أو تاريخ الرحلات
+/// إذا تم تمرير [trip] تظهر تفاصيل رحلة محددة، وإلا تعرض الرحلة الحالية من TaxiProvider.
 class DriverTripScreen extends StatefulWidget {
   final TaxiRequest? trip;
 
@@ -22,7 +23,11 @@ class _DriverTripScreenState extends State<DriverTripScreen> {
   @override
   void initState() {
     super.initState();
-    // تحديد الحالة الأولية بناءً على statusKey الحالي
+    _initStatusIndex();
+  }
+
+  void _initStatusIndex() {
+    if (widget.trip == null) return;
     final key = widget.trip!.statusKey;
     if (key == 'arrived') {
       _statusIndex = 1;
@@ -34,6 +39,10 @@ class _DriverTripScreenState extends State<DriverTripScreen> {
   }
 
   void _advanceStatus(TaxiProvider provider) {
+    // استخدم الرحلة المتاحة (من widget أو من provider)
+    final tripId = widget.trip?.id ?? provider.currentRequest?.id;
+    if (tripId == null) return;
+
     final nextIndex = (_statusIndex + 1) % 3;
     String statusKey;
     String statusAr;
@@ -51,19 +60,25 @@ class _DriverTripScreenState extends State<DriverTripScreen> {
         // العودة للبداية (مكتمل)
         statusKey = 'completed';
         statusAr = 'اكتملت الرحلة';
-        provider.updateStatus(widget.trip!.id, statusKey);
+        provider.updateStatus(tripId, statusKey);
         setState(() => _statusIndex = 2);
         return;
     }
 
-    provider.updateStatus(widget.trip!.id, statusKey);
+    provider.updateStatus(tripId, statusKey);
     setState(() => _statusIndex = nextIndex);
   }
 
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<TaxiProvider>();
-    final trip = widget.trip!;
+    // في وضع التاب: استخدم الرحلة النشطة من TaxiProvider
+    final activeTrip = widget.trip ?? provider.currentRequest;
+
+    // إذا لا توجد رحلة نشطة → اعرض حالة فارغة أو تاريخ الرحلات
+    if (activeTrip == null) {
+      return _buildNoActiveTrip(context, provider);
+    }
 
     return Scaffold(
       backgroundColor: AppColors.scaffold,
@@ -77,7 +92,7 @@ class _DriverTripScreenState extends State<DriverTripScreen> {
             top: 0,
             left: 0,
             right: 0,
-            child: _buildTopBar(trip),
+            child: _buildTopBar(activeTrip),
           ),
 
           // زر تحديد الموقع
@@ -92,10 +107,125 @@ class _DriverTripScreenState extends State<DriverTripScreen> {
             bottom: 0,
             left: 0,
             right: 0,
-            child: _buildBottomSheet(context, provider, trip),
+            child: _buildBottomSheet(context, provider, activeTrip),
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildNoActiveTrip(BuildContext context, TaxiProvider provider) {
+    final completed = provider.completedTrips;
+
+    return Scaffold(
+      backgroundColor: AppColors.scaffold,
+      appBar: AppBar(
+        title: const Text(
+          'الرحلات',
+          style: TextStyle(
+            fontFamily: 'Cairo',
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        centerTitle: true,
+        backgroundColor: Colors.white,
+        foregroundColor: Colors.black,
+        elevation: 0,
+      ),
+      body: completed.isEmpty
+          ? const Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.route_rounded, size: 64, color: Colors.grey),
+                  SizedBox(height: 16),
+                  Text(
+                    'لا توجد رحلة نشطة',
+                    style: TextStyle(
+                      fontFamily: 'Cairo',
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.grey,
+                    ),
+                  ),
+                  SizedBox(height: 8),
+                  Text(
+                    'سيتم عرض رحلاتك هنا',
+                    style: TextStyle(
+                      fontFamily: 'Cairo',
+                      fontSize: 13,
+                      color: Colors.grey,
+                    ),
+                  ),
+                ],
+              ),
+            )
+          : ListView.builder(
+              padding: const EdgeInsets.all(16),
+              itemCount: completed.length,
+              itemBuilder: (context, index) {
+                final trip = completed[index];
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 10),
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 44,
+                        height: 44,
+                        decoration: BoxDecoration(
+                          color: AppColors.success.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Icon(Icons.check_circle_rounded,
+                            color: AppColors.success, size: 24),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              trip.pickupAddress,
+                              style: const TextStyle(
+                                fontFamily: 'Cairo',
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              '→ ${trip.dropoffAddress}',
+                              style: const TextStyle(
+                                fontFamily: 'Cairo',
+                                fontSize: 11,
+                                color: Colors.grey,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ),
+                      ),
+                      Text(
+                        '${trip.fare} د.ع',
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w900,
+                          fontFamily: 'Cairo',
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
     );
   }
 
