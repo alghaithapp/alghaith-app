@@ -233,7 +233,7 @@ class DeliveryActiveGroupCard extends StatelessWidget {
                 Expanded(
                   child: CupertinoButton(
                     padding: const EdgeInsets.symmetric(vertical: 8),
-                    color: Colors.blueGrey.shade700,
+                    color: Colors.red,
                     borderRadius: BorderRadius.circular(8),
                     onPressed: () => _openMapToMerchant(context, order),
                     child: const Text('موقع المتجر',
@@ -247,7 +247,7 @@ class DeliveryActiveGroupCard extends StatelessWidget {
                 Expanded(
                   child: CupertinoButton(
                     padding: const EdgeInsets.symmetric(vertical: 8),
-                    color: AppColors.accent,
+                    color: Colors.red,
                     borderRadius: BorderRadius.circular(8),
                     onPressed: () => provider.markDeliveryPickedUp(order.id),
                     child: const Text('تم الاستلام',
@@ -342,7 +342,7 @@ class DeliveryActiveGroupCard extends StatelessWidget {
                   children: [
                     Expanded(
                       child: CupertinoButton(
-                        color: Colors.black87,
+                        color: Colors.red,
                         padding: EdgeInsets.zero,
                         borderRadius: BorderRadius.circular(12),
                         onPressed: () => _openMapToCustomer(context),
@@ -355,7 +355,7 @@ class DeliveryActiveGroupCard extends StatelessWidget {
                     Expanded(
                       flex: 2,
                       child: CupertinoButton(
-                        color: Colors.green,
+                        color: Colors.red,
                         padding: EdgeInsets.zero,
                         borderRadius: BorderRadius.circular(12),
                         onPressed: () => provider
