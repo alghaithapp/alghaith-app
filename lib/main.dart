@@ -312,7 +312,7 @@ class _AlGhaithAppState extends State<AlGhaithApp> {
           return const ExitConfirmScope(child: DeliveryPendingApprovalScreen());
         }
         return const ExitConfirmScope(child: DeliveryShell());
-      } else if (appProvider.userRole == 'admin') {
+      if (appProvider.isAdmin) {
         return const ExitConfirmScope(child: AdminDashboardScreen());
       }
 

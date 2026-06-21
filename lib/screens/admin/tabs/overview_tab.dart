@@ -34,12 +34,35 @@ class OverviewTab extends StatelessWidget {
     final provider = context.watch<AppProvider>();
     final salesTotal = ((reports['totalSales'] as num?) ?? 0).toInt();
     final codTotal = ((reports['codCollected'] as num?) ?? 0).toInt();
+    final isEmpty = reports.isEmpty;
 
     return RefreshIndicator(
       onRefresh: () async => provider.refreshAdminReports(),
       child: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          if (isEmpty)
+            Container(
+              padding: const EdgeInsets.all(16),
+              margin: const EdgeInsets.only(bottom: 16),
+              decoration: BoxDecoration(
+                color: Colors.amber.shade50,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.amber.shade200),
+              ),
+              child: Row(
+                children: const [
+                  Icon(Icons.sync_problem_rounded, color: Colors.amber),
+                  SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'جاري تحميل البيانات أو تعذر الاتصال بالسيرفر. اسحب للأسفل للتحديث.',
+                      style: TextStyle(fontFamily: 'Cairo', fontSize: 13, color: Colors.black87),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           Row(
             children: [
               Expanded(

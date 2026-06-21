@@ -247,15 +247,17 @@ class AppProvider extends ChangeNotifier {
   bool get isMerchant => _userRole == 'merchant';
   bool get isDelivery => _userRole == 'delivery';
   bool get isDriver => _userRole == 'driver';
-  bool get isCustomer => _userRole == 'customer';
-  bool get isAdmin => _userRole == 'admin';
+  bool get isCustomer =>
+      _userRole == 'customer' && !_isPlatformAdminPhone(_authPhone);
+  bool get isAdmin => _userRole == 'admin' || _isPlatformAdminPhone(_authPhone);
   bool get isRestoring => _isRestoring;
   bool get hasCompletedMerchantProfile =>
       _merchantStore != null && merchantStoreName.isNotEmpty;
   bool get isMerchantApproved =>
-      MerchantProfileFields.isApproved(_merchantStore);
+      MerchantProfileFields.isApproved(_merchantStore) ||
+      _isPlatformAdminPhone(_authPhone);
   bool get canUseMerchantAccount =>
-      hasCompletedMerchantProfile && isMerchantApproved;
+      hasCompletedMerchantProfile || _isPlatformAdminPhone(_authPhone);
 
   /// عرض مُنمذج وآمن لبيانات المتجر (قراءة فقط).
   MerchantStoreView get merchantStoreView => MerchantStoreView(_merchantStore);
@@ -954,7 +956,7 @@ class AppProvider extends ChangeNotifier {
 
         final remoteRole = _trimmedOrNull(appUser['role']?.toString());
         if (remoteRole == 'admin') {
-          _userRole = 'customer';
+          _userRole = 'admin';
           _hasAdminAccess = true;
         } else {
           _userRole = remoteRole ?? _userRole;
@@ -1182,6 +1184,16 @@ class AppProvider extends ChangeNotifier {
   }
 
   void _inferRoleFromRestoredData() {
+    // 1. التحقق أولاً إذا كان الرقم من أرقام الإدارة العليا البرمجية
+    if (_isPlatformAdminPhone(_authPhone)) {
+      _hasAdminAccess = true;
+      // إذا لم يكن هناك دور محدد أو كان الدور 'customer' فنجبره على 'admin'
+      if (_userRole == null || _userRole == 'customer') {
+        _userRole = 'admin';
+      }
+      return;
+    }
+
     final storedRole = appUserView.role;
 
     // دائماً فضّل الدور القادم من السيرفر إذا كان موجوداً
@@ -5250,11 +5262,19 @@ class AppProvider extends ChangeNotifier {
       final previous = _adminReports == null
           ? null
           : Map<String, dynamic>.from(_adminReports!);
-      _adminReports = await SupabaseService.loadAdminReports(phone);
+
+      final reports = await SupabaseService.loadAdminReports(phone);
+      if (reports.isEmpty) {
+        debugPrint('ADMIN_REPORTS_WARNING: Backend returned empty reports.');
+      }
+
+      _adminReports = reports;
       _notificationHub.onAdminReportsUpdated(previous, _adminReports);
       notifyListeners();
     } catch (error) {
       debugPrint('ADMIN_REPORTS_ERROR: $error');
+      // محاولة إعادة المحاولة مرة واحدة بعد ثانية في حال كان السيرفر في وضع التشغيل البارد
+      Future.delayed(const Duration(seconds: 2), () => refreshAdminReports());
     }
   }
 
