@@ -46,14 +46,20 @@ class LocalSessionStore {
     }
   }
 
+  /// يمسح بيانات الجلسة فقط (الرقم والتوكن) دون المساس ببيانات الحساب المحفوظة.
+  /// يُستدعى عند تسجيل الخروج.
   Future<void> clearSession({String? phone}) async {
     final prefs = await SharedPreferences.getInstance();
-    final previousPhone = phone ?? prefs.getString(_phoneKey);
     await prefs.remove(_phoneKey);
     await prefs.remove(_tokenKey);
-    if (previousPhone != null && previousPhone.trim().isNotEmpty) {
-      await prefs.remove(_snapshotKey(previousPhone));
-    }
+  }
+
+  /// يمسح النسخة المحلية لبيانات الحساب بشكل دائم.
+  /// يُستدعى فقط عند حذف الحساب نهائياً.
+  Future<void> clearSnapshot(String phone) async {
+    if (phone.trim().isEmpty) return;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_snapshotKey(phone));
   }
 
   Future<AccountSnapshot?> readSnapshot(String phone) async {

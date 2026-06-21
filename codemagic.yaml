@@ -46,7 +46,7 @@ workflows:
         - push
       branch_patterns:
         - pattern: main
-          include: false # ❌ إيقاف البناء التلقائي لأيفون
+          include: true # ✅ تفعيل البناء التلقائي لأيفون عند الرفع
 
     scripts:
       # يجب توليد ملفات iOS قبل use-profiles حتى يُعثر Codemagic على Scheme Runner

@@ -24,6 +24,9 @@ class AccountRepository {
 
   Future<void> clearSession({String? phone}) => _local.clearSession(phone: phone);
 
+  /// يمسح بيانات الحساب المحلية نهائياً — يُستدعى فقط عند حذف الحساب.
+  Future<void> clearSnapshot(String phone) => _local.clearSnapshot(phone);
+
   Future<AccountSnapshot?> readLocalSnapshot(String phone) =>
       _local.readSnapshot(phone);
 

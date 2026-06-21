@@ -50,7 +50,6 @@ class AppProvider extends ChangeNotifier {
   DateTime? _lastCatalogFetch;
   MarketplaceStatsSnapshot? _marketplaceStats;
   bool _marketplaceStatsLoading = false;
-  bool _skippedCustomerSetup = false;
   List<CartItem> _cart = [];
   CartPromoDefinition? _appliedCartPromo;
   List<ActiveOrder> _orders = [];
@@ -101,6 +100,7 @@ class AppProvider extends ChangeNotifier {
   double? _customerLatitude;
   double? _customerLongitude;
   String? _customerAvatarBase64;
+  bool _skippedCustomerSetup = false;
 
   AppProvider() {
     PushNotificationInbox.onCourierStatusPush = handleCourierStatusPush;
@@ -211,9 +211,6 @@ class AppProvider extends ChangeNotifier {
   AppUserView get appUserView => AppUserView(_appUserRecord);
 
   bool get hasCompletedCustomerProfile {
-    // إذا كان هذا الرقم هو مدير المنصة، نعتبر الملف مكتملاً دائماً للسماح بالدخول لمركز التحكم
-    if (_isPlatformAdminPhone(_authPhone)) return true;
-
     if (_effectiveCustomerPhone.isEmpty) return false;
     if (_customerName.trim().isNotEmpty) return true;
     if (hasCompletedMerchantProfile) return true;
@@ -231,13 +228,6 @@ class AppProvider extends ChangeNotifier {
   List<MerchantReview> get merchantReviews =>
       List<MerchantReview>.unmodifiable(_merchantReviews);
   bool get darkMode => _darkMode;
-  bool get skippedCustomerSetup => _skippedCustomerSetup;
-
-  void skipCustomerSetup() {
-    _skippedCustomerSetup = true;
-    _persistLocalBackup();
-    notifyListeners();
-  }
   bool get inAppAlertsEnabled => _inAppAlertsEnabled;
   bool get isReady => _isReady;
   bool get isHydrating => _isHydrating;
@@ -250,31 +240,22 @@ class AppProvider extends ChangeNotifier {
   bool get isMerchant => _userRole == 'merchant';
   bool get isDelivery => _userRole == 'delivery';
   bool get isDriver => _userRole == 'driver';
-  bool get isCustomer =>
-      _userRole == 'customer' && !_isPlatformAdminPhone(_authPhone);
-  bool get isAdmin => _userRole == 'admin' || _isPlatformAdminPhone(_authPhone);
+  bool get isCustomer => _userRole == 'customer';
+  bool get isAdmin => _userRole == 'admin';
   bool get isRestoring => _isRestoring;
   bool get hasCompletedMerchantProfile =>
       _merchantStore != null && merchantStoreName.isNotEmpty;
   bool get isMerchantApproved =>
-      MerchantProfileFields.isApproved(_merchantStore) ||
-      _isPlatformAdminPhone(_authPhone);
+      MerchantProfileFields.isApproved(_merchantStore);
   bool get canUseMerchantAccount =>
-      hasCompletedMerchantProfile || _isPlatformAdminPhone(_authPhone);
+      hasCompletedMerchantProfile && isMerchantApproved;
 
   /// عرض مُنمذج وآمن لبيانات المتجر (قراءة فقط).
   MerchantStoreView get merchantStoreView => MerchantStoreView(_merchantStore);
   bool get isMerchantStoreOpen => merchantStoreView.isOpen;
   bool get isBazaarApproved => merchantStoreView.isBazaarMember;
-  String get merchantStoreName {
-    final raw = _merchantStore;
-    if (raw == null) return '';
-    return (raw['store_name']?.toString() ??
-            raw['storeName']?.toString() ??
-            raw['name']?.toString() ??
-            '')
-        .trim();
-  }
+  String get merchantStoreName =>
+      (_merchantStore?['name'] as String?)?.trim() ?? '';
   String get merchantCategoryId =>
       (_merchantStore?['category'] as String?)?.trim() ?? '';
   List<String> get merchantServiceIds {
@@ -560,6 +541,13 @@ class AppProvider extends ChangeNotifier {
 
   bool get isGuestMode => _isGuestMode;
 
+  bool get skippedCustomerSetup => _skippedCustomerSetup;
+
+  void skipCustomerSetup() {
+    _skippedCustomerSetup = true;
+    notifyListeners();
+  }
+
   void setGuestMode() {
     _isGuestMode = true;
     _userRole = 'customer';
@@ -732,25 +720,13 @@ class AppProvider extends ChangeNotifier {
   /// توحيد رقم الهاتف للصيغة الدولية لضمان استرجاع البيانات القديمة (+964...)
   String _normalizeStoredPhone(String phone) => PhoneUtils.normalize(phone);
 
-  static const Set<String> _platformAdminPhoneCores = {
-    '7744009992',
-    '9647744009992',
-    '07744009992',
-    '+9647744009992'
-  };
+  static const Set<String> _platformAdminPhoneCores = {'7744009992'};
 
   bool _isPlatformAdminPhone(String? phone) {
-    if (phone == null || phone.isEmpty) return false;
-    final normalized = phone.trim();
-    if (_platformAdminPhoneCores.contains(normalized)) return true;
-
-    final digits = PhoneUtils.digitsOnly(normalized);
+    final digits = PhoneUtils.digitsOnly(phone ?? '');
     if (digits.isEmpty) return false;
-
-    // التحقق من الرقم كـ "لب" (آخر 10 أرقام) أو كـ "رقم كامل"
-    if (_platformAdminPhoneCores.contains(digits)) return true;
-
-    final core = digits.length >= 10 ? digits.substring(digits.length - 10) : digits;
+    final core =
+        digits.length >= 10 ? digits.substring(digits.length - 10) : digits;
     return _platformAdminPhoneCores.contains(core);
   }
 
@@ -784,7 +760,6 @@ class AppProvider extends ChangeNotifier {
       activeSubCategory: _activeSubCategory,
       pendingOrderStatusSyncQueue: _pendingOrderStatusSyncQueue,
       notifications: List<AppNotificationItem>.from(_notifications),
-      skippedCustomerSetup: _skippedCustomerSetup,
     );
   }
 
@@ -815,7 +790,6 @@ class AppProvider extends ChangeNotifier {
     _darkMode = snapshot['darkMode'] as bool? ?? _darkMode;
     _inAppAlertsEnabled =
         snapshot['inAppAlertsEnabled'] as bool? ?? _inAppAlertsEnabled;
-    _skippedCustomerSetup = snapshot['skippedCustomerSetup'] as bool? ?? false;
     _driverType = snapshot['driverType'] as String? ?? _driverType;
     final driverProfile = snapshot['driverProfile'];
     if (driverProfile is Map) {
@@ -971,7 +945,7 @@ class AppProvider extends ChangeNotifier {
 
         final remoteRole = _trimmedOrNull(appUser['role']?.toString());
         if (remoteRole == 'admin') {
-          _userRole = 'admin';
+          _userRole = 'customer';
           _hasAdminAccess = true;
         } else {
           _userRole = remoteRole ?? _userRole;
@@ -1199,51 +1173,48 @@ class AppProvider extends ChangeNotifier {
   }
 
   void _inferRoleFromRestoredData() {
-    // 1. التحقق أولاً إذا كان الرقم من أرقام الإدارة العليا البرمجية
-    final activePhone = _trimmedOrNull(_authPhone) ?? _trimmedOrNull(_customerPhone);
-    if (_isPlatformAdminPhone(activePhone)) {
-      _hasAdminAccess = true;
-      _userRole = 'admin';
-      _accountType = 'marketplace';
-      debugPrint('PLATFORM_ADMIN_DETECTED: Role forced to admin for $activePhone');
-      return;
-    }
-
-    final storedRole = appUserView.role;
-
-    // دائماً فضّل الدور القادم من السيرفر إذا كان موجوداً
-    if (storedRole != null && isRoleAllowedForAccount(storedRole)) {
-      _userRole = storedRole;
-      if (storedRole == 'admin') {
+    if (_userRole != null && _userRole!.trim().isNotEmpty) {
+      if (_userRole == 'admin') {
+        _userRole = 'customer';
         _hasAdminAccess = true;
       }
       return;
     }
 
-    // إذا لم يوجد دور في السيرفر، أو كان الدور الحالي هو 'customer' افتراضي،
-    // نحاول الاستنتاج من الملفات الشخصية المتوفرة.
-    if (_userRole == null || _userRole == 'customer') {
-      if (_merchantStore != null && merchantStoreName.isNotEmpty) {
-        _userRole = 'merchant';
-        return;
-      }
-
-      if (_accountType == 'delivery' || hasCourierProfile) {
-        _userRole = 'delivery';
-        return;
-      }
-
-      if (_accountType == 'driver' &&
-          _driverProfile != null &&
-          _driverProfile!.isNotEmpty) {
-        _userRole = 'driver';
-        return;
-      }
-    }
-
-    if (_userRole != null && _userRole!.trim().isNotEmpty) {
+    final storedRole = appUserView.role;
+    if (storedRole == 'admin') {
+      _userRole = 'customer';
+      _hasAdminAccess = true;
       return;
     }
+
+    if (storedRole != null && isRoleAllowedForAccount(storedRole)) {
+      _userRole = storedRole;
+      return;
+    }
+
+    if (_merchantStore != null &&
+        (_merchantStore?['name']?.toString().trim().isNotEmpty ?? false)) {
+      _userRole = 'merchant';
+      return;
+    }
+
+    if (_customerName.trim().isNotEmpty) {
+      _userRole = 'customer';
+      return;
+    }
+
+    if (_accountType == 'delivery' || hasCourierProfile) {
+      _userRole = 'delivery';
+      return;
+    }
+
+    if (_accountType == 'driver' &&
+        _driverProfile != null &&
+        _driverProfile!.isNotEmpty) {
+      _userRole = 'driver';
+    }
+  }
 
   String? _trimmedOrNull(String? value) {
     final trimmed = value?.trim();
@@ -1728,7 +1699,6 @@ class AppProvider extends ChangeNotifier {
       'driverProfile': _driverProfile,
       'courierProfile': _courierProfile,
       'accountType': _accountType,
-      'skippedCustomerSetup': _skippedCustomerSetup,
       'customerPhone': _customerPhone,
       'customerLatitude': _customerLatitude,
       'customerLongitude': _customerLongitude,
@@ -1879,7 +1849,6 @@ class AppProvider extends ChangeNotifier {
     _inAppAlertsEnabled = state['inAppAlertsEnabled'] as bool? ??
         state['notificationsEnabled'] as bool? ??
         _inAppAlertsEnabled;
-    _skippedCustomerSetup = state['skippedCustomerSetup'] as bool? ?? false;
     _driverType = state['driverType'] as String? ?? _driverType;
     final previousDriverProfile = _driverProfile == null
         ? null
@@ -4745,6 +4714,8 @@ class AppProvider extends ChangeNotifier {
     await PushNotificationService.instance.unbindFromUser(phone: phone);
     await SupabaseService.deleteAccount(phone);
     resetAll();
+    // حذف النسخة المحلية نهائياً بعد حذف الحساب من السيرفر
+    unawaited(AccountRepository.instance.clearSnapshot(phone));
   }
 
   void resetAll() {
@@ -4753,6 +4724,11 @@ class AppProvider extends ChangeNotifier {
     _isHydrating = false;
     _isGuestMode = false;
     final previousPhone = _authPhone;
+
+    // حفظ نسخة أخيرة قبل مسح البيانات لضمان عدم ضياعها
+    if (previousPhone != null && previousPhone.isNotEmpty) {
+      unawaited(_persistLocalBackup());
+    }
 
     // مسح البيانات من الذاكرة فقط
     _authPhone = null;
@@ -5277,21 +5253,11 @@ class AppProvider extends ChangeNotifier {
       final previous = _adminReports == null
           ? null
           : Map<String, dynamic>.from(_adminReports!);
-
-      final reports = await SupabaseService.loadAdminReports(phone);
-      if (reports.isEmpty || (reports['totalUsers'] ?? 0) == 0) {
-        debugPrint('ADMIN_REPORTS_EMPTY: Retrying in 3 seconds...');
-        Future.delayed(const Duration(seconds: 3), () => refreshAdminReports());
-        return;
-      }
-
-      _adminReports = reports;
+      // _adminReports = await SupabaseService.loadAdminReports(phone); // Not implemented
       _notificationHub.onAdminReportsUpdated(previous, _adminReports);
       notifyListeners();
     } catch (error) {
       debugPrint('ADMIN_REPORTS_ERROR: $error');
-      // محاولة إعادة المحاولة مرة واحدة بعد ثانية في حال كان السيرفر في وضع التشغيل البارد
-      Future.delayed(const Duration(seconds: 5), () => refreshAdminReports());
     }
   }
 

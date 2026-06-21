@@ -489,6 +489,8 @@ mixin AuthMixin on AppCoreMixin {
     await PushNotificationService.instance.unbindFromUser(phone: phone);
     await SupabaseService.deleteAccount(phone);
     resetAll();
+    // حذف النسخة المحلية نهائياً بعد حذف الحساب من السيرفر
+    unawaited(AccountRepository.instance.clearSnapshot(phone));
   }
 
   void resetAll() {
