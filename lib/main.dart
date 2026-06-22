@@ -197,10 +197,15 @@ class _AlGhaithAppState extends State<AlGhaithApp> {
       }
 
       if (appProvider.isCustomer &&
-          !appProvider.hasCompletedCustomerProfile &&
           !appProvider.isGuestMode &&
-          !appProvider.skippedCustomerSetup) {
-        return const ExitConfirmScope(child: CustomerSetupScreen());
+          !appProvider.skippedCustomerSetup &&
+          !appProvider.hasCompletedCustomerProfile) {
+        // إذا كان المستخدم لديه متجر/سائق/مندوب، لا تجبره على إكمال ملف الزبون
+        if (!appProvider.hasCompletedMerchantProfile &&
+            !appProvider.hasDriverProfile &&
+            !appProvider.hasCourierProfile) {
+          return const ExitConfirmScope(child: CustomerSetupScreen());
+        }
       }
 
       return MerchantOrderCrossRoleAlert(child: MainShell());
