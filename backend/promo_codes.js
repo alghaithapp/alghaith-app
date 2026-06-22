@@ -30,6 +30,22 @@ function calculatePromoDiscount(promo, subtotalIqd) {
   return Math.max(0, Math.min(discount, subtotal));
 }
 
+/**
+ * @typedef {Object} PromoResult
+ * @property {boolean} valid
+ * @property {string} [messageAr]
+ * @property {string} [messageEn]
+ * @property {string} [code]
+ * @property {string} [discountType]
+ * @property {number} [discountValue]
+ * @property {number} [discountAmountIqd]
+ */
+
+/**
+ * @param {string} code
+ * @param {number} subtotalIqd
+ * @returns {PromoResult}
+ */
 function validatePromoCode(code, subtotalIqd) {
   const normalized = normalizePromoCode(code);
   if (!normalized) {

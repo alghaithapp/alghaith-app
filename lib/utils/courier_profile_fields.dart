@@ -70,4 +70,11 @@ class CourierProfileFields {
 
   static String rejectionMessage(Map<String, dynamic>? profile) =>
       profile?['rejectionMessageAr']?.toString().trim() ?? '';
+
+  static bool hasRequiredUploads(Map<String, dynamic>? profile) {
+    return profileImage(profile).isNotEmpty &&
+        vehicleImage(profile).isNotEmpty &&
+        idFrontImage(profile).isNotEmpty &&
+        idBackImage(profile).isNotEmpty;
+  }
 }

@@ -1,5 +1,7 @@
+const logger = require('./lib/logger');
 const {
-  listAllCustomerOrders,
+  listPendingOrders,
+  listOrdersWithDeliveryStatus,
   readOrderMeta,
   saveCustomerOrder,
   listPushInboxStatesNeedingReminder,
@@ -44,10 +46,10 @@ function deliveredAt(meta) {
 }
 
 async function processPendingOrderReminders(nowMs) {
-  const rows = await listAllCustomerOrders();
+  const rows = await listPendingOrders();
   for (const row of rows) {
     const meta = readOrderMeta(row);
-    if (meta.statusKey !== 'pending' || !meta.merchantPhone) continue;
+    if (!meta.merchantPhone) continue;
 
     const createdAt = orderCreatedAt(meta);
     if (!createdAt) continue;
@@ -104,10 +106,10 @@ async function processRatingReminders(nowMs) {
 }
 
 async function processCourierPickupReminders(nowMs) {
-  const rows = await listAllCustomerOrders();
+  const rows = await listOrdersWithDeliveryStatus('accepted');
   for (const row of rows) {
     const meta = readOrderMeta(row);
-    if (meta.deliveryStatusKey !== 'accepted' || !meta.courierPhone) continue;
+    if (!meta.courierPhone) continue;
     if (meta.payload?.pushCourierPickupReminderSentAt) continue;
 
     const acceptedAt = courierAcceptedAt(meta) || parseIso(meta.row?.updated_at);
@@ -184,7 +186,7 @@ async function runPushSchedulerTick() {
     await processCourierPickupReminders(nowMs);
     await processUnreadInboxReminders();
   } catch (error) {
-    console.error('push scheduler error:', error?.message || error);
+    logger.error('push scheduler error', { error: error.message });
   } finally {
     schedulerRunning = false;
   }

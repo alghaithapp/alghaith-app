@@ -269,14 +269,21 @@ class _MerchantOrdersScreenState extends State<MerchantOrdersScreen> {
   ) async {
     final reason = await _showRejectReasonDialog(context);
     if (reason == null || reason.trim().isEmpty) return;
-    provider.updateOrderStatus(
-      order.id,
-      'cancelled',
-      'تم رفض الطلب',
-      'Rejected',
-      noteAr: 'سبب الرفض: ${reason.trim()}',
-      noteEn: 'Rejected reason: ${reason.trim()}',
-    );
+    try {
+      provider.updateOrderStatus(
+        order.id,
+        'cancelled',
+        'تم رفض الطلب',
+        'Rejected',
+        noteAr: 'سبب الرفض: ${reason.trim()}',
+        noteEn: 'Rejected reason: ${reason.trim()}',
+      );
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('فشل رفض الطلب: $e', style: const TextStyle(fontFamily: 'Cairo'))),
+      );
+    }
   }
 
   Future<void> _openSearchSheet(BuildContext context) async {
@@ -1184,7 +1191,7 @@ class _PendingCountdownCardState extends State<_PendingCountdownCard> {
   @override
   void initState() {
     super.initState();
-    _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
+    _ticker = Timer.periodic(const Duration(seconds: 5), (_) {
       if (mounted) setState(() {});
     });
   }

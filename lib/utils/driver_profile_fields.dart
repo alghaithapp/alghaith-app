@@ -25,7 +25,7 @@ class DriverProfileFields {
       profile?['vehicle']?.toString().trim() ?? '';
 
   static String area(Map<String, dynamic>? profile) {
-    final raw = profile?['area'] ?? profile?['homeAddress'];
+    final raw = profile?['area'];
     return raw?.toString().trim() ?? '';
   }
 

@@ -1,16 +1,36 @@
 import 'package:flutter/foundation.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' show SupabaseClient;
 
 import '../core/config/app_config.dart';
 import '../core/network/api_client.dart';
+import '../core/realtime/realtime_service.dart';
 import '../data/repositories/database_repository.dart';
 import '../models/app_models.dart';
 import '../models/home_category_platform_override.dart';
+import '../features/taxi/models/taxi_request.dart';
 
 /// واجهة توافقية — كل عمليات قاعدة البيانات تمر عبر Railway backend.
 class SupabaseService {
   const SupabaseService._();
 
   static final _db = DatabaseRepository.instance;
+
+  static SupabaseClient? _supabaseClient;
+  static SupabaseClient get supabaseClient {
+    if (_supabaseClient == null) {
+      _supabaseClient = SupabaseClient(
+        AppConfig.supabaseUrl,
+        AppConfig.supabaseAnonKey,
+      );
+    }
+    return _supabaseClient!;
+  }
+
+  static RealtimeService? _realtimeService;
+  static RealtimeService get realtime {
+    _realtimeService ??= RealtimeService(supabaseClient);
+    return _realtimeService!;
+  }
 
   static bool get isConfigured => AppConfig.isBackendConfigured;
 
@@ -389,4 +409,49 @@ class SupabaseService {
       _db.markPushInboxOpened(phone: phone);
 
   static Future<void> deleteAccount(String phone) => _db.deleteAccount(phone);
+
+  // ── Taxi methods ──────────────────────────────────────────────────
+
+  static Future<List<TaxiRequest>> loadTaxiPool(String phone) =>
+      _db.loadTaxiPool(phone);
+
+  static Future<List<TaxiRequest>> loadDriverTaxiOrders(String phone) =>
+      _db.loadDriverTaxiOrders(phone);
+
+  static Future<List<TaxiRequest>> loadCustomerTaxiRequests(String phone) =>
+      _db.loadCustomerTaxiRequests(phone);
+
+  static Future<void> saveTaxiRequest(String phone, TaxiRequest request) =>
+      _db.saveTaxiRequest(phone, request);
+
+  static Future<void> acceptTaxiRequest(
+    String phone,
+    String requestId, {
+    String? driverName,
+    String? vehicleType,
+  }) =>
+      _db.acceptTaxiRequest(
+        phone,
+        requestId,
+        driverName: driverName,
+        vehicleType: vehicleType,
+      );
+
+  static Future<void> rejectTaxiRequest(String phone, String requestId) =>
+      _db.rejectTaxiRequest(phone, requestId);
+
+  static Future<void> updateTaxiRequestStatus(
+    String phone,
+    String requestId, {
+    required String statusKey,
+    required String statusAr,
+    required String statusEn,
+  }) =>
+      _db.updateTaxiRequestStatus(
+        phone,
+        requestId,
+        statusKey: statusKey,
+        statusAr: statusAr,
+        statusEn: statusEn,
+      );
 }

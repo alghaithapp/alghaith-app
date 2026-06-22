@@ -45,6 +45,7 @@ const isLikelyServiceRoleKey = supabaseKeyRole === 'service_role';
 let supabaseAdmin = null;
 const schemaColumnCache = new Map();
 
+/** @returns {import('@supabase/supabase-js').SupabaseClient | null} */
 function getSupabaseAdmin() {
   if (supabaseAdmin) return supabaseAdmin;
   if (!supabaseUrl || !supabaseServiceRoleKey) {
@@ -126,6 +127,10 @@ function isUuid(value) {
   );
 }
 
+/**
+ * @param {string} phone
+ * @returns {string[]}
+ */
 function getPhoneVariants(phone) {
   const digits = String(phone || '').replace(/\D/g, '');
   if (digits.length < 10) {
@@ -207,6 +212,13 @@ async function selectSingle(table, column, value) {
   return data || null;
 }
 
+/**
+ * @param {string} table
+ * @param {Array<{method: string, column: string, value: any}>} filters
+ * @param {{column?: string, ascending?: boolean}} [orderBy]
+ * @param {number} [limit]
+ * @returns {Promise<Array<Object>>}
+ */
 async function selectMany(table, filters = [], orderBy = null, limit = null) {
   const supabase = assertSupabaseAdmin();
   let query = supabase.from(table).select();

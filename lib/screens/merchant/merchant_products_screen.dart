@@ -7,6 +7,7 @@ import '../../core/theme/app_theme.dart';
 import '../../models/app_models.dart';
 import '../../providers/app_provider.dart';
 import '../../utils/dummy_data.dart';
+import '../../utils/sync_error_message.dart';
 import '../../utils/extensions.dart';
 import '../../utils/merchant_service_labels.dart';
 import '../../widgets/app_image.dart';
@@ -52,21 +53,6 @@ class _MerchantProductsScreenState extends State<MerchantProductsScreen> {
     return false;
   }
 
-  String _syncErrorMessage(Object error) {
-    final raw = error.toString();
-    if (raw.contains('Missing authorization token') ||
-        raw.contains('Invalid authorization token') ||
-        raw.contains('401')) {
-      return 'انتهت جلسة الدخول. سجل الخروج ثم ادخل مرة أخرى.';
-    }
-    if (raw.contains('Network error')) {
-      return 'فشل الاتصال بالإنترنت أو بالخادم. حاول مرة أخرى.';
-    }
-    final cleaned = raw.replaceFirst('Exception: ', '').trim();
-    if (cleaned.isNotEmpty) return cleaned;
-    return 'تعذرت المزامنة الآن. تحقق من الاتصال ثم أعد المحاولة.';
-  }
-
   Future<void> _syncCatalogNow(AppProvider provider) async {
     if (_isSyncingCatalog) return;
     setState(() => _isSyncingCatalog = true);
@@ -86,7 +72,7 @@ class _MerchantProductsScreenState extends State<MerchantProductsScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            _syncErrorMessage(error),
+            syncErrorMessage(error),
             style: const TextStyle(fontFamily: 'Cairo'),
           ),
         ),
@@ -329,8 +315,8 @@ class _MerchantProductsScreenState extends State<MerchantProductsScreen> {
                         ? provider.merchantProductSectionName(item.sectionId)
                         : null,
                     onToggle: () async {
-                      item.isAvailable = !item.isAvailable;
-                      await provider.updateProduct(item);
+                      final newValue = !item.isAvailable;
+                      await provider.updateProduct(item.copyWith(isAvailable: newValue));
                     },
                     onEdit: () => _openEditForm(provider, item, serviceId),
                     onDelete: () => _confirmDelete(provider, item),

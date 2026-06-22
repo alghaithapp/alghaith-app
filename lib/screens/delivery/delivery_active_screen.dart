@@ -217,11 +217,11 @@ class DeliveryActiveGroupCard extends StatelessWidget {
                   ],
                 ),
               ),
-              if (!picked)
+              if (!picked && order.merchantPhone != null && order.merchantPhone!.isNotEmpty)
                 CupertinoButton(
                   padding: EdgeInsets.zero,
                   onPressed: () =>
-                      AppHelpers.makePhoneCall(order.merchantPhone ?? ''),
+                      AppHelpers.makePhoneCall(order.merchantPhone!),
                   child: const Icon(CupertinoIcons.phone_fill, size: 20),
                 ),
             ],
@@ -249,7 +249,17 @@ class DeliveryActiveGroupCard extends StatelessWidget {
                     padding: const EdgeInsets.symmetric(vertical: 8),
                     color: Colors.red,
                     borderRadius: BorderRadius.circular(8),
-                    onPressed: () => provider.markDeliveryPickedUp(order.id),
+                    onPressed: () async {
+                      try {
+                        await provider.markDeliveryPickedUp(order.id);
+                      } catch (e) {
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('خطأ: $e', style: const TextStyle(fontFamily: 'Cairo'))),
+                          );
+                        }
+                      }
+                    },
                     child: const Text('تم الاستلام',
                         style: TextStyle(
                             fontFamily: 'Cairo',
@@ -329,8 +339,17 @@ class DeliveryActiveGroupCard extends StatelessWidget {
                   child: CupertinoButton(
                     color: Colors.red,
                     borderRadius: BorderRadius.circular(12),
-                    onPressed: () =>
-                        provider.markDeliveryOnTheWay(group.orders.first.id),
+                    onPressed: () async {
+                      try {
+                        await provider.markDeliveryOnTheWay(group.orders.first.id);
+                      } catch (e) {
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('خطأ: $e', style: const TextStyle(fontFamily: 'Cairo'))),
+                          );
+                        }
+                      }
+                    },
                     child: const Text('بدء التحرك للزبون',
                         style: TextStyle(
                             color: Colors.white,
@@ -358,8 +377,17 @@ class DeliveryActiveGroupCard extends StatelessWidget {
                         color: Colors.red,
                         padding: EdgeInsets.zero,
                         borderRadius: BorderRadius.circular(12),
-                        onPressed: () => provider
-                            .markDeliveryCompleted(group.orders.first.id),
+                        onPressed: () async {
+                          try {
+                            await provider.markDeliveryCompleted(group.orders.first.id);
+                          } catch (e) {
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text('خطأ: $e', style: const TextStyle(fontFamily: 'Cairo'))),
+                              );
+                            }
+                          }
+                        },
                         child: const Text('تسليم وتحصيل الكاش',
                             style: TextStyle(
                                 color: Colors.white,

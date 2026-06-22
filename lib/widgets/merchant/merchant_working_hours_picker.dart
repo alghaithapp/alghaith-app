@@ -179,7 +179,7 @@ class MerchantWorkingHoursPicker extends StatelessWidget {
                             ),
                             child: CupertinoDatePicker(
                               mode: CupertinoDatePickerMode.time,
-                              use24hFormat: false,
+                              use24hFormat: true,
                               initialDateTime: initialDateTime,
                               backgroundColor: Colors.white,
                               onDateTimeChanged: (dateTime) {

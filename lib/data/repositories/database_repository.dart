@@ -4,6 +4,7 @@ import '../../core/network/api_client.dart';
 import '../../core/utils/phone_utils.dart';
 import '../../models/app_models.dart';
 import '../../models/home_category_platform_override.dart';
+import '../../features/taxi/models/taxi_request.dart';
 import '../models/account_snapshot.dart';
 
 
@@ -770,6 +771,100 @@ class DatabaseRepository {
     await ApiClient.instance.delete(
       '/db/app-user',
       queryParameters: {'phone': _phone(phone)},
+    );
+  }
+
+  // ── Taxi methods ──────────────────────────────────────────────────
+
+  Future<List<TaxiRequest>> loadTaxiPool(String phone) async {
+    final result = await ApiClient.instance.get(
+      '/db/taxi-pool',
+      queryParameters: {'phone': _phone(phone)},
+    );
+    if (result is! List) return const [];
+    return result
+        .whereType<Map>()
+        .map((item) => TaxiRequest.fromMap(Map<String, dynamic>.from(item)))
+        .toList();
+  }
+
+  Future<List<TaxiRequest>> loadDriverTaxiOrders(String phone) async {
+    final result = await ApiClient.instance.get(
+      '/db/taxi-driver-orders',
+      queryParameters: {'phone': _phone(phone)},
+    );
+    if (result is! List) return const [];
+    return result
+        .whereType<Map>()
+        .map((item) => TaxiRequest.fromMap(Map<String, dynamic>.from(item)))
+        .toList();
+  }
+
+  Future<List<TaxiRequest>> loadCustomerTaxiRequests(String phone) async {
+    final result = await ApiClient.instance.get(
+      '/db/taxi-customer-requests',
+      queryParameters: {'phone': _phone(phone)},
+    );
+    if (result is! List) return const [];
+    return result
+        .whereType<Map>()
+        .map((item) => TaxiRequest.fromMap(Map<String, dynamic>.from(item)))
+        .toList();
+  }
+
+  Future<void> saveTaxiRequest(String phone, TaxiRequest request) async {
+    await ApiClient.instance.put(
+      '/db/taxi-request',
+      body: {
+        'phone': _phone(phone),
+        'request': request.toMap(),
+      },
+    );
+  }
+
+  Future<void> acceptTaxiRequest(
+    String phone,
+    String requestId, {
+    String? driverName,
+    String? vehicleType,
+  }) async {
+    await ApiClient.instance.put(
+      '/db/taxi-request/accept',
+      body: {
+        'phone': _phone(phone),
+        'requestId': requestId,
+        if (driverName != null) 'driverName': driverName,
+        if (vehicleType != null) 'vehicleType': vehicleType,
+      },
+    );
+  }
+
+  Future<void> rejectTaxiRequest(String phone, String requestId) async {
+    await ApiClient.instance.put(
+      '/db/taxi-request/reject',
+      body: {
+        'phone': _phone(phone),
+        'requestId': requestId,
+      },
+    );
+  }
+
+  Future<void> updateTaxiRequestStatus(
+    String phone,
+    String requestId, {
+    required String statusKey,
+    required String statusAr,
+    required String statusEn,
+  }) async {
+    await ApiClient.instance.put(
+      '/db/taxi-request/status',
+      body: {
+        'phone': _phone(phone),
+        'requestId': requestId,
+        'statusKey': statusKey,
+        'statusAr': statusAr,
+        'statusEn': statusEn,
+      },
     );
   }
 }

@@ -68,67 +68,100 @@ const {
 async function getAdminReports(phone) {
   await assertAdminAccess(phone);
 
-  // تحديد عدد محدود من أحدث الطلبات لتقليل وقت التحميل وتحسين أداء لوحة التحكم
-  const [orders, merchants, users, products] = await Promise.all([
-    selectMany('customer_orders', [], { column: 'updated_at', ascending: false }, 200),
-    selectMany('merchant_profiles', []),
-    selectMany('app_users', []),
-    selectMany('merchant_products', []),
+  const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+  const now = Date.now();
+  const weekAgo = new Date(now - WEEK_MS).toISOString();
+
+  const supabase = assertSupabaseAdmin();
+
+  const [orders, merchants, totalProducts, totalUsers, states] = await Promise.all([
+    selectMany('customer_orders', [], { column: 'updated_at', ascending: false }, 100),
+    selectMany('merchant_profiles', [], { column: 'store_name', ascending: true }, 500),
+    supabase.from('merchant_products').select('*', { count: 'exact', head: true }).then((r) => r.count || 0),
+    supabase.from('app_users').select('*', { count: 'exact', head: true }).then((r) => r.count || 0),
+    supabase.from('app_state').select('phone, state').limit(2000).then((r) => r.data || []),
   ]);
 
-  let completedOrders = 0;
-  let pendingOrders = 0;
-  let deliveringOrders = 0;
-  let totalSales = 0;
-  let codCollected = 0;
+  let completedOrders = 0, pendingOrders = 0, deliveringOrders = 0, cancelledOrders = 0;
+  let totalSales = 0, codCollected = 0, recentRevenue = 0, recentCount = 0;
+  const ordersByStatus = {};
 
   for (const row of orders) {
     const meta = readOrderMeta(row);
     const price = Number(meta.payload.price) || 0;
+    const status = meta.statusKey || 'unknown';
+    ordersByStatus[status] = (ordersByStatus[status] || 0) + 1;
+
     if (meta.statusKey === 'completed') {
       completedOrders += 1;
       totalSales += price;
-      if (meta.payload.codConfirmed) {
-        codCollected += price;
+      if (meta.payload.codConfirmed) codCollected += price;
+      if (row.updated_at && String(row.updated_at) >= weekAgo) {
+        recentRevenue += price;
+        recentCount += 1;
       }
     } else if (meta.statusKey === 'pending' || meta.statusKey === 'preparing') {
       pendingOrders += 1;
-    } else if (
-      meta.statusKey === 'delivering' ||
-      ['accepted', 'picked_up', 'on_way', 'waiting'].includes(meta.deliveryStatusKey)
-    ) {
+    } else if (meta.statusKey === 'cancelled' || meta.statusKey === 'rejected' || meta.statusKey === 'failed') {
+      cancelledOrders += 1;
+    } else if (meta.statusKey === 'delivering' || ['accepted', 'picked_up', 'on_way', 'waiting'].includes(meta.deliveryStatusKey)) {
       deliveringOrders += 1;
     }
   }
 
+  const avgOrderValue = completedOrders > 0 ? Math.round(totalSales / completedOrders) : 0;
+  const recentAvgOrderValue = recentCount > 0 ? Math.round(recentRevenue / recentCount) : avgOrderValue;
+  const revenueGrowth = avgOrderValue > 0 ? Math.round(((recentAvgOrderValue - avgOrderValue) / avgOrderValue) * 100) : 0;
+
+  let courierCount = 0, driverCount = 0;
+  for (const row of states) {
+    const s = normalizeObject(row.state);
+    if (s.courierProfile && typeof s.courierProfile === 'object' && String(s.courierProfile.name || '').trim()) courierCount++;
+    if (s.driverProfile && typeof s.driverProfile === 'object' && String(s.driverProfile.name || '').trim()) driverCount++;
+  }
+
+  const pendingMerchants = merchants.filter((m) => {
+    const st = String(m.approval_status || '').trim();
+    return st === 'pending' || (!st && !isMerchantApproved(m));
+  }).length;
+  const frozenMerchants = merchants.filter((m) => isMerchantFrozen(m)).length;
+  const rejectedMerchantsCount = merchants.filter((m) => (String(m.approval_status || '').trim()) === 'rejected').length;
+  const bazaarMerchants = merchants.filter((m) => m.is_bazaar_member === true).length;
+
+  const topMerchants = merchants.filter((m) => isMerchantApproved(m)).map((m) => {
+    let rev = 0, oc = 0;
+    for (const row of orders) {
+      const meta = readOrderMeta(row);
+      if (!meta.merchantPhone) continue;
+      try {
+        if (getPhoneVariants(meta.merchantPhone).includes(m.phone) && meta.statusKey === 'completed') {
+          rev += Number(meta.payload.price) || 0;
+          oc += 1;
+        }
+      } catch (_) {}
+    }
+    return { phone: m.phone, storeName: merchantProfileDisplayName(m) || m.store_name || '', revenue: rev, orderCount: oc };
+  }).filter((m) => m.revenue > 0).sort((a, b) => b.revenue - a.revenue).slice(0, 5);
+
   const recentOrders = orders.slice(0, 12).map((row) => {
     const meta = readOrderMeta(row);
     return {
-      id: meta.id,
-      orderNumber: meta.payload.orderNumber,
-      statusKey: meta.statusKey,
-      statusAr: meta.payload.statusAr,
-      price: meta.payload.price,
-      merchantStoreName: meta.payload.merchantStoreName,
-      customerNameAr: meta.payload.customerNameAr,
-      deliveryStatusKey: meta.deliveryStatusKey,
-      updatedAt: row.updated_at,
+      id: meta.id, orderNumber: meta.payload.orderNumber, statusKey: meta.statusKey,
+      statusAr: meta.payload.statusAr, price: meta.payload.price,
+      merchantStoreName: meta.payload.merchantStoreName, customerNameAr: meta.payload.customerNameAr,
+      deliveryStatusKey: meta.deliveryStatusKey, updatedAt: row.updated_at,
     };
   });
 
   return {
-    totalOrders: orders.length,
-    completedOrders,
-    pendingOrders,
-    deliveringOrders,
-    totalSales,
-    codCollected,
+    totalOrders: orders.length, completedOrders, pendingOrders, deliveringOrders, cancelledOrders,
+    ordersByStatus, totalSales, codCollected, avgOrderValue, recentRevenue, revenueGrowth,
     totalMerchants: merchants.length,
-    openMerchants: merchants.filter(
-      (row) => row.is_open !== false && !isMerchantFrozen(row)
-    ).length,
-    totalProducts: products.length,
-    totalUsers: users.length,
+    openMerchants: merchants.filter((r) => r.is_open !== false && !isMerchantFrozen(r)).length,
+    frozenMerchants, pendingMerchantsCount: pendingMerchants, rejectedMerchantsCount,
+    bazaarMerchants, topMerchants,
+    totalProducts, totalUsers, activeUsersCount: 0,
+    totalCouriers: courierCount, totalDrivers: driverCount, totalAdminAccounts: 0,
     recentOrders,
   };
 }

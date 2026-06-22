@@ -32,7 +32,7 @@ class DeliveryEarningsScreen extends StatelessWidget {
           padding: EdgeInsets.zero,
           onPressed: () => Navigator.of(context).pop(),
           child: const Icon(
-            CupertinoIcons.chevron_forward,
+            Icons.arrow_back_ios_new_rounded,
             size: 22,
           ),
         ),

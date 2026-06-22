@@ -1,5 +1,5 @@
 require('dotenv').config();
-const { getAllDrivers, getAllCouriers, getAllAdminAccounts } = require('./supabase_repo.js');
+const { getAllDrivers, getAllCouriers, getAllAdminAccounts } = require('./supabase_repo');
 
 async function check() {
   try {

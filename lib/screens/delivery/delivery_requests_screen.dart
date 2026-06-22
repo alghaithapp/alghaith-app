@@ -84,7 +84,17 @@ class DeliveryRequestsScreen extends StatelessWidget {
         ),
         trailing: CupertinoButton(
           padding: EdgeInsets.zero,
-          onPressed: () => appProvider.refreshCourierOrders(),
+          onPressed: () async {
+            try {
+              await appProvider.refreshCourierOrders();
+            } catch (e) {
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('خطأ: $e', style: const TextStyle(fontFamily: 'Cairo'))),
+                );
+              }
+            }
+          },
           child: const Icon(CupertinoIcons.refresh, size: 22),
         ),
         border: null,
@@ -95,7 +105,13 @@ class DeliveryRequestsScreen extends StatelessWidget {
                 text: 'لا توجد طلبات جاهزة للتوصيل حالياً',
               )
             : RefreshIndicator(
-                onRefresh: appProvider.refreshCourierOrders,
+                onRefresh: () async {
+                  try {
+                    await appProvider.refreshCourierOrders();
+                  } catch (e) {
+                    // SnackBar skipped in RefreshIndicator context
+                  }
+                },
                 child: ListView.builder(
                   physics: const AlwaysScrollableScrollPhysics(),
                   padding: const EdgeInsets.all(16),
@@ -247,9 +263,21 @@ class DeliveryGroupCard extends StatelessWidget {
                   padding: EdgeInsets.zero,
                   color: Colors.red.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(12),
-                  onPressed: () => group.groupId != null
-                      ? appProvider.rejectDeliveryGroup(group.groupId!)
-                      : appProvider.rejectDeliveryOrder(group.orders.first.id),
+                  onPressed: () async {
+                    try {
+                      if (group.groupId != null) {
+                        await appProvider.rejectDeliveryGroup(group.groupId!);
+                      } else {
+                        await appProvider.rejectDeliveryOrder(group.orders.first.id);
+                      }
+                    } catch (e) {
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('خطأ: $e', style: const TextStyle(fontFamily: 'Cairo'))),
+                        );
+                      }
+                    }
+                  },
                   child: const Text('رفض',
                       style: TextStyle(
                           color: Colors.red,
@@ -265,9 +293,21 @@ class DeliveryGroupCard extends StatelessWidget {
                   padding: EdgeInsets.zero,
                   color: Colors.green,
                   borderRadius: BorderRadius.circular(12),
-                  onPressed: () => group.groupId != null
-                      ? appProvider.acceptDeliveryGroup(group.groupId!)
-                      : appProvider.acceptDeliveryOrder(group.orders.first.id),
+                  onPressed: () async {
+                    try {
+                      if (group.groupId != null) {
+                        await appProvider.acceptDeliveryGroup(group.groupId!);
+                      } else {
+                        await appProvider.acceptDeliveryOrder(group.orders.first.id);
+                      }
+                    } catch (e) {
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('خطأ: $e', style: const TextStyle(fontFamily: 'Cairo'))),
+                        );
+                      }
+                    }
+                  },
                   child: const Text('قبول المجموعة وتوصيلها',
                       style: TextStyle(
                           color: Colors.white,

@@ -6,8 +6,16 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node server.js",
+    "test": "node --experimental-vm-modules node_modules/.bin/jest --forceExit --detectOpenHandles",
+    "test:watch": "node --experimental-vm-modules node_modules/.bin/jest --watch --forceExit",
     "setup-admin": "node scripts/grant_admin_access.js",
     "restore-primary-roles": "node scripts/restore_primary_roles.js"
+  },
+  "jest": {
+    "testEnvironment": "node",
+    "testMatch": [
+      "**/tests/**/*.test.js"
+    ]
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.56.0",
@@ -17,9 +25,13 @@
     "express-rate-limit": "^8.5.2",
     "firebase-admin": "^13.4.0",
     "helmet": "^8.2.0",
+    "winston": "^3.19.0",
     "ws": "^8.18.3"
   },
   "engines": {
     "node": ">=20"
+  },
+  "devDependencies": {
+    "jest": "^30.4.2"
   }
 }

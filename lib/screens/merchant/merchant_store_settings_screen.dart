@@ -59,11 +59,10 @@ class _MerchantStoreSettingsScreenState
     _addressController = TextEditingController();
     _deliveryAreasController = TextEditingController();
     _deliveryFeeController = TextEditingController();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _populateFromProvider());
   }
 
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
+  void _populateFromProvider() {
     final provider = context.read<AppProvider>();
     _nameController.text = provider.merchantStoreName;
     _descController.text = provider.merchantDescription;

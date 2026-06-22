@@ -3,8 +3,10 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/realtime/realtime_subscription_mixin.dart';
 import '../../core/theme/app_colors.dart';
 import '../../providers/app_provider.dart';
+import '../../services/supabase_service.dart';
 import '../../utils/role_switch_notifications.dart';
 import '../../widgets/in_app_notification_banner.dart';
 import '../../widgets/safe_bottom_bar.dart';
@@ -22,9 +24,10 @@ class MerchantShell extends StatefulWidget {
   State<MerchantShell> createState() => _MerchantShellState();
 }
 
-class _MerchantShellState extends State<MerchantShell> {
+class _MerchantShellState extends State<MerchantShell> with WidgetsBindingObserver, RealtimeSubscriptionMixin {
   int _currentIndex = 0;
   Timer? _refreshTimer;
+  bool _isInBackground = false;
   // تتبع حالة كل طلب لاكتشاف التغييرات
   Map<String, String> _lastOrderStatuses = {};
   bool _bannerShowing = false;
@@ -42,6 +45,7 @@ class _MerchantShellState extends State<MerchantShell> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     context.read<AppProvider>().addListener(_onAppProviderChanged);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!context.mounted) return;
@@ -54,18 +58,40 @@ class _MerchantShellState extends State<MerchantShell> {
       provider.syncMerchantCatalogToCloud().catchError((error) {
         debugPrint('MERCHANT_CLOUD_SYNC: $error');
       });
-      // استطلاع دوري كل 20 ثانية
-      _refreshTimer = Timer.periodic(const Duration(seconds: 20), (_) {
+      // استطلاع دوري كل 30 ثانية (يتوقف تلقائياً عند الخلفية)
+      _refreshTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+        if (_isInBackground) return;
         _pollForNewOrders();
       });
+      final phone = provider.authPhone;
+      if (phone != null && phone.isNotEmpty) {
+        final sub = SupabaseService.realtime.subscribeToOrders(
+          phone: phone,
+          onUpsert: (_) => _pollForNewOrders(),
+          onDelete: (_) => _pollForNewOrders(),
+        );
+        trackChannel(sub);
+      }
       RoleSwitchNotificationPresenter.showIfNeeded(context);
     });
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    _isInBackground = state == AppLifecycleState.paused || state == AppLifecycleState.inactive;
+    if (_isInBackground) {
+      _refreshTimer?.cancel();
+    } else if (_refreshTimer == null || !_refreshTimer!.isActive) {
+      _refreshTimer = Timer.periodic(const Duration(seconds: 20), (_) => _pollForNewOrders());
+    }
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     context.read<AppProvider>().removeListener(_onAppProviderChanged);
     _refreshTimer?.cancel();
+    disposeRealtime();
     super.dispose();
   }
 

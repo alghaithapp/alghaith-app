@@ -1,6 +1,5 @@
 require('dotenv').config({ path: require('path').join(__dirname, '.env') });
 
-const crypto = require('crypto');
 const cors = require('cors');
 const express = require('express');
 const helmet = require('helmet');
@@ -10,13 +9,14 @@ const { version: backendVersion } = require('./package.json');
 const { isPushConfigured } = require('./push_notifications');
 const { startPushScheduler } = require('./push_scheduler');
 const { validatePromoCode } = require('./promo_codes');
-const { normalizePhone } = require('./routes/_middleware');
+const logger = require('./lib/logger');
+const { errorHandler, notFoundHandler } = require('./lib/error_handler');
+const { verifySessionToken } = require('./lib/session');
 
 // ── Config ──────────────────────────────────────────────────────────────
 
 const app = express();
 const port = process.env.PORT || 3000;
-// Railway/most managed platforms sit behind a reverse proxy.
 app.set('trust proxy', 1);
 
 const sessionSecret = String(process.env.SESSION_SECRET || '').trim();
@@ -30,21 +30,15 @@ const corsAllowedOrigins = String(process.env.CORS_ALLOWED_ORIGINS || '')
 // ── Warnings ────────────────────────────────────────────────────────────
 
 if (!sessionSecret) {
-  console.warn(
-    'Missing SESSION_SECRET. Private database routes and signed login sessions will not work until you add it to backend/.env.'
-  );
+  logger.warn('Missing SESSION_SECRET');
 }
 
 if (!mapboxAccessToken) {
-  console.warn(
-    'Missing MAPBOX_ACCESS_TOKEN. Road-distance route API will use fallback behavior in the app.'
-  );
+  logger.warn('Missing MAPBOX_ACCESS_TOKEN');
 }
 
 if (!isPushConfigured()) {
-  console.warn(
-    'Missing FIREBASE_SERVICE_ACCOUNT_JSON. Push notifications are disabled until you add the Firebase service account JSON to Railway env.'
-  );
+  logger.warn('Missing FIREBASE_SERVICE_ACCOUNT_JSON');
 }
 
 // ── CORS ────────────────────────────────────────────────────────────────
@@ -95,65 +89,10 @@ const generalRateLimiter = rateLimit({
 
 app.use(generalRateLimiter);
 
-// ── Session helpers ─────────────────────────────────────────────────────
-
-function base64UrlDecode(input) {
-  const normalized = String(input || '')
-    .replace(/-/g, '+')
-    .replace(/_/g, '/')
-    .padEnd(Math.ceil(String(input || '').length / 4) * 4, '=');
-  return Buffer.from(normalized, 'base64');
-}
-
-function base64UrlEncode(input) {
-  const buffer = Buffer.isBuffer(input) ? input : Buffer.from(String(input), 'utf8');
-  return buffer
-    .toString('base64')
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
-    .replace(/=+$/g, '');
-}
-
-function verifySessionToken(token) {
-  if (!sessionSecret) {
-    throw new Error('SESSION_SECRET is not configured.');
-  }
-
-  const [encodedPayload, encodedSignature] = String(token || '').split('.');
-  if (!encodedPayload || !encodedSignature) {
-    throw new Error('Missing token payload or signature.');
-  }
-
-  const expectedSignature = crypto
-    .createHmac('sha256', sessionSecret)
-    .update(encodedPayload)
-    .digest();
-  const actualSignature = base64UrlDecode(encodedSignature);
-
-  if (
-    actualSignature.length !== expectedSignature.length ||
-    !crypto.timingSafeEqual(actualSignature, expectedSignature)
-  ) {
-    throw new Error('Invalid token signature.');
-  }
-
-  const payloadText = base64UrlDecode(encodedPayload).toString('utf8');
-  let payload = null;
-  try {
-    payload = JSON.parse(payloadText);
-  } catch (_) {
-    throw new Error('Invalid token payload.');
-  }
-
-  const phone = normalizePhone(payload?.phone);
-  const exp = Number(payload?.exp || 0);
-  const now = Math.floor(Date.now() / 1000);
-  if (!phone || !exp || exp <= now) {
-    throw new Error('Token expired or invalid.');
-  }
-
-  return { phone, exp };
-}
+// ── Session verification ────────────────────────────────────────────────
+// تستخدم دوال verifySessionToken من lib/session.js
+// يتطابق التنفيذ مع Cloudflare Worker cloudflare_worker.js
+// لضمان اتساق التحقق من رموز الجلسة عبر البيئتين.
 
 // ── Health endpoint ─────────────────────────────────────────────────────
 
@@ -224,27 +163,23 @@ app.post('/db/validate-promo', async (req, res) => {
     const result = validatePromoCode(code, subtotalIqd);
     return res.json(result);
   } catch (error) {
-    console.error('validate-promo error:', error);
-    return res.status(500).json({ message: error?.message || 'Failed to validate promo code.' });
+    logger.error('validate-promo error', { error: error.message });
+    return res.status(500).json({ message: 'Failed to validate promo code.' });
   }
 });
 
-// ── 404 handlers ────────────────────────────────────────────────────────
+// ── Error handling ─────────────────────────────────────────────────────
 
-app.use('/db', (req, res) => {
-  return res.status(404).json({ message: `Unknown database route: ${req.method} ${req.path}` });
-});
-
-app.use((req, res) => {
-  return res.status(404).json({ message: `Unknown route: ${req.method} ${req.path}` });
-});
+app.use('/db', notFoundHandler);
+app.use(notFoundHandler);
+app.use(errorHandler);
 
 // ── Start server ────────────────────────────────────────────────────────
 
 app.listen(port, () => {
-  console.log(`Auth backend listening on port ${port}`);
+  logger.info(`Backend listening on port ${port} (v${backendVersion})`);
   if (isPushConfigured()) {
     startPushScheduler();
-    console.log('Push scheduler started.');
+    logger.info('Push scheduler started');
   }
 });

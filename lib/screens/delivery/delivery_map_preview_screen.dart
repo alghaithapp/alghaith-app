@@ -53,8 +53,20 @@ class _DeliveryMapPreviewScreenState extends State<DeliveryMapPreviewScreen> {
     if (permission == geo.LocationPermission.denied) {
       permission = await geo.Geolocator.requestPermission();
     }
-    if (permission == geo.LocationPermission.denied ||
-        permission == geo.LocationPermission.deniedForever) {
+    if (permission == geo.LocationPermission.deniedForever) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'تم رفض الوصول إلى الموقع بشكل دائم. يرجى تفعيله من إعدادات الجهاز.',
+              style: TextStyle(fontFamily: 'Cairo'),
+            ),
+          ),
+        );
+      }
+      return;
+    }
+    if (permission == geo.LocationPermission.denied) {
       return;
     }
     final current = await geo.Geolocator.getCurrentPosition(
@@ -65,6 +77,11 @@ class _DeliveryMapPreviewScreenState extends State<DeliveryMapPreviewScreen> {
     setState(() {
       _courierPosition = LatLng(current.latitude, current.longitude);
     });
+    _mapController?.animateCamera(
+      gmaps.CameraUpdate.newLatLng(
+        gmaps.LatLng(current.latitude, current.longitude),
+      ),
+    );
   }
 
   VoidCallback? _externalNavigationAction() {

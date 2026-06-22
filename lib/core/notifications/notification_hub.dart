@@ -1,5 +1,6 @@
 import '../../models/app_models.dart';
 import '../../models/app_notification.dart';
+import '../../features/taxi/models/taxi_request.dart';
 import '../../widgets/customer_order_notifications.dart';
 
 typedef NotifyCallback = String Function({
@@ -668,6 +669,66 @@ class NotificationHub {
       category: NotificationCategory.account,
       priority: NotificationPriority.urgent,
       eventKey: 'driver:account:rejected',
+    );
+  }
+
+  List<RoleBannerData> taxiBannersFromDiff({
+    required Map<String, TaxiRequest> previousById,
+    required List<TaxiRequest> current,
+  }) {
+    final banners = <RoleBannerData>[];
+    for (final request in current) {
+      final prev = previousById[request.id];
+      if (prev == null) {
+        _notify(
+          title: 'طلب تكسي جديد ${request.requestNumber}',
+          body: 'يوجد طلب تكسي جديد للمراجعة.',
+          audience: 'driver',
+          orderNumber: request.requestNumber,
+          category: NotificationCategory.taxi,
+          priority: NotificationPriority.urgent,
+          eventKey: 'taxi:${request.id}:new',
+        );
+        banners.add(RoleBannerData(
+          title: 'طلب تكسي جديد!',
+          body: request.requestNumber,
+          orderNumber: request.requestNumber,
+          colorHint: ColorHint.success,
+        ));
+        continue;
+      }
+      if (prev.statusKey != request.statusKey) {
+        if (request.statusKey == 'cancelled') {
+          _notify(
+            title: 'إلغاء الطلب ${request.requestNumber}',
+            body: 'تم إلغاء طلب التكسي.',
+            audience: 'driver',
+            orderNumber: request.requestNumber,
+            category: NotificationCategory.taxi,
+            priority: NotificationPriority.urgent,
+            eventKey: 'taxi:${request.id}:cancelled',
+          );
+          banners.add(RoleBannerData(
+            title: 'إلغاء طلب',
+            body: request.requestNumber,
+            orderNumber: request.requestNumber,
+            colorHint: ColorHint.warning,
+          ));
+        }
+      }
+    }
+    return banners;
+  }
+
+  void onTaxiRequestCreated(TaxiRequest request) {
+    _notify(
+      title: 'تم إنشاء طلب التكسي',
+      body: 'طلب ${request.requestNumber} قيد الانتظار.',
+      audience: 'customer',
+      orderNumber: request.requestNumber,
+      category: NotificationCategory.taxi,
+      priority: NotificationPriority.urgent,
+      eventKey: 'taxi:${request.id}:created',
     );
   }
 

@@ -12,7 +12,7 @@ import '../../widgets/app_image.dart';
 import '../../widgets/account/account_page_header.dart';
 import '../../screens/notifications_screen.dart';
 import 'delivery_earnings_screen.dart';
-import 'delivery_setup_screen.dart';
+import '../shared/operator_setup_screen.dart';
 import 'delivery_shared_widgets.dart';
 
 class DeliveryAccountScreen extends StatelessWidget {
@@ -100,7 +100,7 @@ class DeliveryAccountScreen extends StatelessWidget {
                           onTap: () {
                             Navigator.of(context).push(
                               CupertinoPageRoute(
-                                builder: (_) => const DeliverySetupScreen(),
+                                builder: (_) => const OperatorSetupScreen(role: 'delivery'),
                               ),
                             );
                           },
@@ -117,7 +117,22 @@ class DeliveryAccountScreen extends StatelessWidget {
                       children: [
                         SwitchListTile(
                           value: isAvailable,
-                          onChanged: appProvider.setCourierAvailability,
+                          onChanged: (val) async {
+                            try {
+                              await appProvider.setCourierAvailability(val);
+                            } catch (e) {
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(
+                                      'حدث خطأ: ${e.toString()}',
+                                      style: const TextStyle(fontFamily: 'Cairo'),
+                                    ),
+                                  ),
+                                );
+                              }
+                            }
+                          },
                           activeThumbColor: Colors.white,
                           activeTrackColor: Colors.green,
                           inactiveTrackColor: Colors.red.shade100,
@@ -251,7 +266,40 @@ class DeliveryAccountScreen extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 24),
-                  DeliveryLogoutCard(onTap: () => appProvider.resetAll()),
+                  DeliveryLogoutCard(onTap: () {
+                    showDialog(
+                      context: context,
+                      builder: (ctx) => AlertDialog(
+                        title: const Text(
+                          'تأكيد الخروج',
+                          style: TextStyle(fontFamily: 'Cairo'),
+                        ),
+                        content: const Text(
+                          'هل تريد تسجيل الخروج من حساب المندوب؟',
+                          style: TextStyle(fontFamily: 'Cairo'),
+                        ),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.of(ctx).pop(),
+                            child: const Text(
+                              'إلغاء',
+                              style: TextStyle(fontFamily: 'Cairo'),
+                            ),
+                          ),
+                          TextButton(
+                            onPressed: () {
+                              Navigator.of(ctx).pop();
+                              appProvider.resetAll();
+                            },
+                            child: const Text(
+                              'تسجيل الخروج',
+                              style: TextStyle(fontFamily: 'Cairo'),
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }),
                 ],
               ),
             ),

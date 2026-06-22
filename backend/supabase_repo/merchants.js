@@ -119,16 +119,15 @@ function isMerchantApproved(profile) {
   if (status === 'approved') return true;
   if (status === 'pending' || status === 'rejected') return false;
 
-  // حالة انتقالية: إذا لم توجد الأعمدة في قاعدة البيانات بعد
-  // نعتبر المتاجر القديمة (التي لها اسم) واصحاب المهن الذين لديهم منتجات موافق عليهم تلقائياً
+  // المهنيين الجدد يحتاجون موافقة، لكن إذا كان لديهم بيانات قديمة
+  // نعتبرهم مفعّلين فقط إذا كان لديهم موافقة صريحة
   if (isProfessionalMerchantProfile(profile)) {
-    // المهنيين الجدد يحتاجون موافقة، لكن إذا كان لديهم بيانات قديمة نعتبرهم مفعّلين
     const info = normalizeObject(profile.professional_info);
-    return Boolean(String(info.name ?? '').trim());
+    return Boolean(String(info.name ?? '').trim()) &&
+           (profile.is_approved === true || profile.isApproved === true);
   }
 
-  const storeName = merchantProfileDisplayName(profile);
-  return storeName.length > 0;
+  return false;
 }
 
 function merchantApprovalStatus(profile) {
@@ -138,7 +137,8 @@ function merchantApprovalStatus(profile) {
   if (status === 'pending') return 'pending';
   if (profile.is_approved === false || profile.isApproved === false) return 'pending';
   if (isProfessionalMerchantProfile(profile)) return 'pending';
-  return 'approved';
+  // إذا لم يُضبط approval_status مطلقاً، فهو معلق للموافقة (pending)
+  return 'pending';
 }
 
 function merchantRejectionMessage(profile) {

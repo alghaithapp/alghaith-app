@@ -639,19 +639,21 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
     }
   }
 
+  static String _fallbackImageForService(String serviceId) {
+    return switch (serviceId) {
+      'restaurant' => 'assets/images/cat_restaurant.png',
+      'cars' => 'assets/images/cat_cars.png',
+      'real_estate' => 'assets/images/re_house.png',
+      _ => 'assets/images/cat_shopping.png',
+    };
+  }
+
   Widget _buildPreviewImage(String serviceId) {
     if (_imageBase64 != null && _imageBase64!.isNotEmpty) {
       return AppImage(imageData: _imageBase64);
     }
 
-    final fallbackAsset = serviceId == 'restaurant'
-        ? 'assets/images/cat_restaurant.png'
-        : serviceId == 'cars'
-            ? 'assets/images/cat_cars.png'
-            : serviceId == 'real_estate'
-                ? 'assets/images/re_house.png'
-                : 'assets/images/cat_shopping.png';
-    return AppImage(imageData: widget.item?.image ?? fallbackAsset);
+    return AppImage(imageData: widget.item?.image ?? _fallbackImageForService(serviceId));
   }
 
   Widget _buildField({
@@ -760,14 +762,7 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
       categoryLabelEn: labels.productsTitleEn,
       image: (_imageBase64 != null && _imageBase64!.startsWith('http'))
           ? _imageBase64!
-          : widget.item?.image ??
-              (serviceId == 'restaurant'
-                  ? 'assets/images/cat_restaurant.png'
-                  : serviceId == 'cars'
-                      ? 'assets/images/cat_cars.png'
-                      : serviceId == 'real_estate'
-                          ? 'assets/images/re_house.png'
-                          : 'assets/images/cat_shopping.png'),
+          : widget.item?.image ?? _fallbackImageForService(serviceId),
       imageBase64: _imageBase64,
       prepMinutes: widget.item?.prepMinutes,
       isAvailable: _isAvailable,

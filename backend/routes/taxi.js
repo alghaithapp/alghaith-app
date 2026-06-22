@@ -124,6 +124,20 @@ router.get('/driver-history', async (req, res) => {
   }
 });
 
+// POST /db/taxi/driver-status - تحديث حالة اتصال السائق (متصل/غير متصل)
+router.post('/driver-status', async (req, res) => {
+  try {
+    const phone = requireAuthorizedPhone(req, res);
+    if (!phone) return;
+    const isOnline = req.body?.isOnline === true;
+    const result = await repo.setDriverOnlineStatus(phone, isOnline);
+    return res.json(result);
+  } catch (error) {
+    console.error('taxi driver-status error:', error);
+    return res.status(500).json({ message: error?.message || 'Failed to update driver status.' });
+  }
+});
+
 // GET /db/taxi/nearby-drivers - البحث عن سائقين قريبين
 router.get('/nearby-drivers', async (req, res) => {
   try {

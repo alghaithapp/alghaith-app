@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:latlong2/latlong.dart' as latlong2;
 
 import '../../../../core/theme/app_colors.dart';
-import '../../providers/taxi_provider.dart';
+import '../../../../providers/app_provider.dart';
 import '../../models/taxi_request.dart';
-import 'driver_request_screen.dart';
+import '../../widgets/taxi_map_widget.dart';
 
-/// الشاشة الرئيسية للسائق — تعرض الخريطة، الإحصائيات، وطلبات التكسي الواردة
+/// الشاشة الرئيسية للسائق — تعرض خريطة Google Maps حقيقية، الإحصائيات، وطلبات التكسي الواردة
 class DriverHomeScreen extends StatefulWidget {
   const DriverHomeScreen({super.key});
 
@@ -15,84 +16,58 @@ class DriverHomeScreen extends StatefulWidget {
 }
 
 class _DriverHomeScreenState extends State<DriverHomeScreen> {
-  @override
-  void initState() {
-    super.initState();
-    // الـ Polling يبدأ من DriverShell مباشرة
-  }
+  final latlong2.LatLng _baghdad = const latlong2.LatLng(32.9256, 44.7766);
 
   @override
   Widget build(BuildContext context) {
-    final provider = context.watch<TaxiProvider>();
-    final isOnline = provider.isOnline;
-    final pendingRequests = provider.pendingRequests;
-    final todayTrips = provider.todayTrips;
-    final todayEarnings = provider.todayEarnings;
+    final appProvider = context.watch<AppProvider>();
+    final pendingRequests = appProvider.visibleTaxiIncomingRequests;
+    final completedRequests = appProvider.visibleTaxiCompletedRequests;
+    final todayTrips = completedRequests.length;
+    final todayEarnings = completedRequests.fold<int>(0, (sum, r) => sum + r.fare);
+    final driverProfile = appProvider.driverProfile ?? const {};
+    final driverName = (driverProfile['name'] as String?)?.trim() ?? 'السائق';
+
+    latlong2.LatLng? pickup;
+    if (pendingRequests.isNotEmpty) {
+      final r = pendingRequests.first;
+      pickup = latlong2.LatLng(r.pickupLat, r.pickupLng);
+    }
 
     return Scaffold(
       backgroundColor: AppColors.scaffold,
       body: Stack(
         children: [
-          // خلفية الخريطة
-          _buildMapBackground(),
-
-          // AppBar
-          Positioned(
-            top: 0,
-            left: 0,
-            right: 0,
-            child: _buildAppBar(context, provider),
+          TaxiMapWidget(
+            pickupLocation: pickup,
+            driverLocation: null,
+            zoom: 13.0,
           ),
-
-          // Floating stats widget
           Positioned(
-            top: 80,
-            left: 20,
-            right: 20,
+            top: 0, left: 0, right: 0,
+            child: SafeArea(child: _buildAppBar(context, appProvider, driverName)),
+          ),
+          Positioned(
+            top: 112, left: 20, right: 20,
             child: _buildStatsWidget(todayTrips, todayEarnings),
           ),
-
-          // بطاقة الطلب الجديد
           if (pendingRequests.isNotEmpty)
             Positioned(
-              bottom: 100,
-              left: 20,
-              right: 20,
-              child: _buildNewRequestCard(context, provider, pendingRequests.first),
+              bottom: 20, left: 20, right: 20,
+              child: _buildNewRequestCard(context, appProvider, pendingRequests.first),
             ),
-
-          // زر تحديد الموقع
           Positioned(
-            bottom: 180,
-            right: 20,
+            bottom: pendingRequests.isNotEmpty ? 280 : 100, right: 20,
             child: _buildRecenterFab(),
-          ),
-
-          // Bottom Navigation
-          Positioned(
-            bottom: 0,
-            left: 0,
-            right: 0,
-            child: _buildBottomNav(context, provider),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildMapBackground() {
+  Widget _buildAppBar(BuildContext context, AppProvider provider, String driverName) {
     return Container(
-      color: const Color(0xFFE5E3DF),
-      child: CustomPaint(
-        size: Size.infinite,
-        painter: _MapPatternPainter(),
-      ),
-    );
-  }
-
-  Widget _buildAppBar(BuildContext context, TaxiProvider provider) {
-    return Container(
-      padding: const EdgeInsets.only(top: 48, left: 16, right: 16, bottom: 12),
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 10),
       decoration: BoxDecoration(
         color: Colors.white,
         boxShadow: [
@@ -105,36 +80,64 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
       ),
       child: Row(
         children: [
-          // زر القائمة
-          GestureDetector(
-            onTap: () => Scaffold.of(context).openDrawer(),
-            child: Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                color: Colors.grey.shade100,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: const Icon(Icons.menu, color: Colors.black87),
-            ),
-          ),
-          const SizedBox(width: 12),
-
-          // اسم التطبيق
-          const Expanded(
-            child: Text(
-              'TaxiLink',
-              style: TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.w700,
-                fontFamily: 'Cairo',
-                color: Colors.black,
-              ),
+          // اسم التطبيق والسائق
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'تكسي الغيث',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w700,
+                    fontFamily: 'Cairo',
+                    color: Colors.black,
+                  ),
+                ),
+                Text(
+                  'مرحباً، $driverName',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontFamily: 'Cairo',
+                    color: Colors.grey,
+                  ),
+                ),
+              ],
             ),
           ),
 
-          // Toggle متصل / غير متصل
-          _buildOnlineToggle(provider),
+          // مؤشر الاتصال (دائماً متصل للسائق المعتمد)
+          Container(
+            padding:
+                const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              color: AppColors.success.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 8,
+                  height: 8,
+                  decoration: const BoxDecoration(
+                    color: AppColors.success,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+                const SizedBox(width: 6),
+                const Text(
+                  'متصل',
+                  style: TextStyle(
+                    fontFamily: 'Cairo',
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.success,
+                  ),
+                ),
+              ],
+            ),
+          ),
 
           const SizedBox(width: 12),
 
@@ -143,66 +146,14 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
             width: 40,
             height: 40,
             decoration: BoxDecoration(
+              color: AppColors.accent.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: Colors.grey.shade300, width: 2),
+              border: Border.all(
+                  color: AppColors.accent.withValues(alpha: 0.3), width: 2),
             ),
-            child: const Icon(Icons.person, color: Colors.grey, size: 24),
+            child: const Icon(Icons.person, color: AppColors.accent, size: 22),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildOnlineToggle(TaxiProvider provider) {
-    final isOnline = provider.isOnline;
-    return GestureDetector(
-      onTap: () => provider.toggleOnline(),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 250),
-        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-        decoration: BoxDecoration(
-          color: Colors.grey.shade200,
-          borderRadius: BorderRadius.circular(24),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            AnimatedContainer(
-              duration: const Duration(milliseconds: 250),
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-              decoration: BoxDecoration(
-                color: isOnline ? AppColors.success : Colors.transparent,
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Text(
-                'متصل',
-                style: TextStyle(
-                  fontFamily: 'Cairo',
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
-                  color: isOnline ? Colors.white : Colors.grey,
-                ),
-              ),
-            ),
-            AnimatedContainer(
-              duration: const Duration(milliseconds: 250),
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-              decoration: BoxDecoration(
-                color: !isOnline ? Colors.red : Colors.transparent,
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Text(
-                'غير متصل',
-                style: TextStyle(
-                  fontFamily: 'Cairo',
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
-                  color: !isOnline ? Colors.white : Colors.grey,
-                ),
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }
@@ -321,7 +272,7 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
 
   Widget _buildNewRequestCard(
     BuildContext context,
-    TaxiProvider provider,
+    AppProvider provider,
     TaxiRequest request,
   ) {
     return Container(
@@ -371,7 +322,7 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Text(
-                    '${request.distanceKm.toStringAsFixed(1)} كم',
+                    request.rideTypeAr,
                     style: const TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.w700,
@@ -448,7 +399,7 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
                         ),
                       ),
                       Text(
-                        request.pickupAddress,
+                        request.pickupAddressAr,
                         style: const TextStyle(
                           fontSize: 15,
                           fontWeight: FontWeight.w700,
@@ -466,7 +417,7 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
                         ),
                       ),
                       Text(
-                        request.dropoffAddress,
+                        request.dropoffAddressAr,
                         style: const TextStyle(
                           fontSize: 15,
                           fontWeight: FontWeight.w700,
@@ -481,11 +432,11 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
             ),
             const SizedBox(height: 12),
 
-            // الأجرة
+            // أجرة + نوع الرحلة
             Row(
               children: [
                 Text(
-                  'الأجرة المقدرة (${request.taxiTypeLabelAr})',
+                  'الأجرة المقدرة (${request.rideTypeAr})',
                   style: const TextStyle(
                     fontSize: 12,
                     fontFamily: 'Cairo',
@@ -494,7 +445,7 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
                 ),
                 const Spacer(),
                 Text(
-                  '${request.fare} د.ع',
+                    '${request.fare} د.ع',
                   style: const TextStyle(
                     fontSize: 22,
                     fontWeight: FontWeight.w900,
@@ -511,7 +462,7 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
               children: [
                 Expanded(
                   child: GestureDetector(
-                    onTap: () => provider.rejectRequest(request.id),
+                    onTap: () => provider.rejectTaxiRequest(request.id),
                     child: Container(
                       padding: const EdgeInsets.symmetric(vertical: 12),
                       decoration: BoxDecoration(
@@ -540,7 +491,7 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
                 const SizedBox(width: 12),
                 Expanded(
                   child: GestureDetector(
-                    onTap: () => provider.acceptRequest(request.id),
+                    onTap: () => provider.acceptTaxiRequest(request.id),
                     child: Container(
                       padding: const EdgeInsets.symmetric(vertical: 12),
                       decoration: BoxDecoration(
@@ -604,98 +555,6 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
     );
   }
 
-  Widget _buildBottomNav(BuildContext context, TaxiProvider provider) {
-    return Container(
-      padding: const EdgeInsets.only(
-        left: 16,
-        right: 16,
-        top: 8,
-        bottom: 24,
-      ),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.08),
-            blurRadius: 20,
-            offset: const Offset(0, -4),
-          ),
-        ],
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
-        children: [
-          _navItem(Icons.directions_car_rounded, 'Home', true),
-          _navItem(Icons.history_rounded, 'Activity', false),
-          _navItem(Icons.payments_rounded, 'Earnings', false),
-          _navItem(Icons.person_rounded, 'Profile', false),
-        ],
-      ),
-    );
-  }
-
-  Widget _navItem(IconData icon, String label, bool isActive) {
-    return GestureDetector(
-      onTap: () {},
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            icon,
-            color: isActive ? AppColors.accent : Colors.grey,
-            size: 26,
-          ),
-          const SizedBox(height: 4),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 10,
-              fontFamily: 'Cairo',
-              fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
-              color: isActive ? AppColors.accent : Colors.grey,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 }
 
-/// رسم نمط الخريطة في الخلفية
-class _MapPatternPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = const Color(0xFFD4D1CC).withValues(alpha: 0.5)
-      ..strokeWidth = 1;
 
-    const spacing = 20.0;
-    for (double x = 0; x < size.width; x += spacing) {
-      for (double y = 0; y < size.height; y += spacing) {
-        canvas.drawCircle(Offset(x, y), 1, paint);
-      }
-    }
-
-    // خطوط طرق بسيطة
-    final routePaint = Paint()
-      ..color = const Color(0xFFFCD400).withValues(alpha: 0.2)
-      ..strokeWidth = 3
-      ..style = PaintingStyle.stroke;
-
-    final path = Path()
-      ..moveTo(0, size.height * 0.8)
-      ..cubicTo(
-        size.width * 0.3,
-        size.height * 0.6,
-        size.width * 0.5,
-        size.height * 0.7,
-        size.width,
-        size.height * 0.2,
-      );
-    canvas.drawPath(path, routePaint);
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
-}

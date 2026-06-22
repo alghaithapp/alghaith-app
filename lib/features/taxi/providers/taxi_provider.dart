@@ -1,7 +1,10 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' show RealtimeChannel;
 
+import '../../../core/realtime/realtime_service.dart';
+import '../../../services/supabase_service.dart';
 import '../models/taxi_request.dart';
 import '../models/driver_model.dart';
 import '../services/taxi_api_service.dart';
@@ -12,8 +15,12 @@ class TaxiProvider extends ChangeNotifier {
   TaxiRequest? _currentRequest;
   List<DriverModel> _nearbyDrivers = [];
   bool _isLoading = false;
+  bool _isOnline = false;
   String? _error;
   Timer? _pollTimer;
+  Timer? _incomingPoolTimer;
+  RealtimeChannel? _activeRequestChannel;
+  RealtimeChannel? _incomingRequestChannel;
 
   // ── Getters ──
 
@@ -48,17 +55,37 @@ class TaxiProvider extends ChangeNotifier {
 
   bool get isLoading => _isLoading;
 
+  bool get isOnline => _isOnline;
+
   String? get error => _error;
-  
-  bool get isOnline => true; // TODO: ربط مع حالة السائق
-  
+
   int get todayTrips => completedRequests.length;
 
   // ── Toggle حالة الاتصال ──
 
-  void toggleOnline() {
-    // TODO: ربط مع الخدمة الفعلية (تغيير حالة السائق في Supabase)
+  Future<void> toggleOnline() async {
+    _isOnline = !_isOnline;
     notifyListeners();
+    try {
+      await TaxiApiService.setDriverOnlineStatus(_isOnline);
+    } catch (e) {
+      _isOnline = !_isOnline;
+      _error = e.toString();
+      notifyListeners();
+    }
+  }
+
+  Future<void> setOnline(bool value) async {
+    if (_isOnline == value) return;
+    _isOnline = value;
+    notifyListeners();
+    try {
+      await TaxiApiService.setDriverOnlineStatus(value);
+    } catch (e) {
+      _isOnline = !value;
+      _error = e.toString();
+      notifyListeners();
+    }
   }
 
   // ── إنشاء طلب ──
@@ -280,25 +307,94 @@ class TaxiProvider extends ChangeNotifier {
 
   // ── Polling للطلبات النشطة ──
 
-  void startPolling({bool isDriver = false}) {
-    _pollTimer?.cancel();
-    _pollTimer = Timer.periodic(const Duration(seconds: 5), (_) async {
+  void startPolling({bool isDriver = false, String? phone}) {
+    stopPolling();
+    _pollTimer = Timer.periodic(const Duration(seconds: 20), (_) async {
       if (isDriver) {
         await loadDriverActiveRequest();
       } else {
         await loadActiveRequest();
       }
     });
+    _startRealtime(isDriver: isDriver, phone: phone);
+  }
+
+  void startIncomingPolling({String? phone}) {
+    _incomingPoolTimer?.cancel();
+    _incomingPoolTimer = Timer.periodic(const Duration(seconds: 15), (_) async {
+      if (_isOnline) {
+        try {
+          final request = await TaxiApiService.getDriverActiveRequest();
+          if (request != null && request.isPending) {
+            _currentRequest = request;
+            notifyListeners();
+          }
+        } catch (_) {}
+      }
+    });
+    _startIncomingRealtime(phone: phone);
   }
 
   void stopPolling() {
     _pollTimer?.cancel();
     _pollTimer = null;
+    _incomingPoolTimer?.cancel();
+    _incomingPoolTimer = null;
+    _stopRealtime();
+  }
+
+  // ── Supabase Realtime ──
+
+  void _startRealtime({bool isDriver = false, String? phone}) {
+    _activeRequestChannel?.unsubscribe();
+    _activeRequestChannel = null;
+    if (phone == null || phone.isEmpty) return;
+    final table = 'taxi_requests';
+    final column = isDriver ? 'driver_phone' : 'customer_phone';
+    _activeRequestChannel = SupabaseService.realtime.subscribeToTable(
+      table: table,
+      filterColumn: column,
+      filterValue: phone,
+      onData: (_) {
+        if (isDriver) {
+          loadDriverActiveRequest();
+        } else {
+          loadActiveRequest();
+        }
+      },
+    );
+  }
+
+  void _startIncomingRealtime({String? phone}) {
+    _incomingRequestChannel?.unsubscribe();
+    _incomingRequestChannel = null;
+    _incomingRequestChannel =
+        SupabaseService.realtime.subscribeToTaxiRequests(
+      phone: phone ?? '',
+      onNewRequest: (_) async {
+        if (!_isOnline) return;
+        try {
+          final request = await TaxiApiService.getDriverActiveRequest();
+          if (request != null && request.isPending) {
+            _currentRequest = request;
+            notifyListeners();
+          }
+        } catch (_) {}
+      },
+    );
+  }
+
+  void _stopRealtime() {
+    _activeRequestChannel?.unsubscribe();
+    _activeRequestChannel = null;
+    _incomingRequestChannel?.unsubscribe();
+    _incomingRequestChannel = null;
   }
 
   @override
   void dispose() {
     stopPolling();
+    _stopRealtime();
     super.dispose();
   }
 
@@ -311,6 +407,7 @@ class TaxiProvider extends ChangeNotifier {
     _requests = [];
     _currentRequest = null;
     _nearbyDrivers = [];
+    _isOnline = false;
     _error = null;
     notifyListeners();
   }

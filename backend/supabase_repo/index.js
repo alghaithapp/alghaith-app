@@ -14,6 +14,7 @@ const couriers_drivers = require('./couriers_drivers');
 const admin = require('./admin');
 const push_notifications = require('./push_notifications');
 const taxi = require('./taxi');
+const admin_roles = require('./admin_roles');
 
 module.exports = {
   // Common / Config
@@ -42,5 +43,8 @@ module.exports = {
 
   // Taxi
   ...taxi,
+
+  // Admin Roles
+  ...admin_roles,
 
 };

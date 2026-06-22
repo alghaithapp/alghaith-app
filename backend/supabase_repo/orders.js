@@ -27,6 +27,25 @@ async function listAllCustomerOrders() {
   return selectMany('customer_orders', [], { column: 'updated_at', ascending: false });
 }
 
+async function listPendingOrders() {
+  return selectMany(
+    'customer_orders',
+    [{ method: 'eq', column: 'status_key', value: 'pending' }],
+    { column: 'updated_at', ascending: false }
+  );
+}
+
+async function listOrdersWithDeliveryStatus(deliveryStatusKey) {
+  return selectMany(
+    'customer_orders',
+    [
+      { method: 'eq', column: 'status_key', value: 'delivering' },
+      { method: 'eq', column: 'delivery_status_key', value: deliveryStatusKey },
+    ],
+    { column: 'updated_at', ascending: false }
+  );
+}
+
 async function getCustomerOrders(phone) {
   const variants = getPhoneVariants(phone);
   if (variants.length === 0) return [];
@@ -582,6 +601,8 @@ async function saveMerchantReview({
 
 module.exports = {
   listAllCustomerOrders,
+  listPendingOrders,
+  listOrdersWithDeliveryStatus,
   getCustomerOrders,
   saveCustomerOrder,
   readOrderMeta,

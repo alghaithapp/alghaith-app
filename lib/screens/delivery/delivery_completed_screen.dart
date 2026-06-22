@@ -26,7 +26,9 @@ class DeliveryCompletedScreen extends StatelessWidget {
         ),
         trailing: CupertinoButton(
           padding: EdgeInsets.zero,
-          onPressed: () => appProvider.refreshCourierOrders(),
+          onPressed: () async {
+            await appProvider.refreshCourierOrders();
+          },
           child: const Icon(CupertinoIcons.refresh, size: 22),
         ),
         border: null,
@@ -37,7 +39,7 @@ class DeliveryCompletedScreen extends StatelessWidget {
                 text: 'لا توجد طلبات مكتملة بعد',
               )
             : RefreshIndicator(
-                onRefresh: appProvider.refreshCourierOrders,
+                onRefresh: () => appProvider.refreshCourierOrders(),
                 child: ListView(
                   physics: const AlwaysScrollableScrollPhysics(),
                   padding: const EdgeInsets.all(16),

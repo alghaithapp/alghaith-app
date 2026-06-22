@@ -1,728 +1,497 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../../../core/theme/app_colors.dart';
-import '../../providers/taxi_provider.dart';
+import '../../../../providers/app_provider.dart';
 import '../../models/taxi_request.dart';
 
-/// شاشة رحلات السائق — تعرض الرحلة النشطة أو تاريخ الرحلات
-/// إذا تم تمرير [trip] تظهر تفاصيل رحلة محددة، وإلا تعرض الرحلة الحالية من TaxiProvider.
-class DriverTripScreen extends StatefulWidget {
-  final TaxiRequest? trip;
-
-  const DriverTripScreen({super.key, this.trip});
+/// شاشة الرحلات النشطة للسائق — تقرأ من AppProvider مباشرة
+class DriverTripScreen extends StatelessWidget {
+  const DriverTripScreen({super.key});
 
   @override
-  State<DriverTripScreen> createState() => _DriverTripScreenState();
+  Widget build(BuildContext context) {
+    final provider = context.watch<AppProvider>();
+    final active = provider.visibleTaxiActiveRequests;
+    final completed = provider.visibleTaxiCompletedRequests;
+
+    return DefaultTabController(
+      length: 2,
+      child: Scaffold(
+        backgroundColor: AppColors.scaffold,
+        appBar: AppBar(
+          title: const Text(
+            'الرحلات',
+            style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w700),
+          ),
+          centerTitle: true,
+          backgroundColor: Colors.white,
+          foregroundColor: Colors.black,
+          elevation: 0,
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.refresh_rounded),
+              onPressed: () => provider.refreshDriverTaxiRequests(),
+            ),
+          ],
+          bottom: TabBar(
+            labelStyle: const TextStyle(
+                fontFamily: 'Cairo', fontWeight: FontWeight.w700),
+            unselectedLabelStyle:
+                const TextStyle(fontFamily: 'Cairo'),
+            indicatorColor: AppColors.accent,
+            labelColor: AppColors.accent,
+            unselectedLabelColor: Colors.grey,
+            tabs: [
+              Tab(text: 'نشطة (${active.length})'),
+              Tab(text: 'مكتملة (${completed.length})'),
+            ],
+          ),
+        ),
+        body: TabBarView(
+          children: [
+            _ActiveTripsTab(active: active),
+            _CompletedTripsTab(completed: completed),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
-class _DriverTripScreenState extends State<DriverTripScreen> {
-  /// 0 = وصلت, 1 = بدأت الرحلة, 2 = اكتملت الرحلة
-  int _statusIndex = 0;
+// ── تبويب الرحلات النشطة ──────────────────────────────────────────────────
+
+class _ActiveTripsTab extends StatelessWidget {
+  final List<TaxiRequest> active;
+  const _ActiveTripsTab({required this.active});
 
   @override
-  void initState() {
-    super.initState();
-    _initStatusIndex();
-  }
-
-  void _initStatusIndex() {
-    if (widget.trip == null) return;
-    final key = widget.trip!.statusKey;
-    if (key == 'arrived') {
-      _statusIndex = 1;
-    } else if (key == 'picked_up' || key == 'completed') {
-      _statusIndex = 2;
-    } else {
-      _statusIndex = 0;
+  Widget build(BuildContext context) {
+    if (active.isEmpty) {
+      return const Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.route_rounded, size: 64, color: Colors.grey),
+            SizedBox(height: 16),
+            Text(
+              'لا توجد رحلة نشطة',
+              style: TextStyle(
+                  fontFamily: 'Cairo',
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.grey),
+            ),
+            SizedBox(height: 8),
+            Text(
+              'بعد قبول طلب ستظهر الرحلة هنا',
+              style: TextStyle(
+                  fontFamily: 'Cairo', fontSize: 13, color: Colors.grey),
+            ),
+          ],
+        ),
+      );
     }
+
+    return ListView.builder(
+      padding: const EdgeInsets.all(16),
+      itemCount: active.length,
+      itemBuilder: (context, i) => _ActiveTripCard(request: active[i]),
+    );
   }
+}
 
-  void _advanceStatus(TaxiProvider provider) {
-    // استخدم الرحلة المتاحة (من widget أو من provider)
-    final tripId = widget.trip?.id ?? provider.currentRequest?.id;
-    if (tripId == null) return;
+class _ActiveTripCard extends StatefulWidget {
+  final TaxiRequest request;
+  const _ActiveTripCard({required this.request});
 
-    final nextIndex = (_statusIndex + 1) % 3;
-    String statusKey;
-    String statusAr;
+  @override
+  State<_ActiveTripCard> createState() => _ActiveTripCardState();
+}
 
-    switch (nextIndex) {
-      case 1:
-        statusKey = 'arrived';
-        statusAr = 'وصلت';
-        break;
-      case 2:
-        statusKey = 'picked_up';
-        statusAr = 'بدأت الرحلة';
-        break;
+class _ActiveTripCardState extends State<_ActiveTripCard> {
+  bool _isBusy = false;
+
+  String get _nextActionLabel {
+    switch (widget.request.statusKey) {
+      case 'accepted':
+        return 'في الطريق للزبون';
+      case 'on_way':
+        return 'وصلت للموقع';
+      case 'arrived':
+        return 'استلام الزبون';
+      case 'picked_up':
+        return 'تم الوصول — إنهاء الرحلة';
+      case 'cancel_requested':
+        return 'موافقة الإلغاء';
       default:
-        // العودة للبداية (مكتمل)
-        statusKey = 'completed';
-        statusAr = 'اكتملت الرحلة';
-        provider.updateStatus(tripId, statusKey);
-        setState(() => _statusIndex = 2);
-        return;
+        return '';
     }
+  }
 
-    provider.updateStatus(tripId, statusKey);
-    setState(() => _statusIndex = nextIndex);
+  Color get _statusColor {
+    switch (widget.request.statusKey) {
+      case 'accepted':
+        return Colors.teal;
+      case 'on_way':
+        return Colors.lightBlue;
+      case 'arrived':
+        return Colors.indigo;
+      case 'picked_up':
+        return AppColors.success;
+      case 'cancel_requested':
+        return Colors.orange;
+      default:
+        return AppColors.accent;
+    }
+  }
+
+  Future<void> _advance(AppProvider provider) async {
+    if (_isBusy) return;
+    setState(() => _isBusy = true);
+    final id = widget.request.id;
+    switch (widget.request.statusKey) {
+      case 'accepted':
+        await provider.markTaxiOnWay(id);
+        break;
+      case 'on_way':
+        await provider.markTaxiArrived(id);
+        break;
+      case 'arrived':
+        await provider.markTaxiPickedUp(id);
+        break;
+      case 'picked_up':
+        await provider.completeTaxiRequest(id);
+        break;
+      case 'cancel_requested':
+        await provider.approveTaxiCancellationByDriver(id);
+        break;
+    }
+    if (mounted) setState(() => _isBusy = false);
   }
 
   @override
   Widget build(BuildContext context) {
-    final provider = context.watch<TaxiProvider>();
-    // في وضع التاب: استخدم الرحلة النشطة من TaxiProvider
-    final activeTrip = widget.trip ?? provider.currentRequest;
+    final provider = context.read<AppProvider>();
+    final req = widget.request;
+    final isCancelRequested = req.statusKey == 'cancel_requested';
 
-    // إذا لا توجد رحلة نشطة → اعرض حالة فارغة أو تاريخ الرحلات
-    if (activeTrip == null) {
-      return _buildNoActiveTrip(context, provider);
-    }
-
-    return Scaffold(
-      backgroundColor: AppColors.scaffold,
-      body: Stack(
-        children: [
-          // خلفية الخريطة
-          _buildMapBackground(),
-
-          // الشريط العلوي
-          Positioned(
-            top: 0,
-            left: 0,
-            right: 0,
-            child: _buildTopBar(activeTrip),
-          ),
-
-          // زر تحديد الموقع
-          Positioned(
-            bottom: 340,
-            right: 20,
-            child: _buildRecenterFab(),
-          ),
-
-          // Bottom sheet
-          Positioned(
-            bottom: 0,
-            left: 0,
-            right: 0,
-            child: _buildBottomSheet(context, provider, activeTrip),
+    return Container(
+      margin: const EdgeInsets.only(bottom: 14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border(
+          right: BorderSide(color: _statusColor, width: 4),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 14,
+            offset: const Offset(0, 4),
           ),
         ],
       ),
-    );
-  }
-
-  Widget _buildNoActiveTrip(BuildContext context, TaxiProvider provider) {
-    final completed = provider.completedTrips;
-
-    return Scaffold(
-      backgroundColor: AppColors.scaffold,
-      appBar: AppBar(
-        title: const Text(
-          'الرحلات',
-          style: TextStyle(
-            fontFamily: 'Cairo',
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-        centerTitle: true,
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.black,
-        elevation: 0,
-      ),
-      body: completed.isEmpty
-          ? const Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.route_rounded, size: 64, color: Colors.grey),
-                  SizedBox(height: 16),
-                  Text(
-                    'لا توجد رحلة نشطة',
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Header
+            Row(
+              children: [
+                Text(
+                  req.requestNumber,
+                  style: const TextStyle(
+                      fontFamily: 'Cairo',
+                      fontWeight: FontWeight.w900,
+                      fontSize: 15),
+                ),
+                const Spacer(),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: _statusColor.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    req.statusAr,
                     style: TextStyle(
                       fontFamily: 'Cairo',
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                      color: Colors.grey,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w800,
+                      color: _statusColor,
                     ),
                   ),
-                  SizedBox(height: 8),
-                  Text(
-                    'سيتم عرض رحلاتك هنا',
-                    style: TextStyle(
-                      fontFamily: 'Cairo',
-                      fontSize: 13,
-                      color: Colors.grey,
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+
+            // الزبون
+            Text(
+              '${req.customerNameAr} • ${req.fare} د.ع',
+              style: const TextStyle(fontFamily: 'Cairo', fontSize: 13),
+            ),
+            const SizedBox(height: 6),
+
+            // العناوين
+            Row(
+              children: [
+                const Icon(Icons.trip_origin_rounded,
+                    size: 14, color: Colors.green),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(req.pickupAddressAr,
+                      style: const TextStyle(
+                          fontFamily: 'Cairo',
+                          fontSize: 12,
+                          color: Colors.grey),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis),
+                ),
+              ],
+            ),
+            const SizedBox(height: 3),
+            Row(
+              children: [
+                const Icon(Icons.flag_rounded,
+                    size: 14, color: Colors.red),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(req.dropoffAddressAr,
+                      style: const TextStyle(
+                          fontFamily: 'Cairo',
+                          fontSize: 12,
+                          color: Colors.grey),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis),
+                ),
+              ],
+            ),
+
+            if (req.assignedDriverName != null) ...[
+              const SizedBox(height: 4),
+              Text(
+                'السائق: ${req.assignedDriverName}',
+                style: const TextStyle(
+                    fontFamily: 'Cairo', fontSize: 11, color: Colors.grey),
+              ),
+            ],
+
+            if (isCancelRequested) ...[
+              const SizedBox(height: 10),
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Colors.orange.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(12),
+                  border:
+                      Border.all(color: Colors.orange.withValues(alpha: 0.3)),
+                ),
+                child: const Text(
+                  'الزبون طلب إلغاء الرحلة',
+                  style: TextStyle(
+                    fontFamily: 'Cairo',
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.orange,
+                  ),
+                ),
+              ),
+            ],
+
+            const SizedBox(height: 14),
+
+            // أزرار الإجراء
+            Row(
+              children: [
+                if (isCancelRequested) ...[
+                  Expanded(
+                    child: _ActionBtn(
+                      label: 'موافقة الإلغاء',
+                      color: Colors.red,
+                      isLoading: _isBusy,
+                      onTap: () => _advance(provider),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: _ActionBtn(
+                      label: 'رفض الإلغاء',
+                      color: AppColors.success,
+                      isLoading: false,
+                      onTap: () => provider
+                          .rejectTaxiCancellationByDriver(req.id),
+                    ),
+                  ),
+                ] else if (_nextActionLabel.isNotEmpty) ...[
+                  Expanded(
+                    child: _ActionBtn(
+                      label: _nextActionLabel,
+                      color: _statusColor,
+                      isLoading: _isBusy,
+                      onTap: () => _advance(provider),
                     ),
                   ),
                 ],
-              ),
-            )
-          : ListView.builder(
-              padding: const EdgeInsets.all(16),
-              itemCount: completed.length,
-              itemBuilder: (context, index) {
-                final trip = completed[index];
-                return Container(
-                  margin: const EdgeInsets.only(bottom: 10),
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 44,
-                        height: 44,
-                        decoration: BoxDecoration(
-                          color: AppColors.success.withValues(alpha: 0.12),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: const Icon(Icons.check_circle_rounded,
-                            color: AppColors.success, size: 24),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              trip.pickupAddress,
-                              style: const TextStyle(
-                                fontFamily: 'Cairo',
-                                fontSize: 13,
-                                fontWeight: FontWeight.w700,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              '→ ${trip.dropoffAddress}',
-                              style: const TextStyle(
-                                fontFamily: 'Cairo',
-                                fontSize: 11,
-                                color: Colors.grey,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ],
-                        ),
-                      ),
-                      Text(
-                        '${trip.fare} د.ع',
-                        style: const TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w900,
-                          fontFamily: 'Cairo',
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              },
-            ),
-    );
-  }
-
-  Widget _buildMapBackground() {
-    return Container(
-      color: const Color(0xFFE5E3DF),
-      child: CustomPaint(
-        size: Size.infinite,
-        painter: _TripMapPainter(),
-      ),
-    );
-  }
-
-  Widget _buildTopBar(TaxiRequest trip) {
-    final statusLabels = {
-      'accepted': 'في الطريق للراكب',
-      'arrived': 'وصلت إلى موقع الانطلاق',
-      'picked_up': 'في الطريق للوجهة',
-      'completed': 'اكتملت الرحلة',
-    };
-
-    final statusLabel = statusLabels[trip.statusKey] ?? 'في الطريق للراكب';
-
-    return Container(
-      padding: const EdgeInsets.only(top: 48, left: 16, right: 16, bottom: 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.08),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          GestureDetector(
-            onTap: () => Navigator.of(context).pop(),
-            child: Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                color: Colors.grey.shade100,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: const Icon(Icons.arrow_back_rounded, color: Colors.black87),
-            ),
-          ),
-          const SizedBox(width: 12),
-          const Expanded(
-            child: Text(
-              'رحلة نشطة',
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.w700,
-                fontFamily: 'Cairo',
-                color: Colors.black,
-              ),
-            ),
-          ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            decoration: BoxDecoration(
-              color: AppColors.accent.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 8,
-                  height: 8,
-                  decoration: BoxDecoration(
-                    color: AppColors.accent,
-                    shape: BoxShape.circle,
-                  ),
-                ),
-                const SizedBox(width: 6),
-                Text(
-                  statusLabel,
-                  style: const TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    fontFamily: 'Cairo',
-                    color: AppColors.accent,
-                  ),
-                ),
               ],
             ),
-          ),
-        ],
+          ],
+        ),
       ),
-    );
-  }
-
-  Widget _buildRecenterFab() {
-    return Container(
-      width: 48,
-      height: 48,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.12),
-            blurRadius: 12,
-            offset: const Offset(0, 3),
-          ),
-        ],
-      ),
-      child: const Icon(
-        Icons.my_location_rounded,
-        color: Colors.black87,
-        size: 22,
-      ),
-    );
-  }
-
-  Widget _buildBottomSheet(
-    BuildContext context,
-    TaxiProvider provider,
-    TaxiRequest trip,
-  ) {
-    final statusTexts = ['وصلت', 'بدأت الرحلة', 'اكتملت الرحلة'];
-    final statusIcons = [
-      Icons.location_on_rounded,
-      Icons.play_arrow_rounded,
-      Icons.check_circle_rounded,
-    ];
-    final statusColors = [
-      AppColors.accent,
-      Colors.black,
-      AppColors.success,
-    ];
-    final currentText = statusTexts[_statusIndex];
-    final currentIcon = statusIcons[_statusIndex];
-    final currentColor = statusColors[_statusIndex];
-
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.1),
-            blurRadius: 20,
-            offset: const Offset(0, -4),
-          ),
-        ],
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // مقبض السحب
-          Container(
-            margin: const EdgeInsets.only(top: 12),
-            width: 48,
-            height: 4,
-            decoration: BoxDecoration(
-              color: Colors.grey.shade300,
-              borderRadius: BorderRadius.circular(2),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // معلومات الزبون
-                Row(
-                  children: [
-                    // الصورة الرمزية
-                    Container(
-                      width: 48,
-                      height: 48,
-                      decoration: BoxDecoration(
-                        color: Colors.grey.shade200,
-                        borderRadius: BorderRadius.circular(24),
-                      ),
-                      child: Center(
-                        child: Text(
-                          trip.customerName.isNotEmpty
-                              ? trip.customerName.substring(0, 1)
-                              : '?',
-                          style: const TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w700,
-                            fontFamily: 'Cairo',
-                            color: Colors.black54,
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            trip.customerName.isNotEmpty
-                                ? trip.customerName
-                                : 'الزبون',
-                            style: const TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w700,
-                              fontFamily: 'Cairo',
-                              color: Colors.black,
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Row(
-                            children: [
-                              const Icon(Icons.star_rounded,
-                                  color: AppColors.accent, size: 16),
-                              const SizedBox(width: 4),
-                              Text(
-                                '${trip.driverRating}.0',
-                                style: const TextStyle(
-                                  fontSize: 12,
-                                  fontFamily: 'Cairo',
-                                  color: Colors.grey,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                    // أزرار الاتصال والرسالة
-                    Row(
-                      children: [
-                        _buildIconButton(Icons.chat_bubble_rounded, Colors.grey),
-                        const SizedBox(width: 8),
-                        _buildIconButton(Icons.phone_rounded, AppColors.success),
-                      ],
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-
-                // العنوانين
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: AppColors.scaffold,
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: Colors.grey.shade200),
-                  ),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // خط المسار
-                      Column(
-                        children: [
-                          Container(
-                            width: 20,
-                            height: 20,
-                            decoration: const BoxDecoration(
-                              color: Colors.black,
-                              shape: BoxShape.circle,
-                            ),
-                            child: Center(
-                              child: Container(
-                                width: 8,
-                                height: 8,
-                                decoration: BoxDecoration(
-                                  color: Colors.white,
-                                  shape: BoxShape.circle,
-                                ),
-                              ),
-                            ),
-                          ),
-                          Container(
-                            width: 2,
-                            height: 24,
-                            color: Colors.grey.shade300,
-                          ),
-                          Container(
-                            width: 20,
-                            height: 20,
-                            decoration: BoxDecoration(
-                              color: AppColors.accent,
-                              shape: BoxShape.circle,
-                            ),
-                            child: Center(
-                              child: Container(
-                                width: 8,
-                                height: 8,
-                                decoration: BoxDecoration(
-                                  color: Colors.black,
-                                  shape: BoxShape.circle,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              'نقطة الانطلاق',
-                              style: TextStyle(
-                                fontSize: 11,
-                                fontFamily: 'Cairo',
-                                color: Colors.grey,
-                              ),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              trip.pickupAddress,
-                              style: const TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w700,
-                                fontFamily: 'Cairo',
-                                color: Colors.black,
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            const Text(
-                              'الوجهة',
-                              style: TextStyle(
-                                fontSize: 11,
-                                fontFamily: 'Cairo',
-                                color: Colors.grey,
-                              ),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              trip.dropoffAddress,
-                              style: const TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w700,
-                                fontFamily: 'Cairo',
-                                color: Colors.black,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 12),
-
-                // الأجرة المتوقعة
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                  decoration: BoxDecoration(
-                    color: AppColors.scaffold,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Row(
-                    children: [
-                      const Text(
-                        'الأجرة المتوقعة (للتحصيل)',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontFamily: 'Cairo',
-                          color: Colors.grey,
-                        ),
-                      ),
-                      const Spacer(),
-                      Text(
-                        '${trip.fare} د.ع',
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w900,
-                          fontFamily: 'Cairo',
-                          color: Colors.black,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 3),
-                        decoration: BoxDecoration(
-                          color: Colors.grey.shade200,
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: const Text(
-                          'كاش',
-                          style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w700,
-                            fontFamily: 'Cairo',
-                            color: Colors.grey,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 16),
-
-                // زر الحالة التفاعلي
-                GestureDetector(
-                  onTap: () => _advanceStatus(provider),
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 250),
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    decoration: BoxDecoration(
-                      color: currentColor,
-                      borderRadius: BorderRadius.circular(14),
-                      boxShadow: [
-                        BoxShadow(
-                          color: currentColor.withValues(alpha: 0.3),
-                          blurRadius: 10,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(currentIcon, color: Colors.white, size: 22),
-                        const SizedBox(width: 8),
-                        Text(
-                          currentText,
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w700,
-                            fontFamily: 'Cairo',
-                            color: Colors.white,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildIconButton(IconData icon, Color color) {
-    return Container(
-      width: 40,
-      height: 40,
-      decoration: BoxDecoration(
-        color: Colors.grey.shade100,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Icon(icon, color: color, size: 20),
     );
   }
 }
 
-/// رسام بسيط للخريطة
-class _TripMapPainter extends CustomPainter {
+// ── تبويب الرحلات المكتملة ────────────────────────────────────────────────
+
+class _CompletedTripsTab extends StatelessWidget {
+  final List<TaxiRequest> completed;
+  const _CompletedTripsTab({required this.completed});
+
   @override
-  void paint(Canvas canvas, Size size) {
-    final gridPaint = Paint()
-      ..color = Colors.grey.withValues(alpha: 0.15)
-      ..strokeWidth = 0.5;
-
-    for (double x = 0; x < size.width; x += 30) {
-      canvas.drawLine(Offset(x, 0), Offset(x, size.height), gridPaint);
-    }
-    for (double y = 0; y < size.height; y += 30) {
-      canvas.drawLine(Offset(0, y), Offset(size.width, y), gridPaint);
-    }
-
-    // مسار الرحلة
-    final routePaint = Paint()
-      ..color = AppColors.accent.withValues(alpha: 0.5)
-      ..strokeWidth = 4
-      ..style = PaintingStyle.stroke;
-
-    final path = Path()
-      ..moveTo(size.width * 0.2, size.height * 0.7)
-      ..cubicTo(
-        size.width * 0.35,
-        size.height * 0.5,
-        size.width * 0.55,
-        size.height * 0.55,
-        size.width * 0.8,
-        size.height * 0.3,
+  Widget build(BuildContext context) {
+    if (completed.isEmpty) {
+      return const Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(CupertinoIcons.checkmark_seal, size: 64, color: Colors.grey),
+            SizedBox(height: 16),
+            Text(
+              'لا توجد رحلات مكتملة بعد',
+              style: TextStyle(
+                  fontFamily: 'Cairo',
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.grey),
+            ),
+          ],
+        ),
       );
-    canvas.drawPath(path, routePaint);
+    }
 
-    // سيارة السائق
-    final carPaint = Paint()..color = Colors.black;
-    canvas.drawCircle(
-      Offset(size.width * 0.35, size.height * 0.55),
-      8,
-      carPaint,
+    return ListView.builder(
+      padding: const EdgeInsets.all(16),
+      itemCount: completed.length,
+      itemBuilder: (context, i) {
+        final req = completed[i];
+        return Container(
+          margin: const EdgeInsets.only(bottom: 10),
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: AppColors.success.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(Icons.check_circle_rounded,
+                    color: AppColors.success, size: 24),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      req.customerNameAr,
+                      style: const TextStyle(
+                          fontFamily: 'Cairo',
+                          fontWeight: FontWeight.w700,
+                          fontSize: 13),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '${req.pickupAddressAr} → ${req.dropoffAddressAr}',
+                      style: const TextStyle(
+                          fontFamily: 'Cairo',
+                          fontSize: 11,
+                          color: Colors.grey),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+              Text(
+                '${req.fare} د.ع',
+                style: const TextStyle(
+                  fontFamily: 'Cairo',
+                  fontWeight: FontWeight.w900,
+                  fontSize: 15,
+                  color: AppColors.success,
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
+}
+
+// ── زر الإجراء ────────────────────────────────────────────────────────────
+
+class _ActionBtn extends StatelessWidget {
+  final String label;
+  final Color color;
+  final bool isLoading;
+  final VoidCallback onTap;
+
+  const _ActionBtn({
+    required this.label,
+    required this.color,
+    required this.isLoading,
+    required this.onTap,
+  });
 
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: isLoading ? null : onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 13),
+        decoration: BoxDecoration(
+          color: color,
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: [
+            BoxShadow(
+              color: color.withValues(alpha: 0.25),
+              blurRadius: 8,
+              offset: const Offset(0, 3),
+            ),
+          ],
+        ),
+        child: isLoading
+            ? const Center(
+                child: SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(
+                      strokeWidth: 2, color: Colors.white),
+                ),
+              )
+            : Text(
+                label,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  fontFamily: 'Cairo',
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.white,
+                ),
+              ),
+      ),
+    );
+  }
 }

@@ -4,9 +4,11 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/realtime/realtime_subscription_mixin.dart';
 import '../../models/app_models.dart';
 import '../../core/ui/app_bottom_nav_style.dart';
 import '../../providers/app_provider.dart';
+import '../../services/supabase_service.dart';
 import '../../utils/role_notification_poller.dart';
 import '../../utils/role_switch_notifications.dart';
 import '../../widgets/safe_bottom_bar.dart';
@@ -24,7 +26,7 @@ class DeliveryShell extends StatefulWidget {
   State<DeliveryShell> createState() => _DeliveryShellState();
 }
 
-class _DeliveryShellState extends State<DeliveryShell> {
+class _DeliveryShellState extends State<DeliveryShell> with RealtimeSubscriptionMixin {
   int _currentIndex = 0;
 
   final List<Widget> _screens = const [
@@ -42,6 +44,21 @@ class _DeliveryShellState extends State<DeliveryShell> {
       if (!context.mounted) return;
       RoleSwitchNotificationPresenter.showIfNeeded(context);
       final provider = context.read<AppProvider>();
+      final phone = provider.authPhone;
+      if (phone != null && phone.isNotEmpty) {
+        final poolSub = SupabaseService.realtime.subscribeToOrders(
+          phone: phone,
+          onUpsert: (_) {
+            if (!context.mounted) return;
+            context.read<AppProvider>().refreshCourierOrders();
+          },
+          onDelete: (_) {
+            if (!context.mounted) return;
+            context.read<AppProvider>().refreshCourierOrders();
+          },
+        );
+        trackChannel(poolSub);
+      }
       final orderId = provider.takePendingOrderId('delivery');
       if (orderId != null && orderId.isNotEmpty) {
         Navigator.of(context).push(
@@ -51,6 +68,12 @@ class _DeliveryShellState extends State<DeliveryShell> {
         );
       }
     });
+  }
+
+  @override
+  void dispose() {
+    disposeRealtime();
+    super.dispose();
   }
 
   @override

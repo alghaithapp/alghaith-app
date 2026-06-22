@@ -358,7 +358,14 @@ class MerchantOffersScreen extends StatelessWidget {
     );
 
     if (result == true) {
-      provider.deleteMerchantOffer(offer.id);
+      try {
+        await provider.deleteMerchantOffer(offer.id);
+      } catch (e) {
+        if (!context.mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('فشل حذف العرض: $e', style: const TextStyle(fontFamily: 'Cairo'))),
+        );
+      }
     }
   }
 

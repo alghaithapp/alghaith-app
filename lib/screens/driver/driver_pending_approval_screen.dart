@@ -8,7 +8,7 @@ import '../../core/notifications/push_notification_service.dart';
 import '../../providers/app_provider.dart';
 import '../../utils/driver_profile_fields.dart';
 import '../../utils/helpers.dart';
-import 'driver_setup_screen.dart';
+import '../shared/operator_setup_screen.dart';
 
 class DriverPendingApprovalScreen extends StatefulWidget {
   const DriverPendingApprovalScreen({super.key});
@@ -30,7 +30,8 @@ class _DriverPendingApprovalScreenState
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final phone = context.read<AppProvider>().authPhone;
       if (phone != null && phone.isNotEmpty) {
-        unawaited(PushNotificationService.instance.bindToUser(phone));
+        unawaited(PushNotificationService.instance.bindToUser(phone)
+            .catchError((e) => debugPrint('bindToUser error: $e')));
       }
       unawaited(_refresh(silent: true));
     });
@@ -186,7 +187,7 @@ class _DriverPendingApprovalScreenState
               onPressed: () {
                 Navigator.of(context).push(
                   MaterialPageRoute<void>(
-                    builder: (_) => const DriverSetupScreen(),
+                    builder: (_) => const OperatorSetupScreen(role: 'driver'),
                   ),
                 );
               },

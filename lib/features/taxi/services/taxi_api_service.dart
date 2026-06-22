@@ -118,6 +118,13 @@ class TaxiApiService {
     return list;
   }
 
+  /// تحديث حالة اتصال السائق (متصل/غير متصل)
+  static Future<void> setDriverOnlineStatus(bool isOnline) async {
+    await ApiClient.instance.post('$_baseUrl/driver-status', body: {
+      'isOnline': isOnline,
+    });
+  }
+
   /// جلب السائقين القريبين
   static Future<List<DriverModel>> getNearbyDrivers(
     double lat,

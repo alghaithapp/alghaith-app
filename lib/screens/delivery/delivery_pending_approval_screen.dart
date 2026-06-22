@@ -8,7 +8,7 @@ import '../../core/notifications/push_notification_service.dart';
 import '../../providers/app_provider.dart';
 import '../../utils/courier_profile_fields.dart';
 import '../../utils/helpers.dart';
-import 'delivery_setup_screen.dart';
+import '../shared/operator_setup_screen.dart';
 
 class DeliveryPendingApprovalScreen extends StatefulWidget {
   const DeliveryPendingApprovalScreen({super.key});
@@ -30,7 +30,8 @@ class _DeliveryPendingApprovalScreenState
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final phone = context.read<AppProvider>().authPhone;
       if (phone != null && phone.isNotEmpty) {
-        unawaited(PushNotificationService.instance.bindToUser(phone));
+        unawaited(PushNotificationService.instance.bindToUser(phone)
+            .catchError((e) => debugPrint('bindToUser error: $e')));
       }
       unawaited(_refresh(silent: true));
     });
@@ -187,7 +188,7 @@ class _DeliveryPendingApprovalScreenState
               onPressed: () {
                 Navigator.of(context).push(
                   MaterialPageRoute<void>(
-                    builder: (_) => const DeliverySetupScreen(),
+                    builder: (_) => const OperatorSetupScreen(role: 'delivery'),
                   ),
                 );
               },

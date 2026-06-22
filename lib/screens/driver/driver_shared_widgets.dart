@@ -289,7 +289,15 @@ class DrvDeliveryCard extends StatelessWidget {
                     color: Colors.red,
                     borderRadius: BorderRadius.circular(12),
                     minimumSize: Size.zero,
-                    onPressed: () => provider.rejectDeliveryOrder(order.id),
+                    onPressed: () async {
+                      try {
+                        await provider.rejectDeliveryOrder(order.id);
+                      } catch (e) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('$e')),
+                        );
+                      }
+                    },
                     child: Text('رفض',
                         style:
                             const TextStyle(color: Colors.white, fontSize: 12)),
@@ -301,7 +309,15 @@ class DrvDeliveryCard extends StatelessWidget {
                     color: Colors.green,
                     borderRadius: BorderRadius.circular(12),
                     minimumSize: Size.zero,
-                    onPressed: () => provider.acceptDeliveryOrder(order.id),
+                    onPressed: () async {
+                      try {
+                        await provider.acceptDeliveryOrder(order.id);
+                      } catch (e) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('$e')),
+                        );
+                      }
+                    },
                     child: Text('موافقة',
                         style:
                             const TextStyle(color: Colors.white, fontSize: 12)),
@@ -360,7 +376,15 @@ class DrvActiveDeliveryCard extends StatelessWidget {
                   color: AppColors.accent,
                   borderRadius: BorderRadius.circular(12),
                   minimumSize: Size.zero,
-                  onPressed: () => provider.markDeliveryPickedUp(order.id),
+                  onPressed: () async {
+                    try {
+                      await provider.markDeliveryPickedUp(order.id);
+                    } catch (e) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('$e')),
+                      );
+                    }
+                  },
                   child: Text('استلام الطلب',
                       style:
                           const TextStyle(color: Colors.white, fontSize: 12)),
@@ -372,7 +396,15 @@ class DrvActiveDeliveryCard extends StatelessWidget {
                   color: Colors.green,
                   borderRadius: BorderRadius.circular(12),
                   minimumSize: Size.zero,
-                  onPressed: () => provider.markDeliveryCompleted(order.id),
+                  onPressed: () async {
+                    try {
+                      await provider.markDeliveryCompleted(order.id);
+                    } catch (e) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('$e')),
+                      );
+                    }
+                  },
                   child: Text('تم التسليم',
                       style:
                           const TextStyle(color: Colors.white, fontSize: 12)),

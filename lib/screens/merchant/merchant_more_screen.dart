@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../../providers/app_provider.dart';
 import '../../utils/helpers.dart';
+import '../../utils/sync_error_message.dart';
 import '../../utils/account_role_switch.dart';
 import '../../widgets/app_image.dart';
 import '../../widgets/app_logo.dart';
@@ -445,21 +446,6 @@ class _SyncCatalogButton extends StatefulWidget {
 class _SyncCatalogButtonState extends State<_SyncCatalogButton> {
   bool _isSyncing = false;
 
-  String _syncErrorMessage(Object error) {
-    final raw = error.toString();
-    if (raw.contains('Missing authorization token') ||
-        raw.contains('Invalid authorization token') ||
-        raw.contains('401')) {
-      return 'انتهت جلسة الدخول. سجل الخروج ثم ادخل مرة أخرى.';
-    }
-    if (raw.contains('Network error')) {
-      return 'فشل الاتصال بالإنترنت أو بالخادم. حاول مرة أخرى.';
-    }
-    final cleaned = raw.replaceFirst('Exception: ', '').trim();
-    if (cleaned.isNotEmpty) return cleaned;
-    return 'تعذرت المزامنة الآن. تحقق من الاتصال ثم أعد المحاولة.';
-  }
-
   Future<void> _syncNow() async {
     if (_isSyncing) return;
     setState(() => _isSyncing = true);
@@ -474,7 +460,7 @@ class _SyncCatalogButtonState extends State<_SyncCatalogButton> {
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(_syncErrorMessage(error))),
+        SnackBar(content: Text(syncErrorMessage(error))),
       );
     } finally {
       if (mounted) {

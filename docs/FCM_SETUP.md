@@ -114,3 +114,70 @@ node scripts/generate_notification_sound.cjs
 - بدون `google-services.json` / `GoogleService-Info.plist` يبقى التطبيق يعمل لكن **بدون push خارجي**.
 - الإشعارات الداخلية (البانر داخل التطبيق) تبقى تعمل كما هي.
 - يحتاج بناء APK/AAB/iOS جديد بعد إعداد Firebase.
+
+## 9) Railway Deployment — Detailed
+
+### 9.1 Set the environment variable
+
+**Option A — Railway Dashboard:**
+1. Open [Railway Dashboard](https://railway.app/project) → your project → **Variables**.
+2. Add variable `FIREBASE_SERVICE_ACCOUNT_JSON`.
+3. Paste the **entire** service account JSON as the value (including `{}` and quotes).
+4. Deploy or restart.
+
+**Option B — Railway CLI (recommended for CI):**
+```bash
+railway variables set FIREBASE_SERVICE_ACCOUNT_JSON='{"type":"service_account","project_id":"...","private_key":"-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n","client_email":"...","client_id":"...","auth_uri":"...","token_uri":"...", ...}'
+```
+
+**Option C — File reference (Railway CLI):**
+```bash
+railway variables set FIREBASE_SERVICE_ACCOUNT_JSON=@backend/firebase-service-account.json
+```
+
+**Option D — PowerShell helper (Windows):**
+```powershell
+.\scripts\configure_fcm_railway.ps1
+```
+
+### 9.2 Verify the variable is set
+
+```bash
+railway variables list | grep FIREBASE
+```
+
+Or check the `/health` endpoint:
+```
+GET https://your-project.up.railway.app/health
+```
+Expected response includes `"pushConfigured": true`.
+
+### 9.3 Redeploy
+
+```bash
+cd backend
+railway up
+```
+
+Or trigger a redeploy from the Railway Dashboard → Deployments → **Redeploy**.
+
+### 9.4 Local testing with .env
+
+Add to `backend/.env`:
+```
+FIREBASE_SERVICE_ACCOUNT_JSON={"type":"service_account","project_id":"...",...}
+```
+
+Then start the backend:
+```bash
+cd backend
+node server.js
+```
+
+### 9.5 Troubleshooting
+
+| Symptom | Cause | Fix |
+|---------|-------|-----|
+| `pushConfigured: false` in /health | JSON missing or invalid | Check Railway variable is set correctly; validate JSON syntax |
+| `Failed to parse private key` | Newlines in key are escaped | Ensure `\n` in private key are literal newlines, not `\\n` |
+| `Credential implementation provided to initializeApp() must be a non-empty string` | Env var empty | Verify variable name matches `FIREBASE_SERVICE_ACCOUNT_JSON` exactly |

@@ -22,6 +22,16 @@ class AppConfig {
     defaultValue: 'YOUR_MAPBOX_PUBLIC_TOKEN',
   );
 
+  static const String supabaseUrl = String.fromEnvironment(
+    'SUPABASE_URL',
+    defaultValue: 'https://your-project-ref.supabase.co',
+  );
+
+  static const String supabaseAnonKey = String.fromEnvironment(
+    'SUPABASE_ANON_KEY',
+    defaultValue: 'your-anon-key',
+  );
+
   static String? _resolvedMapboxToken;
 
   // مهلة أطول لتحمّل بدء تشغيل خادم Railway البارد (cold start) عند أول طلب.

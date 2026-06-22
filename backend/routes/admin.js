@@ -28,6 +28,7 @@ const {
   deleteUserState,
   ensurePlatformAdminAccess,
 } = require('../supabase_repo');
+const logger = require('../lib/logger');
 const {
   requireAuthorizedPhone,
   requireOptionalAuthorizedPhone,
@@ -522,6 +523,48 @@ router.put('/admin/home-categories', async (req, res) => {
     const message = error?.message || 'Failed to save home categories.';
     const status = message.includes('Admin access') ? 403 : 500;
     return res.status(status).json({ message });
+  }
+});
+
+// ── Admin Roles ─────────────────────────────────────────────────────────
+
+router.get('/admin/roles', async (req, res) => {
+  try {
+    const phone = requireOptionalAuthorizedPhone(req, res);
+    if (!phone) return;
+    const { getAdminRole, listAdminAccounts } = require('../supabase_repo');
+    const [role, accounts] = await Promise.all([
+      getAdminRole(phone),
+      listAdminAccounts(phone),
+    ]);
+    return res.json({ role, accounts });
+  } catch (error) {
+    logger.error('admin roles list error', { error: error.message });
+    const status = error.message.includes('Admin access') ? 403 : 500;
+    return res.status(status).json({ message: error.message });
+  }
+});
+
+router.put('/admin/roles', async (req, res) => {
+  try {
+    const phone = requireOptionalAuthorizedPhone(req, res);
+    if (!phone) return;
+    const targetPhone = String(req.body?.targetPhone || '').trim();
+    const newRole = String(req.body?.role || '').trim();
+    if (!targetPhone) {
+      return res.status(400).json({ message: 'targetPhone is required.' });
+    }
+    const { setAdminRole } = require('../supabase_repo');
+    const result = await setAdminRole(phone, targetPhone, newRole || null);
+    return res.json(result);
+  } catch (error) {
+    logger.error('admin roles set error', { error: error.message });
+    const status = error.message.includes('Admin access') || error.message.includes('Only super admins')
+      ? 403
+      : error.message.includes('Invalid role')
+        ? 400
+        : 500;
+    return res.status(status).json({ message: error.message });
   }
 });
 

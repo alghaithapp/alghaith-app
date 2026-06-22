@@ -31,6 +31,8 @@ class TaxiRequest {
   final List<String> rejectedByDriverIds;
   final String? cancellationReason;
   final bool isPaid;
+  final String? noteAr;
+  final String? assignedDriverName;
 
   const TaxiRequest({
     required this.id,
@@ -61,7 +63,14 @@ class TaxiRequest {
     this.rejectedByDriverIds = const [],
     this.cancellationReason,
     this.isPaid = false,
+    this.noteAr,
+    this.assignedDriverName,
   });
+
+  String get rideTypeAr => taxiTypeLabelAr;
+  String get customerNameAr => customerName;
+  String get pickupAddressAr => pickupAddress;
+  String get dropoffAddressAr => dropoffAddress;
 
   bool get isPending => statusKey == 'pending';
   bool get isAccepted => statusKey == 'accepted';
@@ -128,6 +137,8 @@ class TaxiRequest {
       'rejectedByDriverIds': rejectedByDriverIds,
       'cancellationReason': cancellationReason,
       'isPaid': isPaid,
+      if (noteAr != null) 'noteAr': noteAr,
+      if (assignedDriverName != null) 'assignedDriverName': assignedDriverName,
     };
   }
 
@@ -172,6 +183,8 @@ class TaxiRequest {
           : const [],
       cancellationReason: map['cancellationReason'] as String?,
       isPaid: (map['isPaid'] as bool?) ?? false,
+      noteAr: map['noteAr'] as String?,
+      assignedDriverName: map['assignedDriverName'] as String?,
     );
   }
 
@@ -204,6 +217,8 @@ class TaxiRequest {
     List<String>? rejectedByDriverIds,
     String? cancellationReason,
     bool? isPaid,
+    String? noteAr,
+    String? assignedDriverName,
   }) {
     return TaxiRequest(
       id: id ?? this.id,
@@ -234,6 +249,8 @@ class TaxiRequest {
       rejectedByDriverIds: rejectedByDriverIds ?? this.rejectedByDriverIds,
       cancellationReason: cancellationReason ?? this.cancellationReason,
       isPaid: isPaid ?? this.isPaid,
+      noteAr: noteAr ?? this.noteAr,
+      assignedDriverName: assignedDriverName ?? this.assignedDriverName,
     );
   }
 }

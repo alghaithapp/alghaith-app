@@ -1,6 +1,6 @@
 name: alghaith_app
 description: "Al-Ghaith - Professional Service & Shopping App in Iraq"
-version: 1.2.81+116
+version: 1.2.88+123
 
 environment:
   sdk: '>=3.0.0 <4.0.0'
@@ -33,6 +33,7 @@ dev_dependencies:
     sdk: flutter
   flutter_lints: ^3.0.0
   flutter_launcher_icons: ^0.14.1
+  mocktail: ^1.0.0
 
 flutter:
   uses-material-design: true

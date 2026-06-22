@@ -97,13 +97,19 @@ class MerchantReviewsScreen extends StatelessWidget {
     controller.dispose();
 
     if (submitted == null) return;
-    await provider.replyMerchantReview(review.id, submitted);
-    if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('تم حفظ الرد'),
-        ),
-      );
+    try {
+      await provider.replyMerchantReview(review.id, submitted);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: const Text('تم حفظ الرد')),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('فشل حفظ الرد: $e', style: const TextStyle(fontFamily: 'Cairo'))),
+        );
+      }
     }
   }
 }

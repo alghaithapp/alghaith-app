@@ -129,20 +129,6 @@ class MerchantReview {
   }
 }
 
-class MerchantNotificationItem {
-  final String title;
-  final String body;
-  final String type;
-  final String time;
-
-  const MerchantNotificationItem({
-    required this.title,
-    required this.body,
-    required this.type,
-    required this.time,
-  });
-}
-
 class MerchantEarningPoint {
   final String label;
   final int value;

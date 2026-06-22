@@ -71,6 +71,39 @@ function haversineDistance(lat1, lng1, lat2, lng2) {
 
 // ── إنشاء طلب جديد ───────────────────────────────────────────────
 
+/**
+ * @typedef {Object} TaxiRequest
+ * @property {string} id
+ * @property {string} requestNumber
+ * @property {string} customerPhone
+ * @property {string} pickupAddress
+ * @property {string} dropoffAddress
+ * @property {number} pickupLat
+ * @property {number} pickupLng
+ * @property {number} dropoffLat
+ * @property {number} dropoffLng
+ * @property {number} distanceKm
+ * @property {string} taxiType
+ * @property {number} fare
+ * @property {number} fareEconomic
+ * @property {number} fareSuper
+ * @property {string} statusKey
+ * @property {string} statusAr
+ */
+
+/**
+ * @param {string} customerPhone
+ * @param {Object} data
+ * @param {string} [data.pickupAddress]
+ * @param {string} [data.dropoffAddress]
+ * @param {number} [data.pickupLat]
+ * @param {number} [data.pickupLng]
+ * @param {number} [data.dropoffLat]
+ * @param {number} [data.dropoffLng]
+ * @param {number} [data.distanceKm]
+ * @param {string} [data.taxiType]
+ * @returns {Promise<TaxiRequest>}
+ */
 async function createTaxiRequest(customerPhone, data = {}) {
   const normalizedPhone = await resolvePhoneKey(customerPhone);
   await ensureAppUser(normalizedPhone, data);
@@ -561,6 +594,40 @@ async function getDriverHistory(driverPhone) {
   );
 }
 
+// ── حالة السائق (متصل/غير متصل) ─────────────────────────────────────
+
+async function setDriverOnlineStatus(driverPhone, isOnline) {
+  const phoneKey = await resolvePhoneKey(driverPhone);
+  const { getUserState, saveUserState } = require('./users');
+  const state = (await getUserState(phoneKey)) || {};
+  const profile = state.driverProfile || {};
+
+  profile.available = Boolean(isOnline);
+  profile.updatedAt = nowIso();
+
+  await saveUserState(phoneKey, {
+    ...state,
+    driverProfile: profile,
+  });
+
+  if (await hasColumn('taxi_driver_status')) {
+    const supabase = assertSupabaseAdmin();
+    const variants = getPhoneVariants(phoneKey);
+    await supabase
+      .from('taxi_driver_status')
+      .upsert(
+        {
+          phone: phoneKey,
+          is_online: Boolean(isOnline),
+          updated_at: nowIso(),
+        },
+        { onConflict: 'phone' }
+      );
+  }
+
+  return { success: true, phone: phoneKey, isOnline: Boolean(isOnline) };
+}
+
 module.exports = {
   readTaxiMeta,
   generateRequestNumber,
@@ -576,4 +643,5 @@ module.exports = {
   getDriverActiveRequest,
   getCustomerHistory,
   getDriverHistory,
+  setDriverOnlineStatus,
 };
