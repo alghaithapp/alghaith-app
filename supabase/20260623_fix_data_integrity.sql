@@ -3,7 +3,6 @@
 -- =============================================================================
 
 -- 1. Atomic JSONB merge function for app_state
--- يحل مشكلة race condition في قراءة-تعديل-كتابة app_state
 CREATE OR REPLACE FUNCTION merge_app_state(p_phone TEXT, p_state JSONB)
 RETURNS JSONB
 SECURITY DEFINER
@@ -15,9 +14,7 @@ BEGIN
   ON CONFLICT (phone)
   DO UPDATE SET
     state = CASE
-      -- إذا كان p_state يحوي مفتاحاً معيناً بالقيمة null، نزيله من state
       WHEN p_state IS NULL THEN EXCLUDED.state
-      -- وإلا ندمج (دمج على مستوى الجذر فقط)
       ELSE COALESCE(app_state.state, '{}'::JSONB) || p_state
     END,
     updated_at = NOW();
@@ -26,7 +23,6 @@ END;
 $$;
 
 -- 2. Atomic JSONB path merge function (merge nested objects)
--- يسمح بدمج الحقول المتداخلة مثل driverProfile.available
 CREATE OR REPLACE FUNCTION merge_app_state_path(p_phone TEXT, p_path TEXT, p_value JSONB)
 RETURNS JSONB
 SECURITY DEFINER
@@ -35,54 +31,83 @@ AS $$
 DECLARE
   v_state JSONB;
   v_path TEXT[];
-  v_key TEXT;
   v_temp JSONB;
+  v_exists BOOLEAN;
 BEGIN
   v_path := string_to_array(p_path, '.');
   v_state := COALESCE((SELECT state FROM app_state WHERE phone = p_phone), '{}'::JSONB);
-  
-  -- بناء المسار المتداخل
-  v_temp := v_state;
-  FOR i IN 1..array_length(v_path, 1) LOOP
-    v_key := v_path[i];
-    IF i = array_length(v_path, 1) THEN
-      v_temp := jsonb_set(v_temp, v_path, p_value, true);
-    END IF;
-  END LOOP;
-  
+  v_temp := jsonb_set(v_state, v_path, p_value, true);
   INSERT INTO app_state (phone, state, updated_at)
   VALUES (p_phone, v_temp, NOW())
   ON CONFLICT (phone)
   DO UPDATE SET state = v_temp, updated_at = NOW();
-  
   RETURN (SELECT state FROM app_state WHERE phone = p_phone);
 END;
 $$;
 
--- 3. Fix saveRow: استخدام atomic upsert
--- هذا يمنع فقدان البيانات من الطلبات المتزامنة
--- يتم تطبيقه في common.js (انظر أدناه)
+-- 3. إنشاء الجداول المفقودة إن لم توجد
+CREATE TABLE IF NOT EXISTS merchant_reviews (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  merchant_phone TEXT NOT NULL,
+  customer_phone TEXT NOT NULL,
+  order_id TEXT,
+  stars INTEGER NOT NULL DEFAULT 5 CHECK (stars >= 1 AND stars <= 5),
+  comment TEXT DEFAULT '',
+  reply TEXT DEFAULT '',
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
 
--- 4. إضافة FOREIGN KEY للجداول المفقودة
-ALTER TABLE merchant_reviews
-  DROP CONSTRAINT IF EXISTS merchant_reviews_merchant_phone_fkey,
-  ADD CONSTRAINT merchant_reviews_merchant_phone_fkey
-    FOREIGN KEY (merchant_phone) REFERENCES app_users(phone) ON DELETE CASCADE;
+CREATE TABLE IF NOT EXISTS taxi_driver_status (
+  phone TEXT PRIMARY KEY,
+  is_online BOOLEAN DEFAULT false,
+  current_lat DOUBLE PRECISION DEFAULT 0,
+  current_lng DOUBLE PRECISION DEFAULT 0,
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
 
-ALTER TABLE merchant_reviews
-  DROP CONSTRAINT IF EXISTS merchant_reviews_customer_phone_fkey,
-  ADD CONSTRAINT merchant_reviews_customer_phone_fkey
-    FOREIGN KEY (customer_phone) REFERENCES app_users(phone) ON DELETE CASCADE;
+-- 4. إضافة FOREIGN KEY للجداول المفقودة (فقط إذا كانت الأعمدة موجودة)
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'merchant_reviews' AND column_name = 'merchant_phone'
+  ) THEN
+    ALTER TABLE merchant_reviews
+      DROP CONSTRAINT IF EXISTS merchant_reviews_merchant_phone_fkey,
+      ADD CONSTRAINT merchant_reviews_merchant_phone_fkey
+        FOREIGN KEY (merchant_phone) REFERENCES app_users(phone) ON DELETE CASCADE;
+  END IF;
+
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'merchant_reviews' AND column_name = 'customer_phone'
+  ) THEN
+    ALTER TABLE merchant_reviews
+      DROP CONSTRAINT IF EXISTS merchant_reviews_customer_phone_fkey,
+      ADD CONSTRAINT merchant_reviews_customer_phone_fkey
+        FOREIGN KEY (customer_phone) REFERENCES app_users(phone) ON DELETE CASCADE;
+  END IF;
+END $$;
 
 ALTER TABLE taxi_driver_status
   DROP CONSTRAINT IF EXISTS taxi_driver_status_phone_fkey,
   ADD CONSTRAINT taxi_driver_status_phone_fkey
     FOREIGN KEY (phone) REFERENCES app_users(phone) ON DELETE CASCADE;
 
-ALTER TABLE push_inbox_state
-  DROP CONSTRAINT IF EXISTS push_inbox_state_phone_fkey,
-  ADD CONSTRAINT push_inbox_state_phone_fkey
-    FOREIGN KEY (phone) REFERENCES app_users(phone) ON DELETE CASCADE;
+-- push_inbox_state قد لا تكون موجودة — نتحقق
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.tables
+    WHERE table_name = 'push_inbox_state'
+  ) THEN
+    ALTER TABLE push_inbox_state
+      DROP CONSTRAINT IF EXISTS push_inbox_state_phone_fkey,
+      ADD CONSTRAINT push_inbox_state_phone_fkey
+        FOREIGN KEY (phone) REFERENCES app_users(phone) ON DELETE CASCADE;
+  END IF;
+END $$;
 
 -- 5. RLS للجداول المكشوفة
 ALTER TABLE device_tokens ENABLE ROW LEVEL SECURITY;
@@ -94,8 +119,16 @@ REVOKE ALL ON merchant_reviews FROM anon, authenticated;
 ALTER TABLE taxi_driver_status ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON taxi_driver_status FROM anon, authenticated;
 
-ALTER TABLE push_inbox_state ENABLE ROW LEVEL SECURITY;
-REVOKE ALL ON push_inbox_state FROM anon, authenticated;
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.tables
+    WHERE table_name = 'push_inbox_state'
+  ) THEN
+    EXECUTE 'ALTER TABLE push_inbox_state ENABLE ROW LEVEL SECURITY';
+    EXECUTE 'REVOKE ALL ON push_inbox_state FROM anon, authenticated';
+  END IF;
+END $$;
 
 -- 6. CHECK constraint على order_payload
 ALTER TABLE customer_orders
