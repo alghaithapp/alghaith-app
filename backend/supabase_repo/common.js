@@ -263,40 +263,14 @@ async function saveRow(table, payload, conflictColumn) {
   if (conflictColumn === 'phone') {
     conflictValue = await resolvePhoneKey(conflictValue);
     payload.phone = conflictValue;
-    const existing = await selectSingleByPhone(table, conflictValue);
-    if (existing) {
-      const { data, error } = await supabase
-        .from(table)
-        .update(payload)
-        .eq('phone', existing.phone)
-        .select();
-      if (error) throw new Error(error.message);
-      if (Array.isArray(data)) return data[0] || null;
-      return data || null;
-    }
-  } else {
-    const existingQuery = await supabase
-      .from(table)
-      .select(conflictColumn)
-      .eq(conflictColumn, conflictValue)
-      .maybeSingle();
-    if (existingQuery.error) {
-      throw new Error(existingQuery.error.message);
-    }
-
-    if (existingQuery.data) {
-      const { data, error } = await supabase
-        .from(table)
-        .update(payload)
-        .eq(conflictColumn, conflictValue)
-        .select();
-      if (error) throw new Error(error.message);
-      if (Array.isArray(data)) return data[0] || null;
-      return data || null;
-    }
   }
 
-  const { data, error } = await supabase.from(table).insert(payload).select();
+  // Atomic upsert باستخدام ON CONFLICT — يلغي race condition
+  const { data, error } = await supabase
+    .from(table)
+    .upsert(payload, { onConflict: conflictColumn, ignoreDuplicates: false })
+    .select();
+
   if (error) throw new Error(error.message);
   if (Array.isArray(data)) return data[0] || null;
   return data || null;
