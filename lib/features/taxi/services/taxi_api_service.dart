@@ -125,6 +125,16 @@ class TaxiApiService {
     });
   }
 
+  /// جلب الطلبات الواردة للسائق (قريبة + pending + نفس نوع السيارة)
+  static Future<List<TaxiRequest>> getIncomingRequests() async {
+    final result = await ApiClient.instance.get('$_baseUrl/incoming-requests');
+    if (result == null) return [];
+    final list = (result as List)
+        .map((e) => TaxiRequest.fromMap(Map<String, dynamic>.from(e)))
+        .toList();
+    return list;
+  }
+
   /// جلب السائقين القريبين
   static Future<List<DriverModel>> getNearbyDrivers(
     double lat,

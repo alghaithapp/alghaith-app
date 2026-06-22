@@ -5,6 +5,7 @@ import 'package:latlong2/latlong.dart' as latlong2;
 import '../../../../core/theme/app_colors.dart';
 import '../../../../providers/app_provider.dart';
 import '../../models/taxi_request.dart';
+import '../../providers/taxi_provider.dart';
 import '../../widgets/taxi_map_widget.dart';
 
 /// الشاشة الرئيسية للسائق — تعرض خريطة Google Maps حقيقية، الإحصائيات، وطلبات التكسي الواردة
@@ -21,7 +22,8 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
   @override
   Widget build(BuildContext context) {
     final appProvider = context.watch<AppProvider>();
-    final pendingRequests = appProvider.visibleTaxiIncomingRequests;
+    final taxiProvider = context.watch<TaxiProvider>();
+    final pendingRequests = taxiProvider.incomingRequests;
     final completedRequests = appProvider.visibleTaxiCompletedRequests;
     final todayTrips = completedRequests.length;
     final todayEarnings = completedRequests.fold<int>(0, (sum, r) => sum + r.fare);

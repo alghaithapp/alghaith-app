@@ -489,6 +489,54 @@ async function getNearbyDrivers(pickupLat, pickupLng, taxiType = 'economic', exc
   return candidates;
 }
 
+// ── جلب الطلبات الواردة للسائق ──────────────────────────────────
+
+async function getDriverIncomingRequests(driverPhone, lat, lng, taxiType, radiusKm = 15) {
+  const normalizedDriver = await resolvePhoneKey(driverPhone);
+
+  const rows = await selectMany(
+    'taxi_requests',
+    [{ method: 'eq', column: 'status_key', value: 'pending' }],
+    { column: 'created_at', ascending: false }
+  );
+
+  if (!Array.isArray(rows) || rows.length === 0) return [];
+
+  const candidates = [];
+
+  for (const row of rows) {
+    const meta = readTaxiMeta(row);
+
+    if (meta.taxiType !== taxiType) continue;
+
+    const rejectedIds = Array.isArray(meta.payload.rejectedByDriverIds)
+      ? meta.payload.rejectedByDriverIds
+      : [];
+    if (rejectedIds.length > 0) {
+      const variants = getPhoneVariants(normalizedDriver);
+      const alreadyRejected = variants.some((v) => rejectedIds.includes(v));
+      if (alreadyRejected) continue;
+    }
+
+    const distance = haversineDistance(lat, lng, meta.pickupLat, meta.pickupLng);
+    if (distance > radiusKm) continue;
+
+    const roundedDistance = Math.round(distance * 100) / 100;
+
+    const flattened = {
+      ...meta.payload,
+      id: meta.id,
+      distanceKm: roundedDistance,
+    };
+
+    candidates.push(flattened);
+  }
+
+  candidates.sort((a, b) => a.distanceKm - b.distanceKm);
+
+  return candidates;
+}
+
 // ── الحصول على السائقين النشيطين حسب النوع ───────────────────────
 
 async function getActiveDriverPhonesByTaxiType(taxiType = 'economic') {
@@ -635,6 +683,7 @@ module.exports = {
   cancelTaxiRequest,
   getNearbyDrivers,
   getActiveDriverPhonesByTaxiType,
+  getDriverIncomingRequests,
   getCustomerActiveRequest,
   getDriverActiveRequest,
   getCustomerHistory,

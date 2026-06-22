@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const repo = require('../supabase_repo/taxi');
+const { getUserState } = require('../supabase_repo/users');
 const { requireAuthorizedPhone } = require('./_middleware');
 
 // POST /db/taxi/create - إنشاء طلب جديد (يحسب السعر تلقائياً)
@@ -155,6 +156,33 @@ router.get('/nearby-drivers', async (req, res) => {
   } catch (error) {
     console.error('taxi nearby-drivers error:', error);
     return res.status(500).json({ message: error?.message || 'Failed to get nearby drivers.' });
+  }
+});
+
+// GET /db/taxi/incoming-requests - الطلبات الواردة للسائق
+router.get('/incoming-requests', async (req, res) => {
+  try {
+    const phone = requireAuthorizedPhone(req, res);
+    if (!phone) return;
+
+    const state = await getUserState(phone);
+    const profile = state?.driverProfile;
+    if (!profile) {
+      return res.status(400).json({ message: 'Driver profile not found.' });
+    }
+
+    const lat = Number(profile.latitude ?? profile.lat ?? 0);
+    const lng = Number(profile.longitude ?? profile.lng ?? 0);
+    if (!lat || !lng) {
+      return res.status(400).json({ message: 'Driver location not set. Please enable location.' });
+    }
+
+    const taxiType = String(profile.taxiType || 'economic').trim();
+    const requests = await repo.getDriverIncomingRequests(phone, lat, lng, taxiType);
+    return res.json(requests);
+  } catch (error) {
+    console.error('taxi incoming-requests error:', error);
+    return res.status(500).json({ message: error?.message || 'Failed to get incoming requests.' });
   }
 });
 

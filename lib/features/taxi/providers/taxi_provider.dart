@@ -1,9 +1,8 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
-import 'package:supabase_flutter/supabase_flutter.dart' show RealtimeChannel;
+import 'package:supabase_flutter/supabase_flutter.dart' show PostgresChangeEvent, RealtimeChannel;
 
-import '../../../core/realtime/realtime_service.dart';
 import '../../../services/supabase_service.dart';
 import '../models/taxi_request.dart';
 import '../models/driver_model.dart';
@@ -14,6 +13,7 @@ class TaxiProvider extends ChangeNotifier {
   List<TaxiRequest> _requests = [];
   TaxiRequest? _currentRequest;
   List<DriverModel> _nearbyDrivers = [];
+  List<TaxiRequest> _incomingRequests = [];
   bool _isLoading = false;
   bool _isOnline = false;
   String? _error;
@@ -27,6 +27,8 @@ class TaxiProvider extends ChangeNotifier {
   List<TaxiRequest> get requests => List.unmodifiable(_requests);
 
   TaxiRequest? get currentRequest => _currentRequest;
+
+  List<TaxiRequest> get incomingRequests => List.unmodifiable(_incomingRequests);
 
   List<TaxiRequest> get activeRequests =>
       _requests.where((r) => !r.isCompleted && !r.isCancelled).toList();
@@ -319,18 +321,25 @@ class TaxiProvider extends ChangeNotifier {
     _startRealtime(isDriver: isDriver, phone: phone);
   }
 
+  /// جلب الطلبات الواردة للسائق من الخادم (حسب الموقع والنوع)
+  Future<void> fetchIncomingRequests() async {
+    if (!_isOnline) {
+      _incomingRequests = [];
+      notifyListeners();
+      return;
+    }
+    try {
+      final requests = await TaxiApiService.getIncomingRequests();
+      _incomingRequests = requests;
+      notifyListeners();
+    } catch (_) {}
+  }
+
   void startIncomingPolling({String? phone}) {
     _incomingPoolTimer?.cancel();
+    fetchIncomingRequests();
     _incomingPoolTimer = Timer.periodic(const Duration(seconds: 15), (_) async {
-      if (_isOnline) {
-        try {
-          final request = await TaxiApiService.getDriverActiveRequest();
-          if (request != null && request.isPending) {
-            _currentRequest = request;
-            notifyListeners();
-          }
-        } catch (_) {}
-      }
+      await fetchIncomingRequests();
     });
     _startIncomingRealtime(phone: phone);
   }
@@ -340,6 +349,7 @@ class TaxiProvider extends ChangeNotifier {
     _pollTimer = null;
     _incomingPoolTimer?.cancel();
     _incomingPoolTimer = null;
+    _incomingRequests = [];
     _stopRealtime();
   }
 
@@ -368,18 +378,16 @@ class TaxiProvider extends ChangeNotifier {
   void _startIncomingRealtime({String? phone}) {
     _incomingRequestChannel?.unsubscribe();
     _incomingRequestChannel = null;
+
     _incomingRequestChannel =
-        SupabaseService.realtime.subscribeToTaxiRequests(
-      phone: phone ?? '',
-      onNewRequest: (_) async {
+        SupabaseService.realtime.subscribeToTable(
+      table: 'taxi_requests',
+      filterColumn: 'status_key',
+      filterValue: 'pending',
+      event: PostgresChangeEvent.all,
+      onData: (_) {
         if (!_isOnline) return;
-        try {
-          final request = await TaxiApiService.getDriverActiveRequest();
-          if (request != null && request.isPending) {
-            _currentRequest = request;
-            notifyListeners();
-          }
-        } catch (_) {}
+        fetchIncomingRequests();
       },
     );
   }
