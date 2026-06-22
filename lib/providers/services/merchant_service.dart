@@ -1073,6 +1073,22 @@ class MerchantService extends ChangeNotifier {
       wasRejected: wasRejected,
       previousRejectionMessage: previousRejectionMessage,
     );
+    unawaited(_restoreMerchantItems());
+  }
+
+  Future<void> _restoreMerchantItems() async {
+    final phone = _trimmedOrNull(_authPhone) ??
+        _trimmedOrNull(_customerPhone) ??
+        _trimmedOrNull(_merchantStore?['phone']);
+    if (phone == null || phone.isEmpty) return;
+    try {
+      final rows = await SupabaseService.loadMerchantProducts(phone);
+      if (rows.isEmpty) return;
+      _items = rows.map((row) => ListItem.fromMap(row)).toList();
+      notifyListeners();
+    } catch (e) {
+      debugPrint('RESTORE_MERCHANT_ITEMS_ERROR: $e');
+    }
   }
 
   Map<String, dynamic> mapMerchantProfileRow(
