@@ -115,14 +115,10 @@ class AppProvider extends ChangeNotifier {
           _inAppAlertsEnabled;
       driver.updateAuthPhone(auth.authPhone);
       driver.updateUserRole(auth.userRole);
-      final driverProfileData = state['driverProfile'];
-      if (driverProfileData is Map) {
-        // Driver profile is loaded via setDriverProfile-like path
-      }
-      final courierProfileData = state['courierProfile'];
-      if (courierProfileData is Map) {
-        // Courier profile loaded via delivery
-      }
+      delivery.updateAuthPhone(auth.authPhone);
+      delivery.updateUserRole(auth.userRole);
+      driver.loadProfileFromRemoteState(state);
+      delivery.loadProfileFromRemoteState(state);
       if (state['adminAccess'] == true && auth.hasAdminAccess) {
         _adminRole ??= AdminRole.superAdmin;
       }

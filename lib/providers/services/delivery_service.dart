@@ -44,6 +44,15 @@ class DeliveryService extends ChangeNotifier {
   void updateCustomerPhone(String? phone) => _customerPhone = phone;
   void updateUserRole(String? role) => _userRole = role;
 
+  /// تحميل ملف المندوب من بيانات السيرفر (دون حفظ)
+  void loadProfileFromRemoteState(Map<String, dynamic>? state) {
+    if (state == null) return;
+    final cp = state['courierProfile'];
+    if (cp is Map) {
+      _courierProfile = Map<String, dynamic>.from(cp);
+    }
+  }
+
   // ── Methods ────────────────────────────────────────────────────
   Future<void> setCourierProfile(Map<String, dynamic> profile) async {
     final wasApproved =

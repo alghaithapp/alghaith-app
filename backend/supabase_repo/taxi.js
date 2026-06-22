@@ -451,15 +451,11 @@ async function getNearbyDrivers(pickupLat, pickupLng, taxiType = 'economic', exc
     const phone = String(user.phone || '').trim();
     if (!phone || excludeSet.has(phone)) continue;
 
-    const role = String(user.role || '').trim();
-    const accountType = String(user.account_type || '').trim();
-    const isDriverAccount = role === 'driver' || accountType === 'driver';
-    if (!isDriverAccount) continue;
-
-    // قراءة driver profile من getUserState
+    // قراءة driver profile من getUserState — لا نعتمد على role في app_users
     const state = await getUserState(phone);
     const profile = state?.driverProfile;
     if (!profile || typeof profile !== 'object') continue;
+    if (Object.keys(profile).length === 0) continue;
     if (profile.isApproved !== true) continue;
     if (profile.available === false) continue;
 

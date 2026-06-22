@@ -55,6 +55,15 @@ class DriverService extends ChangeNotifier {
   void updateAuthPhone(String? phone) => _authPhone = phone;
   void updateUserRole(String? role) => _userRole = role;
 
+  /// تحميل ملف السائق من بيانات السيرفر (دون حفظ)
+  void loadProfileFromRemoteState(Map<String, dynamic>? state) {
+    if (state == null) return;
+    final dp = state['driverProfile'];
+    if (dp is Map) {
+      _driverProfile = Map<String, dynamic>.from(dp);
+    }
+  }
+
   // ── Methods ────────────────────────────────────────────────────
   void setDriverType(String type) {
     _driverType = type == 'delivery' ? 'delivery' : 'taxi';
