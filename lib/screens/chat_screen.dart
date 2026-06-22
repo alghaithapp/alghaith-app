@@ -96,6 +96,7 @@ class _ChatScreenState extends State<ChatScreen> {
           'messageType': type,
           'content': content,
           'receiverPhone': widget.otherPartyPhone,
+          'senderName': provider.customerName,
         }),
       );
     } catch (e) {

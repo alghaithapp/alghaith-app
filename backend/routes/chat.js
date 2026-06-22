@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { getChatMessages, saveChatMessage } = require('../supabase_repo');
 const { requireOptionalAuthorizedPhone } = require('./_middleware');
+const { notifyChatMessage } = require('../push_events');
 
 router.get('/:orderId', async (req, res) => {
   try {
@@ -27,6 +28,13 @@ router.post('/:orderId', async (req, res) => {
     payload.senderPhone = phone;
     payload.orderId = orderId;
     const savedMessage = await saveChatMessage(payload);
+    if (payload.receiverPhone) {
+      notifyChatMessage(payload.receiverPhone, {
+        ...payload,
+        senderName: payload.senderName || null,
+        orderId,
+      }).catch((err) => console.error('chat push error:', err?.message || err));
+    }
     return res.json(savedMessage);
   } catch (error) {
     console.error('save chat error:', error);

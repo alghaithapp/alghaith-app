@@ -2366,5 +2366,7 @@ class AppProvider extends ChangeNotifier {
     return '${seg(8)}-${seg(4)}-4${seg(3)}-${hex[8 + rng.nextInt(4)]}${seg(3)}-${seg(12)}';
   }
 
+  String? get sessionPhone => auth.authPhone;
+  Future<String?> getValidToken() async => auth.sessionToken;
 
 }

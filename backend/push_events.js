@@ -661,6 +661,21 @@ async function onMerchantFrozen(merchantPhone, isFrozen) {
   );
 }
 
+async function notifyChatMessage(merchantPhone, customerMessage) {
+  const message = String(customerMessage?.content || customerMessage?.text || '').trim().substring(0, 100);
+  const customerName = String(customerMessage?.senderName || customerMessage?.customerName || 'زبون').trim();
+
+  await sendPushToPhone(merchantPhone, {
+    title: `رسالة جديدة من ${customerName}`,
+    body: message || 'قام الزبون بإرسال رسالة جديدة',
+    data: {
+      eventKey: 'chat:new',
+      role: 'merchant',
+      orderId: String(customerMessage?.orderId || '').trim(),
+    },
+  });
+}
+
 module.exports = {
   onOrderSaved,
   onCourierApproved,
@@ -671,6 +686,7 @@ module.exports = {
   onDriverRejected,
   onMerchantFrozen,
   sendPushToPhone,
+  notifyChatMessage,
   notifyActiveCouriers,
   notifyActiveDrivers,
   buildPushPayload,
