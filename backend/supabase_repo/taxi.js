@@ -177,6 +177,7 @@ async function createTaxiRequest(customerPhone, data = {}) {
   }
 
   return {
+    id: requestId,
     requestId,
     requestNumber,
     status: 'pending',
@@ -476,10 +477,22 @@ async function getNearbyDrivers(pickupLat, pickupLng, taxiType = 'economic', exc
     if (distance > radiusKm) continue;
 
     candidates.push({
-      driverPhone: phone,
+      phone: phone,
+      currentLat: driverLat,
+      currentLng: driverLng,
+      name: profile.name || '',
+      taxiType: profile.taxiType || 'economic',
+      vehicleModel: profile.vehicleModel || '',
+      plateNumber: profile.plateNumber || '',
+      color: profile.color || '',
+      area: profile.area || '',
+      rating: profile.rating || 0,
+      totalTrips: 0,
+      isAvailable: profile.available !== false,
+      isOnline: profile.available !== false,
+      isApproved: profile.isApproved === true,
+      services: profile.services || {},
       distanceKm: Math.round(distance * 100) / 100,
-      driverLat,
-      driverLng,
     });
   }
 

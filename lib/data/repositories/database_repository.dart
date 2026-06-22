@@ -130,7 +130,7 @@ class DatabaseRepository {
   }
 
   Future<List<Map<String, dynamic>>> loadOffersCatalog() async {
-    final result = await ApiClient.instance.get('/db/offers-catalog');
+    final result = await ApiClient.instance.get('/db/offer-catalog-products');
     if (result is! List) return const [];
     return result
         .whereType<Map>()

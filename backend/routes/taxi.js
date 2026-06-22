@@ -4,6 +4,30 @@ const repo = require('../supabase_repo/taxi');
 const { getUserState } = require('../supabase_repo/users');
 const { requireAuthorizedPhone } = require('./_middleware');
 
+function formatRequestRow(row) {
+  if (!row) return null;
+  const meta = repo.readTaxiMeta(row);
+  return {
+    id: meta.id || row.id,
+    requestNumber: meta.payload.requestNumber,
+    statusKey: meta.statusKey,
+    statusAr: meta.payload.statusAr,
+    fare: meta.payload.fare || meta.payload.price,
+    fareEconomic: meta.payload.fareEconomic,
+    fareSuper: meta.payload.fareSuper,
+    pickupAddress: meta.payload.pickupAddress,
+    dropoffAddress: meta.payload.dropoffAddress,
+    pickupLat: meta.payload.pickupLat,
+    pickupLng: meta.payload.pickupLng,
+    dropoffLat: meta.payload.dropoffLat,
+    dropoffLng: meta.payload.dropoffLng,
+    distanceKm: meta.payload.distanceKm,
+    taxiType: meta.payload.taxiType,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
 // POST /db/taxi/create - إنشاء طلب جديد (يحسب السعر تلقائياً)
 router.post('/create', async (req, res) => {
   try {
@@ -79,7 +103,8 @@ router.get('/active', async (req, res) => {
     const phone = requireAuthorizedPhone(req, res);
     if (!phone) return;
     const request = await repo.getCustomerActiveRequest(phone);
-    return res.json(request);
+    if (!request) return res.json(null);
+    return res.json(formatRequestRow(request));
   } catch (error) {
     console.error('taxi active error:', error);
     return res.status(500).json({ message: error?.message || 'Failed to get active request.' });
@@ -92,7 +117,8 @@ router.get('/driver-active', async (req, res) => {
     const phone = requireAuthorizedPhone(req, res);
     if (!phone) return;
     const request = await repo.getDriverActiveRequest(phone);
-    return res.json(request);
+    if (!request) return res.json(null);
+    return res.json(formatRequestRow(request));
   } catch (error) {
     console.error('taxi driver-active error:', error);
     return res.status(500).json({ message: error?.message || 'Failed to get driver active request.' });
@@ -105,7 +131,7 @@ router.get('/history', async (req, res) => {
     const phone = requireAuthorizedPhone(req, res);
     if (!phone) return;
     const requests = await repo.getCustomerHistory(phone);
-    return res.json(requests);
+    return res.json((requests || []).map(formatRequestRow));
   } catch (error) {
     console.error('taxi history error:', error);
     return res.status(500).json({ message: error?.message || 'Failed to get history.' });
@@ -118,7 +144,7 @@ router.get('/driver-history', async (req, res) => {
     const phone = requireAuthorizedPhone(req, res);
     if (!phone) return;
     const requests = await repo.getDriverHistory(phone);
-    return res.json(requests);
+    return res.json((requests || []).map(formatRequestRow));
   } catch (error) {
     console.error('taxi driver-history error:', error);
     return res.status(500).json({ message: error?.message || 'Failed to get driver history.' });
