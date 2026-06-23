@@ -204,6 +204,43 @@ app.post('/db/validate-promo', async (req, res) => {
   }
 });
 
+// ── Emergency recovery: نسخ بيانات app_state إلى merchant_profiles ─────
+app.post('/db/debug/recover-merchant', async (req, res) => {
+  try {
+    const phone = String(req.body?.phone || req.query?.phone || '').trim();
+    if (!phone) return res.status(400).json({ message: 'phone required' });
+    const { getAppUser, getUserState, assertSupabaseAdmin } = require('./supabase_repo');
+    const supabase = assertSupabaseAdmin();
+    const [appUser, userState] = await Promise.all([
+      getAppUser(phone).catch(() => null),
+      getUserState(phone).catch(() => null),
+    ]);
+    if (!appUser) return res.json({ error: 'user not found' });
+    const store = userState?.merchantStore || userState?.store || userState?.merchant_profile;
+    if (!store) return res.json({ error: 'no merchant store found in app_state' });
+    const profileRow = {
+      phone: appUser.phone || phone,
+      store_name: store.name || store.store_name || '',
+      description: store.description || '',
+      is_open: store.isOpen ?? store.is_open ?? true,
+      is_approved: store.isApproved ?? store.is_approved ?? true,
+      approval_status: store.approvalStatus || store.approval_status || 'approved',
+      latitude: store.latitude ?? store.lat ?? null,
+      longitude: store.longitude ?? store.lng ?? null,
+      address: store.address || '',
+      delivery_fee: store.deliveryFee ?? store.delivery_fee ?? 0,
+      delivery_areas: store.deliveryAreas || store.delivery_areas || '',
+      contact_phone: store.phone || appUser.phone || phone,
+      updated_at: new Date().toISOString(),
+    };
+    const { error } = await supabase.from('merchant_profiles').upsert(profileRow, { onConflict: 'phone' });
+    if (error) return res.status(500).json({ error: error.message });
+    return res.json({ success: true, phone, store_name: profileRow.store_name });
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+});
+
 // ── Error handling ─────────────────────────────────────────────────────
 
 app.use('/db', notFoundHandler);
