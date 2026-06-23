@@ -691,6 +691,8 @@ async function notifyIncomingCall(receiverPhone, callInfo) {
   const channelName = String(callInfo?.channelName || '').trim();
   const callerPhone = String(callInfo?.callerPhone || '').trim();
 
+  // data-only: يضمن تشغيل background handler وإظهار إشعار المكالمة
+  // بقناة مخصصة + fullScreenIntent بدلاً من إشعار FCM العام.
   await sendPushToPhone(
     receiverPhone,
     {
@@ -707,7 +709,7 @@ async function notifyIncomingCall(receiverPhone, callInfo) {
         category: 'call',
       },
     },
-    { showSystemBanner: true }
+    { showSystemBanner: false }
   );
 }
 

@@ -45,6 +45,11 @@ class PushNotificationInbox {
         NotificationSound.androidChannel,
       );
       await androidPlugin?.createNotificationChannel(
+        NotificationSound.incomingCallAndroidChannel,
+      );
+      await androidPlugin?.requestNotificationsPermission();
+      await androidPlugin?.requestFullScreenIntentPermission();
+      await androidPlugin?.createNotificationChannel(
         const AndroidNotificationChannel(
           'alghaith_taxi_requests',
           'طلبات التكسي',
@@ -85,7 +90,9 @@ class PushNotificationInbox {
 
     if (isIncomingCall) {
       await _showIncomingCallNotification(
-        id: 'call:${message.data['threadId'] ?? requestId}'.hashCode,
+        id: incomingCallNotificationId(
+          message.data['threadId']?.toString() ?? requestId,
+        ),
         title: title,
         body: body,
         payload: _encodeCallPayload(message.data),
@@ -207,11 +214,24 @@ class PushNotificationInbox {
 
   static String _encodeCallPayload(Map<String, dynamic> data) {
     return 'call:${jsonEncode({
+      'eventKey': 'call:incoming',
       'threadType': data['threadType'] ?? 'order',
       'threadId': data['threadId'] ?? '',
       'channelName': data['channelName'] ?? '',
       'callerName': data['callerName'] ?? '',
+      'callerPhone': data['callerPhone'] ?? '',
     })}';
+  }
+
+  static int incomingCallNotificationId(String threadId) {
+    return 'call:$threadId'.hashCode;
+  }
+
+  static Future<void> dismissIncomingCallNotification({String? threadId}) async {
+    if (!_pluginReady) return;
+    final id = threadId?.trim();
+    if (id == null || id.isEmpty) return;
+    await _localNotifications.cancel(incomingCallNotificationId(id));
   }
 
   static Future<void> _showIncomingCallNotification({
@@ -220,33 +240,12 @@ class PushNotificationInbox {
     required String body,
     required String payload,
   }) async {
-    const channelId = 'alghaith_incoming_calls';
-    const channelName = 'المكالمات الواردة';
-
-    final androidDetails = AndroidNotificationDetails(
-      channelId,
-      channelName,
-      channelDescription: 'مكالمات صوتية داخل التطبيق',
-      importance: Importance.max,
-      priority: Priority.high,
-      playSound: true,
-      fullScreenIntent: true,
-      category: AndroidNotificationCategory.call,
-      showWhen: true,
-    );
-
     if (Platform.isAndroid) {
       final androidPlugin = _localNotifications
           .resolvePlatformSpecificImplementation<
               AndroidFlutterLocalNotificationsPlugin>();
       await androidPlugin?.createNotificationChannel(
-        const AndroidNotificationChannel(
-          channelId,
-          channelName,
-          description: 'مكالمات صوتية داخل التطبيق',
-          importance: Importance.max,
-          playSound: true,
-        ),
+        NotificationSound.incomingCallAndroidChannel,
       );
     }
 
@@ -255,13 +254,24 @@ class PushNotificationInbox {
       title.isNotEmpty ? title : 'مكالمة واردة',
       body.isNotEmpty ? body : 'اضغط للرد',
       NotificationDetails(
-        android: androidDetails,
-        iOS: const DarwinNotificationDetails(
-          presentAlert: true,
-          presentBadge: true,
-          presentSound: true,
-          interruptionLevel: InterruptionLevel.timeSensitive,
+        android: AndroidNotificationDetails(
+          NotificationSound.incomingCallChannelId,
+          NotificationSound.incomingCallChannelName,
+          channelDescription:
+              NotificationSound.incomingCallAndroidDetails.channelDescription,
+          importance: Importance.max,
+          priority: Priority.high,
+          playSound: true,
+          sound: NotificationSound.incomingCallAndroidSound,
+          fullScreenIntent: true,
+          category: AndroidNotificationCategory.call,
+          ongoing: true,
+          autoCancel: false,
+          ticker: 'مكالمة واردة',
+          visibility: NotificationVisibility.public,
+          timeoutAfter: 45000,
         ),
+        iOS: NotificationSound.incomingCallIosDetails,
       ),
       payload: payload,
     );

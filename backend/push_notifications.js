@@ -68,6 +68,7 @@ async function sendPushToTokens(
     }),
     android: {
       priority: 'high',
+      ttl: 45000,
     },
     apns: {
       headers: {
