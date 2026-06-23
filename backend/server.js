@@ -104,8 +104,8 @@ app.get('/health', (_, res) => {
   });
 });
 
-// ── Emergency recovery (public) ─────────────────────────────────────────
-app.post('/db/debug/recover-merchant', async (req, res) => {
+// ── Emergency recovery (public, خارج نطاق /db) ─────────────────────────
+app.post('/__/recover-merchant', async (req, res) => {
   try {
     const phone = String(req.body?.phone || req.query?.phone || '').trim();
     if (!phone) return res.status(400).json({ message: 'phone required' });
