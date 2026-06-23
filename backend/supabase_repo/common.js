@@ -169,16 +169,17 @@ function phonesOverlap(left, right) {
 }
 
 async function selectSingleByPhone(table, phone) {
+  const raw = String(phone || '').trim();
   const variants = getPhoneVariants(phone);
-  if (variants.length === 0) return null;
+  const lookupValues = [...new Set([...variants, raw, canonicalPhone(phone)].filter(Boolean))];
+  if (lookupValues.length === 0) return null;
 
   const supabase = assertSupabaseAdmin();
-  const { data, error } = await supabase
-    .from(table)
-    .select()
-    .in('phone', variants)
-    .order('updated_at', { ascending: false })
-    .limit(1);
+  let query = supabase.from(table).select().in('phone', lookupValues);
+  if (await hasColumn(table, 'updated_at')) {
+    query = query.order('updated_at', { ascending: false });
+  }
+  const { data, error } = await query.limit(1);
   if (error) throw new Error(error.message);
   if (!Array.isArray(data) || data.length === 0) return null;
   return data[0];
@@ -281,6 +282,37 @@ async function saveRow(table, payload, conflictColumn) {
   if (conflictColumn === 'phone') {
     conflictValue = await resolvePhoneKey(conflictValue);
     payload.phone = conflictValue;
+
+    const existing = await selectSingleByPhone(table, conflictValue);
+    if (existing?.phone) {
+      return updateRow(table, 'phone', String(existing.phone).trim(), payload);
+    }
+
+    const { data: inserted, error: insertError } = await supabase
+      .from(table)
+      .insert(payload)
+      .select();
+
+    if (!insertError) {
+      if (Array.isArray(inserted)) return inserted[0] || null;
+      return inserted || null;
+    }
+
+    const insertMessage = String(insertError.message || '');
+    if (/duplicate key|unique constraint|_pkey/i.test(insertMessage)) {
+      const retryExisting = await selectSingleByPhone(table, conflictValue);
+      if (retryExisting?.phone) {
+        return updateRow(table, 'phone', String(retryExisting.phone).trim(), payload);
+      }
+      for (const variant of getPhoneVariants(conflictValue)) {
+        const row = await selectSingle(table, 'phone', variant);
+        if (row?.phone) {
+          return updateRow(table, 'phone', String(row.phone).trim(), payload);
+        }
+      }
+    }
+
+    throw new Error(insertError.message);
   }
 
   // Atomic upsert باستخدام ON CONFLICT — يلغي race condition
@@ -292,16 +324,9 @@ async function saveRow(table, payload, conflictColumn) {
   if (error) {
     const message = String(error.message || '');
     if (/no unique or exclusion constraint/i.test(message)) {
-      const existing =
-        conflictColumn === 'phone'
-          ? await selectSingleByPhone(table, conflictValue)
-          : await selectSingle(table, conflictColumn, conflictValue);
+      const existing = await selectSingle(table, conflictColumn, conflictValue);
       if (existing) {
-        const updateKey =
-          conflictColumn === 'phone'
-            ? String(existing.phone || conflictValue).trim()
-            : conflictValue;
-        return updateRow(table, conflictColumn, updateKey, payload);
+        return updateRow(table, conflictColumn, conflictValue, payload);
       }
       const { data: inserted, error: insertError } = await supabase
         .from(table)

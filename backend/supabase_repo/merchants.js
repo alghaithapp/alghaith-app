@@ -1515,9 +1515,9 @@ async function syncMissingMerchantProfilesFromAppState() {
     const phone = String(user.phone || '').trim();
     if (!phone) continue;
 
-    const hasProfile = getPhoneVariants(phone).some((variant) =>
-      existingPhones.has(variant)
-    );
+    const hasProfile =
+      (await getMerchantProfile(phone)) ||
+      getPhoneVariants(phone).some((variant) => existingPhones.has(variant));
     if (hasProfile) continue;
 
     const state = resolveStateForPhone(stateByPhone, phone);
