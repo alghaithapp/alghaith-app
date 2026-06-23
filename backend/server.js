@@ -104,6 +104,34 @@ app.get('/health', (_, res) => {
   });
 });
 
+// ── Debug endpoint (public) ─────────────────────────────────────────────
+app.get('/db/debug/user-bundle', async (req, res) => {
+  try {
+    const phone = String(req.query?.phone || '').trim();
+    if (!phone) return res.status(400).json({ message: 'phone required' });
+    const { getAppUser, getUserState } = require('./supabase_repo');
+    const { loadMerchantProfile, loadMerchantProducts } = require('./supabase_repo');
+    const [appUser, userState, merchantProfile, merchantProducts] = await Promise.all([
+      getAppUser(phone).catch(e => ({ error: e.message })),
+      getUserState(phone).catch(e => ({ error: e.message })),
+      loadMerchantProfile(phone).catch(e => ({ error: e.message })),
+      loadMerchantProducts(phone).catch(e => ({ error: e.message })),
+    ]);
+    return res.json({
+      phone,
+      appUser: appUser?.phone ? { phone: appUser.phone, full_name: appUser.full_name, role: appUser.role } : null,
+      merchantProfile: merchantProfile?.store_name ? { store_name: merchantProfile.store_name, is_approved: merchantProfile.is_approved, approval_status: merchantProfile.approval_status } : null,
+      merchantProductsCount: Array.isArray(merchantProducts) ? merchantProducts.length : 0,
+      userStateKeys: userState ? Object.keys(userState) : null,
+      hasDriver: userState?.driverProfile?.name ? true : false,
+      hasCourier: userState?.courierProfile?.name ? true : false,
+      hasMerchantInState: userState?.merchantStore?.name || userState?.merchantStore?.store_name ? true : false,
+    });
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+});
+
 // ── DB auth middleware ─────────────────────────────────────────────────
 
 app.use('/db', (req, res, next) => {
