@@ -1386,6 +1386,169 @@ async function listRealEstateListings(subCategoryId = '', listingMode = '') {
     .filter(({ merchant }) => merchant && merchant.is_open !== false && !isMerchantFrozen(merchant));
 }
 
+function merchantProfilePayloadFromAppState(state, appUser) {
+  const merchantStore = normalizeObject(state?.merchantStore);
+  const storeName =
+    String(merchantStore.name ?? merchantStore.store_name ?? '').trim() ||
+    String(appUser?.full_name ?? '').trim();
+  if (!storeName) return null;
+
+  const serviceIds = normalizeArray(
+    merchantStore.serviceIds ?? merchantStore.service_ids
+  );
+  const category =
+    String(
+      merchantStore.category ??
+        merchantStore.activeServiceId ??
+        merchantStore.active_service_id ??
+        merchantStore.primary_service_id ??
+        merchantStore.primaryServiceId ??
+        ''
+    ).trim() || (serviceIds[0] || 'product');
+
+  return {
+    store_name: storeName,
+    description: merchantStore.description,
+    primary_service_id: category,
+    service_ids: serviceIds.length > 0 ? serviceIds : [category],
+    active_service_id:
+      merchantStore.activeServiceId ?? merchantStore.active_service_id ?? category,
+    whatsapp: merchantStore.whatsapp,
+    address: merchantStore.address,
+    latitude: merchantStore.latitude ?? merchantStore.lat,
+    longitude: merchantStore.longitude ?? merchantStore.lng,
+    open_time: merchantStore.openTime ?? merchantStore.open_time,
+    close_time: merchantStore.closeTime ?? merchantStore.close_time,
+    delivery_fee: merchantStore.deliveryFee ?? merchantStore.delivery_fee,
+    delivery_areas: merchantStore.deliveryAreas ?? merchantStore.delivery_areas,
+    is_open: merchantStore.isOpen ?? merchantStore.is_open ?? true,
+    restaurant_category:
+      merchantStore.restaurantCategory ?? merchantStore.restaurant_category,
+    service_sub_category:
+      merchantStore.serviceSubCategory ?? merchantStore.service_sub_category,
+    professional_category_id:
+      merchantStore.professionalCategoryId ??
+      merchantStore.professional_category_id,
+    professional_info:
+      merchantStore.professionalInfo ?? merchantStore.professional_info,
+    profile_image_base64:
+      merchantStore.profileImageBase64 ?? merchantStore.profile_image_base64,
+    cover_image_url:
+      merchantStore.coverImageBase64 ??
+      merchantStore.coverImage ??
+      merchantStore.cover_image_url,
+    logo_image_url:
+      merchantStore.logoImageBase64 ??
+      merchantStore.logoImage ??
+      merchantStore.logo_image_url,
+    work_sample_images_base64:
+      merchantStore.workSampleImagesBase64 ??
+      merchantStore.work_sample_images_base64,
+    product_sections:
+      merchantStore.productSections ?? merchantStore.product_sections,
+    is_approved: false,
+    approval_status: 'pending',
+  };
+}
+
+function resolveStateForPhone(stateByPhone, phone) {
+  for (const variant of getPhoneVariants(phone)) {
+    const state = stateByPhone[variant];
+    if (state && typeof state === 'object') return state;
+  }
+  return {};
+}
+
+async function ensureMerchantProfileRecord(phone, options = {}) {
+  const phoneKey = await resolvePhoneKey(phone);
+  let profile = await getMerchantProfile(phoneKey);
+  if (profile) return profile;
+
+  const appUser = await getAppUser(phoneKey);
+  const state = (await getUserState(phoneKey)) || {};
+  const payload = merchantProfilePayloadFromAppState(state, appUser);
+  const storeName =
+    payload?.store_name ||
+    String(appUser?.full_name ?? '').trim() ||
+    `تاجر ${phoneKey.slice(-4)}`;
+
+  profile = await saveMerchantProfile(phoneKey, {
+    ...(payload || {}),
+    store_name: storeName,
+    primary_service_id: payload?.primary_service_id || 'product',
+    is_approved: false,
+    approval_status: 'pending',
+    ...options,
+  });
+
+  if (!profile) {
+    throw new Error('Merchant profile not found.');
+  }
+  return profile;
+}
+
+async function syncMissingMerchantProfilesFromAppState() {
+  const [users, states, existingMerchants] = await Promise.all([
+    selectMany('app_users', [], { column: 'updated_at', ascending: false }),
+    selectMany('app_state', [], { column: 'updated_at', ascending: false }),
+    selectMany('merchant_profiles', [], { column: 'phone', ascending: true }),
+  ]);
+
+  const existingPhones = new Set();
+  for (const row of existingMerchants) {
+    for (const variant of getPhoneVariants(row.phone)) {
+      existingPhones.add(variant);
+    }
+  }
+
+  const stateByPhone = {};
+  for (const row of states) {
+    const phone = String(row.phone || '').trim();
+    if (!phone) continue;
+    for (const variant of getPhoneVariants(phone)) {
+      stateByPhone[variant] = row.state || {};
+    }
+  }
+
+  let synced = 0;
+  for (const user of users) {
+    const phone = String(user.phone || '').trim();
+    if (!phone) continue;
+
+    const hasProfile = getPhoneVariants(phone).some((variant) =>
+      existingPhones.has(variant)
+    );
+    if (hasProfile) continue;
+
+    const state = resolveStateForPhone(stateByPhone, phone);
+    const payload = merchantProfilePayloadFromAppState(state, user);
+    const role = String(user.role ?? '').trim();
+    const isMerchantIntent = role === 'merchant' || payload !== null;
+    if (!isMerchantIntent) continue;
+
+    const toSave =
+      payload ||
+      ({
+        store_name:
+          String(user.full_name ?? '').trim() || `تاجر ${phone.slice(-4)}`,
+        primary_service_id: 'product',
+        is_approved: false,
+        approval_status: 'pending',
+      });
+
+    await saveMerchantProfile(phone, toSave);
+    for (const variant of getPhoneVariants(phone)) {
+      existingPhones.add(variant);
+    }
+    synced += 1;
+  }
+
+  if (synced > 0) {
+    console.log(`syncMissingMerchantProfiles: created ${synced} merchant profile(s).`);
+  }
+  return synced;
+}
+
 module.exports = {
   resolveMerchantContactVisibility,
   withMerchantCustomerContacts,
@@ -1430,4 +1593,7 @@ module.exports = {
   GLOBAL_SHOPPING_SUB_CATEGORY_IDS,
   MARKETPLACE_CATEGORY_DEFS,
   syncMerchantProductsForBazaar,
+  merchantProfilePayloadFromAppState,
+  ensureMerchantProfileRecord,
+  syncMissingMerchantProfilesFromAppState,
 };

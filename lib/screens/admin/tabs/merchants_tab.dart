@@ -23,9 +23,11 @@ class MerchantManagementTabState extends State<MerchantManagementTab> {
   Widget build(BuildContext context) {
     final provider = context.watch<AppProvider>();
     final merchants = provider.allMerchants;
-    final pending = merchants.where((m) =>
-      m['isApproved'] != true && (m['approvalStatus']?.toString() ?? 'pending') == 'pending'
-    ).toList();
+    final pending = merchants.where((m) {
+      if (m['isApproved'] == true) return false;
+      final status = m['approvalStatus']?.toString() ?? 'pending';
+      return status == 'pending';
+    }).toList();
     final approved = merchants.where((m) => m['isApproved'] == true).toList();
     final others = merchants.where((m) =>
       m['isApproved'] != true && (m['approvalStatus']?.toString() ?? 'pending') != 'pending'

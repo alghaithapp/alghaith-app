@@ -32,6 +32,8 @@ const {
   syncMerchantProductsForBazaar,
   updateMerchantApprovalRecord,
   evaluateBazaarCustomerVisibility,
+  ensureMerchantProfileRecord,
+  syncMissingMerchantProfilesFromAppState,
 } = require('./merchants');
 const {
   readCourierProfileFromState,
@@ -67,6 +69,7 @@ const {
 
 async function getAdminReports(phone) {
   await assertAdminAccess(phone);
+  await syncMissingMerchantProfilesFromAppState();
 
   const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
   const now = Date.now();
@@ -168,6 +171,7 @@ async function getAdminReports(phone) {
 
 async function getAllMerchants(adminPhone) {
   await assertAdminAccess(adminPhone);
+  await syncMissingMerchantProfilesFromAppState();
 
   const [merchants, orders, products] = await Promise.all([
     selectMany('merchant_profiles', [], { column: 'store_name', ascending: true }),
@@ -703,34 +707,7 @@ async function toggleMerchantApprovalStatus(adminPhone, merchantPhone, isApprove
   await assertAdminAccess(adminPhone);
 
   const phoneKey = await resolvePhoneKey(merchantPhone);
-  let profile = await getMerchantProfile(phoneKey);
-
-  // إذا لم يوجد ملف تاجر في قاعدة البيانات — ننشئ له ملفاً أولياً
-  // (يحدث عندما يسجل المستخدم كـ "تاجر/مهني" لكن فشل حفظ الملف لسبب ما)
-  if (!profile) {
-    const appUser = await getAppUser(phoneKey);
-    const fullName = String(appUser?.full_name ?? '').trim();
-    const state = await getUserState(phoneKey);
-    const merchantStore = state?.merchantStore;
-    const storeName =
-      String(merchantStore?.name ?? '').trim() ||
-      fullName ||
-      `تاجر ${phoneKey.slice(-4)}`;
-    const professionalInfo = merchantStore?.professionalInfo ||
-      merchantStore?.professional_info || null;
-
-    profile = await saveMerchantProfile(phoneKey, {
-      store_name: storeName,
-      primary_service_id: String(merchantStore?.category ?? merchantStore?.primary_service_id ?? 'product').trim(),
-      professional_info: professionalInfo,
-      is_approved: false,
-      approval_status: 'pending',
-    });
-
-    if (!profile) {
-      throw new Error('Merchant profile not found.');
-    }
-  }
+  await ensureMerchantProfileRecord(phoneKey);
 
   const patch = {
     isApproved: Boolean(isApproved),
@@ -780,33 +757,7 @@ async function rejectMerchantApplication(
   const { message, key: normalizedReason } = resolved;
 
   const phoneKey = await resolvePhoneKey(merchantPhone);
-  let profile = await getMerchantProfile(phoneKey);
-
-  // إذا لم يوجد ملف تاجر — ننشئ ملفاً أولياً قبل الرفض
-  if (!profile) {
-    const appUser = await getAppUser(phoneKey);
-    const fullName = String(appUser?.full_name ?? '').trim();
-    const state = await getUserState(phoneKey);
-    const merchantStore = state?.merchantStore;
-    const storeName =
-      String(merchantStore?.name ?? '').trim() ||
-      fullName ||
-      `تاجر ${phoneKey.slice(-4)}`;
-    const professionalInfo = merchantStore?.professionalInfo ||
-      merchantStore?.professional_info || null;
-
-    profile = await saveMerchantProfile(phoneKey, {
-      store_name: storeName,
-      primary_service_id: String(merchantStore?.category ?? merchantStore?.primary_service_id ?? 'product').trim(),
-      professional_info: professionalInfo,
-      is_approved: false,
-      approval_status: 'pending',
-    });
-
-    if (!profile) {
-      throw new Error('Merchant profile not found.');
-    }
-  }
+  await ensureMerchantProfileRecord(phoneKey);
 
   await updateMerchantApprovalRecord(phoneKey, {
     isApproved: false,
@@ -1249,8 +1200,22 @@ function resolveAccountApproval(state, merchantProfile, kind) {
   };
 }
 
+function resolveStateForAdminAccount(states, phone) {
+  for (const row of states) {
+    const rowPhone = String(row.phone || '').trim();
+    if (!rowPhone) continue;
+    for (const variant of getPhoneVariants(phone)) {
+      if (getPhoneVariants(rowPhone).includes(variant)) {
+        return row.state || {};
+      }
+    }
+  }
+  return {};
+}
+
 async function getAllAdminAccounts(adminPhone) {
   await assertAdminAccess(adminPhone);
+  await syncMissingMerchantProfilesFromAppState();
 
   const [users, states, merchants] = await Promise.all([
     selectMany('app_users', [], { column: 'updated_at', ascending: false }),
@@ -1260,26 +1225,27 @@ async function getAllAdminAccounts(adminPhone) {
     // لكن يمكن إضافة ترقيم الصفحات (pagination) مستقبلاً للتحسين أكثر
   ]);
 
-  const stateByPhone = {};
-  for (const row of states) {
-    const phone = String(row.phone || '').trim();
-    if (!phone) continue;
-    stateByPhone[phone] = row.state || {};
-  }
-
   const merchantByPhone = {};
   for (const row of merchants) {
     const phone = String(row.phone || '').trim();
     if (!phone) continue;
-    merchantByPhone[phone] = row;
+    for (const variant of getPhoneVariants(phone)) {
+      merchantByPhone[variant] = row;
+    }
   }
 
   const accounts = users
     .map((user) => {
       const phone = String(user.phone || '').trim();
       if (!phone) return null;
-      const state = stateByPhone[phone] || {};
-      const merchantProfile = merchantByPhone[phone] || null;
+      const state = resolveStateForAdminAccount(states, phone);
+      let merchantProfile = null;
+      for (const variant of getPhoneVariants(phone)) {
+        if (merchantByPhone[variant]) {
+          merchantProfile = merchantByPhone[variant];
+          break;
+        }
+      }
       return mapAdminAccountSummary(user, state, merchantProfile);
     })
     .filter(Boolean);

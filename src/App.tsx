@@ -342,7 +342,9 @@ export default function App() {
     const query = search.trim().toLowerCase();
     return merchants.filter((merchant) => {
       if (merchantFilter === 'pending') {
-        if (merchant.isApproved || merchant.approvalStatus !== 'pending') return false;
+        if (merchant.isApproved) return false;
+        const status = merchant.approvalStatus?.toString() ?? 'pending';
+        if (status !== 'pending') return false;
       } else if (merchantFilter === 'rejected') {
         if (merchant.approvalStatus !== 'rejected') return false;
       } else if (merchantFilter === 'bazaar') {
@@ -367,7 +369,10 @@ export default function App() {
   );
 
   const pendingMerchantQueue = useMemo(
-    () => merchants.filter((m) => !m.isApproved && m.approvalStatus === 'pending'),
+    () => merchants.filter(
+      (m) => !m.isApproved &&
+        (m.approvalStatus === 'pending' || !m.approvalStatus),
+    ),
     [merchants],
   );
 
