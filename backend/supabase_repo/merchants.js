@@ -182,6 +182,30 @@ async function syncMerchantApprovalToState(phoneKey, patch = {}) {
 
 async function updateMerchantApprovalRecord(phoneKey, patch = {}) {
   const supabase = assertSupabaseAdmin();
+
+  // Try atomic RPC first
+  try {
+    const isReject = String(patch.approvalStatus || '').trim() === 'rejected';
+    let rpcResult;
+    if (isReject) {
+      const { data, error } = await supabase.rpc('atomic_reject_merchant', {
+        p_phone: phoneKey,
+        p_reason_key: patch.rejectionReasonKey || patch.rejection_reason_key || null,
+        p_message_ar: patch.rejectionMessageAr || patch.rejection_message_ar || null,
+      });
+      if (!error) rpcResult = data;
+    } else if (patch.isApproved !== undefined || patch.is_approved !== undefined) {
+      const { data, error } = await supabase.rpc('atomic_approve_merchant', {
+        p_phone: phoneKey,
+        p_approved: Boolean(patch.isApproved ?? patch.is_approved),
+      });
+      if (!error) rpcResult = data;
+    }
+    if (rpcResult) return { phone: phoneKey, ...patch, ...rpcResult };
+  } catch (_) {
+    // fallback to original multi-query approach
+  }
+
   const variants = getPhoneVariants(phoneKey);
   const dbPatch = { updated_at: nowIso() };
   if (patch.isApproved !== undefined) {

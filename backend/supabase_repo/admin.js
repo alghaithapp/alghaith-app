@@ -541,6 +541,35 @@ async function toggleCourierApprovalStatus(adminPhone, courierPhone, isApproved)
   await assertAdminAccess(adminPhone);
 
   const phoneKey = await resolvePhoneKey(courierPhone);
+
+  // Try atomic RPC first
+  try {
+    const supabase = assertSupabaseAdmin();
+    const { data, error } = await supabase.rpc('atomic_approve_courier', {
+      p_phone: phoneKey,
+      p_approved: Boolean(isApproved),
+    });
+    if (!error) {
+      const user = await getAppUser(phoneKey);
+      const refreshedState = (await getUserState(phoneKey)) || {};
+      const profile = readCourierProfileFromState(refreshedState);
+      const mapped = mapCourierForAdmin(phoneKey, user, profile);
+
+      if (Boolean(isApproved)) {
+        try {
+          const { onCourierApproved } = require('./push_events');
+          await onCourierApproved(phoneKey);
+        } catch (pushError) {
+          console.error('push onCourierApproved error:', pushError?.message || pushError);
+        }
+      }
+
+      return { success: true, courier: mapped };
+    }
+  } catch (_) {
+    // fallback
+  }
+
   const state = (await getUserState(phoneKey)) || {};
   const profile = readCourierProfileFromState(state);
   if (!profile || !isCourierProfileComplete(profile)) {
@@ -569,8 +598,8 @@ async function toggleCourierApprovalStatus(adminPhone, courierPhone, isApproved)
     try {
       const { onCourierApproved } = require('./push_events');
       await onCourierApproved(phoneKey);
-    } catch (error) {
-      console.error('push onCourierApproved error:', error?.message || error);
+    } catch (pushError) {
+      console.error('push onCourierApproved error:', pushError?.message || pushError);
     }
   }
 
@@ -610,6 +639,34 @@ async function rejectCourierApplication(
   const { message, key: normalizedReason } = resolved;
 
   const phoneKey = await resolvePhoneKey(courierPhone);
+
+  // Try atomic RPC first
+  try {
+    const supabase = assertSupabaseAdmin();
+    const { data, error } = await supabase.rpc('atomic_reject_courier', {
+      p_phone: phoneKey,
+      p_reason_key: normalizedReason,
+      p_message_ar: message,
+    });
+    if (!error) {
+      const user = await getAppUser(phoneKey);
+      const refreshedState = (await getUserState(phoneKey)) || {};
+      const profile = readCourierProfileFromState(refreshedState);
+      const mapped = mapCourierForAdmin(phoneKey, user, profile);
+
+      try {
+        const { onCourierRejected } = require('./push_events');
+        await onCourierRejected(phoneKey, message, normalizedReason);
+      } catch (pushError) {
+        console.error('push onCourierRejected error:', pushError?.message || pushError);
+      }
+
+      return { success: true, courier: mapped };
+    }
+  } catch (_) {
+    // fallback
+  }
+
   const state = (await getUserState(phoneKey)) || {};
   const profile = readCourierProfileFromState(state);
   if (!profile || !isCourierProfileComplete(profile)) {
@@ -635,8 +692,8 @@ async function rejectCourierApplication(
   try {
     const { onCourierRejected } = require('./push_events');
     await onCourierRejected(phoneKey, message, normalizedReason);
-  } catch (error) {
-    console.error('push onCourierRejected error:', error?.message || error);
+  } catch (pushError) {
+    console.error('push onCourierRejected error:', pushError?.message || pushError);
   }
 
   return { success: true, courier: mapped };
@@ -780,7 +837,28 @@ async function rejectMerchantApplication(
 async function toggleMerchantFreezeStatus(adminPhone, merchantPhone, isFrozen) {
   await assertAdminAccess(adminPhone);
 
+  const phoneKey = await resolvePhoneKey(merchantPhone);
   const supabase = assertSupabaseAdmin();
+
+  // Try atomic RPC first
+  try {
+    const { data, error } = await supabase.rpc('atomic_toggle_frozen', {
+      p_phone: phoneKey,
+      p_is_frozen: Boolean(isFrozen),
+    });
+    if (!error) {
+      try {
+        const { onMerchantFrozen } = require('./push_events');
+        await onMerchantFrozen(merchantPhone, Boolean(isFrozen));
+      } catch (pushError) {
+        console.error('push onMerchantFrozen error:', pushError?.message || pushError);
+      }
+      return { success: true, merchant: { phone: phoneKey, is_frozen: Boolean(isFrozen) } };
+    }
+  } catch (_) {
+    // fallback
+  }
+
   const variants = getPhoneVariants(merchantPhone);
 
   const { data, error } = await supabase
@@ -797,8 +875,8 @@ async function toggleMerchantFreezeStatus(adminPhone, merchantPhone, isFrozen) {
   try {
     const { onMerchantFrozen } = require('./push_events');
     await onMerchantFrozen(merchantPhone, Boolean(isFrozen));
-  } catch (error) {
-    console.error('push onMerchantFrozen error:', error?.message || error);
+  } catch (pushError) {
+    console.error('push onMerchantFrozen error:', pushError?.message || pushError);
   }
 
   return { success: true, merchant: data[0] };
@@ -824,6 +902,20 @@ async function updateAccountRole(adminPhone, targetPhone, newRole) {
   }
 
   const supabase = assertSupabaseAdmin();
+
+  // Try atomic RPC first
+  try {
+    const { data, error } = await supabase.rpc('atomic_update_account_role', {
+      p_phone: phoneKey,
+      p_role: normalizedRole,
+    });
+    if (!error) {
+      return { success: true, phone: phoneKey, role: normalizedRole };
+    }
+  } catch (_) {
+    // fallback
+  }
+
   const { error } = await supabase
     .from('app_users')
     .update({
@@ -868,6 +960,34 @@ async function toggleDriverApprovalStatus(adminPhone, driverPhone, isApproved) {
   await assertAdminAccess(adminPhone);
 
   const phoneKey = await resolvePhoneKey(driverPhone);
+
+  // Try atomic RPC first
+  try {
+    const supabase = assertSupabaseAdmin();
+    const { data, error } = await supabase.rpc('atomic_approve_driver', {
+      p_phone: phoneKey,
+      p_approved: Boolean(isApproved),
+    });
+    if (!error) {
+      const user = await getAppUser(phoneKey);
+      const refreshedState = (await getUserState(phoneKey)) || {};
+      const mapped = mapAdminAccountSummary(user, refreshedState, null);
+
+      if (Boolean(isApproved)) {
+        try {
+          const { onDriverApproved } = require('./push_events');
+          await onDriverApproved(phoneKey);
+        } catch (pushError) {
+          console.error('push onDriverApproved error:', pushError?.message || pushError);
+        }
+      }
+
+      return { success: true, driver: mapped };
+    }
+  } catch (_) {
+    // fallback
+  }
+
   const state = (await getUserState(phoneKey)) || {};
   const profile = readDriverProfileFromState(state);
   if (!profile || !isDriverProfileComplete(profile)) {
@@ -897,8 +1017,8 @@ async function toggleDriverApprovalStatus(adminPhone, driverPhone, isApproved) {
     try {
       const { onDriverApproved } = require('./push_events');
       await onDriverApproved(phoneKey);
-    } catch (error) {
-      console.error('push onDriverApproved error:', error?.message || error);
+    } catch (pushError) {
+      console.error('push onDriverApproved error:', pushError?.message || pushError);
     }
   }
 
@@ -920,6 +1040,33 @@ async function rejectDriverApplication(
   const { message, key: normalizedReason } = resolved;
 
   const phoneKey = await resolvePhoneKey(driverPhone);
+
+  // Try atomic RPC first
+  try {
+    const supabase = assertSupabaseAdmin();
+    const { data, error } = await supabase.rpc('atomic_reject_driver', {
+      p_phone: phoneKey,
+      p_reason_key: normalizedReason,
+      p_message_ar: message,
+    });
+    if (!error) {
+      const user = await getAppUser(phoneKey);
+      const refreshedState = (await getUserState(phoneKey)) || {};
+      const mapped = mapAdminAccountSummary(user, refreshedState, null);
+
+      try {
+        const { onDriverRejected } = require('./push_events');
+        await onDriverRejected(phoneKey, message, normalizedReason);
+      } catch (pushError) {
+        console.error('push onDriverRejected error:', pushError?.message || pushError);
+      }
+
+      return { success: true, driver: mapped };
+    }
+  } catch (_) {
+    // fallback
+  }
+
   const state = (await getUserState(phoneKey)) || {};
   const profile = readDriverProfileFromState(state);
   if (!profile || !isDriverProfileComplete(profile)) {
@@ -946,8 +1093,8 @@ async function rejectDriverApplication(
   try {
     const { onDriverRejected } = require('./push_events');
     await onDriverRejected(phoneKey, message, normalizedReason);
-  } catch (error) {
-    console.error('push onDriverRejected error:', error?.message || error);
+  } catch (pushError) {
+    console.error('push onDriverRejected error:', pushError?.message || pushError);
   }
 
   return { success: true, driver: mapped };
@@ -1254,6 +1401,28 @@ async function adminSuspendAccount(adminPhone, targetPhone, isSuspended) {
     throw new Error('Account not found.');
   }
 
+  const supabase = assertSupabaseAdmin();
+
+  // Try atomic RPC first
+  try {
+    const { data, error } = await supabase.rpc('atomic_suspend_account', {
+      p_phone: phoneKey,
+      p_is_suspended: Boolean(isSuspended),
+    });
+    if (!error) {
+      const refreshedState = (await getUserState(phoneKey)) || {};
+      const refreshedMerchant = await getMerchantProfile(phoneKey);
+      return {
+        success: true,
+        phone: phoneKey,
+        isSuspended: resolveAccountSuspended(refreshedState, refreshedMerchant),
+        account: mapAdminAccountSummary(existing, refreshedState, refreshedMerchant),
+      };
+    }
+  } catch (_) {
+    // fallback
+  }
+
   const state = (await getUserState(phoneKey)) || {};
   const merchantProfile = await getMerchantProfile(phoneKey);
   const courierProfile = readCourierProfileFromState(state);
@@ -1284,7 +1453,6 @@ async function adminSuspendAccount(adminPhone, targetPhone, isSuspended) {
   await saveUserState(phoneKey, nextState);
 
   if (merchantProfile) {
-    const supabase = assertSupabaseAdmin();
     const variants = getPhoneVariants(phoneKey);
     const { error } = await supabase
       .from('merchant_profiles')

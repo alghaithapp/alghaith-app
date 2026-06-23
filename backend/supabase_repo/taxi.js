@@ -655,6 +655,21 @@ async function getDriverHistory(driverPhone) {
 
 async function setDriverOnlineStatus(driverPhone, isOnline) {
   const phoneKey = await resolvePhoneKey(driverPhone);
+  const supabase = assertSupabaseAdmin();
+
+  // Try atomic RPC first
+  try {
+    const { data, error } = await supabase.rpc('atomic_set_driver_online', {
+      p_phone: phoneKey,
+      p_is_online: Boolean(isOnline),
+    });
+    if (!error) {
+      return { success: true, phone: phoneKey, isOnline: Boolean(isOnline) };
+    }
+  } catch (_) {
+    // fallback
+  }
+
   const { getUserState, saveUserState } = require('./users');
   const state = (await getUserState(phoneKey)) || {};
   const profile = state.driverProfile || {};
@@ -668,7 +683,6 @@ async function setDriverOnlineStatus(driverPhone, isOnline) {
   });
 
   if (await hasColumn('taxi_driver_status')) {
-    const supabase = assertSupabaseAdmin();
     const variants = getPhoneVariants(phoneKey);
     await supabase
       .from('taxi_driver_status')
