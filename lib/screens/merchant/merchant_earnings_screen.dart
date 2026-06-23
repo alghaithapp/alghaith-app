@@ -182,9 +182,13 @@ class _MerchantEarningsScreenState extends State<MerchantEarningsScreen>
   }
 
   String _dayLabel(DateTime day, int step) {
-    if (step >= 30) return DateFormat('MMM', 'ar').format(day);
-    if (step >= 7) return DateFormat('d MMM', 'ar').format(day);
-    return DateFormat('d', 'ar').format(day);
+    try {
+      if (step >= 30) return DateFormat('MMM', 'ar').format(day);
+      if (step >= 7) return DateFormat('d MMM', 'ar').format(day);
+      return DateFormat('d', 'ar').format(day);
+    } catch (_) {
+      return '${day.day}/${day.month}';
+    }
   }
 
   @override
@@ -400,7 +404,11 @@ String _formatAmount(int value) {
   try {
     return NumberFormat.decimalPattern('ar').format(value);
   } catch (_) {
-    return value.toPrice();
+    try {
+      return NumberFormat.decimalPattern('en').format(value);
+    } catch (_) {
+      return value.toPrice();
+    }
   }
 }
 

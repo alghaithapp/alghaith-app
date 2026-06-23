@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:ui' show PlatformDispatcher;
 
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart' hide TextDirection;
+import 'package:intl/date_symbol_data_local.dart';
 import 'package:provider/provider.dart';
 import 'core/config/app_config.dart';
 import 'core/theme/app_colors.dart';
@@ -76,6 +78,11 @@ Future<void> _bootstrapAsync() async {
     await SupabaseService.initialize();
     await PushNotificationService.instance.initialize();
     await configureAppSystemUi();
+    try {
+      await initializeDateFormatting('ar', null);
+    } catch (_) {
+      debugPrint('INIT_LOCALE: ar locale not available');
+    }
   } catch (e) {
     debugPrint('Bootstrap error: $e');
   }

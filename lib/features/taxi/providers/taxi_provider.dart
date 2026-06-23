@@ -323,11 +323,6 @@ class TaxiProvider extends ChangeNotifier {
 
   /// جلب الطلبات الواردة للسائق من الخادم (حسب الموقع والنوع)
   Future<void> fetchIncomingRequests() async {
-    if (!_isOnline) {
-      _incomingRequests = [];
-      notifyListeners();
-      return;
-    }
     try {
       final requests = await TaxiApiService.getIncomingRequests();
       _incomingRequests = requests;
