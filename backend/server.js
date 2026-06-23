@@ -105,7 +105,7 @@ app.get('/health', (_, res) => {
 });
 
 // ── Emergency recovery (public, خارج نطاق /db) ─────────────────────────
-app.post('/__/recover-merchant', async (req, res) => {
+app.get('/__/recover-merchant', async (req, res) => {
   try {
     const phone = String(req.body?.phone || req.query?.phone || '').trim();
     if (!phone) return res.status(400).json({ message: 'phone required' });
@@ -136,6 +136,56 @@ app.post('/__/recover-merchant', async (req, res) => {
     const { error } = await supabase.from('merchant_profiles').upsert(profileRow, { onConflict: 'phone' });
     if (error) return res.status(500).json({ error: error.message });
     return res.json({ success: true, phone, store_name: profileRow.store_name });
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+// ── Bulk recovery: استعادة جميع التجار من app_state ────────────────────
+app.get('/__/recover-all-merchants', async (req, res) => {
+  try {
+    const { getAppUser, getUserState, assertSupabaseAdmin } = require('./supabase_repo');
+    const supabase = assertSupabaseAdmin();
+    const { data: states } = await supabase.from('app_state').select('phone, state').limit(500);
+    if (!states) return res.json({ recovered: 0, errors: [] });
+    
+    const { data: existingProfiles } = await supabase.from('merchant_profiles').select('phone');
+    const existingPhones = new Set((existingProfiles || []).map(r => r.phone));
+    
+    let recovered = 0;
+    const errors = [];
+    
+    for (const row of states) {
+      const state = row.state || {};
+      const store = state.merchantStore || state.store || state.merchant_profile;
+      if (!store) continue;
+      const phone = row.phone;
+      if (existingPhones.has(phone)) continue;
+      
+      try {
+        const profileRow = {
+          phone,
+          store_name: String(store.name || store.store_name || '').trim(),
+          description: String(store.description || '').trim(),
+          is_open: store.isOpen ?? store.is_open ?? true,
+          is_approved: store.isApproved ?? store.is_approved ?? false,
+          approval_status: String(store.approvalStatus || store.approval_status || 'pending').trim(),
+          latitude: store.latitude ?? store.lat ?? null,
+          longitude: store.longitude ?? store.lng ?? null,
+          address: String(store.address || '').trim(),
+          delivery_fee: store.deliveryFee ?? store.delivery_fee ?? 0,
+          delivery_areas: String(store.deliveryAreas || store.delivery_areas || '').trim(),
+          contact_phone: String(store.phone || phone).trim(),
+          updated_at: new Date().toISOString(),
+        };
+        if (!profileRow.store_name) continue;
+        await supabase.from('merchant_profiles').upsert(profileRow, { onConflict: 'phone' });
+        recovered++;
+      } catch (e) {
+        errors.push({ phone, error: e.message });
+      }
+    }
+    return res.json({ recovered, totalScanned: states.length, errors });
   } catch (error) {
     return res.status(500).json({ error: error.message });
   }
