@@ -10,6 +10,7 @@ import '../../services/supabase_service.dart';
 import '../../models/app_user_view.dart';
 import '../../models/app_models.dart';
 import '../../models/app_notification.dart';
+import '../../models/merchant_models.dart';
 
 class AuthService extends ChangeNotifier {
   // ── Auth state ─────────────────────────────────────────────────
@@ -696,6 +697,26 @@ class AuthService extends ChangeNotifier {
       _customerAvatarBase64 =
           snapshot.customerAvatarRef ?? _customerAvatarBase64;
 
+      // استعادة البيانات الموسعة عبر callbacks
+      if (snapshot.merchantStore != null && _onApplyMerchantStore != null) {
+        _onApplyMerchantStore!(snapshot.merchantStore!);
+      }
+      if (snapshot.driverProfile != null && _onApplyDriverProfile != null) {
+        _onApplyDriverProfile!(snapshot.driverProfile!);
+      }
+      if (snapshot.courierProfile != null && _onApplyCourierProfile != null) {
+        _onApplyCourierProfile!(snapshot.courierProfile!);
+      }
+      if (snapshot.items.isNotEmpty && _onApplyLocalBackupItems != null) {
+        _onApplyLocalBackupItems!(snapshot.items);
+      }
+      if (snapshot.orders.isNotEmpty && _onApplyLocalBackupOrders != null) {
+        _onApplyLocalBackupOrders!(snapshot.orders);
+      }
+      if (snapshot.merchantOffers.isNotEmpty && _onApplyLocalBackupOffers != null) {
+        _onApplyLocalBackupOffers!(snapshot.merchantOffers);
+      }
+
       return;
     } catch (error) {
       debugPrint('LOCAL_BACKUP_RESTORE_ERROR: $error');
@@ -823,6 +844,14 @@ class AuthService extends ChangeNotifier {
         }
       }
 
+      // استهلاك حزمة البيانات الإضافية من السيرفر
+      if (bundle.orders.isNotEmpty && _onApplyRemoteOrders != null) {
+        _onApplyRemoteOrders!(bundle.orders);
+      }
+      if (bundle.addresses.isNotEmpty && _onApplyRemoteAddresses != null) {
+        _onApplyRemoteAddresses!(bundle.addresses);
+      }
+
       _inferAccountTypeFromLegacyData();
       _inferRoleFromRestoredData();
       _applyAccountTypeConstraints();
@@ -934,6 +963,23 @@ class AuthService extends ChangeNotifier {
   }
 
   AccountSnapshot _buildLocalBackupSnapshot() {
+    Map<String, dynamic>? merchantStore;
+    Map<String, dynamic>? driverProfile;
+    Map<String, dynamic>? courierProfile;
+    List<ListItem> items = const [];
+    List<ActiveOrder> orders = const [];
+    List<MerchantOffer> merchantOffers = const [];
+
+    if (_onCollectLocalBackupData != null) {
+      final extra = _onCollectLocalBackupData!();
+      merchantStore = extra['merchantStore'] as Map<String, dynamic>?;
+      driverProfile = extra['driverProfile'] as Map<String, dynamic>?;
+      courierProfile = extra['courierProfile'] as Map<String, dynamic>?;
+      if (extra['items'] is List) items = extra['items'] as List<ListItem>;
+      if (extra['orders'] is List) orders = extra['orders'] as List<ActiveOrder>;
+      if (extra['merchantOffers'] is List) merchantOffers = extra['merchantOffers'] as List<MerchantOffer>;
+    }
+
     return AccountSnapshot(
       userRole: _userRole,
       hasAdminAccess: _hasAdminAccess,
@@ -944,8 +990,53 @@ class AuthService extends ChangeNotifier {
       customerLatitude: _customerLatitude,
       customerLongitude: _customerLongitude,
       customerAvatarRef: _customerAvatarBase64,
+      merchantStore: merchantStore ?? _buildMerchantStoreFallback(),
+      driverProfile: driverProfile,
+      courierProfile: courierProfile,
+      items: items,
+      orders: orders,
+      merchantOffers: merchantOffers,
     );
   }
+
+  Map<String, dynamic>? _buildMerchantStoreFallback() {
+    if (_merchantStore != null) return _merchantStore;
+    return null;
+  }
+
+  /// إشارة لجمع بيانات النسخ الاحتياطي من جميع الخدمات
+  Map<String, dynamic> Function()? _onCollectLocalBackupData;
+  void setOnCollectLocalBackupData(Map<String, dynamic> Function() cb) =>
+      _onCollectLocalBackupData = cb;
+
+  // Callbacks لاستعادة البيانات من النسخة المحلية
+  void Function(Map<String, dynamic>)? _onApplyMerchantStore;
+  void Function(Map<String, dynamic>)? _onApplyDriverProfile;
+  void Function(Map<String, dynamic>)? _onApplyCourierProfile;
+  void Function(List<ListItem>)? _onApplyLocalBackupItems;
+  void Function(List<ActiveOrder>)? _onApplyLocalBackupOrders;
+  void Function(List<MerchantOffer>)? _onApplyLocalBackupOffers;
+
+  void setOnApplyMerchantStore(void Function(Map<String, dynamic>) cb) =>
+      _onApplyMerchantStore = cb;
+  void setOnApplyDriverProfile(void Function(Map<String, dynamic>) cb) =>
+      _onApplyDriverProfile = cb;
+  void setOnApplyCourierProfile(void Function(Map<String, dynamic>) cb) =>
+      _onApplyCourierProfile = cb;
+  void setOnApplyLocalBackupItems(void Function(List<ListItem>) cb) =>
+      _onApplyLocalBackupItems = cb;
+  void setOnApplyLocalBackupOrders(void Function(List<ActiveOrder>) cb) =>
+      _onApplyLocalBackupOrders = cb;
+  void setOnApplyLocalBackupOffers(void Function(List<MerchantOffer>) cb) =>
+      _onApplyLocalBackupOffers = cb;
+
+  // Callbacks لاستقبال بيانات الحزمة البعيدة
+  void Function(List<ActiveOrder>)? _onApplyRemoteOrders;
+  void Function(List<String>)? _onApplyRemoteAddresses;
+  void setOnApplyRemoteOrders(void Function(List<ActiveOrder>) cb) =>
+      _onApplyRemoteOrders = cb;
+  void setOnApplyRemoteAddresses(void Function(List<String>) cb) =>
+      _onApplyRemoteAddresses = cb;
 
   Map<String, dynamic> _buildRemoteState() {
     return {

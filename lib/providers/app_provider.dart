@@ -94,8 +94,14 @@ class AppProvider extends ChangeNotifier {
   void _wireCrossServiceCallbacks() {
     // Auth → service refresh callbacks for role switch side effects
     auth.setOnRefreshCustomerCatalog(() => customer.refreshCustomerCatalog());
-    auth.setOnRefreshCustomerOrders(
-        () => SupabaseService.loadCustomerOrders(auth.authPhone ?? ''));
+    auth.setOnRefreshCustomerOrders(() async {
+      final phone = auth.authPhone;
+      if (phone == null) return;
+      final orders = await SupabaseService.loadCustomerOrders(phone);
+      _orders = orders;
+      _lastOrdersFetch = DateTime.now();
+      notifyListeners();
+    });
     auth.setOnRefreshMerchantIncomingOrders(
         () => merchant.refreshMerchantIncomingOrders());
     auth.setOnRefreshCourierOrders(() => refreshCourierOrders());
@@ -108,6 +114,23 @@ class AppProvider extends ChangeNotifier {
     auth.setOnApplyMerchantSnapshot((snapshot) {
       merchant.applyMerchantStoreSnapshot(snapshot);
     });
+    auth.setOnCollectLocalBackupData(() => {
+      'merchantStore': merchant.merchantStore,
+      'driverProfile': driver.driverProfile,
+      'courierProfile': delivery.courierProfile,
+      'items': _itemsDelegate(),
+      'orders': _orders,
+      'merchantOffers': merchant.merchantOffers,
+    });
+    auth.setOnApplyMerchantStore((store) => merchant.applyMerchantStoreSnapshot(store));
+    auth.setOnApplyDriverProfile((profile) => driver.loadProfileFromRemoteState({'driverProfile': profile}));
+    auth.setOnApplyCourierProfile((profile) => delivery.loadProfileFromRemoteState({'courierProfile': profile}));
+    auth.setOnApplyLocalBackupItems((items) => merchant.loadInitialData(items));
+    auth.setOnApplyLocalBackupOrders((orders) { _orders = orders; notifyListeners(); });
+    auth.setOnApplyLocalBackupOffers((offers) { /* merchant offers callback */ });
+    auth.setOnApplyRemoteOrders((orders) { _orders = orders; _lastOrdersFetch = DateTime.now(); notifyListeners(); });
+    auth.setOnApplyRemoteAddresses((addresses) { /* restore addresses later */ });
+
     auth.setOnApplyRemoteState((state) {
       _darkMode = state['darkMode'] as bool? ?? _darkMode;
       _inAppAlertsEnabled = state['inAppAlertsEnabled'] as bool? ??
@@ -700,6 +723,8 @@ class AppProvider extends ChangeNotifier {
       customer.refreshMarketplaceStats(force: force);
   ListItem catalogItemFromRow(Map<String, dynamic> row) =>
       customer.catalogItemFromRow(row);
+
+  List<ListItem> _itemsDelegate() => merchant.merchantItems;
 
   Future<void> refreshCustomerOrders({bool force = false}) async {
     final phone = _trimmedOrNull(auth.authPhone);
