@@ -289,7 +289,30 @@ async function saveRow(table, payload, conflictColumn) {
     .upsert(payload, { onConflict: conflictColumn, ignoreDuplicates: false })
     .select();
 
-  if (error) throw new Error(error.message);
+  if (error) {
+    const message = String(error.message || '');
+    if (/no unique or exclusion constraint/i.test(message)) {
+      const existing =
+        conflictColumn === 'phone'
+          ? await selectSingleByPhone(table, conflictValue)
+          : await selectSingle(table, conflictColumn, conflictValue);
+      if (existing) {
+        const updateKey =
+          conflictColumn === 'phone'
+            ? String(existing.phone || conflictValue).trim()
+            : conflictValue;
+        return updateRow(table, conflictColumn, updateKey, payload);
+      }
+      const { data: inserted, error: insertError } = await supabase
+        .from(table)
+        .insert(payload)
+        .select();
+      if (insertError) throw new Error(insertError.message);
+      if (Array.isArray(inserted)) return inserted[0] || null;
+      return inserted || null;
+    }
+    throw new Error(error.message);
+  }
   if (Array.isArray(data)) return data[0] || null;
   return data || null;
 }
