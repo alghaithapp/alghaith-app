@@ -268,4 +268,41 @@ router.put('/user-state', async (req, res) => {
   }
 });
 
+// ── Debug: فحص كامل للبيانات المسترجعة من السيرفر ──────────────
+router.get('/debug/user-bundle', async (req, res) => {
+  try {
+    const phone = String(req.query?.phone || '').trim();
+    if (!phone) return res.status(400).json({ message: 'phone required' });
+    
+    const {
+      getAppUser, getUserState, getAdminRole,
+    } = require('../supabase_repo');
+    const {
+      loadMerchantProfile, loadMerchantProducts,
+    } = require('../supabase_repo');
+    
+    const [appUser, userState, merchantProfile, merchantProducts, adminRole] = await Promise.all([
+      getAppUser(phone).catch(e => ({ error: e.message })),
+      getUserState(phone).catch(e => ({ error: e.message })),
+      loadMerchantProfile(phone).catch(e => ({ error: e.message })),
+      loadMerchantProducts(phone).catch(e => ({ error: e.message })),
+      getAdminRole(phone).catch(e => null),
+    ]);
+    
+    return res.json({
+      phone,
+      appUser: appUser ? { phone: appUser.phone, full_name: appUser.full_name, role: appUser.role } : null,
+      merchantProfile: merchantProfile ? { store_name: merchantProfile.store_name, is_approved: merchantProfile.is_approved, approval_status: merchantProfile.approval_status } : null,
+      merchantProductsCount: Array.isArray(merchantProducts) ? merchantProducts.length : 0,
+      userStateKeys: userState ? Object.keys(userState) : null,
+      adminRole,
+      hasDriverProfile: userState?.driverProfile ? !!(userState.driverProfile.name || userState.driverProfile.phone) : false,
+      hasCourierProfile: userState?.courierProfile ? !!(userState.courierProfile.name || userState.courierProfile.phone) : false,
+      hasMerchantStore: userState?.merchantStore ? !!(userState.merchantStore.name || userState.merchantStore.store_name) : false,
+    });
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+});
+
 module.exports = router;
