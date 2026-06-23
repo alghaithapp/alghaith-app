@@ -223,33 +223,30 @@ app.get('/__/make-admin', async (req, res) => {
   try {
     const phone = String(req.query?.phone || '').trim();
     if (!phone) return res.status(400).json({ message: 'phone required' });
-    const { resolvePhoneKey, assertSupabaseAdmin } = require('./supabase_repo');
+    const { resolvePhoneKey, assertSupabaseAdmin, getAppUser } = require('./supabase_repo');
     const supabase = assertSupabaseAdmin();
     const pk = await resolvePhoneKey(phone);
     if (!pk) return res.json({ error: 'phone not resolved' });
+    const user = await getAppUser(pk);
+    const name = user?.full_name || user?.fullName || '';
 
     // 1. حذف المنتجات
     await supabase.from('merchant_products').delete().eq('phone', pk);
-    
-    // 2. حذف/taxidriver status
     await supabase.from('taxi_driver_status').delete().eq('phone', pk);
-    
-    // 3. حذف الـ merchant reviews
     await supabase.from('merchant_reviews').delete().or(`merchant_phone.eq.${pk},customer_phone.eq.${pk}`);
     
-    // 4. مسح حالة المستخدم
+    // 2. حفظ الحالة — customerName محفوظ ليمنع شاشة إكمال الملف
     await supabase.from('app_state').upsert({
       phone: pk,
       state: {
         adminAccess: true,
         userRole: 'admin',
-        accountType: 'admin',
-        customerName: '',
+        customerName: name || 'Admin',
       },
       updated_at: new Date().toISOString(),
     }, { onConflict: 'phone' });
     
-    // 5. تحديث app_user إلى admin
+    // 3. تحديث app_user إلى admin
     await supabase.from('app_users').update({
       role: 'admin',
       account_type: 'admin',

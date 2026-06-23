@@ -230,13 +230,13 @@ class AuthService extends ChangeNotifier {
 
   bool isRoleAllowedForAccount(String role) {
     if (role == 'admin') return _hasAdminAccess;
+    if (_hasAdminAccess) return true; // Admin يمكنه التبديل لأي دور
     final locked = _trimmedOrNull(_accountType);
     if (locked == null) {
       return role == 'customer' ||
           role == 'merchant' ||
           role == 'delivery' ||
-          role == 'driver' ||
-          (role == 'admin' && _hasAdminAccess);
+          role == 'driver';
     }
     switch (locked) {
       case 'marketplace':
