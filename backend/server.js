@@ -141,6 +141,21 @@ app.get('/__/recover-merchant', async (req, res) => {
   }
 });
 
+// ── فحص المنتجات المخزنة في merchant_products ──────────────────────────
+app.get('/__/check-products', async (req, res) => {
+  try {
+    const phone = String(req.query?.phone || '').trim();
+    const { assertSupabaseAdmin } = require('./supabase_repo');
+    const supabase = assertSupabaseAdmin();
+    let query = supabase.from('merchant_products').select('phone, id, name, created_at').order('created_at', { ascending: false }).limit(100);
+    if (phone) query = supabase.from('merchant_products').select('phone, id, name, created_at').or(`phone.eq.${phone},phone.eq.+964${phone.replace(/^0+/, '')}`).limit(100);
+    const { data } = await query;
+    return res.json({ total: data?.length || 0, products: data || [] });
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+});
+
 // ── Bulk recovery: استعادة جميع التجار من app_state ────────────────────
 app.get('/__/recover-all-merchants', async (req, res) => {
   try {
