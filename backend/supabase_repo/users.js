@@ -96,12 +96,24 @@ async function getUserState(phone) {
 async function saveUserState(phone, state = {}) {
   const phoneKey = await resolvePhoneKey(phone);
   await ensureAppUser(phoneKey);
-  const payload = {
-    phone: phoneKey,
-    state,
-    updated_at: nowIso(),
-  };
-  return saveRow('app_state', payload, 'phone');
+  // استخدام دالة merge_app_state للدمج الذري بدلاً من الاستبدال الكامل
+  // هذا يمنع فقدان بيانات driverProfile, courierProfile, merchantStore, إلخ.
+  try {
+    const supabase = assertSupabaseAdmin();
+    const { data, error } = await supabase.rpc('merge_app_state', {
+      p_phone: phoneKey,
+      p_state: state,
+    });
+    if (error) {
+      // fallback: إذا كانت الـ RPC غير موجودة، استخدم upsert العادي
+      const payload = { phone: phoneKey, state, updated_at: nowIso() };
+      return saveRow('app_state', payload, 'phone');
+    }
+    return data;
+  } catch (_) {
+    const payload = { phone: phoneKey, state, updated_at: nowIso() };
+    return saveRow('app_state', payload, 'phone');
+  }
 }
 
 async function deleteUserState(phone) {
