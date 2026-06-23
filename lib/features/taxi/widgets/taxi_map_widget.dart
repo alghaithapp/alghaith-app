@@ -61,6 +61,7 @@ class TaxiMapWidget extends StatefulWidget {
 class _TaxiMapWidgetState extends State<TaxiMapWidget> {
   Set<gmaps.Marker> _markers = {};
   Set<gmaps.Polyline> _polylines = {};
+  gmaps.GoogleMapController? _mapController;
   gmaps.LatLng? _lastPickupCoord;
   gmaps.LatLng? _lastDropoffCoord;
   List<gmaps.LatLng>? _lastRoutePoints;
@@ -87,9 +88,17 @@ class _TaxiMapWidgetState extends State<TaxiMapWidget> {
     final pickupChanged = widget.pickupLocation != oldWidget.pickupLocation;
     final dropoffChanged = widget.dropoffLocation != oldWidget.dropoffLocation;
     final routeChanged = widget.routePoints != oldWidget.routePoints;
-    if (pickupChanged || dropoffChanged || routeChanged) {
+    final driverChanged =
+        !_sameLatLng(widget.driverLocation, oldWidget.driverLocation);
+    if (pickupChanged || dropoffChanged || routeChanged || driverChanged) {
       _rebuildMarkersAndPolylines();
     }
+  }
+
+  bool _sameLatLng(latlong2.LatLng? a, latlong2.LatLng? b) {
+    if (a == null && b == null) return true;
+    if (a == null || b == null) return false;
+    return a.latitude == b.latitude && a.longitude == b.longitude;
   }
 
   void _rebuildMarkersAndPolylines() {
@@ -186,6 +195,71 @@ class _TaxiMapWidgetState extends State<TaxiMapWidget> {
         _markers = markers;
         _polylines = polylines;
       });
+      _fitCameraToContent();
+    }
+  }
+
+  Future<void> _fitCameraToContent() async {
+    final controller = _mapController;
+    if (controller == null) return;
+
+    final points = <gmaps.LatLng>[];
+    if (widget.pickupLocation != null) {
+      points.add(_toGmaps(widget.pickupLocation!));
+    }
+    if (widget.dropoffLocation != null) {
+      points.add(_toGmaps(widget.dropoffLocation!));
+    }
+    if (widget.routePoints != null && widget.routePoints!.length >= 2) {
+      points.addAll(widget.routePoints!.map(_toGmaps));
+    }
+
+    if (points.isEmpty) return;
+
+    if (points.length == 1) {
+      await controller.animateCamera(
+        gmaps.CameraUpdate.newLatLngZoom(points.first, widget.zoom),
+      );
+      return;
+    }
+
+    var minLat = points.first.latitude;
+    var maxLat = points.first.latitude;
+    var minLng = points.first.longitude;
+    var maxLng = points.first.longitude;
+
+    for (final point in points) {
+      if (point.latitude < minLat) minLat = point.latitude;
+      if (point.latitude > maxLat) maxLat = point.latitude;
+      if (point.longitude < minLng) minLng = point.longitude;
+      if (point.longitude > maxLng) maxLng = point.longitude;
+    }
+
+    if ((maxLat - minLat).abs() < 0.0005 && (maxLng - minLng).abs() < 0.0005) {
+      await controller.animateCamera(
+        gmaps.CameraUpdate.newLatLngZoom(points.first, 16),
+      );
+      return;
+    }
+
+    final bounds = gmaps.LatLngBounds(
+      southwest: gmaps.LatLng(minLat, minLng),
+      northeast: gmaps.LatLng(maxLat, maxLng),
+    );
+    try {
+      await controller.animateCamera(
+        gmaps.CameraUpdate.newLatLngBounds(bounds, 72),
+      );
+    } catch (_) {
+      await controller.animateCamera(
+        gmaps.CameraUpdate.newLatLngZoom(
+          gmaps.LatLng(
+            (minLat + maxLat) / 2,
+            (minLng + maxLng) / 2,
+          ),
+          13,
+        ),
+      );
     }
   }
 
@@ -205,13 +279,18 @@ class _TaxiMapWidgetState extends State<TaxiMapWidget> {
         myLocationEnabled: true,
         myLocationButtonEnabled: false,
         zoomControlsEnabled: false,
+        compassEnabled: true,
+        buildingsEnabled: true,
+        trafficEnabled: false,
         onTap: (gmaps.LatLng pos) {
           widget.onMapTap?.call(
             latlong2.LatLng(pos.latitude, pos.longitude),
           );
         },
         onMapCreated: (gmaps.GoogleMapController controller) {
+          _mapController = controller;
           widget.onMapCreated?.call(controller);
+          _fitCameraToContent();
         },
       ),
     );

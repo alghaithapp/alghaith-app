@@ -404,6 +404,7 @@ app.use('/db', require('./routes/marketplace'));
 app.use('/db', require('./routes/delivery'));
 app.use('/db', require('./routes/admin'));
 app.use('/db/chat', require('./routes/chat'));
+app.use('/db/agora', require('./routes/agora'));
 app.use('/db/taxi', require('./routes/taxi'));
 
 // ── Promo code validation (kept inline) ────────────────────────────────

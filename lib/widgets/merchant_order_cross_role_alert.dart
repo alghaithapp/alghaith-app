@@ -14,7 +14,7 @@ class MerchantOrderCrossRoleAlert extends StatefulWidget {
   const MerchantOrderCrossRoleAlert({
     super.key,
     required this.child,
-    this.interval = const Duration(seconds: 25),
+    this.interval = const Duration(seconds: 10),
   });
 
   final Widget child;

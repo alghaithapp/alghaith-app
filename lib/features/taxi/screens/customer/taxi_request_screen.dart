@@ -1,8 +1,6 @@
-import 'dart:convert';
-import 'dart:math' as math;
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:http/http.dart' as http;
 import 'package:latlong2/latlong.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart' as gmaps;
 import 'package:provider/provider.dart';
@@ -14,12 +12,14 @@ import '../../utils/taxi_distance_calculator.dart';
 import '../../utils/taxi_fare_calculator.dart';
 import 'taxi_waiting_screen.dart';
 import 'taxi_side_menu_screen.dart';
-import '../../../../core/config/app_config.dart';
+import 'taxi_live_tracking_screen.dart';
 import '../../../../core/data/iraq_neighborhoods.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../providers/app_provider.dart';
 import '../../../../utils/guest_gate.dart';
+import '../../services/taxi_places_service.dart';
 import '../../widgets/taxi_map_widget.dart';
-import '../../../../screens/app_settings_screen.dart';
+import '../../widgets/taxi_type_image.dart';
 
 /// شاشة طلب التكسي (مستوى الزبون)
 class TaxiRequestScreen extends StatefulWidget {
@@ -34,19 +34,19 @@ class _TaxiRequestScreenState extends State<TaxiRequestScreen> {
   final _dropoffController = TextEditingController();
   final _dropoffFocus = FocusNode();
   gmaps.GoogleMapController? _mapController;
+  bool _clearedForActiveTrip = false;
 
-  TaxiType _selectedType = TaxiType.economic;
   double _distanceKm = 0.0;
+  int _fareTuktuk = 0;
+  int _fareWazz = 0;
   int _fareEconomic = 0;
-  int _fareSuper = 0;
+  TaxiType _selectedTaxiType = TaxiType.tuktuk;
   bool _showCarSelection = false;
   bool _isSearching = false;
   bool _isGettingLocation = false;
-  List<String> _suggestions = [];
+  List<TaxiPlaceSuggestion> _suggestions = [];
   bool _isPickupField = false;
-
-  /// تخزين إحداثيات كل اقتراح (لنتائج Mapbox)
-  final Map<String, LatLng> _suggestionCoords = {};
+  Timer? _searchDebounce;
 
   /// إحداثيات موقع الانطلاق والوصول
   LatLng? _pickupCoord;
@@ -67,74 +67,125 @@ class _TaxiRequestScreenState extends State<TaxiRequestScreen> {
     super.initState();
     _pickupController.addListener(() => _onTextChanged(true));
     _dropoffController.addListener(() => _onTextChanged(false));
+    WidgetsBinding.instance.addPostFrameCallback((_) => _bootstrapActiveRequest());
+  }
+
+  Future<void> _bootstrapActiveRequest() async {
+    if (!mounted) return;
+    final taxi = context.read<TaxiProvider>();
+    taxi.addListener(_onTaxiProviderChanged);
+    final phone = context.read<AppProvider>().authPhone;
+    if (phone != null && phone.isNotEmpty) {
+      taxi.startPolling(phone: phone);
+    }
+    await taxi.loadActiveRequest();
+    if (!mounted) return;
+    _applyActiveRequestState(taxi.currentRequest);
+  }
+
+  void _onTaxiProviderChanged() {
+    if (!mounted) return;
+    _applyActiveRequestState(context.read<TaxiProvider>().currentRequest);
+  }
+
+  void _applyActiveRequestState(TaxiRequest? request) {
+    if (request == null || request.isCompleted || request.isCancelled) {
+      _clearedForActiveTrip = false;
+      return;
+    }
+    if ((request.hasAssignedDriver || request.isPending) &&
+        !_clearedForActiveTrip) {
+      _clearLocationForm();
+      _clearedForActiveTrip = true;
+    }
+  }
+
+  void _clearLocationForm() {
+    _pickupController.clear();
+    _dropoffController.clear();
+    if (!mounted) return;
+    setState(() {
+      _pickupCoord = null;
+      _dropoffCoord = null;
+      _routePoints = null;
+      _showCarSelection = false;
+      _suggestions = [];
+      _distanceKm = 0;
+      _fareTuktuk = 0;
+      _fareWazz = 0;
+      _fareEconomic = 0;
+    });
   }
 
   void _onTextChanged(bool isPickup) {
     final controller = isPickup ? _pickupController : _dropoffController;
     final query = controller.text.trim();
     _isPickupField = isPickup;
-    if (query.length < 1) {
+    _searchDebounce?.cancel();
+    if (query.length < 2) {
       if (_suggestions.isNotEmpty) setState(() => _suggestions = []);
       return;
     }
-    // البحث في قاعدة بيانات الصويرة (40+ حي وقرية ومحل)
-    final results = IraqNeighborhoods.search(query, maxResults: 10);
-    if (results.isNotEmpty) {
-      setState(() {
-        _suggestionCoords.clear();
-        for (final r in results) {
-          _suggestionCoords[r.place.name] = r.place.latlng;
-        }
-        _suggestions = results.map((r) => r.place.name).toList();
-        _isSearching = false;
-      });
-      return;
-    }
-    // إذا ما لقينا محلياً → ابحث في Mapbox
-    _fetchSuggestions(query);
+    _searchDebounce = Timer(const Duration(milliseconds: 350), () {
+      _fetchPlaceSuggestions(query);
+    });
   }
 
-  Future<void> _fetchSuggestions(String query) async {
-    final token = AppConfig.effectiveMapboxPublicToken;
-    if (token.isEmpty || !token.startsWith('pk.')) return;
+  Future<void> _fetchPlaceSuggestions(String query) async {
+    if (!mounted) return;
     setState(() => _isSearching = true);
-    try {
-      final uri = Uri.parse(
-        'https://api.mapbox.com/geocoding/v5/mapbox.places/${Uri.encodeComponent(query)}.json'
-        '?language=ar&country=iq&limit=5&access_token=$token',
+
+    final bias = _pickupCoord ??
+        const LatLng(IraqNeighborhoods.centerLat, IraqNeighborhoods.centerLng);
+    final googleResults =
+        await TaxiPlacesService.autocomplete(query, bias: bias);
+    final localResults = IraqNeighborhoods.search(query, maxResults: 6);
+
+    final merged = <TaxiPlaceSuggestion>[];
+    final seen = <String>{};
+
+    for (final local in localResults) {
+      final key = local.place.name.trim().toLowerCase();
+      if (key.isEmpty || !seen.add(key)) continue;
+      merged.add(
+        TaxiPlaceSuggestion(
+          displayName: local.place.name,
+          latLng: local.place.latlng,
+        ),
       );
-      final response = await http.get(uri).timeout(const Duration(seconds: 8));
-      if (response.statusCode == 200 && mounted) {
-        final data = jsonDecode(response.body);
-        final features = data['features'] as List?;
-        if (features != null && features.isNotEmpty) {
-          setState(() {
-            _suggestionCoords.clear();
-            _suggestions = features.map((f) {
-              final name = f['place_name'].toString();
-              final center = f['center'] as List?;
-              if (center != null && center.length >= 2) {
-                _suggestionCoords[name] = LatLng(
-                  (center[1] as num).toDouble(),
-                  (center[0] as num).toDouble(),
-                );
-              }
-              return name;
-            }).toList();
-            _isSearching = false;
-          });
-          return;
-        }
-      }
-    } catch (_) {}
-    if (mounted) setState(() => _isSearching = false);
+    }
+
+    for (final item in googleResults) {
+      final key = item.displayName.trim().toLowerCase();
+      if (key.isEmpty || !seen.add(key)) continue;
+      merged.add(item);
+    }
+
+    if (!mounted) return;
+    setState(() {
+      _suggestions = merged.take(12).toList();
+      _isSearching = false;
+    });
   }
 
-  void _selectSuggestion(String address) {
+  Future<void> _selectSuggestion(TaxiPlaceSuggestion suggestion) async {
     final controller = _isPickupField ? _pickupController : _dropoffController;
 
-    // الحصول على الإحداثيات من التخزين المؤقت
-    final coord = _suggestionCoords[address];
+    LatLng? coord = suggestion.latLng;
+    var address = suggestion.displayName;
+
+    if (coord == null &&
+        suggestion.googlePlaceId != null &&
+        suggestion.googlePlaceId!.isNotEmpty) {
+      final details =
+          await TaxiPlacesService.placeDetails(suggestion.googlePlaceId!);
+      if (details != null) {
+        coord = details.latLng;
+        address = details.displayName;
+      }
+    }
+
+    if (!mounted) return;
 
     setState(() {
       controller.text = address;
@@ -142,11 +193,9 @@ class _TaxiRequestScreenState extends State<TaxiRequestScreen> {
       _showCarSelection = false;
 
       if (_isPickupField) {
-        // --- تم اختيار موقع الانطلاق ---
         _pickupCoord = coord;
         _dropoffCoord = null;
         _routePoints = null;
-        // تحريك الخريطة إلى منطقة الانطلاق
         if (coord != null) {
           _mapController?.animateCamera(
             gmaps.CameraUpdate.newLatLngZoom(
@@ -156,9 +205,7 @@ class _TaxiRequestScreenState extends State<TaxiRequestScreen> {
           );
         }
       } else {
-        // --- تم اختيار موقع الوصول ---
         _dropoffCoord = coord;
-        // حساب المسار إذا توفر كلا الموقعين
         if (_pickupCoord != null && coord != null) {
           _fetchRoute(_pickupCoord!, coord);
         }
@@ -167,39 +214,58 @@ class _TaxiRequestScreenState extends State<TaxiRequestScreen> {
     FocusScope.of(context).unfocus();
   }
 
-  /// جلب المسار من Mapbox Directions API
+  /// جلب المسار — Google Directions (مثل Google Maps) مع احتياط Mapbox.
   Future<void> _fetchRoute(LatLng from, LatLng to) async {
-    final token = AppConfig.effectiveMapboxPublicToken;
-    if (token.isEmpty || !token.startsWith('pk.')) return;
-    try {
-      final uri = Uri.parse(
-        'https://api.mapbox.com/directions/v5/mapbox/driving/'
-        '${from.longitude},${from.latitude};${to.longitude},${to.latitude}'
-        '?geometries=geojson&access_token=$token'
-        '&language=ar&overview=full',
+    final points = await TaxiPlacesService.fetchDrivingRoute(from, to);
+    if (!mounted) return;
+    setState(() {
+      _routePoints = points.length >= 2 ? points : null;
+    });
+    if (points.length >= 2) {
+      await _fitMapToLocations();
+    }
+  }
+
+  Future<void> _fitMapToLocations() async {
+    if (_mapController == null) return;
+    final points = <gmaps.LatLng>[];
+    if (_pickupCoord != null) {
+      points.add(
+        gmaps.LatLng(_pickupCoord!.latitude, _pickupCoord!.longitude),
       );
-      final response = await http.get(uri).timeout(const Duration(seconds: 10));
-      if (response.statusCode == 200 && mounted) {
-        final data = jsonDecode(response.body);
-        final routes = data['routes'] as List?;
-        if (routes != null && routes.isNotEmpty) {
-          final geometry = routes[0]['geometry'] as Map?;
-          final coordinates = geometry?['coordinates'] as List?;
-          if (coordinates != null && coordinates.length >= 2) {
-            setState(() {
-              _routePoints = coordinates
-                  .map((c) => LatLng(
-                        (c[1] as num).toDouble(),
-                        (c[0] as num).toDouble(),
-                      ))
-                  .toList();
-            });
-            return;
-          }
-        }
+    }
+    if (_dropoffCoord != null) {
+      points.add(
+        gmaps.LatLng(_dropoffCoord!.latitude, _dropoffCoord!.longitude),
+      );
+    }
+    if (_routePoints != null) {
+      for (final p in _routePoints!) {
+        points.add(gmaps.LatLng(p.latitude, p.longitude));
       }
+    }
+    if (points.length < 2) return;
+
+    var minLat = points.first.latitude;
+    var maxLat = points.first.latitude;
+    var minLng = points.first.longitude;
+    var maxLng = points.first.longitude;
+    for (final p in points) {
+      if (p.latitude < minLat) minLat = p.latitude;
+      if (p.latitude > maxLat) maxLat = p.latitude;
+      if (p.longitude < minLng) minLng = p.longitude;
+      if (p.longitude > maxLng) maxLng = p.longitude;
+    }
+
+    final bounds = gmaps.LatLngBounds(
+      southwest: gmaps.LatLng(minLat, minLng),
+      northeast: gmaps.LatLng(maxLat, maxLng),
+    );
+    try {
+      await _mapController!.animateCamera(
+        gmaps.CameraUpdate.newLatLngBounds(bounds, 72),
+      );
     } catch (_) {}
-    setState(() => _routePoints = null);
   }
 
   void _onRequestTrip() {
@@ -220,61 +286,45 @@ class _TaxiRequestScreenState extends State<TaxiRequestScreen> {
       pickup.latitude, pickup.longitude,
       dropoff.latitude, dropoff.longitude,
     );
-    final result = TaxiFareCalculator.calculateFare(
-      _distanceKm, taxiType: _selectedType,
-    );
     setState(() {
-      _fareEconomic = result.fareEconomic;
-      _fareSuper = result.fareSuper;
+      _fareTuktuk =
+          TaxiFareCalculator.fareForType(_distanceKm, TaxiType.tuktuk);
+      _fareWazz = TaxiFareCalculator.fareForType(_distanceKm, TaxiType.wazz);
+      _fareEconomic =
+          TaxiFareCalculator.fareForType(_distanceKm, TaxiType.economic);
     });
   }
 
-  bool _isSubmitting = false;
-
   Future<void> _onConfirmRequest() async {
-    if (_isSubmitting) return;
-    // إذا كان زائر، نطلب تسجيل الدخول أولاً
     if (!GuestGate.requireAccount(context, message: 'سجّل دخولك لطلب التكسي.')) {
       return;
     }
 
-    setState(() => _isSubmitting = true);
-
     final pickup = _pickupCoord ?? const LatLng(32.9256, 44.7766);
     final dropoff = _dropoffCoord ?? const LatLng(32.9300, 44.7800);
 
-    final provider = context.read<TaxiProvider>();
-    final request = await provider.createTaxiRequest(
-      pickupAddress: _pickupController.text,
-      dropoffAddress: _dropoffController.text,
-      pickupLat: pickup.latitude,
-      pickupLng: pickup.longitude,
-      dropoffLat: dropoff.latitude,
-      dropoffLng: dropoff.longitude,
-      distanceKm: _distanceKm,
-      taxiType: _selectedType.toApiName,
-    );
-
-    if (!mounted) return;
-    setState(() => _isSubmitting = false);
-
-    if (request == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(provider.error ?? 'تعذر إرسال الطلب، حاول مجدداً'),
-          backgroundColor: Colors.red,
-        ),
-      );
-      return;
-    }
-
     Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const TaxiWaitingScreen()),
+      MaterialPageRoute(
+        builder: (_) => TaxiWaitingScreen(
+          createParams: TaxiTripCreateParams(
+            pickupAddress: _pickupController.text,
+            dropoffAddress: _dropoffController.text,
+            pickupLat: pickup.latitude,
+            pickupLng: pickup.longitude,
+            dropoffLat: dropoff.latitude,
+            dropoffLng: dropoff.longitude,
+            distanceKm: _distanceKm,
+            taxiType: _selectedTaxiType.toApiName,
+          ),
+        ),
+      ),
     );
   }
 
   @override
   void dispose() {
+    _searchDebounce?.cancel();
+    context.read<TaxiProvider>().removeListener(_onTaxiProviderChanged);
     _pickupController.dispose();
     _dropoffController.dispose();
     _dropoffFocus.dispose();
@@ -284,6 +334,16 @@ class _TaxiRequestScreenState extends State<TaxiRequestScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final activeRequest = context.watch<TaxiProvider>().currentRequest;
+    final hasActiveTrip = activeRequest != null &&
+        !activeRequest.isCompleted &&
+        !activeRequest.isCancelled;
+
+    final hideLocationFields = hasActiveTrip &&
+        (activeRequest.hasAssignedDriver || activeRequest.isPending);
+    final showPendingBanner = hasActiveTrip && activeRequest.isPending;
+    final showAcceptedBanner = hasActiveTrip && activeRequest.hasAssignedDriver;
+
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
@@ -307,16 +367,57 @@ class _TaxiRequestScreenState extends State<TaxiRequestScreen> {
             // ── خلفية الخريطة (مع الإحداثيات والمسار) ──
             TaxiMapWidget(
               onMapCreated: (controller) => _mapController = controller,
-              pickupLocation: _pickupCoord,
-              dropoffLocation: _dropoffCoord,
-              routePoints: _routePoints,
-              showCrosshair: _pickupCoord == null,
-              onMapTap: _onMapTapped,
-              onPickupDragEnd: _onPickupDragEnd,
-              onDropoffDragEnd: _onDropoffDragEnd,
+              pickupLocation: hideLocationFields ? null : _pickupCoord,
+              dropoffLocation: hideLocationFields ? null : _dropoffCoord,
+              routePoints: hideLocationFields ? null : _routePoints,
+              showCrosshair: !hideLocationFields && _pickupCoord == null,
+              onMapTap: hideLocationFields ? null : _onMapTapped,
+              onPickupDragEnd: hideLocationFields ? null : _onPickupDragEnd,
+              onDropoffDragEnd: hideLocationFields ? null : _onDropoffDragEnd,
             ),
 
+            if (showAcceptedBanner)
+              Positioned(
+                top: 16,
+                left: 20,
+                right: 20,
+                child: _ActiveTripBanner(
+                  request: activeRequest,
+                  onTrack: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const TaxiLiveTrackingScreen(),
+                      ),
+                    );
+                  },
+                  onOpenOrders: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const TaxiSideMenuScreen(),
+                      ),
+                    );
+                  },
+                ),
+              ),
+
+            if (showPendingBanner && !hideLocationFields)
+              Positioned(
+                top: 16,
+                left: 20,
+                right: 20,
+                child: _PendingTripBanner(
+                  onOpenWaiting: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const TaxiWaitingScreen(),
+                      ),
+                    );
+                  },
+                ),
+              ),
+
             // ── حقول البحث العائمة ──
+            if (!hideLocationFields)
             Positioned(
               top: 16, left: 20, right: 20,
               child: Column(
@@ -372,16 +473,42 @@ class _TaxiRequestScreenState extends State<TaxiRequestScreen> {
                           BoxShadow(color: Colors.black26, blurRadius: 8),
                         ],
                       ),
-                      constraints: const BoxConstraints(maxHeight: 200),
+                      constraints: const BoxConstraints(maxHeight: 280),
                       child: ListView.builder(
                         shrinkWrap: true,
                         itemCount: _suggestions.length,
-                        itemBuilder: (_, i) => ListTile(
-                          dense: true,
-                          title: Text(_suggestions[i],
-                              style: const TextStyle(fontFamily: 'Cairo', fontSize: 13)),
-                          onTap: () => _selectSuggestion(_suggestions[i]),
-                        ),
+                        itemBuilder: (_, i) {
+                          final item = _suggestions[i];
+                          return ListTile(
+                            dense: true,
+                            leading: Icon(
+                              item.googlePlaceId != null
+                                  ? Icons.place_outlined
+                                  : Icons.location_city_outlined,
+                              size: 20,
+                              color: AppColors.primary,
+                            ),
+                            title: Text(
+                              item.displayName,
+                              style: const TextStyle(
+                                fontFamily: 'Cairo',
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            subtitle: item.subtitle != null &&
+                                    item.subtitle!.isNotEmpty
+                                ? Text(
+                                    item.subtitle!,
+                                    style: const TextStyle(
+                                      fontFamily: 'Cairo',
+                                      fontSize: 11,
+                                    ),
+                                  )
+                                : null,
+                            onTap: () => _selectSuggestion(item),
+                          );
+                        },
                       ),
                     ),
                 ],
@@ -389,7 +516,7 @@ class _TaxiRequestScreenState extends State<TaxiRequestScreen> {
             ),
 
             // ── زر "اطلب رحلة" (يظهر بعد تحديد الوجهة) ──
-            if (_hasBothLocations && !_showCarSelection)
+            if (!hideLocationFields && _hasBothLocations && !_showCarSelection)
               Positioned(
                 bottom: 40, left: 20, right: 20,
                 child: SizedBox(
@@ -418,7 +545,7 @@ class _TaxiRequestScreenState extends State<TaxiRequestScreen> {
               ),
 
             // ── Bottom Sheet: اختيار السيارة (بعد الضغط على "اطلب رحلة") ──
-            if (_showCarSelection)
+            if (!hideLocationFields && _showCarSelection)
               Positioned(
                 bottom: 0, left: 0, right: 0,
                 child: AnimatedContainer(
@@ -549,30 +676,32 @@ class _TaxiRequestScreenState extends State<TaxiRequestScreen> {
                           ),
                           const SizedBox(height: 16),
 
-                          // ── بطاقة اقتصادي ──
                           _FareOptionCard(
-                            icon: Icons.local_taxi,
-                            iconColor: AppColors.success,
-                            title: 'اقتصادي',
-                            subtitle: '4 مقاعد، قياسي',
-                            price: '$_fareEconomic د.ع',
-                            isSelected: _selectedType == TaxiType.economic,
-                            onTap: () => setState(() => _selectedType = TaxiType.economic),
+                            type: TaxiType.tuktuk,
+                            price: '$_fareTuktuk د.ع',
+                            isSelected: _selectedTaxiType == TaxiType.tuktuk,
+                            onTap: () => setState(
+                              () => _selectedTaxiType = TaxiType.tuktuk,
+                            ),
                           ),
                           const SizedBox(height: 10),
-
-                          // ── بطاقة سوبر ──
                           _FareOptionCard(
-                            icon: Icons.directions_car,
-                            iconColor: AppColors.primary,
-                            title: 'سوبر',
-                            subtitle: 'حديث (2020+)، تقييم عالي',
-                            price: '$_fareSuper د.ع',
-                            isSelected: _selectedType == TaxiType.superTaxiType,
-                            onTap: () => setState(() => _selectedType = TaxiType.superTaxiType),
+                            type: TaxiType.wazz,
+                            price: '$_fareWazz د.ع',
+                            isSelected: _selectedTaxiType == TaxiType.wazz,
+                            onTap: () => setState(
+                              () => _selectedTaxiType = TaxiType.wazz,
+                            ),
                           ),
-                          const SizedBox(height: 14),
-
+                          const SizedBox(height: 10),
+                          _FareOptionCard(
+                            type: TaxiType.economic,
+                            price: '$_fareEconomic د.ع',
+                            isSelected: _selectedTaxiType == TaxiType.economic,
+                            onTap: () => setState(
+                              () => _selectedTaxiType = TaxiType.economic,
+                            ),
+                          ),
                           const SizedBox(height: 16),
 
                           // ── زر "تأكيد وطلب" بتدرج احترافي ──
@@ -672,7 +801,6 @@ class _TaxiRequestScreenState extends State<TaxiRequestScreen> {
       if (_pickupCoord != null) {
         _fetchRoute(_pickupCoord!, latlng);
       }
-      // الرجوع إلى حقل الانطلاق
       setState(() => _isSettingPickupByTap = true);
     }
   }
@@ -745,28 +873,9 @@ class _TaxiRequestScreenState extends State<TaxiRequestScreen> {
     }
   }
 
-  /// تحويل إحداثيات (lat,lng) إلى عنوان نصي عبر Mapbox Reverse Geocoding
-  Future<String> _reverseGeocode(LatLng latlng) async {
-    final token = AppConfig.effectiveMapboxPublicToken;
-    if (token.isNotEmpty && token.startsWith('pk.')) {
-      try {
-        final uri = Uri.parse(
-          'https://api.mapbox.com/geocoding/v5/mapbox.places/'
-          '${latlng.longitude},${latlng.latitude}.json'
-          '?language=ar&access_token=$token',
-        );
-        final response = await http.get(uri).timeout(const Duration(seconds: 8));
-        if (response.statusCode == 200) {
-          final data = jsonDecode(response.body);
-          final features = data['features'] as List?;
-          if (features != null && features.isNotEmpty) {
-            return features[0]['place_name']?.toString() ?? 'موقع محدد';
-          }
-        }
-      } catch (_) {}
-    }
-    return '${latlng.latitude.toStringAsFixed(4)}, ${latlng.longitude.toStringAsFixed(4)}';
-  }
+  /// تحويل الإحداثيات إلى عنوان نصي (Google Geocoding).
+  Future<String> _reverseGeocode(LatLng latlng) =>
+      TaxiPlacesService.reverseGeocode(latlng);
 
   Widget _buildSearchField({
     required TextEditingController controller,
@@ -815,6 +924,164 @@ class _TaxiRequestScreenState extends State<TaxiRequestScreen> {
             const SizedBox(width: 8),
             trailing,
           ],
+        ],
+      ),
+    );
+  }
+}
+
+class _ActiveTripBanner extends StatelessWidget {
+  final TaxiRequest request;
+  final VoidCallback onTrack;
+  final VoidCallback onOpenOrders;
+
+  const _ActiveTripBanner({
+    required this.request,
+    required this.onTrack,
+    required this.onOpenOrders,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.1),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.check_circle, color: AppColors.success, size: 22),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  request.isPickedUp
+                      ? 'رحلتك جارية الآن'
+                      : 'السائق قبل طلبك',
+                  style: const TextStyle(
+                    fontFamily: 'Cairo',
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'تم إخفاء موقع الانطلاق والوجهة — تابع السائق من الخريطة.',
+            style: TextStyle(
+              fontFamily: 'Cairo',
+              fontSize: 13,
+              color: AppColors.textSecondary,
+            ),
+          ),
+          const SizedBox(height: 14),
+          SizedBox(
+            height: 48,
+            child: ElevatedButton.icon(
+              onPressed: onTrack,
+              icon: const Icon(Icons.map_rounded, color: Colors.white),
+              label: const Text(
+                'تتبع السائق',
+                style: TextStyle(
+                  fontFamily: 'Cairo',
+                  fontWeight: FontWeight.w700,
+                  color: Colors.white,
+                ),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          TextButton(
+            onPressed: onOpenOrders,
+            child: const Text(
+              'فتح طلبي الحالي',
+              style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w600),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PendingTripBanner extends StatelessWidget {
+  final VoidCallback onOpenWaiting;
+
+  const _PendingTripBanner({required this.onOpenWaiting});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.1),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.hourglass_top, color: AppColors.accent, size: 22),
+              SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'لديك طلب قيد البحث عن سائق',
+                  style: TextStyle(
+                    fontFamily: 'Cairo',
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            height: 44,
+            child: OutlinedButton(
+              onPressed: onOpenWaiting,
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppColors.primary,
+                side: const BorderSide(color: AppColors.primary),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              child: const Text(
+                'عرض شاشة الانتظار',
+                style: TextStyle(
+                  fontFamily: 'Cairo',
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -883,20 +1150,16 @@ class _TaxiMenuButton extends StatelessWidget {
   }
 }
 
-// ── بطاقة خيار الأجرة ──
 class _FareOptionCard extends StatelessWidget {
-  final IconData icon;
-  final Color iconColor;
-  final String title;
-  final String subtitle;
+  final TaxiType type;
   final String price;
   final bool isSelected;
   final VoidCallback onTap;
 
   const _FareOptionCard({
-    required this.icon, required this.iconColor,
-    required this.title, required this.subtitle,
-    required this.price, required this.isSelected,
+    required this.type,
+    required this.price,
+    required this.isSelected,
     required this.onTap,
   });
 
@@ -917,47 +1180,32 @@ class _FareOptionCard extends StatelessWidget {
         ),
         child: Row(
           children: [
-            Container(
-              width: 64, height: 48,
-              decoration: BoxDecoration(
-                color: const Color(0xFFEEEEEE),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Icon(icon, color: iconColor, size: 32),
-            ),
+            TaxiTypeImage(type: type, width: 64, height: 64),
             const SizedBox(width: 16),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    children: [
-                      Text(title,
-                          style: const TextStyle(
-                              fontFamily: 'Cairo', fontSize: 16, fontWeight: FontWeight.w600)),
-                      if (title == 'اقتصادي') ...[
-                        const SizedBox(width: 8),
-                        const Icon(Icons.group, size: 14, color: AppColors.primary),
-                        const SizedBox(width: 4),
-                        const Text('4',
-                            style: TextStyle(fontFamily: 'Cairo', fontSize: 12, fontWeight: FontWeight.w700)),
-                      ],
-                      if (title == 'سوبر') ...[
-                        const SizedBox(width: 8),
-                        const Icon(Icons.star, size: 14, color: AppColors.accent),
-                      ],
-                    ],
+                  Text(
+                    type.labelAr,
+                    style: const TextStyle(
+                      fontFamily: 'Cairo',
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
-                  Text(subtitle,
-                      style: TextStyle(fontFamily: 'Cairo', fontSize: 14, color: Colors.grey[600])),
                 ],
               ),
             ),
-            Text(price,
-                style: TextStyle(
-                  fontFamily: 'Cairo', fontSize: 16, fontWeight: FontWeight.w600,
-                  color: title == 'سوبر' && !isSelected ? Colors.black : AppColors.primary,
-                )),
+            Text(
+              price,
+              style: TextStyle(
+                fontFamily: 'Cairo',
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+                color: isSelected ? AppColors.primary : Colors.black87,
+              ),
+            ),
           ],
         ),
       ),

@@ -9,10 +9,11 @@ const {
   selectMany,
   hasColumn,
   saveRow,
+  updateRow,
   assertSupabaseAdmin,
 } = require('./common');
 const { ensureAppUser, getUserState } = require('./users');
-const { calculateFare } = require('../services/taxi_pricing_service');
+const { calculateFare, normalizeTaxiType } = require('../services/taxi_pricing_service');
 
 // ── دوال مساعدة ──────────────────────────────────────────────────
 
@@ -40,6 +41,79 @@ function readTaxiMeta(row) {
     fareEconomic: Number(payload.fareEconomic ?? 0),
     fareSuper: Number(payload.fareSuper ?? 0),
   };
+}
+
+function formatTaxiRequestForClient(row) {
+  if (!row) return null;
+  const meta = readTaxiMeta(row);
+  const payload = meta.payload;
+  const vehicleInfo = String(row.vehicle_info ?? payload.driverVehicleInfo ?? '').trim();
+  let vehicleModel = String(payload.vehicleModel ?? '').trim();
+  let plateNumber = String(payload.plateNumber ?? '').trim();
+  if ((!vehicleModel || !plateNumber) && vehicleInfo.includes(' / ')) {
+    const parts = vehicleInfo.split(' / ').map((p) => p.trim()).filter(Boolean);
+    if (!vehicleModel && parts.length > 0) vehicleModel = parts[0];
+    if (!plateNumber && parts.length > 1) plateNumber = parts[parts.length - 1];
+  } else if (!vehicleModel && vehicleInfo) {
+    vehicleModel = vehicleInfo;
+  }
+
+  return {
+    ...payload,
+    id: meta.id,
+    statusKey: meta.statusKey,
+    statusAr: payload.statusAr || 'بانتظار سائق',
+    customerPhone: meta.customerPhone || payload.customerPhone || '',
+    driverPhone: meta.driverPhone || payload.driverPhone || '',
+    driverName: String(row.driver_name ?? payload.driverName ?? '').trim(),
+    driverVehicleInfo: vehicleInfo || null,
+    vehicleModel: vehicleModel || null,
+    plateNumber: plateNumber || null,
+    taxiType: meta.taxiType || payload.taxiType || 'economic',
+    fare: meta.fare || payload.fare || 0,
+    fareEconomic: meta.fareEconomic || payload.fareEconomic || 0,
+    fareSuper: meta.fareSuper || payload.fareSuper || 0,
+    pickupAddress: meta.pickupAddress || payload.pickupAddress || '',
+    dropoffAddress: meta.dropoffAddress || payload.dropoffAddress || '',
+    pickupLat: meta.pickupLat || payload.pickupLat || 0,
+    pickupLng: meta.pickupLng || payload.pickupLng || 0,
+    dropoffLat: meta.dropoffLat || payload.dropoffLat || 0,
+    dropoffLng: meta.dropoffLng || payload.dropoffLng || 0,
+    distanceKm: meta.distanceKm || payload.distanceKm || 0,
+    driverLat: Number(payload.driverLat ?? 0) || null,
+    driverLng: Number(payload.driverLng ?? 0) || null,
+  };
+}
+
+async function enrichTaxiRequestForClient(row) {
+  const base = formatTaxiRequestForClient(row);
+  if (!base) return null;
+
+  const driverPhone = String(base.driverPhone || '').trim();
+  if (!driverPhone) return base;
+
+  try {
+    const state = await getUserState(driverPhone);
+    const profile = state?.driverProfile || {};
+    const lat = Number(profile.latitude ?? profile.lat ?? 0);
+    const lng = Number(profile.longitude ?? profile.lng ?? 0);
+    if (lat && lng) {
+      base.driverLat = lat;
+      base.driverLng = lng;
+    }
+    if (!base.plateNumber) {
+      base.plateNumber = String(profile.plateNumber ?? profile.plate ?? '').trim() || null;
+    }
+    if (!base.vehicleModel) {
+      base.vehicleModel = String(
+        profile.vehicleModel ?? profile.vehicle ?? profile.carModel ?? ''
+      ).trim() || null;
+    }
+  } catch (e) {
+    console.error('taxi enrich driver profile error:', e?.message || e);
+  }
+
+  return base;
 }
 
 /**
@@ -111,7 +185,7 @@ async function createTaxiRequest(customerPhone, data = {}) {
   const requestId = uuidv4();
   const requestNumber = generateRequestNumber();
   const distanceKm = Math.max(Number(data.distanceKm) || 0, 0);
-  const taxiType = String(data.taxiType || 'economic').trim();
+  const taxiType = normalizeTaxiType(data.taxiType);
 
   // حساب السعر تلقائياً
   const { fareEconomic, fareSuper, fare } = calculateFare(distanceKm, taxiType);
@@ -180,10 +254,20 @@ async function createTaxiRequest(customerPhone, data = {}) {
     id: requestId,
     requestId,
     requestNumber,
-    status: 'pending',
+    statusKey: 'pending',
+    statusAr: 'بانتظار سائق',
+    pickupAddress: requestPayload.pickupAddress,
+    dropoffAddress: requestPayload.dropoffAddress,
+    pickupLat: requestPayload.pickupLat,
+    pickupLng: requestPayload.pickupLng,
+    dropoffLat: requestPayload.dropoffLat,
+    dropoffLng: requestPayload.dropoffLng,
+    distanceKm,
+    taxiType,
     fare,
     fareEconomic,
     fareSuper,
+    customerPhone: normalizedPhone,
   };
 }
 
@@ -207,6 +291,7 @@ async function acceptTaxiRequest(driverPhone, requestId, data = {}) {
   const vehicleInfo = [vehicleModel, plateNumber].filter(Boolean).join(' / ');
 
   const meta = readTaxiMeta(row);
+  const acceptedAt = nowIso();
   const nextPayload = {
     ...meta.payload,
     statusKey: 'accepted',
@@ -215,22 +300,31 @@ async function acceptTaxiRequest(driverPhone, requestId, data = {}) {
     driverName,
     driverPhone: normalizedDriver,
     driverVehicleInfo: vehicleInfo || null,
-    acceptedAt: nowIso(),
-    updatedAt: nowIso(),
+    vehicleModel: vehicleModel || null,
+    plateNumber: plateNumber || null,
+    acceptedAt,
+    updatedAt: acceptedAt,
   };
 
-  const payload = {
-    id,
-    driver_phone: normalizedDriver,
-    driver_name: driverName,
-    vehicle_info: vehicleInfo || null,
-    status_key: 'accepted',
-    request_payload: nextPayload,
-    accepted_at: nowIso(),
-    updated_at: nowIso(),
-  };
+  const supabase = assertSupabaseAdmin();
+  const { data: updated, error } = await supabase
+    .from('taxi_requests')
+    .update({
+      driver_phone: normalizedDriver,
+      driver_name: driverName,
+      vehicle_info: vehicleInfo || null,
+      status_key: 'accepted',
+      request_payload: nextPayload,
+      accepted_at: acceptedAt,
+      updated_at: acceptedAt,
+    })
+    .eq('id', id)
+    .eq('status_key', 'pending')
+    .select()
+    .maybeSingle();
 
-  await saveRow('taxi_requests', payload, 'id');
+  if (error) throw new Error(error.message);
+  if (!updated) throw new Error('Request is not available for acceptance.');
 
   // إشعار للزبون
   try {
@@ -240,7 +334,7 @@ async function acceptTaxiRequest(driverPhone, requestId, data = {}) {
     console.error('taxi accept push error:', e?.message || e);
   }
 
-  return readTaxiMeta(await selectSingle('taxi_requests', 'id', id));
+  return formatTaxiRequestForClient(updated);
 }
 
 // ── رفض السائق ───────────────────────────────────────────────────
@@ -273,11 +367,10 @@ async function rejectTaxiRequest(driverPhone, requestId) {
     updatedAt: nowIso(),
   };
 
-  await saveRow('taxi_requests', {
-    id,
+  await updateRow('taxi_requests', 'id', id, {
     request_payload: nextPayload,
     updated_at: nowIso(),
-  }, 'id');
+  });
 
   // البحث عن سائق بديل تلقائياً
   try {
@@ -322,21 +415,25 @@ async function updateTaxiRequestStatus(actorPhone, requestId, statusKey) {
   }
 
   // التحقق من التسلسل الصحيح للحالات
-  const allowedStatuses = ['arrived', 'picked_up', 'completed', 'cancelled'];
+  const allowedStatuses = [
+    'arrived', 'picked_up', 'completed', 'cancelled', 'accepted', 'cancel_requested',
+  ];
   if (!allowedStatuses.includes(statusKey)) {
     throw new Error(`Invalid status key: ${statusKey}.`);
   }
 
   const currentStatus = meta.statusKey;
   const validTransitions = {
-    accepted: ['arrived', 'cancelled'],
-    arrived: ['picked_up', 'cancelled'],
-    picked_up: ['completed', 'cancelled'],
+    accepted: ['on_way', 'arrived', 'cancelled', 'cancel_requested'],
+    arrived: ['picked_up', 'cancelled', 'cancel_requested'],
+    picked_up: ['completed'],
     pending: ['cancelled'],
+    cancel_requested: ['cancelled', 'accepted'],
+    on_way: ['arrived', 'cancelled', 'cancel_requested'],
   };
   const allowedNext = validTransitions[currentStatus] || [];
 
-  if (statusKey !== 'cancelled' && !allowedNext.includes(statusKey)) {
+  if (!allowedNext.includes(statusKey)) {
     throw new Error(`Cannot transition from ${currentStatus} to ${statusKey}.`);
   }
 
@@ -346,18 +443,18 @@ async function updateTaxiRequestStatus(actorPhone, requestId, statusKey) {
     updatedAt: nowIso(),
   };
 
-  const updateFields = {
-    id,
+  const dbUpdate = {
     status_key: statusKey,
     request_payload: nextPayload,
     updated_at: nowIso(),
   };
 
   if (statusKey === 'completed') {
-    nextPayload.completedAt = nowIso();
+    const completedAt = nowIso();
+    nextPayload.completedAt = completedAt;
     nextPayload.cashCollected = true;
-    updateFields.completed_at = nowIso();
-    updateFields.cash_collected = true;
+    dbUpdate.completed_at = completedAt;
+    dbUpdate.cash_collected = true;
   }
 
   if (statusKey === 'arrived') {
@@ -372,10 +469,12 @@ async function updateTaxiRequestStatus(actorPhone, requestId, statusKey) {
     nextPayload.cancellationReason = row.status_key === 'pending'
       ? 'ألغى الزبون الطلب'
       : 'ملغي';
-    updateFields.cancellation_reason = nextPayload.cancellationReason;
+    dbUpdate.cancellation_reason = nextPayload.cancellationReason;
   }
 
-  await saveRow('taxi_requests', updateFields, 'id');
+  dbUpdate.request_payload = nextPayload;
+
+  await updateRow('taxi_requests', 'id', id, dbUpdate);
 
   // إشعارات
   try {
@@ -408,34 +507,56 @@ async function cancelTaxiRequest(customerPhone, requestId, reason) {
   }
 
   const currentStatus = meta.statusKey;
-  if (currentStatus === 'completed') {
-    throw new Error('Cannot cancel a completed request.');
+
+  if (currentStatus === 'completed' || currentStatus === 'cancelled') {
+    throw new Error('لا يمكن إلغاء هذا الطلب.');
+  }
+  if (currentStatus === 'picked_up') {
+    throw new Error('لا يمكن الإلغاء بعد بدء الرحلة.');
   }
 
+  const cancellableStatuses = [
+    'pending', 'accepted', 'on_way', 'arrived', 'cancel_requested',
+  ];
+  if (!cancellableStatuses.includes(currentStatus)) {
+    throw new Error('لا يمكن إلغاء هذا الطلب حالياً.');
+  }
+
+  const cancelledAt = nowIso();
   const nextPayload = {
     ...meta.payload,
     statusKey: 'cancelled',
-    statusAr: reason || 'ألغى الزبون الطلب',
-    cancellationReason: reason || 'ألغى الزبون الطلب',
-    cancelledAt: nowIso(),
-    updatedAt: nowIso(),
+    statusAr: 'ملغي',
+    cancellationReason: 'ألغى الزبون الطلب',
+    cancelledAt,
+    updatedAt: cancelledAt,
   };
 
-  await saveRow('taxi_requests', {
-    id,
-    status_key: 'cancelled',
-    request_payload: nextPayload,
-    cancellation_reason: reason || 'ألغى الزبون الطلب',
-    updated_at: nowIso(),
-  }, 'id');
+  const supabase = assertSupabaseAdmin();
+  const { data: updated, error } = await supabase
+    .from('taxi_requests')
+    .update({
+      status_key: 'cancelled',
+      request_payload: nextPayload,
+      cancellation_reason: null,
+      updated_at: cancelledAt,
+    })
+    .eq('id', id)
+    .in('status_key', cancellableStatuses)
+    .select()
+    .maybeSingle();
 
-  return readTaxiMeta(await selectSingle('taxi_requests', 'id', id));
+  if (error) throw new Error(error.message);
+  if (!updated) throw new Error('لا يمكن إلغاء هذا الطلب حالياً.');
+
+  return formatTaxiRequestForClient(updated);
 }
 
 // ── البحث عن سائقين قريبين ────────────────────────────────────────
 
 async function getNearbyDrivers(pickupLat, pickupLng, taxiType = 'economic', excludeDriverIds = [], radiusKm = 5) {
   const supabase = assertSupabaseAdmin();
+  const requestedType = normalizeTaxiType(taxiType);
 
   // الحصول على جميع مستخدمين دور driver
   const { data: appUsers, error } = await supabase
@@ -464,9 +585,8 @@ async function getNearbyDrivers(pickupLat, pickupLng, taxiType = 'economic', exc
     const services = profile.services || {};
     if (services.taxi === false) continue;
 
-    // تحقق من taxiType
-    const driverTaxiType = String(profile.taxiType || 'economic').trim();
-    if (driverTaxiType !== taxiType) continue;
+    const driverType = normalizeTaxiType(profile.taxiType);
+    if (driverType !== requestedType) continue;
 
     // حساب المسافة باستخدام Haversine
     const driverLat = Number(profile.latitude ?? profile.lat ?? 0);
@@ -481,7 +601,7 @@ async function getNearbyDrivers(pickupLat, pickupLng, taxiType = 'economic', exc
       currentLat: driverLat,
       currentLng: driverLng,
       name: profile.name || '',
-      taxiType: profile.taxiType || 'economic',
+      taxiType: driverType,
       vehicleModel: profile.vehicleModel || '',
       plateNumber: profile.plateNumber || '',
       color: profile.color || '',
@@ -507,6 +627,7 @@ async function getNearbyDrivers(pickupLat, pickupLng, taxiType = 'economic', exc
 async function getDriverIncomingRequests(driverPhone, lat, lng, taxiType, radiusKm = 15) {
   const normalizedDriver = await resolvePhoneKey(driverPhone);
   const hasLocation = lat && lng;
+  const driverType = normalizeTaxiType(taxiType);
 
   const rows = await selectMany(
     'taxi_requests',
@@ -516,15 +637,29 @@ async function getDriverIncomingRequests(driverPhone, lat, lng, taxiType, radius
 
   if (!Array.isArray(rows) || rows.length === 0) return [];
 
-  const candidates = [];
+  const normalizeType = (value) => normalizeTaxiType(value);
+
+  const matchesType = (row, meta) => {
+    const requestType = normalizeType(
+      row.taxi_type || meta.taxiType || meta.payload?.taxiType
+    );
+    return requestType === normalizeType(driverType);
+  };
+
+  const buildCandidate = (row, meta, roundedDistance) => ({
+    ...meta.payload,
+    id: meta.id,
+    statusKey: meta.statusKey,
+    statusAr: meta.payload.statusAr || 'بانتظار سائق',
+    distanceKm: roundedDistance,
+  });
+
+  const withinRadius = [];
+  const allMatching = [];
 
   for (const row of rows) {
     const meta = readTaxiMeta(row);
-
-    // تطابق نوع التكسي (اقتصادي / سوبر)
-    const requestType = String(meta.taxiType || 'economic').trim();
-    const driverType = String(taxiType || 'economic').trim();
-    if (requestType !== driverType) continue;
+    if (!matchesType(row, meta)) continue;
 
     const rejectedIds = Array.isArray(meta.payload.rejectedByDriverIds)
       ? meta.payload.rejectedByDriverIds
@@ -536,22 +671,19 @@ async function getDriverIncomingRequests(driverPhone, lat, lng, taxiType, radius
     }
 
     let roundedDistance = 0;
+    let inRadius = true;
     if (hasLocation && meta.pickupLat && meta.pickupLng) {
       const distance = haversineDistance(lat, lng, meta.pickupLat, meta.pickupLng);
-      // إذا كان الموقع محدداً — نفلتر بالمسافة
-      if (distance > radiusKm) continue;
       roundedDistance = Math.round(distance * 100) / 100;
+      inRadius = distance <= radiusKm;
     }
-    // إذا لم يكن الموقع محدداً — نعرض الطلب بدون فلتر مسافة
 
-    const flattened = {
-      ...meta.payload,
-      id: meta.id,
-      distanceKm: roundedDistance,
-    };
-
-    candidates.push(flattened);
+    const item = buildCandidate(row, meta, roundedDistance);
+    allMatching.push(item);
+    if (inRadius) withinRadius.push(item);
   }
+
+  const candidates = withinRadius.length > 0 ? withinRadius : allMatching;
 
   if (hasLocation) {
     candidates.sort((a, b) => a.distanceKm - b.distanceKm);
@@ -590,9 +722,6 @@ async function getActiveDriverPhonesByTaxiType(taxiType = 'economic') {
     const services = profile.services || {};
     if (services.taxi === false) continue;
 
-    const driverTaxiType = String(profile.taxiType || 'economic').trim();
-    if (driverTaxiType !== taxiType) continue;
-
     result.push(phone);
   }
 
@@ -606,7 +735,7 @@ async function getCustomerActiveRequest(customerPhone) {
   const variants = getPhoneVariants(normalizedPhone);
   if (variants.length === 0) return null;
 
-  const activeStatuses = ['pending', 'accepted', 'arrived', 'picked_up'];
+  const activeStatuses = ['pending', 'accepted', 'arrived', 'picked_up', 'cancel_requested', 'on_way'];
   const rows = await selectMany(
     'taxi_requests',
     [
@@ -624,7 +753,7 @@ async function getDriverActiveRequest(driverPhone) {
   const variants = getPhoneVariants(normalizedDriver);
   if (variants.length === 0) return null;
 
-  const activeStatuses = ['accepted', 'arrived', 'picked_up'];
+  const activeStatuses = ['accepted', 'arrived', 'picked_up', 'cancel_requested', 'on_way'];
   const rows = await selectMany(
     'taxi_requests',
     [
@@ -644,7 +773,10 @@ async function getCustomerHistory(customerPhone) {
 
   return selectMany(
     'taxi_requests',
-    [{ method: 'in', column: 'phone', value: variants }],
+    [
+      { method: 'in', column: 'phone', value: variants },
+      { method: 'in', column: 'status_key', value: ['completed', 'cancelled'] },
+    ],
     { column: 'created_at', ascending: false }
   );
 }
@@ -656,7 +788,10 @@ async function getDriverHistory(driverPhone) {
 
   return selectMany(
     'taxi_requests',
-    [{ method: 'in', column: 'driver_phone', value: variants }],
+    [
+      { method: 'in', column: 'driver_phone', value: variants },
+      { method: 'in', column: 'status_key', value: ['completed', 'cancelled'] },
+    ],
     { column: 'created_at', ascending: false }
   );
 }
@@ -710,6 +845,8 @@ async function setDriverOnlineStatus(driverPhone, isOnline) {
 }
 
 module.exports = {
+  formatTaxiRequestForClient,
+  enrichTaxiRequestForClient,
   readTaxiMeta,
   generateRequestNumber,
   haversineDistance,

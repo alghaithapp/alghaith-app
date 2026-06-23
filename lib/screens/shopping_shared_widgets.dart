@@ -4,9 +4,10 @@ import 'package:flutter/material.dart';
 import '../core/theme/app_colors.dart';
 import '../models/app_models.dart';
 import '../services/image_storage_service.dart';
-import '../utils/helpers.dart';
 import '../utils/merchant_profile_fields.dart';
 import '../utils/extensions.dart';
+import '../utils/chat_navigation.dart';
+import '../utils/guest_gate.dart';
 import '../widgets/app_image.dart';
 import 'shopping_store_menu_screen.dart';
 
@@ -85,7 +86,7 @@ class ShopRestaurantCard extends StatelessWidget {
 
     final primaryOrange = const Color(0xFFF5A01D);
     final customerPhone = MerchantProfileFields.customerVisiblePhone(profile);
-    final customerWhatsApp = MerchantProfileFields.customerVisibleWhatsApp(profile);
+    final storeName = MerchantProfileFields.name(profile);
 
     final productsCount = profile['totalProducts'] ?? products.length;
     final dynamic completedOrdersRaw = profile['completedOrders'];
@@ -398,33 +399,20 @@ class ShopRestaurantCard extends StatelessWidget {
                       child: ShopActionBtn(
                         label: 'مراسلة',
                         icon: Icons.chat_bubble_outline_rounded,
-                        color: Colors.blueGrey,
+                        color: AppColors.primary,
                         onTap: () {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('ميزة المراسلة قريباً...', style: TextStyle(fontFamily: 'Cairo'))),
+                          if (!GuestGate.requireAccount(
+                            context,
+                            message: 'سجّل دخولك للتواصل مع المتجر.',
+                          )) {
+                            return;
+                          }
+                          if (customerPhone.isEmpty) return;
+                          ChatNavigation.openStoreChat(
+                            context,
+                            merchantPhone: customerPhone,
+                            storeName: storeName,
                           );
-                        },
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: ShopActionBtn(
-                        label: 'اتصال',
-                        icon: Icons.phone_outlined,
-                        color: Colors.green,
-                        onTap: () {
-                          if (customerPhone.isNotEmpty) AppHelpers.makePhoneCall(customerPhone);
-                        },
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: ShopActionBtn(
-                        label: 'واتساب',
-                        icon: Icons.chat_outlined,
-                        color: const Color(0xFF25D366),
-                        onTap: () {
-                          if (customerWhatsApp.isNotEmpty) AppHelpers.launchWhatsApp(customerWhatsApp, 'مرحباً، أريد الاستفسار عن منتجاتكم.');
                         },
                       ),
                     ),

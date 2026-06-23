@@ -238,13 +238,9 @@ class AccountFullScreen extends StatelessWidget {
             _SectionCard(
               title: 'روابط سريعة',
               children: [
-                ElevatedButton.icon(
-                  onPressed: () => AppHelpers.launchWhatsApp(
-                    provider.merchantWhatsApp,
-                    'مرحباً، هذا ملفي الكامل',
-                  ),
-                  icon: const Icon(Icons.chat_rounded),
-                  label: const Text('مشاركة عبر واتساب'),
+                const Text(
+                  'يمكن للزبائن مراسلتك مباشرة داخل التطبيق من صفحة متجرك أو الطلبات.',
+                  style: TextStyle(fontFamily: 'Cairo', fontSize: 13),
                 ),
               ],
             ),

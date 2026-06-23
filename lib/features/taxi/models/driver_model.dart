@@ -42,7 +42,7 @@ class DriverModel {
     return {
       'phone': phone,
       'name': name,
-      'taxiType': taxiType.name,
+      'taxiType': taxiType.toApiName,
       'vehicleModel': vehicleModel,
       'plateNumber': plateNumber,
       'color': color,
@@ -62,10 +62,7 @@ class DriverModel {
     return DriverModel(
       phone: (map['phone'] as String?) ?? '',
       name: (map['name'] as String?) ?? '',
-      taxiType: TaxiType.values.firstWhere(
-        (e) => e.name == map['taxiType'],
-        orElse: () => TaxiType.economic,
-      ),
+      taxiType: TaxiTypeX.fromApiName(map['taxiType']?.toString()),
       vehicleModel: (map['vehicleModel'] as String?) ?? '',
       plateNumber: (map['plateNumber'] as String?) ?? '',
       color: (map['color'] as String?) ?? '',

@@ -7,8 +7,8 @@ import '../core/ui/app_bottom_nav_style.dart';
 import '../providers/app_provider.dart';
 import '../models/app_models.dart';
 import '../utils/extensions.dart';
-import '../utils/helpers.dart';
 import '../widgets/app_image.dart';
+import '../widgets/internal_contact_buttons.dart';
 import '../widgets/order_tracking_sheet.dart';
 
 class OrdersScreen extends StatefulWidget {
@@ -456,49 +456,12 @@ class _OrdersScreenState extends State<OrdersScreen> {
           ),
           if ((order.merchantPhone ?? '').isNotEmpty) ...[
             const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: () =>
-                        AppHelpers.makePhoneCall(order.merchantPhone!),
-                    icon: const Icon(CupertinoIcons.phone_fill, size: 16),
-                    label: const Text('اتصال بالتاجر',
-                        style: TextStyle(
-                            fontFamily: 'Cairo',
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold)),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: Colors.green,
-                      side: const BorderSide(color: Colors.green),
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10)),
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: () => AppHelpers.launchWhatsApp(
-                        order.merchantPhone!,
-                        'مرحباً، بخصوص طلبي (رقم ${order.id.length >= 5 ? order.id.substring(0, 5) : order.id}) من متجركم.'),
-                    icon: const Icon(Icons.chat_bubble_outline, size: 16),
-                    label: const Text('واتساب',
-                        style: TextStyle(
-                            fontFamily: 'Cairo',
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold)),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: const Color(0xFF25D366),
-                      side: const BorderSide(color: Color(0xFF25D366)),
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10)),
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                    ),
-                  ),
-                ),
-              ],
+            InternalContactButtons.order(
+              orderId: order.id,
+              otherPartyName: order.merchantStoreName ?? 'التاجر',
+              receiverPhone: order.merchantPhone,
+              chatLabel: 'مراسلة التاجر',
+              callLabel: 'اتصال',
             ),
           ],
         ],

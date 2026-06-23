@@ -651,6 +651,13 @@ class AuthService extends ChangeNotifier {
     unawaited(AccountRepository.instance.clearSnapshot(phone));
   }
 
+  void enterGuestMode() {
+    _isGuestMode = true;
+    _userRole ??= 'customer';
+    _accountType ??= 'marketplace';
+    notifyListeners();
+  }
+
   void resetAll() {
     _isRestoring = false;
     _isLoggingIn = false;

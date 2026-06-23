@@ -1,68 +1,52 @@
-const { calculateFare } = require('../services/taxi_pricing_service');
+const { calculateFare, fareForType } = require('../services/taxi_pricing_service');
 
 describe('Taxi Pricing Service', () => {
+  describe('fareForType', () => {
+    it('tuktuk up to 2km is 1000', () => {
+      expect(fareForType(1.0, 'tuktuk')).toBe(1000);
+      expect(fareForType(2.0, 'tuktuk')).toBe(1000);
+    });
+
+    it('tuktuk 3km is 1250', () => {
+      expect(fareForType(3.0, 'tuktuk')).toBe(1250);
+    });
+
+    it('wazz up to 2km is 1500', () => {
+      expect(fareForType(1.5, 'wazz')).toBe(1500);
+      expect(fareForType(2.0, 'wazz')).toBe(1500);
+    });
+
+    it('wazz 3km is 1800', () => {
+      expect(fareForType(3.0, 'wazz')).toBe(1800);
+    });
+
+    it('economic minimum 1500 for 1km', () => {
+      expect(fareForType(1.0, 'economic')).toBe(1500);
+      expect(fareForType(2.0, 'economic')).toBe(1500);
+    });
+
+    it('economic 3km is 2000', () => {
+      expect(fareForType(3.0, 'economic')).toBe(2000);
+    });
+
+    it('economic 5km is 3000', () => {
+      expect(fareForType(5.0, 'economic')).toBe(3000);
+    });
+
+    it('legacy super maps to economic pricing', () => {
+      expect(fareForType(1.0, 'super')).toBe(1500);
+    });
+
+    it('caps at 50000', () => {
+      expect(fareForType(200, 'economic')).toBe(50000);
+    });
+  });
+
   describe('calculateFare', () => {
-    it('returns minimum fare for very short distances', () => {
-      const result = calculateFare(0.5, 'economic');
-      expect(result.fareEconomic).toBeGreaterThanOrEqual(1000);
-      expect(result.fare).toBe(1000);
-    });
-
-    it('calculates economic fare correctly for 1km', () => {
-      const result = calculateFare(1.0, 'economic');
-      expect(result.fareEconomic).toBe(1000);
-      expect(result.fare).toBe(1000);
-    });
-
-    it('calculates economic fare correctly for 5km', () => {
-      const result = calculateFare(5.0, 'economic');
-      expect(result.fareEconomic).toBe(3000);
-      expect(result.fare).toBe(3000);
-    });
-
-    it('calculates economic fare correctly for 10km', () => {
-      const result = calculateFare(10.0, 'economic');
-      expect(result.fareEconomic).toBe(5500);
-      expect(result.fare).toBe(5500);
-    });
-
-    it('super fare is 30% more than economic', () => {
-      const result = calculateFare(10.0, 'super');
-      expect(result.fareSuper).toBeGreaterThan(result.fareEconomic);
-      expect(result.fare).toBe(result.fareSuper);
-    });
-
-    it('super fare for 10km rounds to nearest 250: 5500 * 1.3 = 7150, ceil(28.6)*250 = 7250', () => {
-      const result = calculateFare(10.0, 'super');
-      expect(result.fareSuper).toBe(7250);
-      expect(result.fare).toBe(7250);
-    });
-
-    it('rounds up to nearest 250', () => {
-      const result = calculateFare(1.1, 'economic');
-      expect(result.fareEconomic % 250).toBe(0);
-    });
-
-    it('caps at 50000 for economic', () => {
-      const result = calculateFare(200, 'economic');
-      expect(result.fare).toBe(50000);
-    });
-
-    it('caps at 50000 for super', () => {
-      const result = calculateFare(200, 'super');
-      expect(result.fare).toBe(50000);
-    });
-
-    it('super minimum fare is 1500', () => {
-      const result = calculateFare(0.1, 'super');
-      expect(result.fare).toBe(1500);
-    });
-
-    it('returns both fareEconomic and fareSuper fields', () => {
-      const result = calculateFare(5.0, 'economic');
-      expect(result).toHaveProperty('fareEconomic');
-      expect(result).toHaveProperty('fareSuper');
-      expect(result).toHaveProperty('fare');
+    it('returns fare for selected type', () => {
+      const result = calculateFare(3.0, 'tuktuk');
+      expect(result.fare).toBe(1250);
+      expect(result.fareEconomic).toBe(2000);
     });
   });
 });

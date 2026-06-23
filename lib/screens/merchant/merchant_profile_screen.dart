@@ -161,13 +161,7 @@ class MerchantProfileScreen extends StatelessWidget {
             const SizedBox(height: 12),
             _SectionCard(
               title: 'نماذج الأعمال',
-              trailing: TextButton(
-                onPressed: () => AppHelpers.launchWhatsApp(
-                  provider.merchantWhatsApp,
-                  'مرحباً، هذا ملف أعمالي للتواصل',
-                ),
-                child: const Text('مشاركة'),
-              ),
+              trailing: const SizedBox.shrink(),
               children: [
                 GridView.builder(
                   shrinkWrap: true,

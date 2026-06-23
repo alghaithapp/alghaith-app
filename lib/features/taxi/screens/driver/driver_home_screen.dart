@@ -6,6 +6,8 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../providers/app_provider.dart';
 import '../../models/taxi_request.dart';
 import '../../providers/taxi_provider.dart';
+import '../../widgets/taxi_type_image.dart';
+import '../../utils/taxi_driver_request_actions.dart';
 import '../../widgets/taxi_map_widget.dart';
 
 /// الشاشة الرئيسية للسائق — تعرض خريطة Google Maps حقيقية، الإحصائيات، وطلبات التكسي الواردة
@@ -17,7 +19,8 @@ class DriverHomeScreen extends StatefulWidget {
 }
 
 class _DriverHomeScreenState extends State<DriverHomeScreen> {
-  final latlong2.LatLng _baghdad = const latlong2.LatLng(32.9256, 44.7766);
+  bool _isAccepting = false;
+  bool _isRejecting = false;
 
   @override
   Widget build(BuildContext context) {
@@ -38,30 +41,51 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
 
     return Scaffold(
       backgroundColor: AppColors.scaffold,
-      body: Stack(
+      body: Column(
         children: [
-          TaxiMapWidget(
-            pickupLocation: pickup,
-            driverLocation: null,
-            zoom: 13.0,
-          ),
-          Positioned(
-            top: 0, left: 0, right: 0,
-            child: SafeArea(child: _buildAppBar(context, appProvider, driverName)),
-          ),
-          Positioned(
-            top: 112, left: 20, right: 20,
-            child: _buildStatsWidget(todayTrips, todayEarnings),
+          Expanded(
+            child: Stack(
+              children: [
+                TaxiMapWidget(
+                  pickupLocation: pickup,
+                  driverLocation: null,
+                  zoom: 13.0,
+                ),
+                Positioned(
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  child: SafeArea(
+                    child: _buildAppBar(context, appProvider, driverName),
+                  ),
+                ),
+                Positioned(
+                  top: 112,
+                  left: 20,
+                  right: 20,
+                  child: _buildStatsWidget(todayTrips, todayEarnings),
+                ),
+                Positioned(
+                  bottom: 20,
+                  right: 20,
+                  child: _buildRecenterFab(),
+                ),
+              ],
+            ),
           ),
           if (pendingRequests.isNotEmpty)
-            Positioned(
-              bottom: 20, left: 20, right: 20,
-              child: _buildNewRequestCard(context, appProvider, taxiProvider, pendingRequests.first),
+            SafeArea(
+              top: false,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+                child: _buildNewRequestCard(
+                  context,
+                  appProvider,
+                  taxiProvider,
+                  pendingRequests.first,
+                ),
+              ),
             ),
-          Positioned(
-            bottom: pendingRequests.isNotEmpty ? 280 : 100, right: 20,
-            child: _buildRecenterFab(),
-          ),
         ],
       ),
     );
@@ -317,6 +341,12 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
                   ),
                 ),
                 const Spacer(),
+                TaxiTypeImage(
+                  type: request.taxiType,
+                  width: 36,
+                  height: 36,
+                ),
+                const SizedBox(width: 8),
                 Container(
                   padding:
                       const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
@@ -464,73 +494,80 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
             Row(
               children: [
                 Expanded(
-                  child: GestureDetector(
-                    onTap: () => taxiProvider.rejectRequest(request.id),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      decoration: BoxDecoration(
-                        color: Colors.red.withValues(alpha: 0.08),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: const Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.close, color: Colors.red, size: 20),
-                          SizedBox(width: 6),
-                          Text(
-                            'رفض',
-                            style: TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w700,
-                              fontFamily: 'Cairo',
+                  child: ElevatedButton.icon(
+                    onPressed: _isRejecting || _isAccepting
+                        ? null
+                        : () async {
+                            setState(() => _isRejecting = true);
+                            await handleDriverRejectRequest(context, request);
+                            if (mounted) {
+                              setState(() => _isRejecting = false);
+                            }
+                          },
+                    icon: _isRejecting
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
                               color: Colors.red,
                             ),
-                          ),
-                        ],
+                          )
+                        : const Icon(Icons.close, color: Colors.red),
+                    label: const Text(
+                      'رفض',
+                      style: TextStyle(
+                        fontFamily: 'Cairo',
+                        fontWeight: FontWeight.w700,
+                        color: Colors.red,
+                      ),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.red.withValues(alpha: 0.08),
+                      foregroundColor: Colors.red,
+                      elevation: 0,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
                       ),
                     ),
                   ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
-                  child: GestureDetector(
-                    onTap: () async {
-                      final driverProfile = appProvider.driverProfile ?? const {};
-                      await taxiProvider.acceptRequest(
-                        request.id,
-                        driverName: (driverProfile['name'] as String?)?.trim(),
-                        vehicleModel: (driverProfile['vehicle'] as String?)?.trim(),
-                        plateNumber: (driverProfile['plateNumber'] as String?)?.trim(),
-                      );
-                    },
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      decoration: BoxDecoration(
-                        color: AppColors.success,
-                        borderRadius: BorderRadius.circular(12),
-                        boxShadow: [
-                          BoxShadow(
-                            color: AppColors.success.withValues(alpha: 0.3),
-                            blurRadius: 8,
-                            offset: const Offset(0, 3),
-                          ),
-                        ],
-                      ),
-                      child: const Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.check, color: Colors.white, size: 20),
-                          SizedBox(width: 6),
-                          Text(
-                            'قبول',
-                            style: TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w700,
-                              fontFamily: 'Cairo',
+                  child: ElevatedButton.icon(
+                    onPressed: _isRejecting || _isAccepting
+                        ? null
+                        : () async {
+                            setState(() => _isAccepting = true);
+                            await handleDriverAcceptRequest(context, request);
+                            if (mounted) {
+                              setState(() => _isAccepting = false);
+                            }
+                          },
+                    icon: _isAccepting
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
                               color: Colors.white,
                             ),
-                          ),
-                        ],
+                          )
+                        : const Icon(Icons.check, color: Colors.white),
+                    label: const Text(
+                      'قبول',
+                      style: TextStyle(
+                        fontFamily: 'Cairo',
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.success,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
                       ),
                     ),
                   ),

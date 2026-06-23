@@ -351,7 +351,7 @@ class MarketplaceCatalog {
   ];
 
   static const List<MarketplaceSubCategory> _carsSubCategories = [
-    MarketplaceSubCategory(id: 'taxi_request', titleAr: 'طلب تكسي', titleEn: 'Taxi Request', image: 'assets/images/car_taxi.png', browseMode: SubCategoryBrowseMode.catalog),
+    MarketplaceSubCategory(id: 'taxi_request', titleAr: 'طلب تكسي', titleEn: 'Taxi Request', image: 'assets/images/taxi_economy.png', browseMode: SubCategoryBrowseMode.catalog),
     MarketplaceSubCategory(id: 'car_request', titleAr: 'طلب سيارة', titleEn: 'Request Car', image: 'assets/images/car_request.png', browseMode: SubCategoryBrowseMode.catalog),
     MarketplaceSubCategory(id: 'car_buy', titleAr: 'شراء سيارة', titleEn: 'Buy Car', image: 'assets/images/car_buy.png', browseMode: SubCategoryBrowseMode.catalog),
     MarketplaceSubCategory(id: 'car_sell', titleAr: 'بيع سيارة', titleEn: 'Sell Car', image: 'assets/images/car_sell.png', browseMode: SubCategoryBrowseMode.catalog),

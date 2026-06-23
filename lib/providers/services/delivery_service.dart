@@ -16,6 +16,8 @@ class DeliveryService extends ChangeNotifier {
   Map<String, dynamic>? get courierProfile => _courierProfile;
   bool get hasCourierProfile =>
       CourierProfileFields.isComplete(_courierProfile);
+  bool get hasCourierRegistration =>
+      CourierProfileFields.name(_courierProfile).isNotEmpty;
   bool get isCourierApproved =>
       CourierProfileFields.isApproved(_courierProfile);
   bool get canUseCourierAccount => hasCourierProfile && isCourierApproved;

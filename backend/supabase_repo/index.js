@@ -15,6 +15,7 @@ const admin = require('./admin');
 const push_notifications = require('./push_notifications');
 const taxi = require('./taxi');
 const admin_roles = require('./admin_roles');
+const chat = require('./chat');
 
 module.exports = {
   // Common / Config
@@ -46,5 +47,8 @@ module.exports = {
 
   // Admin Roles
   ...admin_roles,
+
+  // Chat
+  ...chat,
 
 };

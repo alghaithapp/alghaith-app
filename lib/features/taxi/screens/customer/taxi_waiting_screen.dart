@@ -4,12 +4,41 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../providers/taxi_provider.dart';
+import '../../models/taxi_request.dart';
+import '../../widgets/taxi_type_image.dart';
 import 'taxi_live_tracking_screen.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../widgets/taxi_cancel_dialog.dart';
+import '../../../../providers/app_provider.dart';
 
-/// شاشة انتظار السائق — مستوحاة من _3/code.html
+/// بيانات إنشاء طلب جديد — تُمرَّر لشاشة الانتظار لبدء الإرسال فوراً.
+class TaxiTripCreateParams {
+  const TaxiTripCreateParams({
+    required this.pickupAddress,
+    required this.dropoffAddress,
+    required this.pickupLat,
+    required this.pickupLng,
+    required this.dropoffLat,
+    required this.dropoffLng,
+    required this.distanceKm,
+    required this.taxiType,
+  });
+
+  final String pickupAddress;
+  final String dropoffAddress;
+  final double pickupLat;
+  final double pickupLng;
+  final double dropoffLat;
+  final double dropoffLng;
+  final double distanceKm;
+  final String taxiType;
+}
+
+/// شاشة انتظار السائق
 class TaxiWaitingScreen extends StatefulWidget {
-  const TaxiWaitingScreen({super.key});
+  final TaxiTripCreateParams? createParams;
+
+  const TaxiWaitingScreen({super.key, this.createParams});
 
   @override
   State<TaxiWaitingScreen> createState() => _TaxiWaitingScreenState();
@@ -18,11 +47,53 @@ class TaxiWaitingScreen extends StatefulWidget {
 class _TaxiWaitingScreenState extends State<TaxiWaitingScreen> {
   Timer? _timer;
   int _secondsLeft = 120;
+  bool _isCreating = false;
+  String? _createError;
 
   @override
   void initState() {
     super.initState();
     _startTimer();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (widget.createParams != null) {
+        _submitRequest();
+      } else {
+        _startPolling();
+      }
+    });
+  }
+
+  Future<void> _submitRequest() async {
+    final params = widget.createParams;
+    if (params == null || _isCreating) return;
+    setState(() {
+      _isCreating = true;
+      _createError = null;
+    });
+
+    final provider = context.read<TaxiProvider>();
+    final request = await provider.createTaxiRequest(
+      pickupAddress: params.pickupAddress,
+      dropoffAddress: params.dropoffAddress,
+      pickupLat: params.pickupLat,
+      pickupLng: params.pickupLng,
+      dropoffLat: params.dropoffLat,
+      dropoffLng: params.dropoffLng,
+      distanceKm: params.distanceKm,
+      taxiType: params.taxiType,
+    );
+
+    if (!mounted) return;
+
+    if (request == null) {
+      setState(() {
+        _isCreating = false;
+        _createError = provider.error ?? 'تعذر إرسال الطلب، حاول مجدداً';
+      });
+      return;
+    }
+
+    setState(() => _isCreating = false);
     _startPolling();
   }
 
@@ -38,37 +109,56 @@ class _TaxiWaitingScreenState extends State<TaxiWaitingScreen> {
 
   void _startPolling() {
     final provider = context.read<TaxiProvider>();
-    provider.startPolling();
+    final phone = context.read<AppProvider>().authPhone;
+    provider.startPolling(phone: phone);
+    provider.loadActiveRequest();
   }
 
-  void _onCancelTrip() {
+  Future<void> _onCancelTrip() async {
+    final provider = context.read<TaxiProvider>();
+    final request = provider.currentRequest;
+    if (request == null || !request.canCustomerCancel) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'لا يمكن إلغاء الطلب حالياً',
+              style: TextStyle(fontFamily: 'Cairo'),
+            ),
+          ),
+        );
+      }
+      return;
+    }
+
+    final confirmed = await showTaxiCancelDialog(context);
+    if (confirmed != true || !mounted) return;
+
     _timer?.cancel();
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('إلغاء الرحلة',
-            style: TextStyle(fontFamily: 'Cairo')),
-        content: const Text('هل أنت متأكد من إلغاء الرحلة؟',
-            style: TextStyle(fontFamily: 'Cairo')),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('رجوع',
-                style: TextStyle(fontFamily: 'Cairo')),
+    final ok = await provider.cancelRequest(request.id);
+    if (!mounted) return;
+
+    if (ok) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'تم إلغاء الرحلة',
+            style: TextStyle(fontFamily: 'Cairo'),
           ),
-          TextButton(
-            onPressed: () {
-              context.read<TaxiProvider>().cancelRequest('', ''); // TODO: replace with actual requestId
-              Navigator.of(ctx).pop();
-              Navigator.of(context).pop();
-            },
-            child: const Text('تأكيد الإلغاء',
-                style: TextStyle(
-                    fontFamily: 'Cairo', color: Colors.red)),
+        ),
+      );
+      Navigator.of(context).pop();
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            provider.error ?? 'تعذر إلغاء الطلب',
+            style: const TextStyle(fontFamily: 'Cairo'),
           ),
-        ],
-      ),
-    );
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
   @override
@@ -92,9 +182,7 @@ class _TaxiWaitingScreenState extends State<TaxiWaitingScreen> {
           builder: (context, provider, _) {
             final request = provider.currentRequest;
 
-            // عند قبول السائق → انتقال إلى شاشة التتبع
             if (request != null && request.isAccepted) {
-              // التوجيه بعد إطار البناء
               WidgetsBinding.instance.addPostFrameCallback((_) {
                 if (mounted) {
                   _timer?.cancel();
@@ -107,7 +195,6 @@ class _TaxiWaitingScreenState extends State<TaxiWaitingScreen> {
               });
             }
 
-            // عند اكتمال الرحلة → انتقال إلى شاشة التقييم
             if (request != null && request.isCompleted) {
               WidgetsBinding.instance.addPostFrameCallback((_) {
                 if (mounted) {
@@ -121,9 +208,16 @@ class _TaxiWaitingScreenState extends State<TaxiWaitingScreen> {
               });
             }
 
+            final statusText = _createError != null
+                ? _createError!
+                : _isCreating
+                    ? 'جاري إرسال طلبك...'
+                    : 'جاري البحث عن سائق قريب...';
+            final waitingType = request?.taxiType ??
+                TaxiTypeX.fromApiName(widget.createParams?.taxiType);
+
             return Stack(
               children: [
-                // ── خلفية الخريطة ──
                 Container(
                   color: const Color(0xFFF3F3F3),
                   width: double.infinity,
@@ -132,8 +226,6 @@ class _TaxiWaitingScreenState extends State<TaxiWaitingScreen> {
                     painter: _MapGridPainter(),
                   ),
                 ),
-
-                // ── حالة الانتظار العائمة ──
                 Positioned(
                   top: 60,
                   left: 20,
@@ -163,21 +255,13 @@ class _TaxiWaitingScreenState extends State<TaxiWaitingScreen> {
                               shape: BoxShape.circle,
                               color: AppColors.accent,
                             ),
-                            child: Center(
-                              child: Container(
-                                width: 6,
-                                height: 6,
-                                decoration: const BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  color: AppColors.accent,
-                                ),
-                              ),
-                            ),
                           ),
                           const SizedBox(width: 12),
-                          const Text(
-                            'بانتظار سائق...',
-                            style: TextStyle(
+                          Text(
+                            _createError != null
+                                ? 'تعذر إرسال الطلب'
+                                : 'بانتظار سائق...',
+                            style: const TextStyle(
                               fontFamily: 'Cairo',
                               fontSize: 18,
                               fontWeight: FontWeight.w600,
@@ -188,54 +272,50 @@ class _TaxiWaitingScreenState extends State<TaxiWaitingScreen> {
                     ),
                   ),
                 ),
-
-                // ── المؤقت العكسي ──
-                Positioned(
-                  top: 130,
-                  left: 0,
-                  right: 0,
-                  child: Center(
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 20, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(20),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.08),
-                            blurRadius: 8,
-                            offset: const Offset(0, 2),
-                          ),
-                        ],
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(Icons.timer_outlined,
-                              size: 20, color: AppColors.textSecondary),
-                          const SizedBox(width: 8),
-                          Text(
-                            _formattedTime,
-                            style: const TextStyle(
-                              fontFamily: 'Cairo',
-                              fontSize: 18,
-                              fontWeight: FontWeight.w700,
-                              color: AppColors.primary,
+                if (_createError == null)
+                  Positioned(
+                    top: 130,
+                    left: 0,
+                    right: 0,
+                    child: Center(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 20, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.timer_outlined,
+                                size: 20, color: AppColors.textSecondary),
+                            const SizedBox(width: 8),
+                            Text(
+                              _formattedTime,
+                              style: const TextStyle(
+                                fontFamily: 'Cairo',
+                                fontSize: 18,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.primary,
+                              ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     ),
                   ),
-                ),
-
-                // ── مؤشر التحميل ──
-                const Center(
+                Center(
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      SizedBox(
+                      TaxiTypeImage(
+                        type: waitingType,
+                        width: 88,
+                        height: 88,
+                      ),
+                      const SizedBox(height: 20),
+                      const SizedBox(
                         width: 48,
                         height: 48,
                         child: CircularProgressIndicator(
@@ -243,165 +323,65 @@ class _TaxiWaitingScreenState extends State<TaxiWaitingScreen> {
                           color: AppColors.primary,
                         ),
                       ),
-                      SizedBox(height: 16),
-                      Text(
-                        'جاري البحث عن سائق قريب...',
-                        style: TextStyle(
-                          fontFamily: 'Cairo',
-                          fontSize: 16,
-                          color: AppColors.textSecondary,
+                      const SizedBox(height: 16),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 24),
+                        child: Text(
+                          statusText,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontFamily: 'Cairo',
+                            fontSize: 16,
+                            color: _createError != null
+                                ? Colors.red.shade700
+                                : AppColors.textSecondary,
+                          ),
                         ),
                       ),
+                      if (_createError != null) ...[
+                        const SizedBox(height: 16),
+                        TextButton(
+                          onPressed: _submitRequest,
+                          child: const Text(
+                            'إعادة المحاولة',
+                            style: TextStyle(
+                              fontFamily: 'Cairo',
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),
-
-                // ── زر إلغاء الرحلة ──
-                Positioned(
-                  bottom: 40,
-                  left: 20,
-                  right: 20,
-                  child: SizedBox(
-                    width: double.infinity,
-                    height: 50,
-                    child: OutlinedButton(
-                      onPressed: _onCancelTrip,
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: Colors.red,
-                        side: const BorderSide(color: Colors.red),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                      ),
-                      child: const Text(
-                        'إلغاء الرحلة',
-                        style: TextStyle(
-                          fontFamily: 'Cairo',
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-
-                // ── معلومات السائق (عند القبول) ──
-                if (request != null && request.isAccepted)
+                if (!_isCreating &&
+                    _createError == null &&
+                    request != null &&
+                    request.canCustomerCancel)
                   Positioned(
-                    bottom: 100,
+                    bottom: 40,
                     left: 20,
                     right: 20,
-                    child: Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(16),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.1),
-                            blurRadius: 12,
-                            offset: const Offset(0, -2),
+                    child: SizedBox(
+                      width: double.infinity,
+                      height: 50,
+                      child: OutlinedButton(
+                        onPressed: _onCancelTrip,
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.red,
+                          side: const BorderSide(color: Colors.red),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
                           ),
-                        ],
-                      ),
-                      child: Column(
-                        children: [
-                          Row(
-                            children: [
-                              CircleAvatar(
-                                radius: 28,
-                                backgroundColor: const Color(0xFFEEEEEE),
-                                child: Text(
-                                  (request.driverName?.isNotEmpty == true)
-                                      ? request.driverName![0]
-                                      : 'س',
-                                  style: const TextStyle(
-                                    fontFamily: 'Cairo',
-                                    fontSize: 20,
-                                    fontWeight: FontWeight.w700,
-                                    color: AppColors.primary,
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      request.driverName ?? 'السائق',
-                                      style: const TextStyle(
-                                        fontFamily: 'Cairo',
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 4),
-                                    Row(
-                                      children: [
-                                        const Icon(Icons.star,
-                                            size: 16,
-                                            color: AppColors.accent),
-                                        const SizedBox(width: 4),
-                                        Text(
-                                          request.driverRating > 0
-                                              ? '${request.driverRating}'
-                                              : '5.0',
-                                          style: const TextStyle(
-                                            fontFamily: 'Cairo',
-                                            fontSize: 14,
-                                            color: AppColors.textSecondary,
-                                          ),
-                                        ),
-                                        const SizedBox(width: 12),
-                                        const Icon(Icons.directions_car,
-                                            size: 16,
-                                            color: AppColors.textSecondary),
-                                        const SizedBox(width: 4),
-                                        Text(
-                                          request.driverVehicleInfo ??
-                                              'سيارة',
-                                          style: const TextStyle(
-                                            fontFamily: 'Cairo',
-                                            fontSize: 14,
-                                            color: AppColors.textSecondary,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
+                        ),
+                        child: const Text(
+                          'إلغاء الرحلة',
+                          style: TextStyle(
+                            fontFamily: 'Cairo',
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
                           ),
-                          const SizedBox(height: 12),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 12, vertical: 8),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFE8F5E9),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: const Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(Icons.check_circle,
-                                    size: 18, color: AppColors.success),
-                                SizedBox(width: 8),
-                                Text(
-                                  'السائق في الطريق إليك',
-                                  style: TextStyle(
-                                    fontFamily: 'Cairo',
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w600,
-                                    color: AppColors.success,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
+                        ),
                       ),
                     ),
                   ),
@@ -414,7 +394,6 @@ class _TaxiWaitingScreenState extends State<TaxiWaitingScreen> {
   }
 }
 
-// ── Painter لخلفية الخريطة (شبكة) ──
 class _MapGridPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
@@ -435,7 +414,6 @@ class _MapGridPainter extends CustomPainter {
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
-// ── شاشة تقييم مؤقتة (تحتاج إلى تطوير لاحق) ──
 class _RatingPlaceholderScreen extends StatelessWidget {
   const _RatingPlaceholderScreen();
 

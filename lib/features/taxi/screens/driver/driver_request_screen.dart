@@ -3,9 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../../../core/theme/app_colors.dart';
-import '../../../../providers/app_provider.dart';
 import '../../models/taxi_request.dart';
 import '../../providers/taxi_provider.dart';
+import '../../widgets/taxi_type_image.dart';
+import '../../utils/taxi_driver_request_actions.dart';
 
 /// شاشة طلبات السائق الواردة — تقرأ من TaxiProvider
 class DriverRequestScreen extends StatelessWidget {
@@ -90,8 +91,6 @@ class _RequestCardState extends State<_RequestCard> {
 
   @override
   Widget build(BuildContext context) {
-    final appProvider = context.read<AppProvider>();
-    final taxiProvider = context.read<TaxiProvider>();
     final req = widget.request;
 
     return Container(
@@ -131,6 +130,12 @@ class _RequestCardState extends State<_RequestCard> {
                     ),
                   ),
                 ),
+                TaxiTypeImage(
+                  type: req.taxiType,
+                  width: 40,
+                  height: 40,
+                ),
+                const SizedBox(width: 8),
                 Container(
                   padding:
                       const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
@@ -271,7 +276,7 @@ class _RequestCardState extends State<_RequestCard> {
                         ? null
                         : () async {
                             setState(() => _isRejecting = true);
-                            await taxiProvider.rejectRequest(req.id);
+                            await handleDriverRejectRequest(context, req);
                             if (mounted) {
                               setState(() => _isRejecting = false);
                             }
@@ -320,13 +325,7 @@ class _RequestCardState extends State<_RequestCard> {
                         ? null
                         : () async {
                             setState(() => _isAccepting = true);
-                            final driverProfile = appProvider.driverProfile ?? const {};
-                            await taxiProvider.acceptRequest(
-                              req.id,
-                              driverName: (driverProfile['name'] as String?)?.trim(),
-                              vehicleModel: (driverProfile['vehicle'] as String?)?.trim(),
-                              plateNumber: (driverProfile['plate'] as String?)?.trim(),
-                            );
+                            await handleDriverAcceptRequest(context, req);
                             if (mounted) {
                               setState(() => _isAccepting = false);
                             }

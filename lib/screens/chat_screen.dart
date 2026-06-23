@@ -1,24 +1,26 @@
-import 'dart:io';
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:http/http.dart' as http;
-import 'dart:convert';
 
 import '../core/theme/app_colors.dart';
-import '../core/config/app_config.dart';
+import '../models/chat_message.dart';
 import '../providers/app_provider.dart';
+import '../services/chat_service.dart';
 
 class ChatScreen extends StatefulWidget {
-  final String orderId;
+  final String threadType;
+  final String threadId;
   final String otherPartyName;
-  final String otherPartyPhone;
+  final String? receiverPhone;
 
   const ChatScreen({
-    Key? key,
-    required this.orderId,
+    super.key,
+    required this.threadType,
+    required this.threadId,
     required this.otherPartyName,
-    required this.otherPartyPhone,
-  }) : super(key: key);
+    this.receiverPhone,
+  });
 
   @override
   State<ChatScreen> createState() => _ChatScreenState();
@@ -28,174 +30,225 @@ class _ChatScreenState extends State<ChatScreen> {
   final TextEditingController _textController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
 
-  List<dynamic> _messages = [];
+  List<ChatMessage> _messages = [];
   bool _isLoading = true;
+  bool _isSending = false;
+  Timer? _pollTimer;
+  String? _sessionPhone;
 
   @override
   void initState() {
     super.initState();
-    _fetchMessages();
+    _sessionPhone = context.read<AppProvider>().sessionPhone;
+    _loadMessages();
+    _pollTimer = Timer.periodic(const Duration(seconds: 5), (_) => _loadMessages(silent: true));
   }
 
   @override
   void dispose() {
+    _pollTimer?.cancel();
     _textController.dispose();
     _scrollController.dispose();
     super.dispose();
   }
 
-  Future<void> _fetchMessages() async {
-    final provider = context.read<AppProvider>();
-    final token = await provider.getValidToken();
-    if (token == null) return;
-
+  Future<void> _loadMessages({bool silent = false}) async {
+    if (!silent && mounted) setState(() => _isLoading = true);
     try {
-      final uri = Uri.parse('\${AppConfig.normalizedDatabaseUrl}/db/chat/\${widget.orderId}');
-      final response = await http.get(uri, headers: {
-        'Authorization': 'Bearer \$token',
+      final messages = await ChatService.fetchMessages(
+        threadType: widget.threadType,
+        threadId: widget.threadId,
+      );
+      if (!mounted) return;
+      setState(() {
+        _messages = messages;
+        _isLoading = false;
       });
-      if (response.statusCode == 200) {
-        setState(() {
-          _messages = jsonDecode(response.body);
-          _isLoading = false;
-        });
-        _scrollToBottom();
-      }
-    } catch (e) {
-      print('Fetch messages error: \$e');
+      _scrollToBottom();
+    } catch (_) {
+      if (!mounted) return;
       setState(() => _isLoading = false);
     }
   }
 
-  Future<void> _sendMessage(String type, String content) async {
-    final provider = context.read<AppProvider>();
-    final token = await provider.getValidToken();
-    if (token == null) return;
+  Future<void> _sendMessage() async {
+    final content = _textController.text.trim();
+    if (content.isEmpty || _isSending) return;
 
-    final localMsg = {
-      'id': DateTime.now().millisecondsSinceEpoch.toString(),
-      'message_type': type,
-      'content': content,
-      'sender_phone': provider.sessionPhone,
-      'created_at': DateTime.now().toIso8601String(),
-    };
+    final provider = context.read<AppProvider>();
+    final senderPhone = provider.sessionPhone ?? '';
+    final local = ChatMessage(
+      id: 'local-${DateTime.now().millisecondsSinceEpoch}',
+      threadType: widget.threadType,
+      threadId: widget.threadId,
+      senderPhone: senderPhone,
+      receiverPhone: widget.receiverPhone,
+      senderName: provider.customerName,
+      content: content,
+      createdAt: DateTime.now(),
+    );
+
     setState(() {
-      _messages.add(localMsg);
+      _isSending = true;
+      _messages = [..._messages, local];
     });
+    _textController.clear();
     _scrollToBottom();
 
     try {
-      final uri = Uri.parse('\${AppConfig.normalizedDatabaseUrl}/db/chat/\${widget.orderId}');
-      await http.post(
-        uri,
-        headers: {
-          'Authorization': 'Bearer \$token',
-          'Content-Type': 'application/json',
-        },
-        body: jsonEncode({
-          'messageType': type,
-          'content': content,
-          'receiverPhone': widget.otherPartyPhone,
-          'senderName': provider.customerName,
-        }),
+      await ChatService.sendMessage(
+        threadType: widget.threadType,
+        threadId: widget.threadId,
+        content: content,
+        receiverPhone: widget.receiverPhone,
+        senderName: provider.customerName,
       );
-    } catch (e) {
-      print('Send message error: \$e');
+      await _loadMessages(silent: true);
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'تعذر إرسال الرسالة، حاول مجدداً',
+              style: TextStyle(fontFamily: 'Cairo'),
+            ),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSending = false);
     }
   }
 
   void _scrollToBottom() {
-    Future.delayed(const Duration(milliseconds: 100), () {
+    Future.delayed(const Duration(milliseconds: 120), () {
       if (_scrollController.hasClients) {
         _scrollController.animateTo(
           _scrollController.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 300),
+          duration: const Duration(milliseconds: 250),
           curve: Curves.easeOut,
         );
       }
     });
   }
 
-  void _showComingSoon() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('ميزة الرسائل الصوتية ستتوفر قريباً!', style: TextStyle(fontFamily: 'Cairo')),
-        backgroundColor: Colors.orange,
-        duration: Duration(seconds: 2),
-      ),
-    );
+  bool _isMine(ChatMessage msg) {
+    final mine = _sessionPhone ?? context.read<AppProvider>().sessionPhone ?? '';
+    if (mine.isEmpty) return false;
+    return msg.senderPhone.contains(mine.replaceAll('+', '')) ||
+        mine.contains(msg.senderPhone.replaceAll('+', '')) ||
+        msg.senderPhone == mine;
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text('محادثة مع \${widget.otherPartyName}', style: const TextStyle(fontFamily: 'Cairo', fontSize: 16)),
-        backgroundColor: AppColors.primary,
-      ),
-      body: Column(
-        children: [
-          Expanded(
-            child: _isLoading
-                ? const Center(child: CircularProgressIndicator())
-                : ListView.builder(
-                    controller: _scrollController,
-                    padding: const EdgeInsets.all(10),
-                    itemCount: _messages.length,
-                    itemBuilder: (context, index) {
-                      final msg = _messages[index];
-                      final isMe = msg['sender_phone'] == context.read<AppProvider>().sessionPhone;
-                      return Align(
-                        alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
-                        child: Container(
-                          margin: const EdgeInsets.symmetric(vertical: 5),
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: isMe ? AppColors.primary : Colors.grey.shade300,
-                            borderRadius: BorderRadius.circular(15),
-                          ),
+    return Directionality(
+      textDirection: TextDirection.rtl,
+      child: Scaffold(
+        appBar: AppBar(
+          title: Text(
+            'محادثة مع ${widget.otherPartyName}',
+            style: const TextStyle(fontFamily: 'Cairo', fontSize: 16),
+          ),
+          backgroundColor: AppColors.primary,
+          foregroundColor: Colors.white,
+        ),
+        body: Column(
+          children: [
+            Expanded(
+              child: _isLoading
+                  ? const Center(child: CircularProgressIndicator())
+                  : _messages.isEmpty
+                      ? const Center(
                           child: Text(
-                            msg['content'],
-                            style: TextStyle(fontFamily: 'Cairo', color: isMe ? Colors.white : Colors.black),
+                            'ابدأ المحادثة الآن داخل التطبيق',
+                            style: TextStyle(
+                              fontFamily: 'Cairo',
+                              color: AppColors.textSecondary,
+                            ),
+                          ),
+                        )
+                      : ListView.builder(
+                          controller: _scrollController,
+                          padding: const EdgeInsets.all(12),
+                          itemCount: _messages.length,
+                          itemBuilder: (context, index) {
+                            final msg = _messages[index];
+                            final isMe = _isMine(msg);
+                            return Align(
+                              alignment:
+                                  isMe ? Alignment.centerRight : Alignment.centerLeft,
+                              child: Container(
+                                margin: const EdgeInsets.symmetric(vertical: 4),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 14,
+                                  vertical: 10,
+                                ),
+                                constraints: BoxConstraints(
+                                  maxWidth: MediaQuery.of(context).size.width * 0.78,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: isMe
+                                      ? AppColors.primary
+                                      : Colors.grey.shade200,
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                                child: Text(
+                                  msg.content,
+                                  style: TextStyle(
+                                    fontFamily: 'Cairo',
+                                    color: isMe ? Colors.white : Colors.black87,
+                                  ),
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+            ),
+            SafeArea(
+              top: false,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _textController,
+                        textInputAction: TextInputAction.send,
+                        onSubmitted: (_) => _sendMessage(),
+                        decoration: InputDecoration(
+                          hintText: 'اكتب رسالة...',
+                          hintStyle: const TextStyle(fontFamily: 'Cairo'),
+                          filled: true,
+                          fillColor: Colors.grey.shade100,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(22),
+                            borderSide: BorderSide.none,
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 10,
                           ),
                         ),
-                      );
-                    },
-                  ),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(8.0),
-            child: Row(
-              children: [
-                IconButton(
-                  icon: const Icon(Icons.mic, color: Colors.grey),
-                  onPressed: _showComingSoon,
-                ),
-                Expanded(
-                  child: TextField(
-                    controller: _textController,
-                    decoration: InputDecoration(
-                      hintText: 'اكتب رسالة...',
-                      hintStyle: const TextStyle(fontFamily: 'Cairo'),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(20),
                       ),
                     ),
-                  ),
+                    const SizedBox(width: 8),
+                    IconButton(
+                      onPressed: _isSending ? null : _sendMessage,
+                      icon: _isSending
+                          ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.send_rounded, color: AppColors.primary),
+                    ),
+                  ],
                 ),
-                IconButton(
-                  icon: const Icon(Icons.send, color: AppColors.primary),
-                  onPressed: () {
-                    if (_textController.text.trim().isNotEmpty) {
-                      _sendMessage('text', _textController.text.trim());
-                      _textController.clear();
-                    }
-                  },
-                ),
-              ],
+              ),
             ),
-          )
-        ],
+          ],
+        ),
       ),
     );
   }

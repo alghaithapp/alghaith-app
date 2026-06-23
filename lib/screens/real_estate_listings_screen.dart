@@ -5,7 +5,7 @@ import '../services/supabase_service.dart';
 import '../utils/dummy_data.dart';
 import '../utils/extensions.dart';
 import '../utils/guest_gate.dart';
-import '../utils/helpers.dart';
+import '../utils/chat_navigation.dart';
 import '../utils/merchant_profile_fields.dart';
 import '../widgets/app_image.dart';
 import '../widgets/service_navigation_buttons.dart';
@@ -296,7 +296,7 @@ class _PropertyCard extends StatelessWidget {
                       ),
                     ),
                     FilledButton.icon(
-                      onPressed: whatsapp.isEmpty
+                      onPressed: (whatsapp.isEmpty && (product['merchant_phone']?.toString().trim().isEmpty ?? true))
                           ? null
                           : () {
                               if (!GuestGate.requireAccount(
@@ -305,14 +305,19 @@ class _PropertyCard extends StatelessWidget {
                               )) {
                                 return;
                               }
-                              AppHelpers.launchWhatsApp(
-                                whatsapp,
-                                'مرحبًا، أريد الاستفسار عن العقار ${product['name_ar'] ?? ''}',
+                              final contact = (product['merchant_phone']?.toString().trim().isNotEmpty == true)
+                                  ? product['merchant_phone'].toString().trim()
+                                  : whatsapp.trim();
+                              if (contact.isEmpty) return;
+                              ChatNavigation.openStoreChat(
+                                context,
+                                merchantPhone: contact,
+                                storeName: merchantName ?? product['name_ar']?.toString() ?? 'المعلن',
                               );
                             },
-                      icon: const Icon(Icons.chat_outlined),
+                      icon: const Icon(Icons.chat_bubble_outline_rounded),
                       label: const Text(
-                        'تواصل',
+                        'مراسلة',
                         style: TextStyle(fontFamily: 'Cairo'),
                       ),
                     ),

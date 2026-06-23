@@ -205,8 +205,78 @@ class AppProvider extends ChangeNotifier {
     if (auth.hasPhoneSession && auth.authPhone != null &&
         auth.authPhone!.isNotEmpty) {
       unawaited(PushNotificationService.instance.bindToUser(auth.authPhone!));
+      unawaited(_preloadAllOperatorProfiles());
     }
     notifyListeners();
+  }
+
+  /// يحمّل ملفات المندوب والسائق والتاجر من التخزين المحلي أو السيرفر
+  /// حتى يكون التبديل بين الأدوار فورياً دون شاشة إعداد فارغة.
+  Future<void> _preloadAllOperatorProfiles() async {
+    await Future.wait([
+      _ensureCourierProfileLoaded(),
+      _ensureDriverProfileLoaded(),
+    ]);
+    notifyListeners();
+  }
+
+  Future<void> _ensureCourierProfileLoaded() async {
+    if (delivery.hasCourierProfile ||
+        delivery.hasCourierRegistration) {
+      return;
+    }
+    final phone = _trimmedOrNull(auth.authPhone);
+    if (phone == null) return;
+
+    try {
+      final snapshot =
+          await AccountRepository.instance.readLocalSnapshot(phone);
+      final local = snapshot?.courierProfile;
+      if (local != null && local.isNotEmpty) {
+        delivery.loadProfileFromRemoteState({'courierProfile': local});
+        if (delivery.hasCourierRegistration) return;
+      }
+    } catch (error) {
+      debugPrint('ENSURE_COURIER_LOCAL_ERROR: $error');
+    }
+
+    if (!SupabaseService.isConfigured) return;
+    try {
+      final state = await SupabaseService.loadUserState(phone);
+      if (state != null) {
+        delivery.loadProfileFromRemoteState(state);
+      }
+    } catch (error) {
+      debugPrint('ENSURE_COURIER_REMOTE_ERROR: $error');
+    }
+  }
+
+  Future<void> _ensureDriverProfileLoaded() async {
+    if (driver.hasDriverProfile) return;
+    final phone = _trimmedOrNull(auth.authPhone);
+    if (phone == null) return;
+
+    try {
+      final snapshot =
+          await AccountRepository.instance.readLocalSnapshot(phone);
+      final local = snapshot?.driverProfile;
+      if (local != null && local.isNotEmpty) {
+        driver.loadProfileFromRemoteState({'driverProfile': local});
+        if (driver.hasDriverProfile) return;
+      }
+    } catch (error) {
+      debugPrint('ENSURE_DRIVER_LOCAL_ERROR: $error');
+    }
+
+    if (!SupabaseService.isConfigured) return;
+    try {
+      final state = await SupabaseService.loadUserState(phone);
+      if (state != null) {
+        driver.loadProfileFromRemoteState(state);
+      }
+    } catch (error) {
+      debugPrint('ENSURE_DRIVER_REMOTE_ERROR: $error');
+    }
   }
 
   Future<void> _loadSettingsBackend() async {
@@ -296,12 +366,20 @@ class AppProvider extends ChangeNotifier {
   Future<void> setPhoneSession(String phone, {String? sessionToken}) async {
     await auth.setPhoneSession(phone, sessionToken: sessionToken);
     _propagateCrossDomainState();
+    await _preloadAllOperatorProfiles();
   }
 
   Future<bool> setUserRole(String role) async {
+    if (role == 'delivery') {
+      await _ensureCourierProfileLoaded();
+    } else if (role == 'driver') {
+      await _ensureDriverProfileLoaded();
+    }
+
     final result = await auth.setUserRole(role);
     if (result) {
       _propagateCrossDomainState();
+      notifyListeners();
     }
     return result;
   }
@@ -331,9 +409,16 @@ class AppProvider extends ChangeNotifier {
   }
 
   void setGuestMode() {
+    auth.enterGuestMode();
+    _propagateCrossDomainState();
     _isReady = true;
     _isHydrating = false;
     notifyListeners();
+    unawaited(refreshHomeCategoriesConfig());
+    if (isGuestMode) {
+      unawaited(customer.refreshCustomerCatalog());
+      unawaited(refreshMarketplaceStats());
+    }
   }
 
   void setLanguage(String l) {
@@ -1638,6 +1723,7 @@ class AppProvider extends ChangeNotifier {
 
   Map<String, dynamic>? get courierProfile => delivery.courierProfile;
   bool get hasCourierProfile => delivery.hasCourierProfile;
+  bool get hasCourierRegistration => delivery.hasCourierRegistration;
   bool get isCourierApproved => delivery.isCourierApproved;
   bool get canUseCourierAccount => delivery.canUseCourierAccount;
   bool get isDelivery => delivery.isDelivery;
@@ -1991,21 +2077,31 @@ class AppProvider extends ChangeNotifier {
     );
   }
 
+  List<TaxiRequest> _dedupeTaxiById(Iterable<TaxiRequest> requests) {
+    final byId = <String, TaxiRequest>{};
+    for (final request in requests) {
+      final id = request.id.trim();
+      if (id.isEmpty) continue;
+      byId[id] = request;
+    }
+    return byId.values.toList();
+  }
+
   List<TaxiRequest> get visibleTaxiActiveRequests {
     final source = driver.isDriver ? _taxiDriverAssignedRequests : _taxiRequests;
-    return List<TaxiRequest>.unmodifiable(source.where((r) {
+    return List<TaxiRequest>.unmodifiable(_dedupeTaxiById(source.where((r) {
       return const {
         'accepted', 'on_way', 'arrived', 'picked_up', 'in_progress',
         'cancel_requested',
       }.contains(r.statusKey);
-    }));
+    })));
   }
 
   List<TaxiRequest> get visibleTaxiCompletedRequests {
     final source = driver.isDriver ? _taxiDriverAssignedRequests : _taxiRequests;
-    return List<TaxiRequest>.unmodifiable(source.where((r) {
+    return List<TaxiRequest>.unmodifiable(_dedupeTaxiById(source.where((r) {
       return const {'completed', 'done', 'finished'}.contains(r.statusKey);
-    }));
+    })));
   }
 
   List<TaxiRequest> _mergedTaxiSnapshotList() {
@@ -2031,8 +2127,8 @@ class AppProvider extends ChangeNotifier {
           SupabaseService.loadTaxiPool(phone),
           SupabaseService.loadDriverTaxiOrders(phone),
         ]);
-        _taxiPoolRequests = results[0];
-        _taxiDriverAssignedRequests = results[1];
+        _taxiPoolRequests = _dedupeTaxiById(results[0]);
+        _taxiDriverAssignedRequests = _dedupeTaxiById(results[1]);
       } else if (customer.isCustomer) {
         _taxiRequests = await SupabaseService.loadCustomerTaxiRequests(phone);
       }
@@ -2120,12 +2216,10 @@ class AppProvider extends ChangeNotifier {
     if (request.statusKey == 'completed' || request.statusKey == 'cancelled') {
       return 'لا يمكن إلغاء هذا الطلب';
     }
-    if (request.statusKey == 'pending') {
-      await _updateTaxiStatus(requestId, 'cancelled', 'ملغي', 'Cancelled');
-      return null;
+    if (request.statusKey == 'picked_up') {
+      return 'لا يمكن الإلغاء بعد بدء الرحلة';
     }
-    await _updateTaxiStatus(
-        requestId, 'cancel_requested', 'طلب إلغاء', 'Cancel requested');
+    await _updateTaxiStatus(requestId, 'cancelled', 'ملغي', 'Cancelled');
     return null;
   }
 
@@ -2367,6 +2461,10 @@ class AppProvider extends ChangeNotifier {
 
     debugPrint(
         'Push: handleNotificationOpen event=$eventKey targetRole=$role orderId=$orderId');
+
+    if (eventKey == 'call:incoming') {
+      return;
+    }
 
     if (hasOrderId) {
       setPendingOrderId(role, orderId);

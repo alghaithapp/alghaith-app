@@ -34,6 +34,17 @@ class AppConfig {
 
   static String? _resolvedMapboxToken;
 
+  /// مفتاح Google Maps (Places + Geocoding + Directions) — نفس مفتاح الخريطة.
+  static const String googleMapsApiKey = String.fromEnvironment(
+    'GOOGLE_MAPS_API_KEY',
+    defaultValue: 'AIzaSyBX720zCrccLT6ZKrc_o7r9tr0TAHDsy8c',
+  );
+
+  static bool get isGoogleMapsConfigured {
+    final key = googleMapsApiKey.trim();
+    return key.isNotEmpty && !key.startsWith('YOUR_');
+  }
+
   // مهلة أطول لتحمّل بدء تشغيل خادم Railway البارد (cold start) عند أول طلب.
   static const Duration apiTimeout = Duration(seconds: 45);
   static const Duration restoreTimeout = Duration(seconds: 60);
@@ -118,7 +129,7 @@ class AppConfig {
           ((safeDistance - 1.0) * taxiFareExtraKmPriceIqd).round();
     }
 
-    // تطبيق الـ multiplier (1.0 للاقتصادي، 1.30 للسوبر)
+    // تطبيق الـ multiplier (افتراضي 1.0 — تكسي اقتصادي فقط)
     rawFare = (rawFare * multiplier).round();
 
     // تقريب للأعلى لأقرب 250

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
@@ -11,6 +13,7 @@ import '../../features/taxi/screens/driver/driver_request_screen.dart';
 import '../../features/taxi/screens/driver/driver_trip_screen.dart';
 import '../../features/taxi/screens/driver/driver_earnings_screen.dart';
 import '../../providers/app_provider.dart';
+import '../../utils/driver_profile_fields.dart';
 import '../../services/supabase_service.dart';
 import '../../utils/role_notification_poller.dart';
 import '../../utils/role_switch_notifications.dart';
@@ -26,6 +29,7 @@ class DriverShell extends StatefulWidget {
 
 class _DriverShellState extends State<DriverShell> with RealtimeSubscriptionMixin {
   int _currentIndex = 0;
+  Timer? _locationTimer;
 
   final List<Widget> _screens = const [
     DriverHomeScreen(),
@@ -46,6 +50,7 @@ class _DriverShellState extends State<DriverShell> with RealtimeSubscriptionMixi
       if (phone != null && phone.isNotEmpty) {
         // تحديث موقع السائق وتشغيل polling الطلبات
         _initDriverLocation(provider, phone);
+        _startDriverLocationUpdates(provider);
 
         // Realtime للرحلة النشطة (بعد القبول)
         final sub = SupabaseService.realtime.subscribeToTable(
@@ -63,44 +68,84 @@ class _DriverShellState extends State<DriverShell> with RealtimeSubscriptionMixi
   }
 
   Future<void> _initDriverLocation(AppProvider provider, String phone) async {
+    if (!context.mounted) return;
+    final taxi = context.read<TaxiProvider>();
+    final profile = Map<String, dynamic>.from(provider.driverProfile ?? {});
+    final lat = (profile['latitude'] ?? profile['lat']) as num?;
+    final lng = (profile['longitude'] ?? profile['lng']) as num?;
+    final taxiType = DriverProfileFields.taxiTypeOrDefault(profile);
+
+    // ابدأ استقبال الطلبات فوراً — لا تنتظر GPS
+    await taxi.setOnline(true);
+    taxi.startIncomingPolling(
+      phone: phone,
+      lat: lat?.toDouble(),
+      lng: lng?.toDouble(),
+      taxiType: taxiType,
+    );
+
     try {
       LocationPermission permission = await Geolocator.checkPermission();
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
       }
-      if (permission == LocationPermission.deniedForever) {
-        // لا يزال يعمل — بدون موقع سيعرض جميع الطلبات
-        if (context.mounted) {
-          context.read<TaxiProvider>().startIncomingPolling(phone: phone);
-        }
-        return;
-      }
+      if (permission == LocationPermission.deniedForever) return;
 
       final pos = await Geolocator.getCurrentPosition(
         locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
-      ).timeout(const Duration(seconds: 10));
+      ).timeout(const Duration(seconds: 8));
 
-      // حفظ الموقع في ملف السائق
-      final profile = Map<String, dynamic>.from(provider.driverProfile ?? {});
       profile['latitude'] = pos.latitude;
       profile['longitude'] = pos.longitude;
       profile['lat'] = pos.latitude;
       profile['lng'] = pos.longitude;
       await provider.setDriverProfile(profile);
-    } catch (_) {
-      // فشل جلب الموقع — نكمل بدونه
-    } finally {
+
       if (context.mounted) {
-        // السائق يصبح متصلاً تلقائياً
-        context.read<TaxiProvider>()
-          ..setOnline(true)
-          ..startIncomingPolling(phone: phone);
+        taxi.updateIncomingPollLocation(lat: pos.latitude, lng: pos.longitude);
+        await taxi.fetchIncomingRequests();
       }
+    } catch (_) {
+      // الموقع اختياري — الطلبات تصل بدونه أيضاً
     }
+  }
+
+  void _startDriverLocationUpdates(AppProvider provider) {
+    _locationTimer?.cancel();
+    _locationTimer = Timer.periodic(const Duration(seconds: 12), (_) async {
+      if (!mounted) return;
+      try {
+        LocationPermission permission = await Geolocator.checkPermission();
+        if (permission == LocationPermission.denied ||
+            permission == LocationPermission.deniedForever) {
+          return;
+        }
+
+        final pos = await Geolocator.getCurrentPosition(
+          locationSettings:
+              const LocationSettings(accuracy: LocationAccuracy.high),
+        ).timeout(const Duration(seconds: 8));
+
+        final profile =
+            Map<String, dynamic>.from(provider.driverProfile ?? {});
+        profile['latitude'] = pos.latitude;
+        profile['longitude'] = pos.longitude;
+        profile['lat'] = pos.latitude;
+        profile['lng'] = pos.longitude;
+        await provider.setDriverProfile(profile);
+
+        if (!mounted) return;
+        context.read<TaxiProvider>().updateIncomingPollLocation(
+              lat: pos.latitude,
+              lng: pos.longitude,
+            );
+      } catch (_) {}
+    });
   }
 
   @override
   void dispose() {
+    _locationTimer?.cancel();
     context.read<TaxiProvider>().stopPolling();
     disposeRealtime();
     super.dispose();

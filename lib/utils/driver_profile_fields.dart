@@ -53,13 +53,38 @@ class DriverProfileFields {
   static String vehicleRegBackImage(Map<String, dynamic>? profile) =>
       profile?['vehicleRegBackImage']?.toString().trim() ?? '';
 
+  static String taxiType(Map<String, dynamic>? profile) =>
+      profile?['taxiType']?.toString().trim() ?? '';
+
+  static String taxiTypeOrDefault(Map<String, dynamic>? profile) {
+    final raw = taxiType(profile);
+    if (raw.isEmpty) return 'economic';
+    return raw;
+  }
+
+  static String taxiTypeLabelAr(Map<String, dynamic>? profile) {
+    switch (taxiTypeOrDefault(profile)) {
+      case 'tuktuk':
+        return 'تكتك';
+      case 'wazz':
+        return 'واز';
+      default:
+        return 'تكسي اقتصادي';
+    }
+  }
+
+  static bool needsVehicleRegistration(String type) => type == 'economic';
+
   /// هل جميع المستندات المطلوبة مرفوعة؟
   static bool hasRequiredUploads(Map<String, dynamic>? profile) {
-    return profileImage(profile).isNotEmpty &&
+    final type = taxiTypeOrDefault(profile);
+    final baseComplete = profileImage(profile).isNotEmpty &&
         carImage(profile).isNotEmpty &&
         idFrontImage(profile).isNotEmpty &&
         idBackImage(profile).isNotEmpty &&
-        residenceCardImage(profile).isNotEmpty &&
+        residenceCardImage(profile).isNotEmpty;
+    if (!needsVehicleRegistration(type)) return baseComplete;
+    return baseComplete &&
         vehicleRegFrontImage(profile).isNotEmpty &&
         vehicleRegBackImage(profile).isNotEmpty;
   }
@@ -71,6 +96,10 @@ class DriverProfileFields {
   }
 
   static bool isComplete(Map<String, dynamic>? profile) {
+    final type = taxiType(profile);
+    final hasVehicleReg = !needsVehicleRegistration(type) ||
+        (vehicleRegFrontImage(profile).isNotEmpty &&
+            vehicleRegBackImage(profile).isNotEmpty);
     return name(profile).isNotEmpty &&
         phone(profile).isNotEmpty &&
         homeAddress(profile).isNotEmpty &&
@@ -78,11 +107,13 @@ class DriverProfileFields {
         area(profile).isNotEmpty &&
         plate(profile).isNotEmpty &&
         mukhtarName(profile).isNotEmpty &&
+        (type == 'tuktuk' || type == 'wazz' || type == 'economic') &&
         profileImage(profile).isNotEmpty &&
         carImage(profile).isNotEmpty &&
         idFrontImage(profile).isNotEmpty &&
         idBackImage(profile).isNotEmpty &&
-        residenceCardImage(profile).isNotEmpty;
+        residenceCardImage(profile).isNotEmpty &&
+        hasVehicleReg;
   }
 
   static bool isApproved(Map<String, dynamic>? profile) =>

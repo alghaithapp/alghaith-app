@@ -1,11 +1,18 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../../models/taxi_request.dart';
 import '../../providers/taxi_provider.dart';
+import '../../widgets/taxi_cancel_dialog.dart';
+import '../../widgets/taxi_type_image.dart';
+import '../../widgets/taxi_plate_badge.dart';
+import '../../widgets/taxi_order_tracking_map.dart';
+import 'taxi_live_tracking_screen.dart';
+import '../../../../utils/helpers.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../providers/app_provider.dart';
+import '../../../../widgets/internal_contact_buttons.dart';
 
 /// شاشة القائمة الجانبية للتكسي — طلبي الحالي، سجل الطلبات، تواصل معنا
 class TaxiSideMenuScreen extends StatefulWidget {
@@ -28,6 +35,8 @@ class _TaxiSideMenuScreenState extends State<TaxiSideMenuScreen>
 
   Future<void> _loadData() async {
     final provider = context.read<TaxiProvider>();
+    final phone = context.read<AppProvider>().authPhone;
+    provider.startPolling(phone: phone);
     await provider.loadActiveRequest();
     await provider.loadHistory();
   }
@@ -38,19 +47,15 @@ class _TaxiSideMenuScreenState extends State<TaxiSideMenuScreen>
     super.dispose();
   }
 
-  Future<void> _openWhatsApp() async {
-    final phone = '964xxxxxxxxx'; // ضع رقم الدعم الفني هنا
-    final message = Uri.encodeComponent('مرحباً، أحتاج مساعدة في خدمة التكسي');
-    final uri = Uri.parse('https://wa.me/$phone?text=$message');
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
-    } else {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('لا يمكن فتح واتساب، تأكد من تثبيت التطبيق')),
-        );
-      }
-    }
+  void _openSupportWhatsApp() {
+    AppHelpers.launchWhatsApp(
+      AppHelpers.supportWhatsAppNumber,
+      'مرحباً، أحتاج مساعدة في خدمة التكسي',
+    );
+  }
+
+  void _openSupportCall() {
+    AppHelpers.makePhoneCall(AppHelpers.supportPhoneNumber);
   }
 
   @override
@@ -85,7 +90,10 @@ class _TaxiSideMenuScreenState extends State<TaxiSideMenuScreen>
           children: [
             _CurrentRequestTab(),
             _HistoryTab(),
-            _SupportTab(onWhatsAppTap: _openWhatsApp),
+            _SupportTab(
+              onWhatsAppTap: _openSupportWhatsApp,
+              onCallTap: _openSupportCall,
+            ),
           ],
         ),
       ),
@@ -95,7 +103,48 @@ class _TaxiSideMenuScreenState extends State<TaxiSideMenuScreen>
 
 // ── التبويب الأول: الطلب الحالي ──
 
-class _CurrentRequestTab extends StatelessWidget {
+class _CurrentRequestTab extends StatefulWidget {
+  @override
+  State<_CurrentRequestTab> createState() => _CurrentRequestTabState();
+}
+
+class _CurrentRequestTabState extends State<_CurrentRequestTab> {
+  bool _isCancelling = false;
+
+  Future<void> _cancelRequest(TaxiRequest request) async {
+    final confirmed = await showTaxiCancelDialog(context);
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _isCancelling = true);
+    final provider = context.read<TaxiProvider>();
+    final ok = await provider.cancelRequest(request.id);
+    if (!mounted) return;
+    setState(() => _isCancelling = false);
+
+    if (ok) {
+      await provider.loadActiveRequest();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'تم إلغاء الرحلة',
+            style: TextStyle(fontFamily: 'Cairo'),
+          ),
+        ),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            provider.error ?? 'تعذر إلغاء الطلب',
+            style: const TextStyle(fontFamily: 'Cairo'),
+          ),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Consumer<TaxiProvider>(
@@ -188,6 +237,20 @@ class _CurrentRequestTab extends StatelessWidget {
               ),
               const SizedBox(height: 16),
 
+              if (request.canShowLiveTracking) ...[
+                TaxiOrderTrackingMap(
+                  request: request,
+                  onExpand: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const TaxiLiveTrackingScreen(),
+                      ),
+                    );
+                  },
+                ),
+                const SizedBox(height: 16),
+              ],
+
               // تفاصيل الرحلة
               Container(
                 width: double.infinity,
@@ -207,10 +270,12 @@ class _CurrentRequestTab extends StatelessWidget {
                       style: TextStyle(fontFamily: 'Cairo', fontSize: 16, fontWeight: FontWeight.w700),
                     ),
                     const Divider(),
-                    _detailRow(Icons.my_location, 'من', request.pickupAddress),
-                    const SizedBox(height: 8),
-                    _detailRow(Icons.place, 'إلى', request.dropoffAddress),
-                    const SizedBox(height: 8),
+                    if (!request.canShowLiveTracking) ...[
+                      _detailRow(Icons.my_location, 'من', request.pickupAddress),
+                      const SizedBox(height: 8),
+                      _detailRow(Icons.place, 'إلى', request.dropoffAddress),
+                      const SizedBox(height: 8),
+                    ],
                     Row(
                       children: [
                         const Icon(Icons.straighten, size: 18, color: AppColors.textSecondary),
@@ -232,13 +297,30 @@ class _CurrentRequestTab extends StatelessWidget {
                       const SizedBox(height: 8),
                       Row(
                         children: [
-                          const Icon(Icons.local_taxi, size: 18, color: AppColors.textSecondary),
+                          TaxiTypeImage(
+                            type: request.taxiType,
+                            width: 36,
+                            height: 36,
+                          ),
                           const SizedBox(width: 8),
                           Text(
-                            request.taxiTypeLabelAr,
+                            'نوع الخدمة: ${request.taxiTypeLabelAr}',
                             style: const TextStyle(fontFamily: 'Cairo', fontSize: 14),
                           ),
                         ],
+                      ),
+                    ],
+                    if (request.isCancelRequested &&
+                        request.cancellationReason != null &&
+                        request.cancellationReason!.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        'سبب الإلغاء: ${request.cancellationReason}',
+                        style: TextStyle(
+                          fontFamily: 'Cairo',
+                          fontSize: 13,
+                          color: Colors.orange.shade800,
+                        ),
                       ),
                     ],
                   ],
@@ -246,7 +328,7 @@ class _CurrentRequestTab extends StatelessWidget {
               ),
 
               // معلومات السائق إن وجدت
-              if (request.driverName != null && request.driverName!.isNotEmpty) ...[
+              if (request.hasAssignedDriver) ...[
                 const SizedBox(height: 16),
                 Container(
                   width: double.infinity,
@@ -266,16 +348,96 @@ class _CurrentRequestTab extends StatelessWidget {
                         style: TextStyle(fontFamily: 'Cairo', fontSize: 16, fontWeight: FontWeight.w700),
                       ),
                       const Divider(),
-                      _detailRow(Icons.person, 'الاسم', request.driverName ?? ''),
-                      if (request.driverVehicleInfo != null && request.driverVehicleInfo!.isNotEmpty) ...[
+                      _detailRow(
+                        Icons.person,
+                        'الاسم',
+                        (request.driverName?.trim().isNotEmpty == true)
+                            ? request.driverName!
+                            : 'سائق',
+                      ),
+                      if (request.vehicleModelDisplay.isNotEmpty) ...[
                         const SizedBox(height: 8),
-                        _detailRow(Icons.directions_car, 'السيارة', request.driverVehicleInfo ?? ''),
+                        _detailRow(
+                          Icons.directions_car,
+                          'السيارة',
+                          request.vehicleModelDisplay,
+                        ),
                       ],
-                      if (request.driverPhone != null && request.driverPhone!.isNotEmpty) ...[
+                      if (request.plateNumberDisplay.isNotEmpty) ...[
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            const Icon(Icons.pin, size: 18, color: AppColors.textSecondary),
+                            const SizedBox(width: 8),
+                            const Text(
+                              'اللوحة:',
+                              style: TextStyle(
+                                fontFamily: 'Cairo',
+                                fontSize: 14,
+                                color: AppColors.textSecondary,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            TaxiPlateBadge(plateNumber: request.plateNumberDisplay),
+                          ],
+                        ),
+                      ] else if (request.driverVehicleInfo != null &&
+                          request.driverVehicleInfo!.isNotEmpty) ...[
                         const SizedBox(height: 8),
-                        _detailRow(Icons.phone, 'الهاتف', request.driverPhone ?? ''),
+                        _detailRow(
+                          Icons.directions_car,
+                          'السيارة',
+                          request.driverVehicleInfo ?? '',
+                        ),
+                      ],
+                      if (request.hasAssignedDriver) ...[
+                        const SizedBox(height: 12),
+                        InternalContactButtons.taxi(
+                          requestId: request.id,
+                          otherPartyName: (request.driverName?.trim().isNotEmpty == true)
+                              ? request.driverName!.trim()
+                              : 'السائق',
+                          receiverPhone: request.driverPhone,
+                          chatLabel: 'مراسلة السائق',
+                          callLabel: 'اتصال',
+                        ),
                       ],
                     ],
+                  ),
+                ),
+              ],
+
+              if (request.canCustomerCancel) ...[
+                const SizedBox(height: 16),
+                SizedBox(
+                  width: double.infinity,
+                  height: 50,
+                  child: OutlinedButton.icon(
+                    onPressed: _isCancelling || provider.isLoading
+                        ? null
+                        : () => _cancelRequest(request),
+                    icon: _isCancelling
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.cancel_outlined),
+                    label: Text(
+                      'إلغاء الرحلة',
+                      style: const TextStyle(
+                        fontFamily: 'Cairo',
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.red,
+                      side: const BorderSide(color: Colors.red),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                    ),
                   ),
                 ),
               ],
@@ -312,11 +474,14 @@ class _CurrentRequestTab extends StatelessWidget {
   IconData _statusIcon(String key) {
     switch (key) {
       case 'pending': return Icons.hourglass_empty;
-      case 'accepted': return Icons.directions_car;
+      case 'accepted':
+      case 'on_way':
+        return Icons.directions_car;
       case 'arrived': return Icons.location_on;
       case 'picked_up': return Icons.trip_origin;
       case 'completed': return Icons.check_circle;
       case 'cancelled': return Icons.cancel;
+      case 'cancel_requested': return Icons.hourglass_top;
       default: return Icons.info;
     }
   }
@@ -324,11 +489,14 @@ class _CurrentRequestTab extends StatelessWidget {
   Color _statusIconColor(String key) {
     switch (key) {
       case 'pending': return const Color(0xFFF9A825);
-      case 'accepted': return AppColors.primary;
+      case 'accepted':
+      case 'on_way':
+        return AppColors.primary;
       case 'arrived': return const Color(0xFF2E7D32);
       case 'picked_up': return const Color(0xFF145B66);
       case 'completed': return const Color(0xFF2E7D32);
       case 'cancelled': return const Color(0xFFC62828);
+      case 'cancel_requested': return const Color(0xFFE65100);
       default: return Colors.grey;
     }
   }
@@ -336,11 +504,14 @@ class _CurrentRequestTab extends StatelessWidget {
   String _statusLabel(String key) {
     switch (key) {
       case 'pending': return 'بانتظار سائق';
-      case 'accepted': return 'السائق في الطريق';
+      case 'accepted':
+      case 'on_way':
+        return 'السائق في الطريق';
       case 'arrived': return 'السائق في مكان الالتقاء';
       case 'picked_up': return 'تم الاستلام';
       case 'completed': return 'اكتملت الرحلة';
       case 'cancelled': return 'ملغية';
+      case 'cancel_requested': return 'بانتظار موافقة السائق على الإلغاء';
       default: return key;
     }
   }
@@ -534,7 +705,12 @@ class _HistoryTripCard extends StatelessWidget {
 
 class _SupportTab extends StatelessWidget {
   final VoidCallback onWhatsAppTap;
-  const _SupportTab({required this.onWhatsAppTap});
+  final VoidCallback onCallTap;
+
+  const _SupportTab({
+    required this.onWhatsAppTap,
+    required this.onCallTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -551,7 +727,7 @@ class _SupportTab extends StatelessWidget {
                 shape: BoxShape.circle,
               ),
               child: const Icon(
-                Icons.chat,
+                Icons.support_agent,
                 size: 40,
                 color: Color(0xFF25D366),
               ),
@@ -567,7 +743,7 @@ class _SupportTab extends StatelessWidget {
             ),
             const SizedBox(height: 12),
             Text(
-              'لديك استفسار أو مشكلة؟ فريق الدعم الفني جاهز لمساعدتك عبر واتساب.',
+              'لديك استفسار أو مشكلة؟ تواصل مع فريق الدعم عبر واتساب أو الاتصال.',
               style: TextStyle(
                 fontFamily: 'Cairo',
                 fontSize: 14,
@@ -591,6 +767,24 @@ class _SupportTab extends StatelessWidget {
                   backgroundColor: const Color(0xFF25D366),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                   elevation: 4,
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              height: 52,
+              child: OutlinedButton.icon(
+                onPressed: onCallTap,
+                icon: const Icon(Icons.phone, color: AppColors.primary),
+                label: const Text(
+                  'اتصال بالدعم',
+                  style: TextStyle(fontFamily: 'Cairo', fontSize: 16, fontWeight: FontWeight.w700),
+                ),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.primary,
+                  side: const BorderSide(color: AppColors.primary),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                 ),
               ),
             ),

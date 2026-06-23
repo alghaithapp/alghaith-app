@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import '../models/app_models.dart';
 import '../services/supabase_service.dart';
 import '../utils/guest_gate.dart';
-import '../utils/helpers.dart';
+import '../utils/chat_navigation.dart';
 import '../utils/merchant_profile_fields.dart';
 import '../widgets/app_image.dart';
 import '../widgets/service_navigation_buttons.dart';
@@ -367,50 +367,30 @@ class _ProfessionalCard extends StatelessWidget {
               ),
             )
           else
-            Row(
-              children: [
-                if (whatsapp.trim().isNotEmpty)
-                  Expanded(
-                    child: FilledButton.icon(
-                      onPressed: () {
-                        if (!GuestGate.requireAccount(
-                          context,
-                          message: 'سجّل دخولك للتواصل مع مزوّد الخدمة.',
-                        )) {
-                          return;
-                        }
-                        AppHelpers.launchWhatsApp(
-                          whatsapp,
-                          'مرحبًا، أريد الاستفسار عن الخدمة',
-                        );
-                      },
-                      icon: const Icon(Icons.chat_outlined),
-                      label: const Text(
-                        'واتساب',
-                        style: TextStyle(fontFamily: 'Cairo'),
-                      ),
-                    ),
-                  ),
-                if (whatsapp.trim().isNotEmpty && phone.trim().isNotEmpty)
-                  const SizedBox(width: 8),
-                if (phone.trim().isNotEmpty)
-                  OutlinedButton.icon(
-                    onPressed: () {
-                      if (!GuestGate.requireAccount(
-                        context,
-                        message: 'سجّل دخولك للتواصل مع مزوّد الخدمة.',
-                      )) {
-                        return;
-                      }
-                      AppHelpers.makePhoneCall(phone);
-                    },
-                    icon: const Icon(Icons.call_outlined),
-                    label: const Text(
-                      'اتصال',
-                      style: TextStyle(fontFamily: 'Cairo'),
-                    ),
-                  ),
-              ],
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed: () {
+                  if (!GuestGate.requireAccount(
+                    context,
+                    message: 'سجّل دخولك للتواصل مع مزوّد الخدمة.',
+                  )) {
+                    return;
+                  }
+                  final contact = phone.trim().isNotEmpty ? phone.trim() : whatsapp.trim();
+                  if (contact.isEmpty) return;
+                  ChatNavigation.openStoreChat(
+                    context,
+                    merchantPhone: contact,
+                    storeName: name,
+                  );
+                },
+                icon: const Icon(Icons.chat_bubble_outline_rounded),
+                label: const Text(
+                  'مراسلة',
+                  style: TextStyle(fontFamily: 'Cairo'),
+                ),
+              ),
             ),
         ],
       ),

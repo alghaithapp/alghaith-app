@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
+import '../../features/taxi/models/taxi_request.dart';
+import '../../features/taxi/widgets/taxi_type_image.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/utils/phone_utils.dart';
 import '../../core/utils/western_digits_input_formatter.dart';
@@ -38,10 +40,46 @@ class _OperatorSetupScreenState extends State<OperatorSetupScreen> {
   String? _residenceCardImageRef;
   String? _vehicleRegFrontImageRef;
   String? _vehicleRegBackImageRef;
+  String _selectedTaxiType = '';
   bool _isUploadingImage = false;
   bool _isSaving = false;
 
   bool get _isDriver => widget.role == 'driver';
+
+  bool get _isCarTaxi => _selectedTaxiType == 'economic';
+
+  String get _vehicleImageTitle {
+    switch (_selectedTaxiType) {
+      case 'tuktuk':
+        return 'صورة التكتك';
+      case 'wazz':
+        return 'صورة الواز';
+      default:
+        return 'صورة السيارة';
+    }
+  }
+
+  String get _vehicleImageSubtitle {
+    switch (_selectedTaxiType) {
+      case 'tuktuk':
+        return 'صورة واضحة للتكتك';
+      case 'wazz':
+        return 'صورة واضحة للدراجة';
+      default:
+        return 'صورة واضحة للمركبة';
+    }
+  }
+
+  IconData get _vehicleImageIcon {
+    switch (_selectedTaxiType) {
+      case 'tuktuk':
+        return Icons.electric_rickshaw_rounded;
+      case 'wazz':
+        return Icons.two_wheeler_rounded;
+      default:
+        return Icons.directions_car_rounded;
+    }
+  }
 
   @override
   void initState() {
@@ -94,6 +132,7 @@ class _OperatorSetupScreenState extends State<OperatorSetupScreen> {
           DriverProfileFields.vehicleRegBackImage(profile).isNotEmpty
               ? DriverProfileFields.vehicleRegBackImage(profile)
               : null;
+      _selectedTaxiType = profile?['taxiType']?.toString().trim() ?? '';
     } else {
       final profile = provider.courierProfile ?? {};
       _nameController = TextEditingController(
@@ -254,12 +293,22 @@ class _OperatorSetupScreenState extends State<OperatorSetupScreen> {
       return;
     }
     if (_isDriver) {
+      if (_selectedTaxiType != 'tuktuk' &&
+          _selectedTaxiType != 'wazz' &&
+          _selectedTaxiType != 'economic') {
+        _showMessage('اختر نوع الخدمة: تكتك، واز، أو تكسي اقتصادي');
+        return;
+      }
       if (plate.isEmpty) {
-        _showMessage('أدخل رقم لوحة السيارة');
+        _showMessage(_isCarTaxi
+            ? 'أدخل رقم لوحة السيارة'
+            : 'أدخل رقم لوحة المركبة');
         return;
       }
       if (vehicle.isEmpty) {
-        _showMessage('أدخل نوع المركبة');
+        _showMessage(_isCarTaxi
+            ? 'أدخل نوع السيارة'
+            : 'أدخل نوع المركبة');
         return;
       }
       if (area.isEmpty) {
@@ -272,7 +321,7 @@ class _OperatorSetupScreenState extends State<OperatorSetupScreen> {
       return;
     }
     if (vehicleImage.isEmpty) {
-      _showMessage(_isDriver ? 'أضف صورة للسيارة' : 'أضف صورة للدراجة');
+      _showMessage(_isDriver ? 'أضف $_vehicleImageTitle' : 'أضف صورة للدراجة');
       return;
     }
     if (idFrontImage.isEmpty) {
@@ -287,7 +336,7 @@ class _OperatorSetupScreenState extends State<OperatorSetupScreen> {
       _showMessage('أضف صورة بطاقة السكن');
       return;
     }
-    if (_isDriver) {
+    if (_isDriver && _isCarTaxi) {
       if (vehicleRegFrontImage.isEmpty) {
         _showMessage('أضف صورة سنوية السيارة (الوجه الأمامي)');
         return;
@@ -314,7 +363,7 @@ class _OperatorSetupScreenState extends State<OperatorSetupScreen> {
           'plateNumber': plate,
           'vehicle': vehicle,
           'vehicleModel': vehicle,
-          'taxiType': 'economic',
+          'taxiType': _selectedTaxiType,
           'area': area,
           'profileImage': profileImage,
           'carImage': vehicleImage,
@@ -391,7 +440,7 @@ class _OperatorSetupScreenState extends State<OperatorSetupScreen> {
     final profile = _isDriver ? provider.driverProfile : null;
     final hasProfile = _isDriver
         ? (profile != null && profile.isNotEmpty)
-        : provider.hasCourierProfile;
+        : provider.hasCourierRegistration;
     final isEditing = hasProfile;
 
     return Scaffold(
@@ -465,15 +514,26 @@ class _OperatorSetupScreenState extends State<OperatorSetupScreen> {
           ),
           if (_isDriver) ...[
             const SizedBox(height: 20),
+            const _SectionTitle(text: 'نوع الخدمة'),
+            const SizedBox(height: 8),
+            _TaxiTypePicker(
+              selected: _selectedTaxiType,
+              onChanged: (value) => setState(() => _selectedTaxiType = value),
+            ),
+            const SizedBox(height: 20),
             const _SectionTitle(text: 'بيانات المركبة'),
             const SizedBox(height: 8),
             _Field(
-              label: 'نوع المركبة',
-              hintText: 'مثال: سيارة صالون — تاكسي — هايلوكس',
+              label: _isCarTaxi ? 'نوع السيارة' : 'نوع المركبة',
+              hintText: _selectedTaxiType == 'tuktuk'
+                  ? 'مثال: تكتك — ركشة'
+                  : _selectedTaxiType == 'wazz'
+                      ? 'مثال: دراجة نارية — هوندا'
+                      : 'مثال: سيارة صالون — تاكسي',
               controller: _vehicleController,
             ),
             _Field(
-              label: 'رقم لوحة السيارة',
+              label: _isCarTaxi ? 'رقم لوحة السيارة' : 'رقم لوحة المركبة',
               hintText: 'مثال: 12345 بغداد',
               controller: _plateController,
             ),
@@ -504,13 +564,13 @@ class _OperatorSetupScreenState extends State<OperatorSetupScreen> {
               const SizedBox(width: 10),
               Expanded(
                 child: MerchantImageUploadSlot(
-                  title: _isDriver ? 'صورة السيارة' : 'صورة الدراجة',
+                  title: _isDriver ? _vehicleImageTitle : 'صورة الدراجة',
                   subtitle: _isDriver
-                      ? 'صورة واضحة للمركبة'
+                      ? _vehicleImageSubtitle
                       : 'صورة الدراجة المستخدمة',
                   imageRef: _vehicleImageRef,
                   icon: _isDriver
-                      ? Icons.directions_car_rounded
+                      ? _vehicleImageIcon
                       : Icons.motorcycle_rounded,
                   onTap: _isUploadingImage ? () {} : _pickVehicleImage,
                 ),
@@ -549,7 +609,7 @@ class _OperatorSetupScreenState extends State<OperatorSetupScreen> {
               ),
             ],
           ),
-          if (_isDriver) ...[
+          if (_isDriver && _isCarTaxi) ...[
             const SizedBox(height: 10),
             Row(
               children: [
@@ -756,7 +816,7 @@ class _OperatorSetupScreenState extends State<OperatorSetupScreen> {
                   isEditing
                       ? 'أكمل البيانات والمستندات الناقصة لتفعيل حسابك.'
                       : (_isDriver
-                          ? 'الاسم الرباعي، العنوان، رقم اللوحة، والمستندات الثبوتية مطلوبة للتفعيل.'
+                          ? 'اختر نوع الخدمة (تكتك، واز، أو تكسي)، ثم أكمل بياناتك والمستندات.'
                           : 'الاسم الثلاثي، الهاتف، عنوان السكن، اسم المختار، والصور الثبوتية مطلوبة للتفعيل.'),
                   style: const TextStyle(
                     color: Colors.white70,
@@ -769,6 +829,112 @@ class _OperatorSetupScreenState extends State<OperatorSetupScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _TaxiTypePicker extends StatelessWidget {
+  final String selected;
+  final ValueChanged<String> onChanged;
+
+  const _TaxiTypePicker({
+    required this.selected,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final options = [
+      (id: 'tuktuk', type: TaxiType.tuktuk),
+      (id: 'wazz', type: TaxiType.wazz),
+      (id: 'economic', type: TaxiType.economic),
+    ];
+
+    return Column(
+      children: [
+        for (final option in options) ...[
+          _TaxiTypeOptionCard(
+            type: option.type,
+            isSelected: selected == option.id,
+            onTap: () => onChanged(option.id),
+          ),
+          if (option.id != 'economic') const SizedBox(height: 10),
+        ],
+      ],
+    );
+  }
+}
+
+class _TaxiTypeOptionCard extends StatelessWidget {
+  final TaxiType type;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  const _TaxiTypeOptionCard({
+    required this.type,
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: isSelected ? AppColors.primary : const Color(0xFFE5E7EB),
+              width: isSelected ? 2 : 1,
+            ),
+          ),
+          child: Row(
+            children: [
+              TaxiTypeImage(
+                type: type,
+                width: 52,
+                height: 52,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      type.labelAr,
+                      style: const TextStyle(
+                        fontFamily: 'Cairo',
+                        fontWeight: FontWeight.w800,
+                        fontSize: 15,
+                      ),
+                    ),
+                    Text(
+                      type.subtitleAr,
+                      style: const TextStyle(
+                        fontFamily: 'Cairo',
+                        fontSize: 12,
+                        color: Color(0xFF6B7280),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(
+                isSelected
+                    ? Icons.radio_button_checked_rounded
+                    : Icons.radio_button_off_rounded,
+                color: isSelected ? AppColors.primary : Colors.grey,
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

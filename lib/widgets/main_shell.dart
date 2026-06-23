@@ -7,7 +7,6 @@ import 'package:provider/provider.dart';
 import 'package:animate_do/animate_do.dart';
 import '../core/theme/app_colors.dart';
 import '../core/ui/app_bottom_nav_style.dart';
-import '../core/notifications/push_notification_service.dart';
 import '../models/app_models.dart';
 import '../providers/app_provider.dart';
 import '../screens/home_screen.dart';
@@ -15,8 +14,6 @@ import '../screens/cart_screen.dart';
 import '../screens/orders_screen.dart';
 import '../screens/account_screen.dart';
 import '../screens/favorites_screen.dart';
-import '../core/realtime/realtime_subscription_mixin.dart';
-import '../services/supabase_service.dart';
 import '../utils/role_switch_notifications.dart';
 import 'customer_order_notifications.dart';
 import 'safe_bottom_bar.dart';
@@ -29,7 +26,7 @@ class MainShell extends StatefulWidget {
   State<MainShell> createState() => _MainShellState();
 }
 
-class _MainShellState extends State<MainShell> with WidgetsBindingObserver, RealtimeSubscriptionMixin {
+class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
   int _currentIndex = 0;
   final GlobalKey<NavigatorState> _homeNavigatorKey = GlobalKey<NavigatorState>();
   Timer? _orderRefreshTimer;
@@ -44,10 +41,6 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver, Real
     WidgetsBinding.instance.addObserver(this);
     _appProvider = context.read<AppProvider>();
     _appProvider.addListener(_onAppProviderChanged);
-    PushNotificationService.instance.setOnNotificationOpened((data) {
-      if (!mounted) return;
-      context.read<AppProvider>().handleNotificationOpen(data);
-    });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!context.mounted) return;
       final provider = context.read<AppProvider>();
@@ -59,18 +52,9 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver, Real
           ),
       };
       provider.refreshCustomerOrders();
-      _orderRefreshTimer = Timer.periodic(const Duration(seconds: 45), (_) {
+      _orderRefreshTimer = Timer.periodic(const Duration(seconds: 10), (_) {
         _pollCustomerOrders();
       });
-      final phone = provider.authPhone;
-      if (phone != null && phone.isNotEmpty) {
-        final sub = SupabaseService.realtime.subscribeToOrders(
-          phone: phone,
-          onUpsert: (_) => _pollCustomerOrders(),
-          onDelete: (_) => _pollCustomerOrders(),
-        );
-        trackChannel(sub);
-      }
       RoleSwitchNotificationPresenter.showIfNeeded(context);
       _openPendingOrderDetail();
     });
@@ -82,7 +66,6 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver, Real
     WidgetsBinding.instance.removeObserver(this);
     _orderRefreshTimer?.cancel();
     _notificationEntry?.remove();
-    disposeRealtime();
     super.dispose();
   }
 

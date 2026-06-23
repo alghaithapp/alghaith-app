@@ -249,6 +249,24 @@ async function hasColumn(table, column) {
   return exists;
 }
 
+async function updateRow(table, keyColumn, keyValue, payload) {
+  const supabase = assertSupabaseAdmin();
+  const key = String(keyValue ?? '').trim();
+  if (!key) {
+    throw new Error(`Missing ${keyColumn} for ${table} update.`);
+  }
+
+  const { data, error } = await supabase
+    .from(table)
+    .update(payload)
+    .eq(keyColumn, key)
+    .select();
+
+  if (error) throw new Error(error.message);
+  if (Array.isArray(data)) return data[0] || null;
+  return data || null;
+}
+
 async function saveRow(table, payload, conflictColumn) {
   const supabase = assertSupabaseAdmin();
   let conflictValue = payload[conflictColumn];
@@ -312,6 +330,7 @@ module.exports = {
   selectMany,
   hasColumn,
   saveRow,
+  updateRow,
   deleteRow,
   PLATFORM_SETTINGS_PHONE,
   PLATFORM_ADMIN_PHONES,

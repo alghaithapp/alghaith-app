@@ -26,6 +26,7 @@ import 'screens/shared/operator_setup_screen.dart';
 import 'screens/driver/driver_shell.dart';
 import 'utils/driver_profile_fields.dart';
 import 'services/supabase_service.dart';
+import 'utils/call_navigation.dart';
 import 'widgets/splash_screen.dart';
 import 'widgets/main_shell.dart';
 import 'widgets/push_notification_lifecycle_scope.dart';
@@ -190,6 +191,33 @@ class _AlGhaithAppState extends State<AlGhaithApp> {
     PushNotificationInbox.onTaxiNotificationTapped = (requestId) {
       debugPrint('TaxiPushAction: فتح طلب $requestId من الإشعار');
     };
+    PushNotificationService.instance.onIncomingCall = _handleIncomingCallPush;
+    PushNotificationInbox.onIncomingCallTapped = (data) {
+      _handleIncomingCallPush({
+        'eventKey': 'call:incoming',
+        ...data,
+      });
+    };
+    PushNotificationService.instance.setOnNotificationOpened((data) {
+      final nav = _navigatorKey.currentState;
+      if (nav == null || !nav.mounted) return;
+      final context = nav.context;
+      final eventKey = data['eventKey']?.toString() ?? '';
+      if (eventKey == 'call:incoming') {
+        _handleIncomingCallPush(data);
+        return;
+      }
+      try {
+        context.read<AppProvider>().handleNotificationOpen(data);
+      } catch (_) {}
+    });
+  }
+
+  void _handleIncomingCallPush(Map<String, dynamic> data) {
+    final nav = _navigatorKey.currentState;
+    if (nav == null || !nav.mounted) return;
+    final context = nav.context;
+    unawaited(CallNavigation.handlePushData(context, data));
   }
 
   @override

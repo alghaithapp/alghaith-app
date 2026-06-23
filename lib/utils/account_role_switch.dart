@@ -209,7 +209,7 @@ void showRoleSwitcher(BuildContext context, AppProvider provider) {
                 ctx,
                 provider,
                 title: 'حساب مندوب التوصيل',
-                subtitle: provider.hasCourierProfile
+                subtitle: provider.hasCourierRegistration
                     ? 'استلام طلبات التوصيل وتتبع الأرباح'
                     : 'سجّل بيانات المندوب أولاً لتفعيل الحساب',
                 roleKey: 'delivery',

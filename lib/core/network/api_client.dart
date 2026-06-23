@@ -63,9 +63,9 @@ class ApiClient {
       headers['Authorization'] = 'Bearer $token';
     }
 
-    // طلبات GET آمنة لإعادة المحاولة. نعيد المحاولة عند أخطاء الشبكة/المهلة
-    // لتجاوز بدء تشغيل خادم Railway البارد (cold start) عند أول فتح للتطبيق.
-    final maxAttempts = method == 'GET' ? 3 : 1;
+    // إعادة المحاولة عند أخطاء الشبكة/المهلة (بما فيها POST الحرجة مثل طلب التكسي).
+    final maxAttempts =
+        method == 'GET' || path.startsWith('/db/taxi/') ? 3 : 1;
 
     late http.Response response;
     var attempt = 0;
@@ -97,7 +97,7 @@ class ApiClient {
         if (error is ApiException) rethrow;
         debugPrint('ApiClient network error (attempt $attempt): $error');
         if (attempt >= maxAttempts) {
-          throw ApiException('Network error. Check your connection.');
+          throw ApiException('خطأ في الاتصال. تحقق من الإنترنت وحاول مجدداً.');
         }
         // مهلة تصاعدية بسيطة قبل إعادة المحاولة (1ث، 2ث).
         await Future<void>.delayed(Duration(seconds: attempt));

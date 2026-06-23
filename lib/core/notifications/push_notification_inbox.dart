@@ -67,6 +67,7 @@ class PushNotificationInbox {
     final category = message.data['category']?.toString() ?? '';
     final audience = message.data['audience']?.toString() ?? '';
     final requestId = message.data['orderId']?.toString() ?? '';
+    final isIncomingCall = eventKey == 'call:incoming';
     final isTaxiForDriver =
         category == 'taxi' &&
         audience == 'driver' &&
@@ -78,6 +79,16 @@ class PushNotificationInbox {
         title: title,
         body: body,
         requestId: requestId,
+      );
+      return;
+    }
+
+    if (isIncomingCall) {
+      await _showIncomingCallNotification(
+        id: 'call:${message.data['threadId'] ?? requestId}'.hashCode,
+        title: title,
+        body: body,
+        payload: _encodeCallPayload(message.data),
       );
       return;
     }
@@ -175,11 +186,86 @@ class PushNotificationInbox {
         debugPrint('PushAction: فتح طلب تكسي $reqId من الإشعار');
         onTaxiNotificationTapped?.call(reqId);
       }
+      return;
+    }
+    if (payload.startsWith('call:')) {
+      try {
+        final raw = payload.replaceFirst('call:', '');
+        final decoded = jsonDecode(raw);
+        if (decoded is Map) {
+          onIncomingCallTapped?.call(Map<String, dynamic>.from(decoded));
+        }
+      } catch (error) {
+        debugPrint('PushAction: failed to decode call payload: $error');
+      }
     }
   }
 
   /// Callback عندما يضغط السائق على الإشعار لفتح نافذة الطلب
   static void Function(String requestId)? onTaxiNotificationTapped;
+  static void Function(Map<String, dynamic> data)? onIncomingCallTapped;
+
+  static String _encodeCallPayload(Map<String, dynamic> data) {
+    return 'call:${jsonEncode({
+      'threadType': data['threadType'] ?? 'order',
+      'threadId': data['threadId'] ?? '',
+      'channelName': data['channelName'] ?? '',
+      'callerName': data['callerName'] ?? '',
+    })}';
+  }
+
+  static Future<void> _showIncomingCallNotification({
+    required int id,
+    required String title,
+    required String body,
+    required String payload,
+  }) async {
+    const channelId = 'alghaith_incoming_calls';
+    const channelName = 'المكالمات الواردة';
+
+    final androidDetails = AndroidNotificationDetails(
+      channelId,
+      channelName,
+      channelDescription: 'مكالمات صوتية داخل التطبيق',
+      importance: Importance.max,
+      priority: Priority.high,
+      playSound: true,
+      fullScreenIntent: true,
+      category: AndroidNotificationCategory.call,
+      showWhen: true,
+    );
+
+    if (Platform.isAndroid) {
+      final androidPlugin = _localNotifications
+          .resolvePlatformSpecificImplementation<
+              AndroidFlutterLocalNotificationsPlugin>();
+      await androidPlugin?.createNotificationChannel(
+        const AndroidNotificationChannel(
+          channelId,
+          channelName,
+          description: 'مكالمات صوتية داخل التطبيق',
+          importance: Importance.max,
+          playSound: true,
+        ),
+      );
+    }
+
+    await _localNotifications.show(
+      id,
+      title.isNotEmpty ? title : 'مكالمة واردة',
+      body.isNotEmpty ? body : 'اضغط للرد',
+      NotificationDetails(
+        android: androidDetails,
+        iOS: const DarwinNotificationDetails(
+          presentAlert: true,
+          presentBadge: true,
+          presentSound: true,
+          interruptionLevel: InterruptionLevel.timeSensitive,
+        ),
+      ),
+      payload: payload,
+    );
+  }
 
   static Future<void> clearUnread() async {
     final prefs = await SharedPreferences.getInstance();

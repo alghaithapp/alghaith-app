@@ -21,6 +21,9 @@ class TaxiProvider extends ChangeNotifier {
   Timer? _incomingPoolTimer;
   RealtimeChannel? _activeRequestChannel;
   RealtimeChannel? _incomingRequestChannel;
+  double? _incomingPollLat;
+  double? _incomingPollLng;
+  String? _incomingPollTaxiType;
 
   // ── Getters ──
 
@@ -137,20 +140,29 @@ class TaxiProvider extends ChangeNotifier {
     String? vehicleModel,
     String? plateNumber,
   }) async {
+    final trimmedId = requestId.trim();
+    if (trimmedId.isEmpty) {
+      _error = 'معرّف الطلب غير صالح';
+      notifyListeners();
+      return false;
+    }
+
     _isLoading = true;
     _error = null;
     notifyListeners();
 
     try {
-      await TaxiApiService.acceptRequest(
-        requestId,
+      final accepted = await TaxiApiService.acceptRequest(
+        trimmedId,
         driverName: driverName,
         vehicleModel: vehicleModel,
         plateNumber: plateNumber,
       );
+      _currentRequest = accepted;
+      _incomingRequests.removeWhere((r) => r.id == trimmedId);
       return true;
     } catch (e) {
-      _error = e.toString();
+      _error = e.toString().replaceFirst('ApiException: ', '');
       return false;
     } finally {
       _isLoading = false;
@@ -160,15 +172,25 @@ class TaxiProvider extends ChangeNotifier {
 
   // ── رفض الطلب ──
 
-  Future<void> rejectRequest(String requestId) async {
+  Future<bool> rejectRequest(String requestId) async {
+    final trimmedId = requestId.trim();
+    if (trimmedId.isEmpty) {
+      _error = 'معرّف الطلب غير صالح';
+      notifyListeners();
+      return false;
+    }
+
     _isLoading = true;
     _error = null;
     notifyListeners();
 
     try {
-      await TaxiApiService.rejectRequest(requestId);
+      await TaxiApiService.rejectRequest(trimmedId);
+      _incomingRequests.removeWhere((r) => r.id == trimmedId);
+      return true;
     } catch (e) {
-      _error = e.toString();
+      _error = e.toString().replaceFirst('ApiException: ', '');
+      return false;
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -202,25 +224,31 @@ class TaxiProvider extends ChangeNotifier {
 
   // ── إلغاء الطلب ──
 
-  Future<bool> cancelRequest(
-    String requestId,
-    String reason,
-  ) async {
+  Future<bool> cancelRequest(String requestId) async {
+    final trimmedId = requestId.trim();
+    if (trimmedId.isEmpty) {
+      _error = 'معرّف الطلب غير صالح';
+      notifyListeners();
+      return false;
+    }
+
     _isLoading = true;
     _error = null;
     notifyListeners();
 
     try {
-      await TaxiApiService.cancelRequest(requestId, reason);
-      if (_currentRequest != null && _currentRequest!.id == requestId) {
-        _currentRequest = _currentRequest!.copyWith(
-          statusKey: 'cancelled',
-          cancellationReason: reason,
-        );
+      final updated = await TaxiApiService.cancelRequest(trimmedId);
+      if (updated == null || updated.isCancelled) {
+        _currentRequest = null;
+      } else {
+        _currentRequest = updated;
+      }
+      if (updated?.isCancelled == true) {
+        _requests.removeWhere((r) => r.id == trimmedId);
       }
       return true;
     } catch (e) {
-      _error = e.toString();
+      _error = e.toString().replaceFirst('ApiException: ', '');
       return false;
     } finally {
       _isLoading = false;
@@ -281,7 +309,7 @@ class TaxiProvider extends ChangeNotifier {
 
     try {
       final history = await TaxiApiService.getDriverHistory();
-      _requests = history;
+      _requests = _dedupeTaxiRequestsList(history);
     } catch (e) {
       _error = e.toString();
     } finally {
@@ -311,29 +339,59 @@ class TaxiProvider extends ChangeNotifier {
 
   void startPolling({bool isDriver = false, String? phone}) {
     stopPolling();
-    _pollTimer = Timer.periodic(const Duration(seconds: 20), (_) async {
+    _pollTimer = Timer.periodic(const Duration(seconds: 5), (_) async {
       if (isDriver) {
         await loadDriverActiveRequest();
       } else {
         await loadActiveRequest();
       }
     });
+    if (!isDriver) {
+      loadActiveRequest();
+    }
     _startRealtime(isDriver: isDriver, phone: phone);
+  }
+
+  void updateIncomingPollLocation({double? lat, double? lng}) {
+    if (lat != null) _incomingPollLat = lat;
+    if (lng != null) _incomingPollLng = lng;
+  }
+
+  List<TaxiRequest> _dedupeTaxiRequestsList(List<TaxiRequest> requests) {
+    final byId = <String, TaxiRequest>{};
+    for (final request in requests) {
+      final id = request.id.trim();
+      if (id.isEmpty) continue;
+      byId[id] = request;
+    }
+    return byId.values.toList();
   }
 
   /// جلب الطلبات الواردة للسائق من الخادم (حسب الموقع والنوع)
   Future<void> fetchIncomingRequests() async {
     try {
-      final requests = await TaxiApiService.getIncomingRequests();
-      _incomingRequests = requests;
+      final requests = await TaxiApiService.getIncomingRequests(
+        lat: _incomingPollLat,
+        lng: _incomingPollLng,
+        taxiType: _incomingPollTaxiType,
+      );
+      _incomingRequests = _dedupeTaxiRequestsList(requests);
       notifyListeners();
     } catch (_) {}
   }
 
-  void startIncomingPolling({String? phone}) {
+  void startIncomingPolling({
+    String? phone,
+    double? lat,
+    double? lng,
+    String? taxiType,
+  }) {
+    _incomingPollLat = lat;
+    _incomingPollLng = lng;
+    _incomingPollTaxiType = taxiType ?? 'economic';
     _incomingPoolTimer?.cancel();
     fetchIncomingRequests();
-    _incomingPoolTimer = Timer.periodic(const Duration(seconds: 15), (_) async {
+    _incomingPoolTimer = Timer.periodic(const Duration(seconds: 5), (_) async {
       await fetchIncomingRequests();
     });
     _startIncomingRealtime(phone: phone);
@@ -381,7 +439,6 @@ class TaxiProvider extends ChangeNotifier {
       filterValue: 'pending',
       event: PostgresChangeEvent.all,
       onData: (_) {
-        if (!_isOnline) return;
         fetchIncomingRequests();
       },
     );

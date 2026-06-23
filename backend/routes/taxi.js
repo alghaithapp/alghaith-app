@@ -1,31 +1,16 @@
 const express = require('express');
 const router = express.Router();
+const { normalizeTaxiType } = require('../services/taxi_pricing_service');
 const repo = require('../supabase_repo/taxi');
 const { getUserState } = require('../supabase_repo/users');
 const { requireOptionalAuthorizedPhone } = require('./_middleware');
 
 function formatRequestRow(row) {
-  if (!row) return null;
-  const meta = repo.readTaxiMeta(row);
-  return {
-    id: meta.id || row.id,
-    requestNumber: meta.payload.requestNumber,
-    statusKey: meta.statusKey,
-    statusAr: meta.payload.statusAr,
-    fare: meta.payload.fare || meta.payload.price,
-    fareEconomic: meta.payload.fareEconomic,
-    fareSuper: meta.payload.fareSuper,
-    pickupAddress: meta.payload.pickupAddress,
-    dropoffAddress: meta.payload.dropoffAddress,
-    pickupLat: meta.payload.pickupLat,
-    pickupLng: meta.payload.pickupLng,
-    dropoffLat: meta.payload.dropoffLat,
-    dropoffLng: meta.payload.dropoffLng,
-    distanceKm: meta.payload.distanceKm,
-    taxiType: meta.payload.taxiType,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-  };
+  return repo.formatTaxiRequestForClient(row);
+}
+
+async function formatRequestRowEnriched(row) {
+  return repo.enrichTaxiRequestForClient(row);
 }
 
 // POST /db/taxi/create - إنشاء طلب جديد (يحسب السعر تلقائياً)
@@ -104,7 +89,7 @@ router.get('/active', async (req, res) => {
     if (!phone) return;
     const request = await repo.getCustomerActiveRequest(phone);
     if (!request) return res.json(null);
-    return res.json(formatRequestRow(request));
+    return res.json(await formatRequestRowEnriched(request));
   } catch (error) {
     console.error('taxi active error:', error);
     return res.status(500).json({ message: error?.message || 'Failed to get active request.' });
@@ -118,7 +103,7 @@ router.get('/driver-active', async (req, res) => {
     if (!phone) return;
     const request = await repo.getDriverActiveRequest(phone);
     if (!request) return res.json(null);
-    return res.json(formatRequestRow(request));
+    return res.json(await formatRequestRowEnriched(request));
   } catch (error) {
     console.error('taxi driver-active error:', error);
     return res.status(500).json({ message: error?.message || 'Failed to get driver active request.' });
@@ -207,11 +192,11 @@ router.get('/incoming-requests', async (req, res) => {
     }
 
     // إذا لا يزال الموقع مجهولاً، نرجع كل الطلبات المعلقة بدون فلتر مسافة
-    const taxiType = String(
+    const taxiType = normalizeTaxiType(
       req.query.taxiType ||
       (await getUserState(phone))?.driverProfile?.taxiType ||
       'economic'
-    ).trim();
+    );
 
     const requests = await repo.getDriverIncomingRequests(
       phone,

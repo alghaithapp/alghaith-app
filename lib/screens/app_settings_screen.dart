@@ -257,6 +257,13 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
               'مرحبًا، أحتاج مساعدة في تطبيق الغيث',
             ),
           ),
+          const SizedBox(height: 10),
+          _SupportButton(
+            label: 'اتصال بالدعم الفني',
+            color: Colors.blue,
+            iconWidget: const Icon(Icons.phone_rounded, size: 38),
+            onTap: () => AppHelpers.makePhoneCall(AppHelpers.supportPhoneNumber),
+          ),
           // تم إخفاء زر فيسبوك بناءً على طلب الإدارة
         ],
       ),

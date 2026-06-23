@@ -6,7 +6,7 @@ import '../../models/app_models.dart';
 import '../../providers/app_provider.dart';
 import '../../core/theme/app_colors.dart';
 import '../../utils/extensions.dart';
-import '../../utils/helpers.dart';
+import '../../utils/chat_navigation.dart';
 import 'delivery_shared_widgets.dart';
 import 'delivery_requests_screen.dart';
 
@@ -220,9 +220,13 @@ class DeliveryActiveGroupCard extends StatelessWidget {
               if (!picked && order.merchantPhone != null && order.merchantPhone!.isNotEmpty)
                 CupertinoButton(
                   padding: EdgeInsets.zero,
-                  onPressed: () =>
-                      AppHelpers.makePhoneCall(order.merchantPhone!),
-                  child: const Icon(CupertinoIcons.phone_fill, size: 20),
+                  onPressed: () => ChatNavigation.openOrderChat(
+                    context,
+                    orderId: order.id,
+                    otherPartyName: order.merchantStoreName ?? 'التاجر',
+                    receiverPhone: order.merchantPhone,
+                  ),
+                  child: const Icon(CupertinoIcons.chat_bubble_text_fill, size: 20),
                 ),
             ],
           ),
@@ -311,9 +315,13 @@ class DeliveryActiveGroupCard extends StatelessWidget {
                   ),
                   CupertinoButton(
                     padding: EdgeInsets.zero,
-                    onPressed: () =>
-                        AppHelpers.makePhoneCall(group.customerPhone),
-                    child: const Icon(CupertinoIcons.phone_fill, size: 22),
+                    onPressed: () => ChatNavigation.openOrderChat(
+                      context,
+                      orderId: group.orders.first.id,
+                      otherPartyName: group.customerName,
+                      receiverPhone: group.customerPhone,
+                    ),
+                    child: const Icon(CupertinoIcons.chat_bubble_text_fill, size: 22),
                   ),
                 ],
               ),

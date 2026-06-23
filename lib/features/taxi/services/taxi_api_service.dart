@@ -1,11 +1,10 @@
-import '../../../core/config/app_config.dart';
 import '../../../core/network/api_client.dart';
 import '../models/taxi_request.dart';
 import '../models/driver_model.dart';
 
 /// خدمة API لطلبات التكسي — تتصل بـ /db/taxi/* عبر ApiClient
 class TaxiApiService {
-  static String get _baseUrl => '${AppConfig.normalizedDatabaseUrl}/db/taxi';
+  static const String _basePath = '/db/taxi';
 
   /// إنشاء طلب تكسي جديد
   /// (رقم الهاتف يجي من توكن الجلسة تلقائياً)
@@ -19,7 +18,7 @@ class TaxiApiService {
     required double distanceKm,
     required String taxiType,
   }) async {
-    final result = await ApiClient.instance.post('$_baseUrl/create', body: {
+    final result = await ApiClient.instance.post('$_basePath/create', body: {
       'pickupAddress': pickupAddress,
       'dropoffAddress': dropoffAddress,
       'pickupLat': pickupLat,
@@ -33,73 +32,65 @@ class TaxiApiService {
   }
 
   /// قبول الطلب من قبل السائق
-  /// (رقم الهاتف يجي من توكن الجلسة تلقائياً)
-  static Future<void> acceptRequest(
+  static Future<TaxiRequest> acceptRequest(
     String requestId, {
     String? driverName,
     String? vehicleModel,
     String? plateNumber,
   }) async {
-    await ApiClient.instance.post('$_baseUrl/accept', body: {
+    final result = await ApiClient.instance.post('$_basePath/accept', body: {
       'requestId': requestId,
-      if (driverName != null) 'driverName': driverName,
-      if (vehicleModel != null) 'vehicleModel': vehicleModel,
-      if (plateNumber != null) 'plateNumber': plateNumber,
+      if (driverName != null && driverName.isNotEmpty) 'driverName': driverName,
+      if (vehicleModel != null && vehicleModel.isNotEmpty) 'vehicleModel': vehicleModel,
+      if (plateNumber != null && plateNumber.isNotEmpty) 'plateNumber': plateNumber,
     });
+    return TaxiRequest.fromMap(Map<String, dynamic>.from(result as Map));
   }
 
   /// رفض الطلب من قبل السائق
-  /// (رقم الهاتف يجي من توكن الجلسة تلقائياً)
   static Future<void> rejectRequest(String requestId) async {
-    await ApiClient.instance.post('$_baseUrl/reject', body: {
+    await ApiClient.instance.post('$_basePath/reject', body: {
       'requestId': requestId,
     });
   }
 
   /// تحديث حالة الطلب (arrived, picked_up, completed)
-  /// (رقم الهاتف يجي من توكن الجلسة تلقائياً)
   static Future<void> updateStatus(
     String requestId,
     String statusKey,
   ) async {
-    await ApiClient.instance.post('$_baseUrl/status', body: {
+    await ApiClient.instance.post('$_basePath/status', body: {
       'requestId': requestId,
       'statusKey': statusKey,
     });
   }
 
-  /// إلغاء الطلب من قبل الزبون
-  /// (رقم الهاتف يجي من توكن الجلسة تلقائياً)
-  static Future<void> cancelRequest(
-    String requestId,
-    String reason,
-  ) async {
-    await ApiClient.instance.post('$_baseUrl/cancel', body: {
+  /// إلغاء الطلب من قبل الزبون — فوري بدون موافقة السائق
+  static Future<TaxiRequest?> cancelRequest(String requestId) async {
+    final result = await ApiClient.instance.post('$_basePath/cancel', body: {
       'requestId': requestId,
-      'reason': reason,
     });
+    if (result == null) return null;
+    return TaxiRequest.fromMap(Map<String, dynamic>.from(result as Map));
   }
 
   /// جلب الطلب النشط للزبون
-  /// (رقم الهاتف يجي من توكن الجلسة تلقائياً)
   static Future<TaxiRequest?> getActiveRequest() async {
-    final result = await ApiClient.instance.get('$_baseUrl/active');
+    final result = await ApiClient.instance.get('$_basePath/active');
     if (result == null) return null;
     return TaxiRequest.fromMap(Map<String, dynamic>.from(result));
   }
 
   /// جلب الطلب النشط للسائق
-  /// (رقم الهاتف يجي من توكن الجلسة تلقائياً)
   static Future<TaxiRequest?> getDriverActiveRequest() async {
-    final result = await ApiClient.instance.get('$_baseUrl/driver-active');
+    final result = await ApiClient.instance.get('$_basePath/driver-active');
     if (result == null) return null;
     return TaxiRequest.fromMap(Map<String, dynamic>.from(result));
   }
 
   /// جلب تاريخ الطلبات للزبون
-  /// (رقم الهاتف يجي من توكن الجلسة تلقائياً)
   static Future<List<TaxiRequest>> getHistory() async {
-    final result = await ApiClient.instance.get('$_baseUrl/history');
+    final result = await ApiClient.instance.get('$_basePath/history');
     if (result == null) return [];
     final list = (result as List)
         .map((e) => TaxiRequest.fromMap(Map<String, dynamic>.from(e)))
@@ -108,9 +99,8 @@ class TaxiApiService {
   }
 
   /// جلب تاريخ الطلبات للسائق
-  /// (رقم الهاتف يجي من توكن الجلسة تلقائياً)
   static Future<List<TaxiRequest>> getDriverHistory() async {
-    final result = await ApiClient.instance.get('$_baseUrl/driver-history');
+    final result = await ApiClient.instance.get('$_basePath/driver-history');
     if (result == null) return [];
     final list = (result as List)
         .map((e) => TaxiRequest.fromMap(Map<String, dynamic>.from(e)))
@@ -120,14 +110,27 @@ class TaxiApiService {
 
   /// تحديث حالة اتصال السائق (متصل/غير متصل)
   static Future<void> setDriverOnlineStatus(bool isOnline) async {
-    await ApiClient.instance.post('$_baseUrl/driver-status', body: {
+    await ApiClient.instance.post('$_basePath/driver-status', body: {
       'isOnline': isOnline,
     });
   }
 
-  /// جلب الطلبات الواردة للسائق (قريبة + pending + نفس نوع السيارة)
-  static Future<List<TaxiRequest>> getIncomingRequests() async {
-    final result = await ApiClient.instance.get('$_baseUrl/incoming-requests');
+  /// جلب الطلبات الواردة للسائق
+  static Future<List<TaxiRequest>> getIncomingRequests({
+    double? lat,
+    double? lng,
+    String? taxiType,
+  }) async {
+    final query = <String, String>{};
+    if (lat != null && lat != 0) query['lat'] = lat.toString();
+    if (lng != null && lng != 0) query['lng'] = lng.toString();
+    if (taxiType != null && taxiType.trim().isNotEmpty) {
+      query['taxiType'] = taxiType.trim();
+    }
+    final result = await ApiClient.instance.get(
+      '$_basePath/incoming-requests',
+      queryParameters: query.isEmpty ? null : query,
+    );
     if (result == null) return [];
     final list = (result as List)
         .map((e) => TaxiRequest.fromMap(Map<String, dynamic>.from(e)))
@@ -142,7 +145,7 @@ class TaxiApiService {
     String taxiType,
   ) async {
     final result = await ApiClient.instance.get(
-      '$_baseUrl/nearby-drivers',
+      '$_basePath/nearby-drivers',
       queryParameters: {
         'lat': lat.toString(),
         'lng': lng.toString(),

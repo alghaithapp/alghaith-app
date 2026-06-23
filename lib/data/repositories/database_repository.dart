@@ -776,11 +776,18 @@ class DatabaseRepository {
 
   // ── Taxi methods ──────────────────────────────────────────────────
 
+  static List<TaxiRequest> _dedupeTaxiRequests(List<TaxiRequest> requests) {
+    final byId = <String, TaxiRequest>{};
+    for (final request in requests) {
+      final id = request.id.trim();
+      if (id.isEmpty) continue;
+      byId[id] = request;
+    }
+    return byId.values.toList();
+  }
+
   Future<List<TaxiRequest>> loadTaxiPool(String phone) async {
-    final result = await ApiClient.instance.get(
-      '/db/taxi-pool',
-      queryParameters: {'phone': _phone(phone)},
-    );
+    final result = await ApiClient.instance.get('/db/taxi/incoming-requests');
     if (result is! List) return const [];
     return result
         .whereType<Map>()
@@ -789,27 +796,53 @@ class DatabaseRepository {
   }
 
   Future<List<TaxiRequest>> loadDriverTaxiOrders(String phone) async {
-    final result = await ApiClient.instance.get(
-      '/db/taxi-driver-orders',
-      queryParameters: {'phone': _phone(phone)},
-    );
-    if (result is! List) return const [];
-    return result
-        .whereType<Map>()
-        .map((item) => TaxiRequest.fromMap(Map<String, dynamic>.from(item)))
-        .toList();
+    final requests = <TaxiRequest>[];
+    try {
+      final active = await ApiClient.instance.get('/db/taxi/driver-active');
+      if (active is Map) {
+        requests.add(
+          TaxiRequest.fromMap(Map<String, dynamic>.from(active)),
+        );
+      }
+    } catch (_) {}
+    try {
+      final history = await ApiClient.instance.get('/db/taxi/driver-history');
+      if (history is List) {
+        for (final item in history) {
+          if (item is Map) {
+            requests.add(
+              TaxiRequest.fromMap(Map<String, dynamic>.from(item)),
+            );
+          }
+        }
+      }
+    } catch (_) {}
+    return _dedupeTaxiRequests(requests);
   }
 
   Future<List<TaxiRequest>> loadCustomerTaxiRequests(String phone) async {
-    final result = await ApiClient.instance.get(
-      '/db/taxi-customer-requests',
-      queryParameters: {'phone': _phone(phone)},
-    );
-    if (result is! List) return const [];
-    return result
-        .whereType<Map>()
-        .map((item) => TaxiRequest.fromMap(Map<String, dynamic>.from(item)))
-        .toList();
+    final requests = <TaxiRequest>[];
+    try {
+      final active = await ApiClient.instance.get('/db/taxi/active');
+      if (active is Map) {
+        requests.add(
+          TaxiRequest.fromMap(Map<String, dynamic>.from(active)),
+        );
+      }
+    } catch (_) {}
+    try {
+      final history = await ApiClient.instance.get('/db/taxi/history');
+      if (history is List) {
+        for (final item in history) {
+          if (item is Map) {
+            requests.add(
+              TaxiRequest.fromMap(Map<String, dynamic>.from(item)),
+            );
+          }
+        }
+      }
+    } catch (_) {}
+    return _dedupeTaxiRequests(requests);
   }
 
   Future<void> saveTaxiRequest(String phone, TaxiRequest request) async {
@@ -828,24 +861,20 @@ class DatabaseRepository {
     String? driverName,
     String? vehicleType,
   }) async {
-    await ApiClient.instance.put(
-      '/db/taxi-request/accept',
+    await ApiClient.instance.post(
+      '/db/taxi/accept',
       body: {
-        'phone': _phone(phone),
         'requestId': requestId,
-        if (driverName != null) 'driverName': driverName,
-        if (vehicleType != null) 'vehicleType': vehicleType,
+        if (driverName != null && driverName.isNotEmpty) 'driverName': driverName,
+        if (vehicleType != null && vehicleType.isNotEmpty) 'vehicleModel': vehicleType,
       },
     );
   }
 
   Future<void> rejectTaxiRequest(String phone, String requestId) async {
-    await ApiClient.instance.put(
-      '/db/taxi-request/reject',
-      body: {
-        'phone': _phone(phone),
-        'requestId': requestId,
-      },
+    await ApiClient.instance.post(
+      '/db/taxi/reject',
+      body: {'requestId': requestId},
     );
   }
 
@@ -856,14 +885,11 @@ class DatabaseRepository {
     required String statusAr,
     required String statusEn,
   }) async {
-    await ApiClient.instance.put(
-      '/db/taxi-request/status',
+    await ApiClient.instance.post(
+      '/db/taxi/status',
       body: {
-        'phone': _phone(phone),
         'requestId': requestId,
         'statusKey': statusKey,
-        'statusAr': statusAr,
-        'statusEn': statusEn,
       },
     );
   }

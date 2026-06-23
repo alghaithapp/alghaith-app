@@ -7,7 +7,7 @@ import '../models/merchant_product_section.dart';
 import '../providers/app_provider.dart';
 import '../utils/extensions.dart';
 import '../utils/guest_gate.dart';
-import '../utils/helpers.dart';
+import '../utils/chat_navigation.dart';
 import '../utils/merchant_profile_fields.dart';
 import '../core/theme/app_colors.dart';
 import '../core/theme/app_theme.dart';
@@ -328,7 +328,7 @@ class _RestaurantMenuScreenState extends State<RestaurantMenuScreen>
                           ? restaurant.address!
                           : 'العنوان غير متوفر',
                       hours: _workingHoursLabel,
-                      onCall: _storeCustomerPhone == null
+                      onMessage: _storeCustomerPhone == null
                           ? null
                           : () {
                         if (!GuestGate.requireAccount(
@@ -339,22 +339,10 @@ class _RestaurantMenuScreenState extends State<RestaurantMenuScreen>
                         }
                         final phone = _storeCustomerPhone;
                         if (phone == null || phone.isEmpty) return;
-                        AppHelpers.makePhoneCall(phone);
-                      },
-                      onWhatsApp: _whatsappNumber == null
-                          ? null
-                          : () {
-                        if (!GuestGate.requireAccount(
+                        ChatNavigation.openStoreChat(
                           context,
-                          message: 'سجّل دخولك للتواصل مع المتجر.',
-                        )) {
-                          return;
-                        }
-                        final phone = _whatsappNumber;
-                        if (phone == null || phone.isEmpty) return;
-                        AppHelpers.launchWhatsApp(
-                          phone,
-                          'مرحباً، أريد الاستفسار عن ${restaurant.nameAr}',
+                          merchantPhone: phone,
+                          storeName: restaurant.nameAr,
                         );
                       },
                     ),
@@ -669,14 +657,12 @@ class _HeroSection extends StatelessWidget {
 class _RestaurantInfoCard extends StatelessWidget {
   final String address;
   final String hours;
-  final VoidCallback? onCall;
-  final VoidCallback? onWhatsApp;
+  final VoidCallback? onMessage;
 
   const _RestaurantInfoCard({
     required this.address,
     required this.hours,
-    required this.onCall,
-    required this.onWhatsApp,
+    required this.onMessage,
   });
 
   @override
@@ -707,7 +693,7 @@ class _RestaurantInfoCard extends StatelessWidget {
             label: hours,
           ),
           const SizedBox(height: 16),
-          if (onCall == null && onWhatsApp == null)
+          if (onMessage == null)
             const Text(
               'المتجر أخفى وسائل التواصل حالياً.',
               style: TextStyle(
@@ -717,28 +703,11 @@ class _RestaurantInfoCard extends StatelessWidget {
               ),
             )
           else
-            Row(
-              children: [
-                if (onCall != null)
-                  Expanded(
-                    child: _ActionChip(
-                      label: 'اتصال',
-                      icon: Icons.phone_rounded,
-                      color: _brandRed,
-                      onTap: onCall!,
-                    ),
-                  ),
-                if (onCall != null && onWhatsApp != null) const SizedBox(width: 10),
-                if (onWhatsApp != null)
-                  Expanded(
-                    child: _ActionChip(
-                      label: 'واتساب',
-                      icon: Icons.chat_rounded,
-                      color: const Color(0xFF25D366),
-                      onTap: onWhatsApp!,
-                    ),
-                  ),
-              ],
+            _ActionChip(
+              label: 'مراسلة داخل التطبيق',
+              icon: Icons.chat_bubble_outline_rounded,
+              color: _brandRed,
+              onTap: onMessage!,
             ),
         ],
       ),

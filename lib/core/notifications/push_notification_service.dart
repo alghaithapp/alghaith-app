@@ -166,6 +166,10 @@ class PushNotificationService {
     final category = message.data['category']?.toString() ?? '';
     final requestId = message.data['orderId']?.toString() ?? '';
 
+    if (eventKey == 'call:incoming') {
+      onIncomingCall?.call(Map<String, dynamic>.from(message.data));
+    }
+
     if (eventKey.contains(':approved') || eventKey.contains(':rejected')) {
       await PushNotificationInbox.onCourierStatusPush?.call();
     }
@@ -211,6 +215,7 @@ class PushNotificationService {
     _rootNavigatorKey = key;
   }
   void Function(Map<String, dynamic> data)? _onNotificationOpened;
+  void Function(Map<String, dynamic> data)? onIncomingCall;
 
   void setOnNotificationOpened(void Function(Map<String, dynamic> data) callback) {
     _onNotificationOpened = callback;

@@ -3,10 +3,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../core/realtime/realtime_subscription_mixin.dart';
 import '../../core/theme/app_colors.dart';
 import '../../providers/app_provider.dart';
-import '../../services/supabase_service.dart';
 import '../../utils/role_switch_notifications.dart';
 import '../../widgets/in_app_notification_banner.dart';
 import '../../widgets/safe_bottom_bar.dart';
@@ -24,7 +22,7 @@ class MerchantShell extends StatefulWidget {
   State<MerchantShell> createState() => _MerchantShellState();
 }
 
-class _MerchantShellState extends State<MerchantShell> with WidgetsBindingObserver, RealtimeSubscriptionMixin {
+class _MerchantShellState extends State<MerchantShell> with WidgetsBindingObserver {
   int _currentIndex = 0;
   Timer? _refreshTimer;
   bool _isInBackground = false;
@@ -58,20 +56,11 @@ class _MerchantShellState extends State<MerchantShell> with WidgetsBindingObserv
       provider.syncMerchantCatalogToCloud().catchError((error) {
         debugPrint('MERCHANT_CLOUD_SYNC: $error');
       });
-      // استطلاع دوري كل 30 ثانية (يتوقف تلقائياً عند الخلفية)
-      _refreshTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+      // استطلاع دوري كل 10 ثوانٍ (بدون Realtime — يوفر حصة Supabase)
+      _refreshTimer = Timer.periodic(const Duration(seconds: 10), (_) {
         if (_isInBackground) return;
         _pollForNewOrders();
       });
-      final phone = provider.authPhone;
-      if (phone != null && phone.isNotEmpty) {
-        final sub = SupabaseService.realtime.subscribeToOrders(
-          phone: phone,
-          onUpsert: (_) => _pollForNewOrders(),
-          onDelete: (_) => _pollForNewOrders(),
-        );
-        trackChannel(sub);
-      }
       RoleSwitchNotificationPresenter.showIfNeeded(context);
     });
   }
@@ -82,7 +71,7 @@ class _MerchantShellState extends State<MerchantShell> with WidgetsBindingObserv
     if (_isInBackground) {
       _refreshTimer?.cancel();
     } else if (_refreshTimer == null || !_refreshTimer!.isActive) {
-      _refreshTimer = Timer.periodic(const Duration(seconds: 20), (_) => _pollForNewOrders());
+      _refreshTimer = Timer.periodic(const Duration(seconds: 10), (_) => _pollForNewOrders());
     }
   }
 
@@ -91,7 +80,6 @@ class _MerchantShellState extends State<MerchantShell> with WidgetsBindingObserv
     WidgetsBinding.instance.removeObserver(this);
     context.read<AppProvider>().removeListener(_onAppProviderChanged);
     _refreshTimer?.cancel();
-    disposeRealtime();
     super.dispose();
   }
 

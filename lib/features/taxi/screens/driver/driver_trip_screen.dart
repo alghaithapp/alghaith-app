@@ -1,9 +1,12 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../../providers/app_provider.dart';
+import '../../../../utils/call_navigation.dart';
+import '../../../../utils/chat_navigation.dart';
 import '../../models/taxi_request.dart';
 
 /// شاشة الرحلات النشطة للسائق — تقرأ من AppProvider مباشرة
@@ -147,8 +150,33 @@ class _ActiveTripCardState extends State<_ActiveTripCard> {
     }
   }
 
+  Future<void> _openNavigationFor(TaxiRequest req) async {
+    LatLng? target;
+    if (req.statusKey == 'accepted' || req.statusKey == 'on_way') {
+      if (req.pickupLat != 0 && req.pickupLng != 0) {
+        target = LatLng(req.pickupLat, req.pickupLng);
+      }
+    } else if (req.statusKey == 'picked_up') {
+      if (req.dropoffLat != 0 && req.dropoffLng != 0) {
+        target = LatLng(req.dropoffLat, req.dropoffLng);
+      }
+    }
+    if (target == null || !mounted) return;
+    await AppHelpers.openExternalMapNavigation(
+      context: context,
+      latitude: target.latitude,
+      longitude: target.longitude,
+    );
+  }
+
   Future<void> _advance(AppProvider provider) async {
     if (_isBusy) return;
+    final req = widget.request;
+
+    if (req.statusKey == 'accepted' || req.statusKey == 'picked_up') {
+      await _openNavigationFor(req);
+    }
+
     setState(() => _isBusy = true);
     final id = widget.request.id;
     switch (widget.request.statusKey) {
@@ -231,9 +259,37 @@ class _ActiveTripCardState extends State<_ActiveTripCard> {
             const SizedBox(height: 10),
 
             // الزبون
-            Text(
-              '${req.customerNameAr} • ${req.fare} د.ع',
-              style: const TextStyle(fontFamily: 'Cairo', fontSize: 13),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    '${req.customerNameAr} • ${req.fare} د.ع',
+                    style: const TextStyle(fontFamily: 'Cairo', fontSize: 13),
+                  ),
+                ),
+                if (req.customerPhone.trim().isNotEmpty) ...[
+                  IconButton(
+                    tooltip: 'اتصال بالزبون',
+                    onPressed: () => CallNavigation.openTaxiCall(
+                      context,
+                      requestId: req.id,
+                      otherPartyName: req.customerNameAr,
+                      receiverPhone: req.customerPhone,
+                    ),
+                    icon: const Icon(Icons.call, size: 20),
+                  ),
+                  IconButton(
+                    tooltip: 'مراسلة الزبون',
+                    onPressed: () => ChatNavigation.openTaxiChat(
+                      context,
+                      requestId: req.id,
+                      otherPartyName: req.customerNameAr,
+                      receiverPhone: req.customerPhone,
+                    ),
+                    icon: const Icon(Icons.chat_bubble_outline, size: 20),
+                  ),
+                ],
+              ],
             ),
             const SizedBox(height: 6),
 
@@ -306,9 +362,9 @@ class _ActiveTripCardState extends State<_ActiveTripCard> {
             const SizedBox(height: 14),
 
             // أزرار الإجراء
-            Row(
-              children: [
-                if (isCancelRequested) ...[
+            if (isCancelRequested)
+              Row(
+                children: [
                   Expanded(
                     child: _ActionBtn(
                       label: 'موافقة الإلغاء',
@@ -323,22 +379,43 @@ class _ActiveTripCardState extends State<_ActiveTripCard> {
                       label: 'رفض الإلغاء',
                       color: AppColors.success,
                       isLoading: false,
-                      onTap: () => provider
-                          .rejectTaxiCancellationByDriver(req.id),
-                    ),
-                  ),
-                ] else if (_nextActionLabel.isNotEmpty) ...[
-                  Expanded(
-                    child: _ActionBtn(
-                      label: _nextActionLabel,
-                      color: _statusColor,
-                      isLoading: _isBusy,
-                      onTap: () => _advance(provider),
+                      onTap: () =>
+                          provider.rejectTaxiCancellationByDriver(req.id),
                     ),
                   ),
                 ],
-              ],
-            ),
+              )
+            else if (_nextActionLabel.isNotEmpty)
+              Column(
+                children: [
+                  if (req.statusKey == 'accepted' ||
+                      req.statusKey == 'on_way' ||
+                      req.statusKey == 'picked_up')
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton.icon(
+                          onPressed:
+                              _isBusy ? null : () => _openNavigationFor(req),
+                          icon: const Icon(Icons.navigation_rounded),
+                          label: Text(
+                            req.statusKey == 'picked_up'
+                                ? 'فتح المسار إلى الوجهة'
+                                : 'فتح المسار إلى الزبون',
+                            style: const TextStyle(fontFamily: 'Cairo'),
+                          ),
+                        ),
+                      ),
+                    ),
+                  _ActionBtn(
+                    label: _nextActionLabel,
+                    color: _statusColor,
+                    isLoading: _isBusy,
+                    onTap: () => _advance(provider),
+                  ),
+                ],
+              ),
           ],
         ),
       ),

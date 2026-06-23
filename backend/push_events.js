@@ -661,19 +661,50 @@ async function onMerchantFrozen(merchantPhone, isFrozen) {
   );
 }
 
-async function notifyChatMessage(merchantPhone, customerMessage) {
+async function notifyChatMessage(receiverPhone, customerMessage) {
   const message = String(customerMessage?.content || customerMessage?.text || '').trim().substring(0, 100);
-  const customerName = String(customerMessage?.senderName || customerMessage?.customerName || 'زبون').trim();
+  const customerName = String(customerMessage?.senderName || customerMessage?.customerName || customerMessage?.sender_name || 'مستخدم').trim();
+  const threadType = String(customerMessage?.threadType || customerMessage?.thread_type || 'order').trim();
+  const threadId = String(customerMessage?.threadId || customerMessage?.thread_id || customerMessage?.orderId || '').trim();
 
-  await sendPushToPhone(merchantPhone, {
+  await sendPushToPhone(receiverPhone, {
     title: `رسالة جديدة من ${customerName}`,
-    body: message || 'قام الزبون بإرسال رسالة جديدة',
+    body: message || 'وصلتك رسالة جديدة داخل التطبيق',
     data: {
       eventKey: 'chat:new',
-      role: 'merchant',
-      orderId: String(customerMessage?.orderId || '').trim(),
+      threadType,
+      threadId,
+      orderId: threadType === 'order' ? threadId : '',
+      category: 'chat',
     },
   });
+}
+
+async function notifyIncomingCall(receiverPhone, callInfo) {
+  const callerName = String(callInfo?.callerName || 'مستخدم').trim();
+  const threadType = String(callInfo?.threadType || 'order').trim();
+  const threadId = String(callInfo?.threadId || '').trim();
+  const channelName = String(callInfo?.channelName || '').trim();
+  const callerPhone = String(callInfo?.callerPhone || '').trim();
+
+  await sendPushToPhone(
+    receiverPhone,
+    {
+      title: `مكالمة واردة من ${callerName}`,
+      body: 'اضغط للرد على المكالمة داخل التطبيق',
+      data: {
+        eventKey: 'call:incoming',
+        threadType,
+        threadId,
+        channelName,
+        callerName,
+        callerPhone,
+        orderId: threadType === 'order' ? threadId : '',
+        category: 'call',
+      },
+    },
+    { showSystemBanner: true }
+  );
 }
 
 module.exports = {
@@ -687,6 +718,7 @@ module.exports = {
   onMerchantFrozen,
   sendPushToPhone,
   notifyChatMessage,
+  notifyIncomingCall,
   notifyActiveCouriers,
   notifyActiveDrivers,
   buildPushPayload,

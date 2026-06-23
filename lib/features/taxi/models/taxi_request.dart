@@ -1,23 +1,88 @@
-/// أنواع التكسي
-enum TaxiType { economic, superTaxiType }
+import 'package:flutter/material.dart';
+
+/// أنواع خدمة التنقل
+enum TaxiType { tuktuk, wazz, economic }
 
 extension TaxiTypeX on TaxiType {
-  /// القيمة التي يتوقعها السيرفر
   String get toApiName {
     switch (this) {
-      case TaxiType.superTaxiType:
-        return 'super';
+      case TaxiType.tuktuk:
+        return 'tuktuk';
+      case TaxiType.wazz:
+        return 'wazz';
       case TaxiType.economic:
         return 'economic';
     }
   }
 
+  String get labelAr {
+    switch (this) {
+      case TaxiType.tuktuk:
+        return 'تكتك';
+      case TaxiType.wazz:
+        return 'واز جيب';
+      case TaxiType.economic:
+        return 'تكسي اقتصادي';
+    }
+  }
+
+  String get subtitleAr {
+    switch (this) {
+      case TaxiType.tuktuk:
+        return 'رحلة اقتصادية';
+      case TaxiType.wazz:
+        return 'سيارة جيب';
+      case TaxiType.economic:
+        return '4 مقاعد، سيارة';
+    }
+  }
+
+  /// مسار صورة النوع داخل assets/images/
+  String get imageAsset {
+    switch (this) {
+      case TaxiType.tuktuk:
+        return 'assets/images/taxi_tuktuk.png';
+      case TaxiType.wazz:
+        return 'assets/images/taxi_wazz.png';
+      case TaxiType.economic:
+        return 'assets/images/taxi_economy.png';
+    }
+  }
+
+  /// للعرض في تفاصيل الطلب للزبون
+  String get customerServiceLabelAr => labelAr;
+
+  IconData get icon {
+    switch (this) {
+      case TaxiType.tuktuk:
+        return Icons.electric_rickshaw_rounded;
+      case TaxiType.wazz:
+        return Icons.two_wheeler_rounded;
+      case TaxiType.economic:
+        return Icons.local_taxi_rounded;
+    }
+  }
+
+  Color get accentColor {
+    switch (this) {
+      case TaxiType.tuktuk:
+        return const Color(0xFF2E7D32);
+      case TaxiType.wazz:
+        return const Color(0xFF1565C0);
+      case TaxiType.economic:
+        return const Color(0xFF1B5E20);
+    }
+  }
+
   static TaxiType fromApiName(String? name) {
-    switch (name) {
+    switch (name?.trim().toLowerCase()) {
+      case 'tuktuk':
+      case 'tuk_tuk':
+        return TaxiType.tuktuk;
+      case 'wazz':
+        return TaxiType.wazz;
       case 'super':
-        return TaxiType.superTaxiType;
       case 'economic':
-        return TaxiType.economic;
       default:
         return TaxiType.economic;
     }
@@ -37,7 +102,7 @@ class TaxiRequest {
   final double dropoffLat;
   final double dropoffLng;
   final double distanceKm;
-  final TaxiType taxiType; // 🟢 economic / 🔵 super
+  final TaxiType taxiType;
   final int fareEconomic;
   final int fareSuper;
   final int fare;
@@ -50,7 +115,11 @@ class TaxiRequest {
   final String? driverId;
   final String? driverName;
   final String? driverPhone;
-  final String? driverVehicleInfo; // نوع السيارة + لوحة
+  final String? driverVehicleInfo;
+  final String? vehicleModel;
+  final String? plateNumber;
+  final double? driverLat;
+  final double? driverLng;
   final List<String> rejectedByDriverIds;
   final String? cancellationReason;
   final bool isPaid;
@@ -62,13 +131,13 @@ class TaxiRequest {
     required this.requestNumber,
     this.customerName = '',
     this.customerPhone = '',
-    this.pickupAddress = '',
-    this.dropoffAddress = '',
-    this.pickupLat = 0.0,
-    this.pickupLng = 0.0,
-    this.dropoffLat = 0.0,
-    this.dropoffLng = 0.0,
-    this.distanceKm = 0.0,
+    required this.pickupAddress,
+    required this.dropoffAddress,
+    this.pickupLat = 0,
+    this.pickupLng = 0,
+    this.dropoffLat = 0,
+    this.dropoffLng = 0,
+    this.distanceKm = 0,
     this.taxiType = TaxiType.economic,
     this.fareEconomic = 0,
     this.fareSuper = 0,
@@ -83,6 +152,10 @@ class TaxiRequest {
     this.driverName,
     this.driverPhone,
     this.driverVehicleInfo,
+    this.vehicleModel,
+    this.plateNumber,
+    this.driverLat,
+    this.driverLng,
     this.rejectedByDriverIds = const [],
     this.cancellationReason,
     this.isPaid = false,
@@ -90,45 +163,73 @@ class TaxiRequest {
     this.assignedDriverName,
   });
 
-  String get rideTypeAr => taxiTypeLabelAr;
-  String get customerNameAr => customerName;
   String get pickupAddressAr => pickupAddress;
   String get dropoffAddressAr => dropoffAddress;
+  String get customerNameAr => customerName;
 
   bool get isPending => statusKey == 'pending';
   bool get isAccepted => statusKey == 'accepted';
+  bool get isOnWay => statusKey == 'on_way';
   bool get isArrived => statusKey == 'arrived';
   bool get isPickedUp => statusKey == 'picked_up';
   bool get isCompleted => statusKey == 'completed';
   bool get isCancelled => statusKey == 'cancelled';
+  bool get isCancelRequested => statusKey == 'cancel_requested';
 
-  String get taxiTypeLabelAr {
-    switch (taxiType) {
-      case TaxiType.superTaxiType:
-        return '\u{1F535} \u{633}\u{648}\u{628}\u{631}';
-      case TaxiType.economic:
-        return '\u{1F7E2} \u{627}\u{642}\u{62A}\u{635}\u{627}\u{62F}\u{64A}';
-    }
-  }
+  bool get canCustomerCancel =>
+      !isCompleted && !isCancelled && !isPickedUp;
+
+  bool get hasAssignedDriver =>
+      isAccepted || isOnWay || isArrived || isPickedUp || isCancelRequested;
+
+  /// يمكن للزبون فتح شاشة التتبع المباشر ولوحة الرحلة
+  bool get canShowLiveTracking => hasAssignedDriver;
+
+  String get taxiTypeLabelAr => taxiType.customerServiceLabelAr;
 
   String get statusLabelAr {
     switch (statusKey) {
       case 'pending':
-        return '\u{642}\u{64A}\u{62F} \u{627}\u{644}\u{627}\u{646}\u{62A}\u{638}\u{627}\u{631}';
+        return 'قيد الانتظار';
       case 'accepted':
-        return '\u{62A}\u{645} \u{627}\u{644}\u{642}\u{628}\u{648}\u{644}';
+        return 'تم القبول';
       case 'arrived':
-        return '\u{648}\u{635}\u{644} \u{627}\u{644}\u{633}\u{627}\u{626}\u{642}';
+        return 'وصل السائق';
       case 'picked_up':
-        return '\u{62A}\u{645} \u{627}\u{644}\u{627}\u{633}\u{62A}\u{644}\u{627}\u{645}';
+        return 'تم الاستلام';
       case 'completed':
-        return '\u{645}\u{643}\u{62A}\u{645}\u{644}';
+        return 'مكتمل';
       case 'cancelled':
-        return '\u{645}\u{644}\u{63A}\u{64A}';
+        return 'ملغي';
+      case 'cancel_requested':
+        return 'بانتظار موافقة السائق على الإلغاء';
       default:
         return statusAr.isNotEmpty ? statusAr : statusKey;
     }
   }
+
+  String get rideTypeAr => taxiTypeLabelAr;
+
+  String get vehicleModelDisplay {
+    final model = vehicleModel?.trim();
+    if (model != null && model.isNotEmpty) return model;
+    final info = driverVehicleInfo?.trim() ?? '';
+    if (info.contains(' / ')) return info.split(' / ').first.trim();
+    return info.isNotEmpty ? info : 'مركبة';
+  }
+
+  String get plateNumberDisplay {
+    final plate = plateNumber?.trim();
+    if (plate != null && plate.isNotEmpty) return plate;
+    final info = driverVehicleInfo?.trim() ?? '';
+    if (info.contains(' / ')) {
+      return info.split(' / ').last.trim();
+    }
+    return '';
+  }
+
+  bool get hasDriverLocation =>
+      driverLat != null && driverLng != null && driverLat != 0 && driverLng != 0;
 
   Map<String, dynamic> toMap() {
     return {
@@ -143,7 +244,7 @@ class TaxiRequest {
       'dropoffLat': dropoffLat,
       'dropoffLng': dropoffLng,
       'distanceKm': distanceKm,
-      'taxiType': taxiType.name,
+      'taxiType': taxiType.toApiName,
       'fareEconomic': fareEconomic,
       'fareSuper': fareSuper,
       'fare': fare,
@@ -157,6 +258,10 @@ class TaxiRequest {
       'driverName': driverName,
       'driverPhone': driverPhone,
       'driverVehicleInfo': driverVehicleInfo,
+      'vehicleModel': vehicleModel,
+      'plateNumber': plateNumber,
+      'driverLat': driverLat,
+      'driverLng': driverLng,
       'rejectedByDriverIds': rejectedByDriverIds,
       'cancellationReason': cancellationReason,
       'isPaid': isPaid,
@@ -196,6 +301,10 @@ class TaxiRequest {
       driverName: map['driverName'] as String?,
       driverPhone: map['driverPhone'] as String?,
       driverVehicleInfo: map['driverVehicleInfo'] as String?,
+      vehicleModel: map['vehicleModel'] as String?,
+      plateNumber: map['plateNumber'] as String?,
+      driverLat: (map['driverLat'] as num?)?.toDouble(),
+      driverLng: (map['driverLng'] as num?)?.toDouble(),
       rejectedByDriverIds: map['rejectedByDriverIds'] is List
           ? (map['rejectedByDriverIds'] as List)
               .map((e) => e.toString())
@@ -234,6 +343,10 @@ class TaxiRequest {
     String? driverName,
     String? driverPhone,
     String? driverVehicleInfo,
+    String? vehicleModel,
+    String? plateNumber,
+    double? driverLat,
+    double? driverLng,
     List<String>? rejectedByDriverIds,
     String? cancellationReason,
     bool? isPaid,
@@ -266,6 +379,10 @@ class TaxiRequest {
       driverName: driverName ?? this.driverName,
       driverPhone: driverPhone ?? this.driverPhone,
       driverVehicleInfo: driverVehicleInfo ?? this.driverVehicleInfo,
+      vehicleModel: vehicleModel ?? this.vehicleModel,
+      plateNumber: plateNumber ?? this.plateNumber,
+      driverLat: driverLat ?? this.driverLat,
+      driverLng: driverLng ?? this.driverLng,
       rejectedByDriverIds: rejectedByDriverIds ?? this.rejectedByDriverIds,
       cancellationReason: cancellationReason ?? this.cancellationReason,
       isPaid: isPaid ?? this.isPaid,

@@ -1,15 +1,30 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import '../core/theme/app_colors.dart';
-import '../utils/helpers.dart';
+import '../utils/chat_navigation.dart';
+import '../utils/guest_gate.dart';
 import '../widgets/app_image.dart';
 import '../widgets/service_navigation_buttons.dart';
 
-/// شاشة مطبعة جنة عدن — تعرض الخدمات وزر واتساب للتواصل المباشر.
+/// شاشة مطبعة جنة عدن — تعرض الخدمات ومراسلة داخل التطبيق.
 class EdenPrintingScreen extends StatelessWidget {
   const EdenPrintingScreen({super.key});
 
   static const String _whatsappNumber = '9647725053888';
+
+  static void _openChat(BuildContext context) {
+    if (!GuestGate.requireAccount(
+      context,
+      message: 'سجّل دخولك للتواصل مع المطبعة.',
+    )) {
+      return;
+    }
+    ChatNavigation.openStoreChat(
+      context,
+      merchantPhone: _whatsappNumber,
+      storeName: 'مطبعة جنة عدن',
+    );
+  }
 
   static const List<_PrintingService> _services = [
     _PrintingService(
@@ -120,12 +135,7 @@ class EdenPrintingScreen extends StatelessWidget {
                         const SizedBox(width: 10),
                         // زر واتساب صغير
                         GestureDetector(
-                          onTap: () {
-                            AppHelpers.launchWhatsApp(
-                              _whatsappNumber,
-                              'السلام عليكم، أريد الاستفسار عن خدمات الطباعة في مطبعة جنة عدن',
-                            );
-                          },
+                          onTap: () => _openChat(context),
                           child: Container(
                             width: 44,
                             height: 44,
@@ -219,12 +229,7 @@ class EdenPrintingScreen extends StatelessWidget {
                         ),
                         const Spacer(),
                         GestureDetector(
-                          onTap: () {
-                            AppHelpers.launchWhatsApp(
-                              _whatsappNumber,
-                              'السلام عليكم، أريد الاستفسار عن خدمات الطباعة في مطبعة جنة عدن',
-                            );
-                          },
+                          onTap: () => _openChat(context),
                           child: const Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
@@ -343,12 +348,7 @@ class EdenPrintingScreen extends StatelessWidget {
                   color: const Color(0xFF25D366),
                   borderRadius: BorderRadius.circular(16),
                   pressedOpacity: 0.85,
-                  onPressed: () {
-                    AppHelpers.launchWhatsApp(
-                      _whatsappNumber,
-                      'السلام عليكم، أريد الاستفسار عن خدمات الطباعة في مطبعة جنة عدن',
-                    );
-                  },
+                  onPressed: () => _openChat(context),
                   child: const Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [

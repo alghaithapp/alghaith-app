@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../providers/taxi_provider.dart';
 import '../../models/taxi_request.dart';
+import '../../widgets/taxi_type_image.dart';
 
 /// شاشة أرباح السائق — تعرض إجمالي الأرباح وقائمة الرحلات المكتملة
 class DriverEarningsScreen extends StatelessWidget {
@@ -296,7 +297,7 @@ class _CompletedTripTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isSuper = trip.taxiType == TaxiType.superTaxiType;
+    final typeColor = trip.taxiType.accentColor;
 
     return Container(
       padding: const EdgeInsets.all(14),
@@ -307,20 +308,10 @@ class _CompletedTripTile extends StatelessWidget {
       child: Row(
         children: [
           // أيقونة نوع الخدمة
-          Container(
+          TaxiTypeImage(
+            type: trip.taxiType,
             width: 44,
             height: 44,
-            decoration: BoxDecoration(
-              color: isSuper
-                  ? Colors.blue.withValues(alpha: 0.1)
-                  : AppColors.success.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: Icon(
-              isSuper ? Icons.star_rounded : Icons.electric_car_rounded,
-              color: isSuper ? Colors.blue : AppColors.success,
-              size: 22,
-            ),
           ),
           const SizedBox(width: 12),
           // معلومات الرحلة
@@ -336,7 +327,7 @@ class _CompletedTripTile extends StatelessWidget {
                         fontFamily: 'Cairo',
                         fontWeight: FontWeight.w900,
                         fontSize: 12,
-                        color: isSuper ? Colors.blue : AppColors.success,
+                        color: typeColor,
                       ),
                     ),
                     const SizedBox(width: 8),
