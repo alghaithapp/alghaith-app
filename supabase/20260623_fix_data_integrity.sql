@@ -73,10 +73,10 @@ BEGIN
     SELECT 1 FROM information_schema.columns
     WHERE table_name = 'merchant_reviews' AND column_name = 'merchant_phone'
   ) THEN
-    ALTER TABLE merchant_reviews
-      DROP CONSTRAINT IF EXISTS merchant_reviews_merchant_phone_fkey,
-      ADD CONSTRAINT merchant_reviews_merchant_phone_fkey
-        FOREIGN KEY (merchant_phone) REFERENCES app_users(phone) ON DELETE CASCADE;
+ALTER TABLE merchant_reviews
+  DROP CONSTRAINT IF EXISTS merchant_reviews_merchant_user_id_fkey,
+  ADD CONSTRAINT merchant_reviews_merchant_user_id_fkey
+    FOREIGN KEY (merchant_user_id) REFERENCES app_users(phone) ON DELETE CASCADE;
   END IF;
 
   IF EXISTS (
