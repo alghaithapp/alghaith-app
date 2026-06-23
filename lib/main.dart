@@ -81,6 +81,38 @@ Future<void> _bootstrapAsync() async {
   }
 }
 
+class _LoadingOverlay extends StatelessWidget {
+  const _LoadingOverlay();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Scaffold(
+      body: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SizedBox(
+              width: 36,
+              height: 36,
+              child: CircularProgressIndicator(strokeWidth: 3),
+            ),
+            SizedBox(height: 20),
+            Text(
+              'جاري تحميل بياناتك...',
+              style: TextStyle(
+                fontFamily: 'Cairo',
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFF666666),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class AppErrorFallback extends StatelessWidget {
   final FlutterErrorDetails? details;
 
@@ -164,6 +196,11 @@ class _AlGhaithAppState extends State<AlGhaithApp> {
 
       if (appProvider.isGuestMode || (!appProvider.hasPhoneSession && !appProvider.hasSelectedRole)) {
         return const ExitConfirmScope(child: MainShell());
+      }
+
+      // أثناء تحميل البيانات من السيرفر، اظهر شاشة تحميل بدلاً من الشاشات الفارغة
+      if (appProvider.isRestoring && !appProvider.isReady) {
+        return const ExitConfirmScope(child: _LoadingOverlay());
       }
 
       if (appProvider.isAdmin) {

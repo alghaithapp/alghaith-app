@@ -154,9 +154,7 @@ class AuthService extends ChangeNotifier {
       _hydrateCustomerIdentityFromRestoredData();
     } finally {
       _isLoggingIn = false;
-      _isRestoring = true;
       _isHydrating = false;
-      _isReady = false;
       notifyListeners();
 
       _notificationHub.onLoginSuccess();
