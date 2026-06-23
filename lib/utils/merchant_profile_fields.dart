@@ -25,6 +25,21 @@ class MerchantProfileFields {
     return '';
   }
 
+  static String name(Map<String, dynamic>? map) {
+    if (map == null) return 'المحل';
+    for (final key in [
+      'store_name',
+      'storeName',
+      'name',
+      'merchant_store_name',
+      'merchantStoreName',
+    ]) {
+      final value = map[key]?.toString().trim() ?? '';
+      if (value.isNotEmpty) return value;
+    }
+    return 'المحل';
+  }
+
   static String timeFromMap(
     Map<String, dynamic>? map, {
     required bool isOpen,

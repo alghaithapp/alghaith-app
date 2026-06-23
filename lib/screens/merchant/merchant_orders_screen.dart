@@ -979,7 +979,7 @@ class _PremiumOrderCard extends StatelessWidget {
               order.customerPhone != '07700000000') ...[
             InternalContactButtons.order(
               orderId: order.id,
-              otherPartyName: order.customerName,
+              otherPartyName: order.customerNameAr,
               receiverPhone: order.customerPhone,
               chatLabel: 'مراسلة الزبون',
               callLabel: 'اتصال',
