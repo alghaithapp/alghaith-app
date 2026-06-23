@@ -73,7 +73,7 @@ class AuthService extends ChangeNotifier {
   Map<String, dynamic>? get appUserRecord => _appUserRecord;
   bool get hasPhoneSession =>
       _authPhone != null && _authPhone!.trim().isNotEmpty;
-  bool get isAdmin => _userRole == 'admin';
+  bool get isAdmin => _userRole == 'admin' || _hasAdminAccess;
   bool get isMerchant => _userRole == 'merchant';
   bool get isDelivery => _userRole == 'delivery';
   bool get isDriver => _userRole == 'driver';
