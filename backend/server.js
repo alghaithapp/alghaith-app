@@ -148,7 +148,10 @@ app.get('/__/check-products', async (req, res) => {
     const { assertSupabaseAdmin } = require('./supabase_repo');
     const supabase = assertSupabaseAdmin();
     let query = supabase.from('merchant_products').select('phone, id, name, created_at').order('created_at', { ascending: false }).limit(100);
-    if (phone) query = supabase.from('merchant_products').select('phone, id, name, created_at').or(`phone.eq.${phone},phone.eq.+964${phone.replace(/^0+/, '')}`).limit(100);
+    if (phone) {
+      const digits = phone.replace(/^\+?9640*/, '');
+      query = supabase.from('merchant_products').select('phone, id, name_ar, price, created_at').or(`phone.eq.${phone},phone.eq.+964${digits},phone.eq.0${digits}`).limit(100);
+    }
     const { data } = await query;
     return res.json({ total: data?.length || 0, products: data || [] });
   } catch (error) {
