@@ -141,6 +141,65 @@ app.get('/__/recover-merchant', async (req, res) => {
   }
 });
 
+// ── استعادة منتجات التجار من app_state.items إلى merchant_products ─────
+app.get('/__/recover-products', async (req, res) => {
+  try {
+    const { assertSupabaseAdmin } = require('./supabase_repo');
+    const supabase = assertSupabaseAdmin();
+    
+    // 1. فحص كل app_state للبحث عن items
+    const { data: states } = await supabase.from('app_state').select('phone, state').limit(500);
+    if (!states) return res.json({ recovered: 0, scanned: 0, errors: [] });
+    
+    const { data: existingRows } = await supabase.from('merchant_products').select('phone');
+    const existingSet = new Set((existingRows || []).map(r => r.phone));
+    
+    let recovered = 0;
+    let scanned = 0;
+    const errors = [];
+    
+    for (const row of states) {
+      const state = row.state || {};
+      const items = state.items;
+      if (!Array.isArray(items) || items.length === 0) continue;
+      scanned++;
+      
+      const phone = row.phone;
+      for (const item of items) {
+        try {
+          const product = {
+            id: String(item.id || ''),
+            phone: phone,
+            name_ar: String(item.nameAr || item.name || ''),
+            name_en: String(item.nameEn || item.name || ''),
+            description_ar: String(item.descriptionAr || item.description || ''),
+            description_en: String(item.descriptionEn || item.description || ''),
+            price: (item.price as num?)?.toInt() ?? 0,
+            category: String(item.category || 'general'),
+            sub_category: String(item.subCategory || item.sub_category || ''),
+            image: String(item.image || ''),
+            image_base64: String(item.imageBase64 || item.image_base64 || ''),
+            is_available: item.isAvailable ?? true,
+          };
+          if (!product.id) continue;
+          await supabase.from('merchant_products').upsert(product, { onConflict: 'id' });
+          recovered++;
+        } catch (e) {
+          errors.push({ phone, itemId: item.id, error: e.message });
+        }
+      }
+    }
+    return res.json({
+      scanned: states.length,
+      merchantsWithItems: scanned,
+      productsRecovered: recovered,
+      errors,
+    });
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+});
+
 // ── فحص المنتجات المخزنة في merchant_products ──────────────────────────
 app.get('/__/check-products', async (req, res) => {
   try {
