@@ -649,6 +649,20 @@ async function saveMerchantProfile(phone, data = {}) {
       data.restaurant_category ?? data.restaurantCategory
     );
   }
+  if (await hasColumn('merchant_profiles', 'service_sub_category')) {
+    assignIfDefined(
+      basePayload,
+      'service_sub_category',
+      data.service_sub_category ?? data.serviceSubCategory
+    );
+  } else {
+    // تخزين serviceSubCategory في store_data كحل بديل إذا لم يكن العمود موجوداً
+    const storeData = normalizeObject(basePayload.store_data);
+    if (data.serviceSubCategory || data.service_sub_category) {
+      storeData.serviceSubCategory = data.serviceSubCategory ?? data.service_sub_category;
+      basePayload.store_data = storeData;
+    }
+  }
   if (await hasColumn('merchant_profiles', 'is_approved')) {
     if (data.is_approved !== undefined || data.isApproved !== undefined) {
       basePayload.is_approved = Boolean(data.is_approved ?? data.isApproved);
@@ -904,6 +918,9 @@ async function listProfessionalProfiles(professionId = '') {
     .map((row) => enrichProfessionalProfileRow(row));
 }
 
+// الخدمات التي تعتمد على التواصل المباشر دون منتجات (جمال، مهنيون، إلخ)
+const CONTACT_ONLY_SERVICES = new Set(['beauty', 'professionals', 'tourism']);
+
 async function listMerchantStoresByService({
   serviceId,
   productCategory,
@@ -913,6 +930,8 @@ async function listMerchantStoresByService({
   const profiles = await selectMany('merchant_profiles');
   const normalizedServiceId = String(serviceId || '').trim();
   const channel = String(marketplaceCategory || '').trim();
+  const normalizedSubCategoryId = String(subCategoryId || '').trim();
+  const isContactOnly = CONTACT_ONLY_SERVICES.has(normalizedServiceId);
   const result = [];
 
   for (const profile of profiles) {
@@ -921,6 +940,25 @@ async function listMerchantStoresByService({
     if (isMerchantFrozen(profile)) continue;
     if (!isMerchantApproved(profile)) continue;
     if (!merchantQualifiesForServiceListing(profile, normalizedServiceId)) {
+      continue;
+    }
+
+    // تصفية حسب serviceSubCategory إذا كان محدداً
+    if (normalizedSubCategoryId) {
+      const profileSubCat = String(
+        profile.service_sub_category ||
+        (profile.store_data && profile.store_data.serviceSubCategory) ||
+        ''
+      ).trim();
+      if (profileSubCat && profileSubCat !== normalizedSubCategoryId) continue;
+    }
+
+    // خدمات التواصل المباشر: تظهر بدون منتجات
+    if (isContactOnly) {
+      result.push({
+        profile: withMerchantCustomerContacts(profile),
+        products: [],
+      });
       continue;
     }
 
@@ -936,7 +974,7 @@ async function listMerchantStoresByService({
         row,
         profile,
         productCategory,
-        subCategoryId,
+        subCategoryId: normalizedSubCategoryId,
         marketplaceCategory: channel || normalizedServiceId,
       })
     );

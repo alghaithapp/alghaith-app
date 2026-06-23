@@ -173,7 +173,7 @@ class MarketplaceCatalog {
       apiServiceId: 'beauty',
       apiProductCategory: 'beauty',
       hubTitleAr: 'الصحة والجمال',
-      hubSubtitleAr: 'عيادات، صيدليات، وخدمات العناية',
+      hubSubtitleAr: 'صالونات، عيادات تجميل، وصيدليات',
       storeTitleAr: 'الصحة والجمال',
       storeSubtitleAr: 'اختر مزود الخدمة',
       defaultSubBrowseMode: SubCategoryBrowseMode.catalog,
@@ -371,10 +371,10 @@ class MarketplaceCatalog {
   ];
 
   static const List<MarketplaceSubCategory> _healthSubCategories = [
-    MarketplaceSubCategory(id: 'hospitals', titleAr: 'مستشفيات', titleEn: 'Hospitals', image: 'assets/images/health_hospitals.png', browseMode: SubCategoryBrowseMode.catalog),
-    MarketplaceSubCategory(id: 'doctors', titleAr: 'أطباء وعيادات', titleEn: 'Doctors & Clinics', image: 'assets/images/health_doctors.png', browseMode: SubCategoryBrowseMode.catalog),
-    MarketplaceSubCategory(id: 'pharmacies', titleAr: 'صيدليات', titleEn: 'Pharmacies', image: 'assets/images/health_pharmacies.png', browseMode: SubCategoryBrowseMode.stores),
-    MarketplaceSubCategory(id: 'salon', titleAr: 'صالون وتجميل', titleEn: 'Salon & Beauty', image: 'assets/images/health_salon.png', browseMode: SubCategoryBrowseMode.catalog),
+    MarketplaceSubCategory(id: 'صالون رجالي', titleAr: 'صالون رجالي', titleEn: 'Male Salon', image: 'assets/images/health_salon.png', browseMode: SubCategoryBrowseMode.stores),
+    MarketplaceSubCategory(id: 'صالون نسائي', titleAr: 'صالون نسائي', titleEn: 'Female Salon', image: 'assets/images/health_salon.png', browseMode: SubCategoryBrowseMode.stores),
+    MarketplaceSubCategory(id: 'عيادة تجميل', titleAr: 'عيادة تجميل', titleEn: 'Beauty Clinic', image: 'assets/images/health_doctors.png', browseMode: SubCategoryBrowseMode.stores),
+    MarketplaceSubCategory(id: 'صيدلية', titleAr: 'صيدلية', titleEn: 'Pharmacy', image: 'assets/images/health_pharmacies.png', browseMode: SubCategoryBrowseMode.stores),
   ];
 
   static const List<MarketplaceSubCategory> _realEstateSubCategories = [

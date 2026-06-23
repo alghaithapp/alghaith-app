@@ -35,6 +35,7 @@ class _MerchantSetupScreenState extends State<MerchantSetupScreen> {
   String _closeTime = '';
   final TextEditingController _deliveryFeeController = TextEditingController();
 
+  bool _isSaving = false;
   final List<String> _selectedServiceIds = []; // تبدأ فارغة ليقوم التاجر بالاختيار أولاً
   String? _coverImageBase64;
   String? _logoImageBase64;
@@ -42,6 +43,7 @@ class _MerchantSetupScreenState extends State<MerchantSetupScreen> {
   final List<String> _workSampleImagesBase64 = [];
   String? _selectedProfessionalCategoryId;
   String? _selectedRestaurantCategory;
+  String? _selectedServiceSubCategory; // للخدمات: جمال، سيارات، عقارات، سياحة
   double? _storeLatitude;
   double? _storeLongitude;
 
@@ -74,6 +76,37 @@ class _MerchantSetupScreenState extends State<MerchantSetupScreen> {
           _selectedProfessionalCategoryId!.isEmpty);
 
   bool get _isRestaurantSetup => _primaryServiceId == 'restaurant';
+
+  /// خدمات الجمال تُعرض كملف خدمة (صورة + هاتف + واتساب + ساعات) لا كمتجر منتجات
+  bool get _isBeautySetup => _primaryServiceId == 'beauty';
+
+  bool get _hasServiceSubCategories =>
+      const {'beauty', 'cars', 'real_estate', 'tourism'}.contains(_primaryServiceId);
+
+  List<String> get _serviceSubCategories {
+    switch (_primaryServiceId) {
+      case 'beauty':
+        return ['صالون رجالي', 'صالون نسائي', 'عيادة تجميل', 'صيدلية'];
+      case 'cars':
+        return ['بيع وشراء', 'تأجير', 'قطع غيار', 'صيانة'];
+      case 'real_estate':
+        return ['بيع', 'إيجار', 'مكتب عقاري'];
+      case 'tourism':
+        return ['رحلات', 'فنادق', 'تأشيرات'];
+      default:
+        return [];
+    }
+  }
+
+  String get _serviceSubCategoryLabel {
+    switch (_primaryServiceId) {
+      case 'beauty': return 'تخصص النشاط';
+      case 'cars': return 'نوع النشاط';
+      case 'real_estate': return 'نوع الخدمة العقارية';
+      case 'tourism': return 'نوع الخدمة السياحية';
+      default: return 'التخصص';
+    }
+  }
 
   bool _isLocationRequiredFor(String serviceId) {
     return const {
@@ -152,7 +185,9 @@ class _MerchantSetupScreenState extends State<MerchantSetupScreen> {
           ImageStorageService.merchantUploadedImageRef(
             provider.merchantProfileImageBase64,
           );
-      if (_selectedServiceIds.isEmpty) {
+      // استعادة الخدمات فقط إذا كان المتجر مكتملاً (إعداد موجود)
+      // في حالة الإنشاء لأول مرة نبدأ من شاشة الاختيار دائماً
+      if (_selectedServiceIds.isEmpty && provider.hasCompletedMerchantProfile) {
         final existingServices = provider.merchantServiceIds;
         if (existingServices.isNotEmpty) {
           _selectedServiceIds.addAll(existingServices);
@@ -167,6 +202,8 @@ class _MerchantSetupScreenState extends State<MerchantSetupScreen> {
           provider.merchantProfessionalCategoryId;
       _selectedRestaurantCategory ??=
           provider.merchantStore?['restaurantCategory']?.toString();
+      _selectedServiceSubCategory ??=
+          provider.merchantStore?['serviceSubCategory']?.toString();
       _storeLatitude ??= provider.merchantLatitude;
       _storeLongitude ??= provider.merchantLongitude;
       if (_workSampleImagesBase64.isEmpty) {
@@ -192,8 +229,21 @@ class _MerchantSetupScreenState extends State<MerchantSetupScreen> {
 
   void _showMessage(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
+    showCupertinoDialog(
+      context: context,
+      builder: (_) => CupertinoAlertDialog(
+        content: Text(
+          message,
+          style: const TextStyle(fontFamily: 'Cairo', fontSize: 14),
+        ),
+        actions: [
+          CupertinoDialogAction(
+            isDefaultAction: true,
+            child: const Text('حسناً', style: TextStyle(fontFamily: 'Cairo')),
+            onPressed: () => Navigator.of(context).pop(),
+          ),
+        ],
+      ),
     );
   }
 
@@ -224,7 +274,7 @@ class _MerchantSetupScreenState extends State<MerchantSetupScreen> {
   }
 
   String _navigationTitle(MerchantServiceLabels labels) {
-    if (_selectedServiceIds.isEmpty) return labels.accountTitleAr;
+    if (_selectedServiceIds.isEmpty) return 'إنشاء حساب تجاري';
     if (_awaitingProfessionPick) return 'اختر تخصصك المهني';
     if (_isProfessionalSetup) return 'إعداد ملف المهنة';
     return labels.accountTitleAr;
@@ -536,6 +586,51 @@ class _MerchantSetupScreenState extends State<MerchantSetupScreen> {
                                 ],
                               ),
                             ],
+                            if (_hasServiceSubCategories) ...[
+                              const SizedBox(height: 20),
+                              _sectionTitle(_serviceSubCategoryLabel),
+                              const SizedBox(height: 6),
+                              Text(
+                                'حدد نوع نشاطك ليظهر في القسم المناسب للزبائن.',
+                                style: TextStyle(
+                                  color: Colors.grey.shade600,
+                                  fontSize: 12,
+                                  fontFamily: 'Cairo',
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                              Wrap(
+                                spacing: 8,
+                                runSpacing: 8,
+                                children: _serviceSubCategories.map((sub) => _ChoiceChip(
+                                  label: sub,
+                                  selected: _selectedServiceSubCategory == sub,
+                                  onTap: () => setState(
+                                    () => _selectedServiceSubCategory = sub,
+                                  ),
+                                )).toList(),
+                              ),
+                            ],
+                          ] else if (_isBeautySetup) ...[
+                            MerchantImageUploadSlot(
+                              title: 'صورة غلاف الصالون/العيادة',
+                              imageRef: _coverImageBase64,
+                              icon: Icons.storefront_rounded,
+                              onTap: _pickCoverImage,
+                            ),
+                            const SizedBox(height: 12),
+                            MerchantImageUploadSlot(
+                              title: 'شعار أو صورة بارزة',
+                              imageRef: _logoImageBase64,
+                              icon: Icons.badge_rounded,
+                              onTap: _pickLogoImage,
+                            ),
+                            const SizedBox(height: 12),
+                            _SampleImagesRow(
+                              title: 'صور من داخل المكان',
+                              imagesBase64: _workSampleImagesBase64,
+                              onAddTap: _pickWorkSamples,
+                            ),
                           ] else if (_isProfessionalSetup) ...[
                             MerchantImageUploadSlot(
                               title: 'الصورة الشخصية (مطلوبة)',
@@ -550,9 +645,9 @@ class _MerchantSetupScreenState extends State<MerchantSetupScreen> {
                               onAddTap: _pickWorkSamples,
                             ),
                           ],
-                          if (!_isProfessionalSetup) ...[
-                            const SizedBox(height: 20),
-                            _sectionTitle('الخدمات المشمولة'),
+                          if (!_isProfessionalSetup && !_isBeautySetup) ...[
+                              const SizedBox(height: 20),
+                              _sectionTitle('الخدمات المشمولة'),
                             const SizedBox(height: 6),
                             Text(
                               'يمكنك اختيار أكثر من خدمة من نفس الحساب، ثم التبديل بينها لاحقًا من داخل حسابك.',
@@ -703,11 +798,17 @@ class _MerchantSetupScreenState extends State<MerchantSetupScreen> {
                               padding: const EdgeInsets.symmetric(vertical: 16),
                               color: const Color(0xFF007A7A),
                               borderRadius: BorderRadius.circular(18),
-                              onPressed: () async {
+                              onPressed: _isSaving ? null : () async {
+                                setState(() => _isSaving = true);
+
+                                void failWith(String msg) {
+                                  setState(() => _isSaving = false);
+                                  _showMessage(msg);
+                                }
+
                                 final name = _nameController.text.trim();
                                 if (name.isEmpty) {
-                                  _showMessage('يرجى إدخال الاسم أولاً');
-                                  return;
+                                  return failWith('يرجى إدخال الاسم أولاً');
                                 }
 
                                 if (_showsStoreBrandingImages) {
@@ -717,18 +818,22 @@ class _MerchantSetupScreenState extends State<MerchantSetupScreen> {
                                       !ImageStorageService
                                           .isMerchantUploadedImage(
                                               _logoImageBase64)) {
-                                    _showMessage(
+                                    return failWith(
                                       'يرجى رفع ${brandLabels.coverLabelAr} و${brandLabels.logoLabelAr}',
                                     );
-                                    return;
                                   }
                                 }
                                 if (_isRestaurantSetup) {
                                   if (_selectedRestaurantCategory == null) {
-                                    _showMessage(
+                                    return failWith(
                                         'يرجى اختيار تصنيف المطعم (مشويات أو وجبات سريعة)');
-                                    return;
                                   }
+                                }
+                                if (_hasServiceSubCategories &&
+                                    (_selectedServiceSubCategory == null ||
+                                        _selectedServiceSubCategory!.isEmpty)) {
+                                  return failWith(
+                                      'يرجى اختيار $_serviceSubCategoryLabel');
                                 }
 
                                 if (_isProfessionalSetup) {
@@ -741,48 +846,40 @@ class _MerchantSetupScreenState extends State<MerchantSetupScreen> {
                                       _selectedProfessionalCategoryId;
                                   if (professionId == null ||
                                       professionId.isEmpty) {
-                                    _showMessage('يرجى اختيار تخصص المهنة');
-                                    return;
+                                    return failWith('يرجى اختيار تخصص المهنة');
                                   }
                                   if (address.isEmpty) {
-                                    _showMessage('يرجى إدخال عنوانك');
-                                    return;
+                                    return failWith('يرجى إدخال عنوانك');
                                   }
                                   if (_storeLatitude == null ||
                                       _storeLongitude == null) {
-                                    _showMessage(
+                                    return failWith(
                                         'يرجى تحديد موقعك على الخريطة');
-                                    return;
                                   }
                                   if (phone.isEmpty) {
-                                    _showMessage('يرجى إدخال رقم الهاتف');
-                                    return;
+                                    return failWith('يرجى إدخال رقم الهاتف');
                                   }
                                   if (openTime.isEmpty || closeTime.isEmpty) {
-                                    _showMessage(
+                                    return failWith(
                                         'يرجى تحديد وقت الافتتاح ووقت الإغلاق');
-                                    return;
                                   }
                                   if (!ImageStorageService
                                       .isMerchantUploadedImage(
                                           _profileImageBase64)) {
-                                    _showMessage('يرجى رفع صورتك الشخصية');
-                                    return;
+                                    return failWith('يرجى رفع صورتك الشخصية');
                                   }
                                 }
                                 if (!_isProfessionalSetup &&
                                     _requiresStoreLocation &&
                                     (_storeLatitude == null ||
                                         _storeLongitude == null)) {
-                                  _showMessage(
+                                  return failWith(
                                       'حدد ${_locationTitleFor(_primaryServiceId)} أولاً');
-                                  return;
                                 }
                                 if (_openTime.trim().isEmpty ||
                                     _closeTime.trim().isEmpty) {
-                                  _showMessage(
+                                  return failWith(
                                       'يرجى تحديد وقت الافتتاح ووقت الإغلاق');
-                                  return;
                                 }
 
                                 try {
@@ -798,6 +895,8 @@ class _MerchantSetupScreenState extends State<MerchantSetupScreen> {
                                     'logoImageBase64': _logoImageBase64,
                                     'restaurantCategory':
                                         _selectedRestaurantCategory,
+                                    'serviceSubCategory':
+                                        _selectedServiceSubCategory,
                                     'profileImageBase64': _isRestaurantSetup
                                         ? _logoImageBase64
                                         : _profileImageBase64,
@@ -873,15 +972,19 @@ class _MerchantSetupScreenState extends State<MerchantSetupScreen> {
                                 } catch (error) {
                                   _showMessage(
                                       'تعذر حفظ بيانات التاجر: $error');
+                                } finally {
+                                  if (mounted) setState(() => _isSaving = false);
                                 }
                               },
-                              child: Text(
-                                'إرسال طلب ${labels.storeLabelAr}',
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w800,
-                                  fontFamily: 'Cairo',
-                                ),
-                              ),
+                              child: _isSaving
+                                  ? const CupertinoActivityIndicator(color: Colors.white)
+                                  : Text(
+                                      'إرسال طلب ${labels.storeLabelAr}',
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.w800,
+                                        fontFamily: 'Cairo',
+                                      ),
+                                    ),
                             ),
                           ),
                         ],
@@ -1047,41 +1150,230 @@ class _MerchantSetupScreenState extends State<MerchantSetupScreen> {
     );
   }
 
+  void _selectService(String serviceId) {
+    setState(() {
+      _selectedServiceIds
+        ..clear()
+        ..add(serviceId);
+      if (serviceId == 'professionals') {
+        _selectedProfessionalCategoryId = null;
+      }
+    });
+  }
+
   Widget _buildInitialActivitySelection() {
-    return Column(
-      children: [
-        const SizedBox(height: 40),
-        const AppLogo(size: 80),
-        const SizedBox(height: 24),
-        const Text(
-          'مرحباً بك في أسرة الغيث',
-          style: TextStyle(
-            fontSize: 22,
-            fontWeight: FontWeight.w900,
-            fontFamily: 'Cairo',
-            color: Color(0xFF1A1A1A),
-          ),
-        ),
-        const SizedBox(height: 8),
-        const Padding(
-          padding: EdgeInsets.symmetric(horizontal: 40),
-          child: Text(
-            'يرجى اختيار نوع نشاطك التجاري الأساسي للبدء في إعداد ملفك الشخصي.',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 14,
-              color: Colors.grey,
-              fontFamily: 'Cairo',
-              height: 1.5,
+    // الخيارات الرئيسية الثلاث — بطاقات كبيرة بارزة
+    final mainOptions = [
+      _BusinessTypeOption(
+        id: 'product',
+        icon: Icons.shopping_bag_rounded,
+        titleAr: 'متجر',
+        subtitleAr: 'بيع منتجات ومستلزمات',
+        color: const Color(0xFF007A7A),
+      ),
+      _BusinessTypeOption(
+        id: 'restaurant',
+        icon: Icons.restaurant_rounded,
+        titleAr: 'مطعم',
+        subtitleAr: 'قائمة طعام وطلبات توصيل',
+        color: const Color(0xFFF5A01D),
+      ),
+      _BusinessTypeOption(
+        id: 'professionals',
+        icon: Icons.engineering_rounded,
+        titleAr: 'مهني',
+        subtitleAr: 'طبيب، محامٍ، مهندس وغيرهم',
+        color: const Color(0xFF5C6BC0),
+      ),
+    ];
+
+    // الخيارات الأخرى — قائمة مدمجة أصغر
+    final otherOptions = [
+      _BusinessTypeOption(id: 'beauty', icon: Icons.spa_rounded, titleAr: 'الصحة والجمال', color: const Color(0xFFE91E8C)),
+      _BusinessTypeOption(id: 'cars', icon: Icons.directions_car_rounded, titleAr: 'معرض سيارات', color: const Color(0xFF1565C0)),
+      _BusinessTypeOption(id: 'real_estate', icon: Icons.home_work_rounded, titleAr: 'العقارات', color: const Color(0xFF43A047)),
+      _BusinessTypeOption(id: 'tourism', icon: Icons.travel_explore_rounded, titleAr: 'السياحة والسفر', color: const Color(0xFF00897B)),
+      _BusinessTypeOption(id: 'used', icon: Icons.recycling_rounded, titleAr: 'المستعمل', color: const Color(0xFF6D4C41)),
+      _BusinessTypeOption(id: 'offers', icon: Icons.local_offer_rounded, titleAr: 'العروض والخصومات', color: const Color(0xFFE53935)),
+      _BusinessTypeOption(id: 'bazar_ghaith', icon: Icons.auto_awesome_rounded, titleAr: 'بازار الغيث', color: const Color(0xFFF5A01D), requiresApproval: true),
+    ];
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(20, 24, 20, 40),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // رأس الصفحة
+          Center(
+            child: Column(
+              children: [
+                const AppLogo(size: 64),
+                const SizedBox(height: 16),
+                const Text(
+                  'ما نوع نشاطك التجاري؟',
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w900,
+                    fontFamily: 'Cairo',
+                    color: Color(0xFF1A1A1A),
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'اختر نوع نشاطك وسنهيئ لك الإعداد المناسب',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: Colors.grey.shade600,
+                    fontFamily: 'Cairo',
+                    height: 1.5,
+                  ),
+                ),
+              ],
             ),
           ),
-        ),
-        const SizedBox(height: 32),
+          const SizedBox(height: 28),
+
+          // البطاقات الرئيسية الثلاث
+          Row(
+            children: mainOptions.map((opt) => Expanded(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                child: GestureDetector(
+                  onTap: () => _selectService(opt.id),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: opt.color.withValues(alpha: 0.2)),
+                      boxShadow: [
+                        BoxShadow(
+                          color: opt.color.withValues(alpha: 0.1),
+                          blurRadius: 12,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          width: 52,
+                          height: 52,
+                          decoration: BoxDecoration(
+                            color: opt.color.withValues(alpha: 0.12),
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(opt.icon, color: opt.color, size: 26),
+                        ),
+                        const SizedBox(height: 10),
+                        Text(
+                          opt.titleAr,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w900,
+                            fontFamily: 'Cairo',
+                            color: opt.color,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          opt.subtitleAr ?? '',
+                          textAlign: TextAlign.center,
+                          maxLines: 2,
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontFamily: 'Cairo',
+                            color: Colors.grey.shade500,
+                            height: 1.4,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            )).toList(),
+          ),
+
+          const SizedBox(height: 28),
+
+          // قسم "خدمات أخرى"
+          Text(
+            'خدمات أخرى',
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w900,
+              fontFamily: 'Cairo',
+              color: Colors.grey.shade500,
+            ),
+          ),
+          const SizedBox(height: 10),
+          ...otherOptions.map((opt) => GestureDetector(
+            onTap: () => _selectService(opt.id),
+            child: Container(
+              margin: const EdgeInsets.only(bottom: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: Colors.grey.shade100),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 38,
+                    height: 38,
+                    decoration: BoxDecoration(
+                      color: opt.color.withValues(alpha: 0.1),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(opt.icon, color: opt.color, size: 20),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          opt.titleAr,
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w800,
+                            fontFamily: 'Cairo',
+                          ),
+                        ),
+                        if (opt.requiresApproval)
+                          Text(
+                            'يتطلب موافقة الإدارة',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontFamily: 'Cairo',
+                              color: Colors.orange.shade700,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                  Icon(CupertinoIcons.chevron_left, color: Colors.grey.shade300, size: 16),
+                ],
+              ),
+            ),
+          )),
+        ],
+      ),
+    );
+  }
+
+  // ── دالة وهمية لإرضاء المترجم — تم استبدالها بـ _buildInitialActivitySelection الجديدة ──
+  Widget _buildInitialActivitySelectionOld_unused() {
+    return Column(
+      children: [
         Expanded(
-          child: ListView.separated(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-            itemCount: MarketplaceCatalog.categories.length,
-            separatorBuilder: (_, __) => const SizedBox(height: 12),
+          child: ListView.builder(
+            itemCount: 0,
             itemBuilder: (context, index) {
               final cat = MarketplaceCatalog.categories[index];
               return GestureDetector(
@@ -1101,13 +1393,6 @@ class _MerchantSetupScreenState extends State<MerchantSetupScreen> {
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(20),
                     border: Border.all(color: Colors.grey.shade200),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.03),
-                        blurRadius: 10,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
                   ),
                   child: Column(
                     children: [
@@ -1448,4 +1733,22 @@ class _SampleImagesRow extends StatelessWidget {
       ],
     );
   }
+}
+
+class _BusinessTypeOption {
+  final String id;
+  final IconData icon;
+  final String titleAr;
+  final String? subtitleAr;
+  final Color color;
+  final bool requiresApproval;
+
+  const _BusinessTypeOption({
+    required this.id,
+    required this.icon,
+    required this.titleAr,
+    this.subtitleAr,
+    required this.color,
+    this.requiresApproval = false,
+  });
 }

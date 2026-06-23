@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const repo = require('../supabase_repo/taxi');
 const { getUserState } = require('../supabase_repo/users');
-const { requireAuthorizedPhone } = require('./_middleware');
+const { requireOptionalAuthorizedPhone } = require('./_middleware');
 
 function formatRequestRow(row) {
   if (!row) return null;
@@ -31,7 +31,7 @@ function formatRequestRow(row) {
 // POST /db/taxi/create - إنشاء طلب جديد (يحسب السعر تلقائياً)
 router.post('/create', async (req, res) => {
   try {
-    const phone = requireAuthorizedPhone(req, res);
+    const phone = requireOptionalAuthorizedPhone(req, res);
     if (!phone) return;
     const result = await repo.createTaxiRequest(phone, req.body || {});
     return res.json(result);
@@ -44,7 +44,7 @@ router.post('/create', async (req, res) => {
 // POST /db/taxi/accept - قبول السائق
 router.post('/accept', async (req, res) => {
   try {
-    const phone = requireAuthorizedPhone(req, res);
+    const phone = requireOptionalAuthorizedPhone(req, res);
     if (!phone) return;
     const { requestId, driverName, vehicleModel, plateNumber } = req.body || {};
     const result = await repo.acceptTaxiRequest(phone, requestId, { driverName, vehicleModel, plateNumber });
@@ -58,7 +58,7 @@ router.post('/accept', async (req, res) => {
 // POST /db/taxi/reject - رفض السائق
 router.post('/reject', async (req, res) => {
   try {
-    const phone = requireAuthorizedPhone(req, res);
+    const phone = requireOptionalAuthorizedPhone(req, res);
     if (!phone) return;
     const { requestId } = req.body || {};
     const result = await repo.rejectTaxiRequest(phone, requestId);
@@ -72,7 +72,7 @@ router.post('/reject', async (req, res) => {
 // POST /db/taxi/cancel - إلغاء من الزبون
 router.post('/cancel', async (req, res) => {
   try {
-    const phone = requireAuthorizedPhone(req, res);
+    const phone = requireOptionalAuthorizedPhone(req, res);
     if (!phone) return;
     const { requestId, reason } = req.body || {};
     const result = await repo.cancelTaxiRequest(phone, requestId, reason);
@@ -86,7 +86,7 @@ router.post('/cancel', async (req, res) => {
 // POST /db/taxi/status - تحديث حالة الرحلة
 router.post('/status', async (req, res) => {
   try {
-    const phone = requireAuthorizedPhone(req, res);
+    const phone = requireOptionalAuthorizedPhone(req, res);
     if (!phone) return;
     const { requestId, statusKey } = req.body || {};
     const result = await repo.updateTaxiRequestStatus(phone, requestId, statusKey);
@@ -100,7 +100,7 @@ router.post('/status', async (req, res) => {
 // GET /db/taxi/active - الطلب النشط للزبون
 router.get('/active', async (req, res) => {
   try {
-    const phone = requireAuthorizedPhone(req, res);
+    const phone = requireOptionalAuthorizedPhone(req, res);
     if (!phone) return;
     const request = await repo.getCustomerActiveRequest(phone);
     if (!request) return res.json(null);
@@ -114,7 +114,7 @@ router.get('/active', async (req, res) => {
 // GET /db/taxi/driver-active - الطلب النشط للسائق
 router.get('/driver-active', async (req, res) => {
   try {
-    const phone = requireAuthorizedPhone(req, res);
+    const phone = requireOptionalAuthorizedPhone(req, res);
     if (!phone) return;
     const request = await repo.getDriverActiveRequest(phone);
     if (!request) return res.json(null);
@@ -128,7 +128,7 @@ router.get('/driver-active', async (req, res) => {
 // GET /db/taxi/history - تاريخ رحلات الزبون
 router.get('/history', async (req, res) => {
   try {
-    const phone = requireAuthorizedPhone(req, res);
+    const phone = requireOptionalAuthorizedPhone(req, res);
     if (!phone) return;
     const requests = await repo.getCustomerHistory(phone);
     return res.json((requests || []).map(formatRequestRow));
@@ -141,7 +141,7 @@ router.get('/history', async (req, res) => {
 // GET /db/taxi/driver-history - تاريخ رحلات السائق
 router.get('/driver-history', async (req, res) => {
   try {
-    const phone = requireAuthorizedPhone(req, res);
+    const phone = requireOptionalAuthorizedPhone(req, res);
     if (!phone) return;
     const requests = await repo.getDriverHistory(phone);
     return res.json((requests || []).map(formatRequestRow));
@@ -154,7 +154,7 @@ router.get('/driver-history', async (req, res) => {
 // POST /db/taxi/driver-status - تحديث حالة اتصال السائق (متصل/غير متصل)
 router.post('/driver-status', async (req, res) => {
   try {
-    const phone = requireAuthorizedPhone(req, res);
+    const phone = requireOptionalAuthorizedPhone(req, res);
     if (!phone) return;
     const isOnline = req.body?.isOnline === true;
     const result = await repo.setDriverOnlineStatus(phone, isOnline);
@@ -186,25 +186,39 @@ router.get('/nearby-drivers', async (req, res) => {
 });
 
 // GET /db/taxi/incoming-requests - الطلبات الواردة للسائق
+// يقبل lat/lng من query params (موقع حالي) أو من ملف السائق المحفوظ
 router.get('/incoming-requests', async (req, res) => {
   try {
-    const phone = requireAuthorizedPhone(req, res);
+    const phone = requireOptionalAuthorizedPhone(req, res);
     if (!phone) return;
 
-    const state = await getUserState(phone);
-    const profile = state?.driverProfile;
-    if (!profile) {
-      return res.status(400).json({ message: 'Driver profile not found.' });
-    }
+    // محاولة استخدام الموقع المرسل من التطبيق أولاً
+    let lat = Number(req.query.lat ?? 0);
+    let lng = Number(req.query.lng ?? 0);
 
-    const lat = Number(profile.latitude ?? profile.lat ?? 0);
-    const lng = Number(profile.longitude ?? profile.lng ?? 0);
+    // إذا لم يُرسَل الموقع، نجلبه من ملف السائق المحفوظ
     if (!lat || !lng) {
-      return res.status(400).json({ message: 'Driver location not set. Please enable location.' });
+      const state = await getUserState(phone);
+      const profile = state?.driverProfile;
+      if (profile) {
+        lat = Number(profile.latitude ?? profile.lat ?? 0);
+        lng = Number(profile.longitude ?? profile.lng ?? 0);
+      }
     }
 
-    const taxiType = String(profile.taxiType || 'economic').trim();
-    const requests = await repo.getDriverIncomingRequests(phone, lat, lng, taxiType);
+    // إذا لا يزال الموقع مجهولاً، نرجع كل الطلبات المعلقة بدون فلتر مسافة
+    const taxiType = String(
+      req.query.taxiType ||
+      (await getUserState(phone))?.driverProfile?.taxiType ||
+      'economic'
+    ).trim();
+
+    const requests = await repo.getDriverIncomingRequests(
+      phone,
+      lat || null,
+      lng || null,
+      taxiType,
+    );
     return res.json(requests);
   } catch (error) {
     console.error('taxi incoming-requests error:', error);

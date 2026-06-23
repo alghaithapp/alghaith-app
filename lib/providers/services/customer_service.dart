@@ -104,6 +104,27 @@ class CustomerService extends ChangeNotifier {
       _merchantStore = store;
   void updateItems(List<ListItem> items) => _items = items;
 
+  /// يُطبَّق بعد استعادة الجلسة من السيرفر أو من النسخة المحلية،
+  /// يملأ بيانات الملف الشخصي دون حفظ remote جديد.
+  void applyRestoredProfile({
+    String? name,
+    String? phone,
+    String? address,
+    double? latitude,
+    double? longitude,
+    String? avatarBase64,
+  }) {
+    if (name != null && name.trim().isNotEmpty) _customerName = name.trim();
+    if (phone != null && phone.trim().isNotEmpty) _customerPhone = phone.trim();
+    if (address != null && address.trim().isNotEmpty) _customerAddress = address.trim();
+    if (latitude != null) _customerLatitude = latitude;
+    if (longitude != null) _customerLongitude = longitude;
+    if (avatarBase64 != null && avatarBase64.trim().isNotEmpty) {
+      _customerAvatarBase64 = avatarBase64;
+    }
+    notifyListeners();
+  }
+
   // ── Customer profile methods ──────────────────────────────────
   Future<void> updateCustomerProfile({
     String? name,

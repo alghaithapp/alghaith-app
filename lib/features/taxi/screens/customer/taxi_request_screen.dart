@@ -229,17 +229,22 @@ class _TaxiRequestScreenState extends State<TaxiRequestScreen> {
     });
   }
 
-  void _onConfirmRequest() {
+  bool _isSubmitting = false;
+
+  Future<void> _onConfirmRequest() async {
+    if (_isSubmitting) return;
     // إذا كان زائر، نطلب تسجيل الدخول أولاً
     if (!GuestGate.requireAccount(context, message: 'سجّل دخولك لطلب التكسي.')) {
       return;
     }
 
+    setState(() => _isSubmitting = true);
+
     final pickup = _pickupCoord ?? const LatLng(32.9256, 44.7766);
     final dropoff = _dropoffCoord ?? const LatLng(32.9300, 44.7800);
 
     final provider = context.read<TaxiProvider>();
-    provider.createTaxiRequest(
+    final request = await provider.createTaxiRequest(
       pickupAddress: _pickupController.text,
       dropoffAddress: _dropoffController.text,
       pickupLat: pickup.latitude,
@@ -247,8 +252,22 @@ class _TaxiRequestScreenState extends State<TaxiRequestScreen> {
       dropoffLat: dropoff.latitude,
       dropoffLng: dropoff.longitude,
       distanceKm: _distanceKm,
-      taxiType: _selectedType.name,
+      taxiType: _selectedType.toApiName,
     );
+
+    if (!mounted) return;
+    setState(() => _isSubmitting = false);
+
+    if (request == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(provider.error ?? 'تعذر إرسال الطلب، حاول مجدداً'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
     Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => const TaxiWaitingScreen()),
     );

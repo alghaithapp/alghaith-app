@@ -146,6 +146,34 @@ class AppProvider extends ChangeNotifier {
       if (state['adminAccess'] == true && auth.hasAdminAccess) {
         _adminRole ??= AdminRole.superAdmin;
       }
+      // مزامنة بيانات الملف الشخصي المستعادة من user-state إلى CustomerService
+      customer.applyRestoredProfile(
+        name: state['customerName'] as String?,
+        phone: state['customerPhone'] as String?,
+        address: state['customerAddress'] as String?,
+        latitude: (state['customerLatitude'] as num?)?.toDouble(),
+        longitude: (state['customerLongitude'] as num?)?.toDouble(),
+        avatarBase64: (state['customerAvatarBase64'] ?? state['customerAvatarUrl']) as String?,
+      );
+    });
+
+    // مزامنة مباشرة من customer-profile / app-user بعد الاستعادة
+    auth.setOnApplyRestoredCustomerProfile(({
+      String? name,
+      String? phone,
+      String? address,
+      double? latitude,
+      double? longitude,
+      String? avatarBase64,
+    }) {
+      customer.applyRestoredProfile(
+        name: name,
+        phone: phone,
+        address: address,
+        latitude: latitude,
+        longitude: longitude,
+        avatarBase64: avatarBase64,
+      );
     });
 
     // Delivery → refresh account from cloud

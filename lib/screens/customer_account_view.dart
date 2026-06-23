@@ -28,6 +28,7 @@ class CustomerAccountView extends StatelessWidget {
   Widget build(BuildContext context) {
     final provider = context.watch<AppProvider>();
     final notificationCount = provider.unreadNotificationCount;
+    final isLoading = provider.isRestoring && !provider.isReady;
 
     return Scaffold(
       backgroundColor: accountBackground,
@@ -37,7 +38,8 @@ class CustomerAccountView extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             AccountPageHeader(notificationCount: notificationCount),
-            Expanded(
+            if (isLoading) const _AccountLoadingView(),
+            if (!isLoading) Expanded(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
                 child: Column(
@@ -49,7 +51,7 @@ class CustomerAccountView extends StatelessWidget {
                         icon: CupertinoIcons.shield_fill,
                         iconColor: Colors.redAccent,
                         title: 'لوحة الإدارة (Super Admin)',
-                        subtitle: 'إحصائيات المنصة، إدارة التجار، وصلاحيات البازار',
+                        subtitle: 'إحصائيات المنصة وإدارة البازار',
                         onTap: () async {
                           if (!provider.isAdmin) {
                             final ok = await provider.setUserRole('admin');
@@ -305,6 +307,8 @@ class _NavigationCard extends StatelessWidget {
                     const SizedBox(height: 4),
                     Text(
                       subtitle,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                         fontFamily: 'Cairo',
                         fontSize: 12,
@@ -767,4 +771,60 @@ Widget _profileField({
       ),
     ],
   );
+}
+
+/// شاشة تحميل بيانات الحساب
+class _AccountLoadingView extends StatelessWidget {
+  const _AccountLoadingView();
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return Expanded(
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 80,
+              height: 80,
+              decoration: BoxDecoration(
+                color: isDark
+                    ? const Color(0xFF1E1E2E)
+                    : const Color(0xFFF0F4FF),
+                shape: BoxShape.circle,
+              ),
+              child: const Padding(
+                padding: EdgeInsets.all(20),
+                child: CircularProgressIndicator(
+                  strokeWidth: 3,
+                  color: AppColors.primary,
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
+            Text(
+              'جارٍ تحميل بيانات حسابك...',
+              style: TextStyle(
+                fontFamily: 'Cairo',
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+                color: isDark ? Colors.white70 : const Color(0xFF555555),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'لحظة من فضلك',
+              style: TextStyle(
+                fontFamily: 'Cairo',
+                fontSize: 12,
+                color: isDark ? Colors.white38 : Colors.grey.shade400,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }

@@ -506,6 +506,7 @@ async function getNearbyDrivers(pickupLat, pickupLng, taxiType = 'economic', exc
 
 async function getDriverIncomingRequests(driverPhone, lat, lng, taxiType, radiusKm = 15) {
   const normalizedDriver = await resolvePhoneKey(driverPhone);
+  const hasLocation = lat && lng;
 
   const rows = await selectMany(
     'taxi_requests',
@@ -520,7 +521,10 @@ async function getDriverIncomingRequests(driverPhone, lat, lng, taxiType, radius
   for (const row of rows) {
     const meta = readTaxiMeta(row);
 
-    if (meta.taxiType !== taxiType) continue;
+    // تطابق نوع التكسي (اقتصادي / سوبر)
+    const requestType = String(meta.taxiType || 'economic').trim();
+    const driverType = String(taxiType || 'economic').trim();
+    if (requestType !== driverType) continue;
 
     const rejectedIds = Array.isArray(meta.payload.rejectedByDriverIds)
       ? meta.payload.rejectedByDriverIds
@@ -531,10 +535,14 @@ async function getDriverIncomingRequests(driverPhone, lat, lng, taxiType, radius
       if (alreadyRejected) continue;
     }
 
-    const distance = haversineDistance(lat, lng, meta.pickupLat, meta.pickupLng);
-    if (distance > radiusKm) continue;
-
-    const roundedDistance = Math.round(distance * 100) / 100;
+    let roundedDistance = 0;
+    if (hasLocation && meta.pickupLat && meta.pickupLng) {
+      const distance = haversineDistance(lat, lng, meta.pickupLat, meta.pickupLng);
+      // إذا كان الموقع محدداً — نفلتر بالمسافة
+      if (distance > radiusKm) continue;
+      roundedDistance = Math.round(distance * 100) / 100;
+    }
+    // إذا لم يكن الموقع محدداً — نعرض الطلب بدون فلتر مسافة
 
     const flattened = {
       ...meta.payload,
@@ -545,7 +553,9 @@ async function getDriverIncomingRequests(driverPhone, lat, lng, taxiType, radius
     candidates.push(flattened);
   }
 
-  candidates.sort((a, b) => a.distanceKm - b.distanceKm);
+  if (hasLocation) {
+    candidates.sort((a, b) => a.distanceKm - b.distanceKm);
+  }
 
   return candidates;
 }

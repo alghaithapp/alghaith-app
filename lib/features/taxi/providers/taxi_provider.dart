@@ -355,7 +355,7 @@ class TaxiProvider extends ChangeNotifier {
     _activeRequestChannel = null;
     if (phone == null || phone.isEmpty) return;
     final table = 'taxi_requests';
-    final column = isDriver ? 'driver_phone' : 'customer_phone';
+    final column = isDriver ? 'driver_phone' : 'phone';
     _activeRequestChannel = SupabaseService.realtime.subscribeToTable(
       table: table,
       filterColumn: column,

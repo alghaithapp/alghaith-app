@@ -239,52 +239,62 @@ class AdminSidebar extends StatelessWidget {
                 padding: const EdgeInsets.only(bottom: 24),
                 children: [
                   buildSection('الرئيسية', mainItems),
-                  if (hasMerchantStores || hasCourier || hasDriver) ...[
-                    const Divider(indent: 16, endIndent: 16),
-                    buildSection('حساباتي', []),
-                    if (hasMerchantStores)
-                      _SidebarItem(
-                        item: AdminNavItem.overview,
-                        isSelected: false,
-                        pendingCount: 0,
-                        onTap: () {
-                          Navigator.of(context).pop();
-                          provider.setUserRole('merchant');
-                        },
-                        fgColor: fgColor,
-                        isDark: isDark,
-                        customIcon: Icons.store_rounded,
-                        customLabel: 'متجري',
-                      ),
-                    if (hasCourier)
-                      _SidebarItem(
-                        item: AdminNavItem.overview,
-                        isSelected: false,
-                        pendingCount: 0,
-                        onTap: () {
-                          Navigator.of(context).pop();
-                          provider.setUserRole('delivery');
-                        },
-                        fgColor: fgColor,
-                        isDark: isDark,
-                        customIcon: Icons.two_wheeler_rounded,
-                        customLabel: 'حساب التوصيل',
-                      ),
-                    if (hasDriver)
-                      _SidebarItem(
-                        item: AdminNavItem.overview,
-                        isSelected: false,
-                        pendingCount: 0,
-                        onTap: () {
-                          Navigator.of(context).pop();
-                          provider.setUserRole('driver');
-                        },
-                        fgColor: fgColor,
-                        isDark: isDark,
-                        customIcon: Icons.directions_car_rounded,
-                        customLabel: 'حساب السائق',
-                      ),
-                  ],
+                  const Divider(indent: 16, endIndent: 16),
+                  buildSection('تبديل الحساب', []),
+                  _SidebarItem(
+                    item: AdminNavItem.overview,
+                    isSelected: false,
+                    pendingCount: 0,
+                    onTap: () {
+                      Navigator.of(context).pop();
+                      provider.setUserRole('customer');
+                    },
+                    fgColor: fgColor,
+                    isDark: isDark,
+                    customIcon: Icons.person_rounded,
+                    customLabel: 'حساب الزبون',
+                  ),
+                  _SidebarItem(
+                    item: AdminNavItem.overview,
+                    isSelected: false,
+                    pendingCount: 0,
+                    onTap: () {
+                      Navigator.of(context).pop();
+                      provider.setUserRole('merchant');
+                    },
+                    fgColor: fgColor,
+                    isDark: isDark,
+                    customIcon: Icons.store_rounded,
+                    customLabel: hasMerchantStores ? 'متجري' : 'إنشاء متجر',
+                  ),
+                  if (hasCourier)
+                    _SidebarItem(
+                      item: AdminNavItem.overview,
+                      isSelected: false,
+                      pendingCount: 0,
+                      onTap: () {
+                        Navigator.of(context).pop();
+                        provider.setUserRole('delivery');
+                      },
+                      fgColor: fgColor,
+                      isDark: isDark,
+                      customIcon: Icons.two_wheeler_rounded,
+                        customLabel: 'مندوب توصيل',
+                    ),
+                  if (hasDriver)
+                    _SidebarItem(
+                      item: AdminNavItem.overview,
+                      isSelected: false,
+                      pendingCount: 0,
+                      onTap: () {
+                        Navigator.of(context).pop();
+                        provider.setUserRole('driver');
+                      },
+                      fgColor: fgColor,
+                      isDark: isDark,
+                      customIcon: Icons.directions_car_rounded,
+                      customLabel: 'حساب السائق',
+                    ),
                   const Divider(indent: 16, endIndent: 16),
                   buildSection('المحتوى', contentItems),
                   const Divider(indent: 16, endIndent: 16),

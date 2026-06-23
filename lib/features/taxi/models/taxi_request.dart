@@ -1,6 +1,29 @@
 /// أنواع التكسي
 enum TaxiType { economic, superTaxiType }
 
+extension TaxiTypeX on TaxiType {
+  /// القيمة التي يتوقعها السيرفر
+  String get toApiName {
+    switch (this) {
+      case TaxiType.superTaxiType:
+        return 'super';
+      case TaxiType.economic:
+        return 'economic';
+    }
+  }
+
+  static TaxiType fromApiName(String? name) {
+    switch (name) {
+      case 'super':
+        return TaxiType.superTaxiType;
+      case 'economic':
+        return TaxiType.economic;
+      default:
+        return TaxiType.economic;
+    }
+  }
+}
+
 /// نموذج طلب التكسي
 class TaxiRequest {
   final String id;
@@ -155,10 +178,7 @@ class TaxiRequest {
       dropoffLat: (map['dropoffLat'] as num?)?.toDouble() ?? 0.0,
       dropoffLng: (map['dropoffLng'] as num?)?.toDouble() ?? 0.0,
       distanceKm: (map['distanceKm'] as num?)?.toDouble() ?? 0.0,
-      taxiType: TaxiType.values.firstWhere(
-        (e) => e.name == map['taxiType'],
-        orElse: () => TaxiType.economic,
-      ),
+      taxiType: TaxiTypeX.fromApiName(map['taxiType']?.toString()),
       fareEconomic: (map['fareEconomic'] as num?)?.toInt() ?? 0,
       fareSuper: (map['fareSuper'] as num?)?.toInt() ?? 0,
       fare: (map['fare'] as num?)?.toInt() ?? 0,

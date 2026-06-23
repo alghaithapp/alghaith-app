@@ -73,7 +73,7 @@ class AuthService extends ChangeNotifier {
   Map<String, dynamic>? get appUserRecord => _appUserRecord;
   bool get hasPhoneSession =>
       _authPhone != null && _authPhone!.trim().isNotEmpty;
-  bool get isAdmin => _userRole == 'admin' || _hasAdminAccess;
+  bool get isAdmin => _userRole == 'admin';
   bool get isMerchant => _userRole == 'merchant';
   bool get isDelivery => _userRole == 'delivery';
   bool get isDriver => _userRole == 'driver';
@@ -207,9 +207,15 @@ class AuthService extends ChangeNotifier {
     }
     _accountType ??= _accountTypeForRole(_userRole!);
     _accountType ??= 'marketplace';
-    if (_userRole == 'admin') {
-      unawaited(
-          PushNotificationService.instance.subscribeToTopic('admin_alerts'));
+    // الأدمن يبدأ كزبون — لا يُستعاد دور 'merchant' إن لم يكن له متجر
+    if (_hasAdminAccess) {
+      if (_userRole == 'merchant' && merchantStoreName.trim().isEmpty) {
+        _userRole = 'customer';
+      }
+      if (_userRole == 'admin') {
+        unawaited(
+            PushNotificationService.instance.subscribeToTopic('admin_alerts'));
+      }
     }
     _isGuestMode = false;
   }
@@ -699,6 +705,19 @@ class AuthService extends ChangeNotifier {
       _customerAvatarBase64 =
           snapshot.customerAvatarRef ?? _customerAvatarBase64;
 
+      // مزامنة الملف الشخصي مع CustomerService بعد استعادة النسخة المحلية
+      if (_onApplyRestoredCustomerProfile != null &&
+          (_customerName.trim().isNotEmpty || _customerAddress.trim().isNotEmpty)) {
+        _onApplyRestoredCustomerProfile!(
+          name: _trimmedOrNull(_customerName),
+          phone: _trimmedOrNull(_customerPhone ?? _authPhone),
+          address: _trimmedOrNull(_customerAddress),
+          latitude: _customerLatitude,
+          longitude: _customerLongitude,
+          avatarBase64: _trimmedOrNull(_customerAvatarBase64),
+        );
+      }
+
       // استعادة البيانات الموسعة عبر callbacks
       if (snapshot.merchantStore != null && _onApplyMerchantStore != null) {
         _onApplyMerchantStore!(snapshot.merchantStore!);
@@ -825,6 +844,19 @@ class AuthService extends ChangeNotifier {
             _customerAvatarBase64;
       }
 
+      // إرسال بيانات الملف الشخصي المستعادة إلى CustomerService
+      if (_onApplyRestoredCustomerProfile != null &&
+          (_customerName.trim().isNotEmpty || _customerAddress.trim().isNotEmpty)) {
+        _onApplyRestoredCustomerProfile!(
+          name: _trimmedOrNull(_customerName),
+          phone: _trimmedOrNull(_customerPhone ?? _authPhone),
+          address: _trimmedOrNull(_customerAddress),
+          latitude: _customerLatitude,
+          longitude: _customerLongitude,
+          avatarBase64: _trimmedOrNull(_customerAvatarBase64),
+        );
+      }
+
       if (merchantProfile != null) {
         final hasLocalStore =
             _merchantStore != null && merchantStoreName.isNotEmpty;
@@ -880,6 +912,7 @@ class AuthService extends ChangeNotifier {
   // ── Callbacks for persistence cross-domain operations ──────────
   void Function(Map<String, dynamic> snapshot)? _onApplyMerchantSnapshot;
   void Function(Map<String, dynamic> state)? _onApplyRemoteState;
+  void Function({String? name, String? phone, String? address, double? latitude, double? longitude, String? avatarBase64})? _onApplyRestoredCustomerProfile;
   Future<void> Function()? _onPersistMerchantStoreAndState;
   Future<void> Function()? _onSyncMerchantDataBeforeLeavingMerchantMode;
 
@@ -889,6 +922,9 @@ class AuthService extends ChangeNotifier {
   void setOnApplyRemoteState(
           void Function(Map<String, dynamic> state) cb) =>
       _onApplyRemoteState = cb;
+  void setOnApplyRestoredCustomerProfile(
+          void Function({String? name, String? phone, String? address, double? latitude, double? longitude, String? avatarBase64}) cb) =>
+      _onApplyRestoredCustomerProfile = cb;
   void setOnPersistMerchantStoreAndState(
           Future<void> Function() cb) =>
       _onPersistMerchantStoreAndState = cb;
@@ -1056,6 +1092,7 @@ class AuthService extends ChangeNotifier {
       'customerLongitude': _customerLongitude,
       'userRole': _userRole,
       'customerName': _customerName,
+      'customerAddress': _customerAddress,
       'customerAvatarBase64': _customerAvatarBase64,
       'customerAvatarUrl': _customerAvatarBase64,
       'profileComplete': hasCompletedCustomerProfile,

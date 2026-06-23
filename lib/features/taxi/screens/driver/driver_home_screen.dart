@@ -56,7 +56,7 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
           if (pendingRequests.isNotEmpty)
             Positioned(
               bottom: 20, left: 20, right: 20,
-              child: _buildNewRequestCard(context, appProvider, pendingRequests.first),
+              child: _buildNewRequestCard(context, appProvider, taxiProvider, pendingRequests.first),
             ),
           Positioned(
             bottom: pendingRequests.isNotEmpty ? 280 : 100, right: 20,
@@ -274,7 +274,8 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
 
   Widget _buildNewRequestCard(
     BuildContext context,
-    AppProvider provider,
+    AppProvider appProvider,
+    TaxiProvider taxiProvider,
     TaxiRequest request,
   ) {
     return Container(
@@ -464,7 +465,7 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
               children: [
                 Expanded(
                   child: GestureDetector(
-                    onTap: () => provider.rejectTaxiRequest(request.id),
+                    onTap: () => taxiProvider.rejectRequest(request.id),
                     child: Container(
                       padding: const EdgeInsets.symmetric(vertical: 12),
                       decoration: BoxDecoration(
@@ -493,7 +494,15 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
                 const SizedBox(width: 12),
                 Expanded(
                   child: GestureDetector(
-                    onTap: () => provider.acceptTaxiRequest(request.id),
+                    onTap: () async {
+                      final driverProfile = appProvider.driverProfile ?? const {};
+                      await taxiProvider.acceptRequest(
+                        request.id,
+                        driverName: (driverProfile['name'] as String?)?.trim(),
+                        vehicleModel: (driverProfile['vehicle'] as String?)?.trim(),
+                        plateNumber: (driverProfile['plateNumber'] as String?)?.trim(),
+                      );
+                    },
                     child: Container(
                       padding: const EdgeInsets.symmetric(vertical: 12),
                       decoration: BoxDecoration(
