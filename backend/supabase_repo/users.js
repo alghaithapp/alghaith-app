@@ -105,14 +105,24 @@ async function saveUserState(phone, state = {}) {
       p_state: state,
     });
     if (error) {
-      // fallback: إذا كانت الـ RPC غير موجودة، استخدم upsert العادي
-      const payload = { phone: phoneKey, state, updated_at: nowIso() };
+      // fallback: اقرأ الحالة الحالية وادمجها يدوياً
+      const current = await getUserState(phoneKey);
+      const merged = { ...(current || {}), ...state };
+      const payload = { phone: phoneKey, state: merged, updated_at: nowIso() };
       return saveRow('app_state', payload, 'phone');
     }
     return data;
-  } catch (_) {
-    const payload = { phone: phoneKey, state, updated_at: nowIso() };
-    return saveRow('app_state', payload, 'phone');
+  } catch (e) {
+    // fallback نهائي: اقرأ الحالة الحالية وادمجها يدوياً
+    try {
+      const current = await getUserState(phoneKey);
+      const merged = { ...(current || {}), ...state };
+      const payload = { phone: phoneKey, state: merged, updated_at: nowIso() };
+      return saveRow('app_state', payload, 'phone');
+    } catch (_) {
+      const payload = { phone: phoneKey, state, updated_at: nowIso() };
+      return saveRow('app_state', payload, 'phone');
+    }
   }
 }
 
