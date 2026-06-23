@@ -1,8 +1,21 @@
 const express = require('express');
 const router = express.Router();
-const { getChatMessages, saveChatMessage } = require('../supabase_repo');
+const { getChatMessages, getChatInbox, saveChatMessage } = require('../supabase_repo');
 const { requireOptionalAuthorizedPhone } = require('./_middleware');
 const { notifyChatMessage } = require('../push_events');
+
+router.get('/inbox/threads', async (req, res) => {
+  try {
+    const phone = requireOptionalAuthorizedPhone(req, res);
+    if (!phone) return;
+    const threads = await getChatInbox(phone);
+    return res.json(threads);
+  } catch (error) {
+    console.error('get chat inbox error:', error);
+    const status = String(error?.message || '').includes('Unauthorized') ? 403 : 500;
+    return res.status(status).json({ message: error?.message || 'Failed to load chat inbox.' });
+  }
+});
 
 async function handleGet(req, res, threadType, threadId) {
   const phone = requireOptionalAuthorizedPhone(req, res);

@@ -16,6 +16,7 @@ const push_notifications = require('./push_notifications');
 const taxi = require('./taxi');
 const admin_roles = require('./admin_roles');
 const chat = require('./chat');
+const call_logs = require('./call_logs');
 
 module.exports = {
   // Common / Config
@@ -50,5 +51,8 @@ module.exports = {
 
   // Chat
   ...chat,
+
+  // Voice call logs
+  ...call_logs,
 
 };

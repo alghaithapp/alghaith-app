@@ -4,7 +4,6 @@ const {
   selectMany,
   resolvePhoneKey,
   phonesOverlap,
-  canonicalPhone,
   normalizeObject,
   PLATFORM_ADMIN_PHONES,
 } = require('./common');
@@ -25,6 +24,31 @@ function formatMessage(row) {
     content: row.content,
     created_at: row.created_at,
   };
+}
+
+function formatThreadSummary(row, myPhone) {
+  const mine = phonesOverlap(row.sender_phone, myPhone);
+  return {
+    thread_type: row.thread_type,
+    thread_id: row.thread_id,
+    other_party_phone: mine ? row.receiver_phone : row.sender_phone,
+    other_party_name: mine ? null : row.sender_name,
+    last_message: row.content,
+    last_at: row.created_at,
+  };
+}
+
+function mapChatDbError(error) {
+  const message = String(error?.message || error || '').trim();
+  if (
+    message.includes('chat_messages') &&
+    (message.includes('does not exist') ||
+      message.includes('schema cache') ||
+      message.includes('Could not find'))
+  ) {
+    return 'جدول المحادثات غير منشأ في Supabase. نفّذ ملف supabase/chat_messages.sql ثم أعد المحاولة.';
+  }
+  return message || 'Failed to save chat message.';
 }
 
 async function assertCanAccessThread(threadType, threadId, requestPhone) {
@@ -62,6 +86,7 @@ async function assertCanAccessThread(threadType, threadId, requestPhone) {
       return;
     }
     case 'store': {
+      // الزبون يتواصل قبل الطلب؛ التاجر يصل عبر thread_id = رقم متجره.
       if (phonesOverlap(phone, trimmedId)) return;
       return;
     }
@@ -136,6 +161,43 @@ async function getChatMessages(threadType, threadId, requestPhone) {
   return rows.map(formatMessage);
 }
 
+async function getChatInbox(requestPhone) {
+  const phone = await resolvePhoneKey(requestPhone);
+  const supabase = assertSupabaseAdmin();
+
+  const [sentResult, receivedResult] = await Promise.all([
+    supabase
+      .from('chat_messages')
+      .select('*')
+      .eq('sender_phone', phone)
+      .order('created_at', { ascending: false })
+      .limit(300),
+    supabase
+      .from('chat_messages')
+      .select('*')
+      .eq('receiver_phone', phone)
+      .order('created_at', { ascending: false })
+      .limit(300),
+  ]);
+
+  const error = sentResult.error || receivedResult.error;
+  if (error) throw new Error(mapChatDbError(error));
+
+  const combined = [...(sentResult.data || []), ...(receivedResult.data || [])];
+  combined.sort(
+    (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+  );
+
+  const threads = new Map();
+  for (const row of combined) {
+    const key = `${row.thread_type}:${row.thread_id}`;
+    if (!threads.has(key)) {
+      threads.set(key, formatThreadSummary(row, phone));
+    }
+  }
+  return Array.from(threads.values());
+}
+
 async function saveChatMessage(payload) {
   const threadType = String(payload.threadType || payload.thread_type || 'order').trim();
   const threadId = String(payload.threadId || payload.thread_id || payload.orderId || '').trim();
@@ -172,12 +234,13 @@ async function saveChatMessage(payload) {
     .select()
     .single();
 
-  if (error) throw new Error(error.message);
+  if (error) throw new Error(mapChatDbError(error));
   return formatMessage(data);
 }
 
 module.exports = {
   getChatMessages,
+  getChatInbox,
   saveChatMessage,
   SUPPORT_PLATFORM_PHONE,
 };

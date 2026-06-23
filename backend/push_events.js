@@ -674,6 +674,10 @@ async function notifyChatMessage(receiverPhone, customerMessage) {
       eventKey: 'chat:new',
       threadType,
       threadId,
+      senderName: customerName,
+      senderPhone: String(
+        customerMessage?.senderPhone || customerMessage?.sender_phone || ''
+      ).trim(),
       orderId: threadType === 'order' ? threadId : '',
       category: 'chat',
     },

@@ -8,6 +8,11 @@ const {
   buildRtcToken,
   buildCallSession,
 } = require('../services/agora');
+const {
+  createOutgoingCallLog,
+  completeCallLog,
+  getCallHistory,
+} = require('../supabase_repo');
 const { notifyIncomingCall } = require('../push_events');
 
 router.get('/config', async (req, res) => {
@@ -22,6 +27,49 @@ router.get('/config', async (req, res) => {
   } catch (error) {
     console.error('agora config error:', error);
     return res.status(500).json({ message: 'Failed to load Agora config.' });
+  }
+});
+
+router.get('/history', async (req, res) => {
+  try {
+    const phone = requireOptionalAuthorizedPhone(req, res);
+    if (!phone) return;
+    const threadType = String(req.query.threadType || '').trim();
+    const threadId = String(req.query.threadId || '').trim();
+    const limit = req.query.limit;
+    const logs = await getCallHistory(phone, {
+      threadType: threadType || undefined,
+      threadId: threadId || undefined,
+      limit,
+    });
+    return res.json(logs);
+  } catch (error) {
+    console.error('agora history error:', error);
+    const status = String(error?.message || '').includes('Unauthorized') ? 403 : 500;
+    return res.status(status).json({ message: error?.message || 'Failed to load call history.' });
+  }
+});
+
+router.post('/call/complete', async (req, res) => {
+  try {
+    const phone = requireOptionalAuthorizedPhone(req, res);
+    if (!phone) return;
+    const saved = await completeCallLog({
+      callLogId: req.body?.callLogId,
+      requestPhone: phone,
+      threadType: req.body?.threadType,
+      threadId: req.body?.threadId,
+      otherPartyPhone: req.body?.otherPartyPhone,
+      direction: req.body?.direction,
+      status: req.body?.status,
+      durationSeconds: req.body?.durationSeconds,
+      channelName: req.body?.channelName,
+    });
+    return res.json(saved);
+  } catch (error) {
+    console.error('agora call complete error:', error);
+    const status = String(error?.message || '').includes('Unauthorized') ? 403 : 500;
+    return res.status(status).json({ message: error?.message || 'Failed to complete call log.' });
   }
 });
 
@@ -74,6 +122,20 @@ router.post('/call', async (req, res) => {
 
     const session = buildCallSession(threadType, threadId, phone);
 
+    let callLog = null;
+    try {
+      callLog = await createOutgoingCallLog({
+        threadType,
+        threadId,
+        callerPhone: phone,
+        receiverPhone,
+        callerName,
+        channelName: session.channelName,
+      });
+    } catch (logError) {
+      console.error('call log create error:', logError?.message || logError);
+    }
+
     notifyIncomingCall(receiverPhone, {
       threadType,
       threadId,
@@ -88,6 +150,7 @@ router.post('/call', async (req, res) => {
       ...session,
       receiverPhone,
       callerName,
+      callLogId: callLog?.id || null,
     });
   } catch (error) {
     console.error('agora call error:', error);
