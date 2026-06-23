@@ -155,10 +155,14 @@ class AuthService extends ChangeNotifier {
     } finally {
       _isLoggingIn = false;
       _isHydrating = false;
-      notifyListeners();
 
       _notificationHub.onLoginSuccess();
       _notificationHub.onAppBootWelcome(_customerName);
+
+      // إظهار شاشة التحميل قبل تحميل البيانات من السيرفر
+      _isRestoring = true;
+      _isReady = false;
+      notifyListeners();
 
       await _completeLoginRemoteRestore(normalized);
 

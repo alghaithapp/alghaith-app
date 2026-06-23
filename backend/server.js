@@ -218,6 +218,61 @@ app.get('/__/check-products', async (req, res) => {
   }
 });
 
+// ── تنظيف الحساب وتحويله إلى Admin فقط ────────────────────────────────
+app.get('/__/make-admin', async (req, res) => {
+  try {
+    const phone = String(req.query?.phone || '').trim();
+    if (!phone) return res.status(400).json({ message: 'phone required' });
+    const { resolvePhoneKey, assertSupabaseAdmin } = require('./supabase_repo');
+    const supabase = assertSupabaseAdmin();
+    const pk = await resolvePhoneKey(phone);
+    if (!pk) return res.json({ error: 'phone not resolved' });
+
+    // 1. حذف المنتجات
+    await supabase.from('merchant_products').delete().eq('phone', pk);
+    
+    // 2. حذف/taxidriver status
+    await supabase.from('taxi_driver_status').delete().eq('phone', pk);
+    
+    // 3. حذف الـ merchant reviews
+    await supabase.from('merchant_reviews').delete().or(`merchant_phone.eq.${pk},customer_phone.eq.${pk}`);
+    
+    // 4. مسح حالة المستخدم
+    await supabase.from('app_state').upsert({
+      phone: pk,
+      state: {
+        adminAccess: true,
+        userRole: 'admin',
+        accountType: 'admin',
+        customerName: '',
+      },
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'phone' });
+    
+    // 5. تحديث app_user إلى admin
+    await supabase.from('app_users').update({
+      role: 'admin',
+      account_type: 'admin',
+      updated_at: new Date().toISOString(),
+    }).eq('phone', pk);
+    
+    // 6. التأكد من وجود الرقم في ADMIN_PHONES
+    const currentEnv = process.env.ADMIN_PHONES || '';
+    if (!currentEnv.includes(pk)) {
+      const updated = currentEnv ? `${currentEnv},${pk}` : pk;
+      process.env.ADMIN_PHONES = updated;
+    }
+    
+    return res.json({
+      success: true,
+      phone: pk,
+      message: 'تم تحويل الحساب إلى Admin وحذف جميع البيانات الأخرى',
+    });
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+});
+
 // ── Bulk recovery: استعادة جميع التجار من app_state ────────────────────
 app.get('/__/recover-all-merchants', async (req, res) => {
   try {
