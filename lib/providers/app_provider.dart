@@ -130,6 +130,7 @@ class AppProvider extends ChangeNotifier {
     auth.setOnApplyLocalBackupOffers((offers) { /* merchant offers callback */ });
     auth.setOnApplyRemoteOrders((orders) { _orders = orders; _lastOrdersFetch = DateTime.now(); notifyListeners(); });
     auth.setOnApplyRemoteAddresses((addresses) { /* restore addresses later */ });
+    auth.setOnApplyRemoteProducts((products) { merchant.loadInitialData(products.map((p) => ListItem.fromMap(p)).toList()); });
 
     auth.setOnApplyRemoteState((state) {
       _darkMode = state['darkMode'] as bool? ?? _darkMode;

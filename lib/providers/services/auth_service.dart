@@ -851,6 +851,9 @@ class AuthService extends ChangeNotifier {
       if (bundle.addresses.isNotEmpty && _onApplyRemoteAddresses != null) {
         _onApplyRemoteAddresses!(bundle.addresses);
       }
+      if (bundle.products.isNotEmpty && _onApplyRemoteProducts != null) {
+        _onApplyRemoteProducts!(bundle.products);
+      }
 
       _inferAccountTypeFromLegacyData();
       _inferRoleFromRestoredData();
@@ -1037,6 +1040,10 @@ class AuthService extends ChangeNotifier {
       _onApplyRemoteOrders = cb;
   void setOnApplyRemoteAddresses(void Function(List<String>) cb) =>
       _onApplyRemoteAddresses = cb;
+
+  void Function(List<Map<String, dynamic>>)? _onApplyRemoteProducts;
+  void setOnApplyRemoteProducts(void Function(List<Map<String, dynamic>>) cb) =>
+      _onApplyRemoteProducts = cb;
 
   Map<String, dynamic> _buildRemoteState() {
     return {
