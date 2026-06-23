@@ -9,6 +9,7 @@ import '../../core/theme/app_colors.dart';
 import '../../providers/app_provider.dart';
 import '../../utils/account_role_switch.dart';
 import '../../screens/notifications_screen.dart';
+import '../merchant/merchant_chat_inbox_screen.dart';
 import '../../widgets/app_image.dart';
 import 'driver_shared_widgets.dart';
 
@@ -25,6 +26,28 @@ class DriverAccountScreen extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
+        ListTile(
+          tileColor: Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          leading: const Icon(Icons.chat_bubble_outline, color: AppColors.primary),
+          title: const Text(
+            'الرسائل داخل التطبيق',
+            style: TextStyle(
+              fontFamily: 'Cairo',
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          subtitle: const Text(
+            'محادثات الزبائن والرحلات',
+            style: TextStyle(fontFamily: 'Cairo', fontSize: 12),
+          ),
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => const ChatInboxScreen()),
+          ),
+        ),
+        const SizedBox(height: 12),
         ListTile(
           tileColor: Colors.white,
           shape: RoundedRectangleBorder(

@@ -4,9 +4,9 @@ import 'package:flutter/material.dart';
 import '../models/app_models.dart';
 import '../services/supabase_service.dart';
 import '../utils/guest_gate.dart';
-import '../utils/chat_navigation.dart';
 import '../utils/merchant_profile_fields.dart';
 import '../widgets/app_image.dart';
+import '../widgets/internal_contact_buttons.dart';
 import '../widgets/service_navigation_buttons.dart';
 
 class ProfessionalsDirectoryScreen extends StatefulWidget {
@@ -92,11 +92,11 @@ class _ProfessionalsDirectoryScreenState
   }
 
   String _profileWhatsapp(Map<String, dynamic> profile) {
-    return MerchantProfileFields.customerVisibleWhatsApp(profile).trim();
+    return MerchantProfileFields.merchantInternalContactPhone(profile).trim();
   }
 
   String _profilePhone(Map<String, dynamic> profile) {
-    return MerchantProfileFields.customerVisiblePhone(profile).trim();
+    return MerchantProfileFields.merchantInternalContactPhone(profile).trim();
   }
 
   @override
@@ -357,9 +357,9 @@ class _ProfessionalCard extends StatelessWidget {
             ),
           ],
           const SizedBox(height: 14),
-          if (whatsapp.trim().isEmpty && phone.trim().isEmpty)
+          if (phone.trim().isEmpty)
             const Text(
-              'مزوّد الخدمة أخفى وسائل التواصل حالياً.',
+              'لا يتوفر تواصل مع مزوّد الخدمة حالياً.',
               style: TextStyle(
                 fontFamily: 'Cairo',
                 color: Colors.grey,
@@ -367,30 +367,16 @@ class _ProfessionalCard extends StatelessWidget {
               ),
             )
           else
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton.icon(
-                onPressed: () {
-                  if (!GuestGate.requireAccount(
-                    context,
-                    message: 'سجّل دخولك للتواصل مع مزوّد الخدمة.',
-                  )) {
-                    return;
-                  }
-                  final contact = phone.trim().isNotEmpty ? phone.trim() : whatsapp.trim();
-                  if (contact.isEmpty) return;
-                  ChatNavigation.openStoreChat(
-                    context,
-                    merchantPhone: contact,
-                    storeName: name,
-                  );
-                },
-                icon: const Icon(Icons.chat_bubble_outline_rounded),
-                label: const Text(
-                  'مراسلة',
-                  style: TextStyle(fontFamily: 'Cairo'),
-                ),
-              ),
+            InternalContactButtons.store(
+              merchantPhone: phone.trim(),
+              storeName: name,
+              merchantProfile: {
+                'open_time': openTime,
+                'close_time': closeTime,
+                'is_open': true,
+              },
+              chatLabel: 'مراسلة',
+              callLabel: 'اتصال',
             ),
         ],
       ),

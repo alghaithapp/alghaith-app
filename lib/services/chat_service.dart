@@ -1,5 +1,7 @@
 import '../core/network/api_client.dart';
+import '../core/network/api_exception.dart';
 import '../models/chat_message.dart';
+import '../models/chat_thread_summary.dart';
 
 class ChatService {
   static Future<List<ChatMessage>> fetchMessages({
@@ -14,7 +16,16 @@ class ChatService {
         .toList();
   }
 
-  static Future<ChatMessage?> sendMessage({
+  static Future<List<ChatThreadSummary>> fetchInbox() async {
+    final data = await ApiClient.instance.get('/db/chat/inbox/threads');
+    if (data is! List) return const [];
+    return data
+        .whereType<Map>()
+        .map((item) => ChatThreadSummary.fromMap(Map<String, dynamic>.from(item)))
+        .toList();
+  }
+
+  static Future<ChatMessage> sendMessage({
     required String threadType,
     required String threadId,
     required String content,
@@ -33,7 +44,9 @@ class ChatService {
         'messageType': messageType,
       },
     );
-    if (data is! Map) return null;
+    if (data is! Map) {
+      throw ApiException('تعذر إرسال الرسالة.');
+    }
     return ChatMessage.fromMap(Map<String, dynamic>.from(data));
   }
 }

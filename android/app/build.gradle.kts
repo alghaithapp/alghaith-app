@@ -13,6 +13,31 @@ if (keystorePropertiesFile.exists()) {
     keystoreProperties.load(FileInputStream(keystorePropertiesFile))
 }
 
+// Agora voice-only: drop video/face/screen extensions; keep noise + echo cancellation.
+val agoraNativeAbis = listOf("arm64-v8a", "armeabi-v7a", "x86_64", "x86")
+val agoraExcludedVoiceOnlyExtensions = listOf(
+    "libagora_clear_vision_extension.so",
+    "libagora_lip_sync_extension.so",
+    "libagora_ffmpeg.so",
+    "libagora_spatial_audio_extension.so",
+    "libagora_segmentation_extension.so",
+    "libagora_face_capture_extension.so",
+    "libagora_face_detection_extension.so",
+    "libagora_video_encoder_extension.so",
+    "libagora_video_decoder_extension.so",
+    "libagora_video_av1_encoder_extension.so",
+    "libagora_video_av1_decoder_extension.so",
+    "libagora_video_quality_analyzer_extension.so",
+    "libagora_screen_capture_extension.so",
+    "libagora_content_inspect_extension.so",
+    "libagora_audio_beauty_extension.so",
+    "libagora_ai_denoise_extension.so",
+    "libagora_super_resolution_extension.so",
+    "libagora_drm_loader_extension.so",
+    "libagora_replay_kit_extension.so",
+    "libagora_video_segmentation_extension.so",
+)
+
 android {
     namespace = "com.alghaith.app"
     compileSdk = 36
@@ -49,6 +74,16 @@ android {
                 signingConfigs.getByName("release")
             } else {
                 signingConfigs.getByName("debug")
+            }
+        }
+    }
+
+    packaging {
+        jniLibs {
+            agoraNativeAbis.forEach { abi ->
+                agoraExcludedVoiceOnlyExtensions.forEach { library ->
+                    excludes += "lib/$abi/$library"
+                }
             }
         }
     }

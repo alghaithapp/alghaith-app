@@ -4,8 +4,9 @@ import '../core/theme/app_colors.dart';
 import '../utils/call_navigation.dart';
 import '../utils/chat_navigation.dart';
 import '../utils/guest_gate.dart';
+import '../utils/merchant_profile_fields.dart';
 
-/// أزرار تواصل داخلية: مراسلة + اتصال صوتي (Agora).
+/// أزرار تواصل داخلية — مراسلة + مكالمة صوتية داخل التطبيق فقط.
 class InternalContactButtons extends StatelessWidget {
   final String threadType;
   final String threadId;
@@ -13,7 +14,7 @@ class InternalContactButtons extends StatelessWidget {
   final String? receiverPhone;
   final String chatLabel;
   final String callLabel;
-  final String? callerName;
+  final Map<String, dynamic>? merchantProfile;
 
   const InternalContactButtons({
     super.key,
@@ -23,25 +24,25 @@ class InternalContactButtons extends StatelessWidget {
     this.receiverPhone,
     this.chatLabel = 'مراسلة',
     this.callLabel = 'اتصال',
-    this.callerName,
+    this.merchantProfile,
   });
 
   factory InternalContactButtons.order({
     required String orderId,
     required String otherPartyName,
     String? receiverPhone,
+    Map<String, dynamic>? merchantProfile,
     String chatLabel = 'مراسلة',
     String callLabel = 'اتصال',
-    String? callerName,
   }) {
     return InternalContactButtons(
       threadType: 'order',
       threadId: orderId,
       otherPartyName: otherPartyName,
       receiverPhone: receiverPhone,
+      merchantProfile: merchantProfile,
       chatLabel: chatLabel,
       callLabel: callLabel,
-      callerName: callerName,
     );
   }
 
@@ -51,7 +52,6 @@ class InternalContactButtons extends StatelessWidget {
     String? receiverPhone,
     String chatLabel = 'مراسلة',
     String callLabel = 'اتصال',
-    String? callerName,
   }) {
     return InternalContactButtons(
       threadType: 'taxi',
@@ -60,16 +60,15 @@ class InternalContactButtons extends StatelessWidget {
       receiverPhone: receiverPhone,
       chatLabel: chatLabel,
       callLabel: callLabel,
-      callerName: callerName,
     );
   }
 
   factory InternalContactButtons.store({
     required String merchantPhone,
     required String storeName,
+    Map<String, dynamic>? merchantProfile,
     String chatLabel = 'مراسلة',
     String callLabel = 'اتصال',
-    String? callerName,
   }) {
     final phone = merchantPhone.trim();
     return InternalContactButtons(
@@ -77,11 +76,18 @@ class InternalContactButtons extends StatelessWidget {
       threadId: phone,
       otherPartyName: storeName,
       receiverPhone: phone,
+      merchantProfile: merchantProfile,
       chatLabel: chatLabel,
       callLabel: callLabel,
-      callerName: callerName,
     );
   }
+
+  bool get _canCall =>
+      (receiverPhone?.trim().isNotEmpty ?? false) &&
+      MerchantProfileFields.isAcceptingCustomerCalls(merchantProfile);
+
+  String? get _callsBlockedMessage =>
+      MerchantProfileFields.callsUnavailableMessageAr(merchantProfile);
 
   Future<void> _openChat(BuildContext context) async {
     if (!GuestGate.requireAccount(
@@ -96,71 +102,112 @@ class InternalContactButtons extends StatelessWidget {
       threadId: threadId,
       otherPartyName: otherPartyName,
       receiverPhone: receiverPhone,
+      merchantProfile: merchantProfile,
     );
   }
 
-  Future<void> _openCall(BuildContext context) async {
+  Future<void> _startCall(BuildContext context) async {
     final phone = receiverPhone?.trim() ?? '';
     if (phone.isEmpty) return;
+
+    final blocked = _callsBlockedMessage;
+    if (blocked != null) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            blocked,
+            style: const TextStyle(fontFamily: 'Cairo'),
+          ),
+        ),
+      );
+      return;
+    }
+
+    if (!GuestGate.requireAccount(
+      context,
+      message: 'سجّل دخولك لإجراء مكالمة داخل التطبيق.',
+    )) {
+      return;
+    }
+
     await CallNavigation.openOutgoing(
       context,
       threadType: threadType,
       threadId: threadId,
       otherPartyName: otherPartyName,
       receiverPhone: phone,
-      callerName: callerName,
+      merchantProfile: merchantProfile,
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final canCall = (receiverPhone?.trim().isNotEmpty ?? false);
+    final blockedMessage = _callsBlockedMessage;
 
-    return Row(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Expanded(
-          child: OutlinedButton.icon(
-            onPressed: () => _openChat(context),
-            icon: const Icon(Icons.chat_bubble_outline, size: 16),
-            label: Text(
-              chatLabel,
-              style: const TextStyle(
-                fontFamily: 'Cairo',
-                fontSize: 12,
-                fontWeight: FontWeight.bold,
+        Row(
+          children: [
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: () => _openChat(context),
+                icon: const Icon(Icons.chat_bubble_outline, size: 16),
+                label: Text(
+                  chatLabel,
+                  style: const TextStyle(
+                    fontFamily: 'Cairo',
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.primary,
+                  side: const BorderSide(color: AppColors.primary),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                ),
               ),
             ),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: AppColors.primary,
-              side: const BorderSide(color: AppColors.primary),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
+            if (_canCall) ...[
+              const SizedBox(width: 8),
+              Expanded(
+                child: FilledButton.icon(
+                  onPressed: () => _startCall(context),
+                  icon: const Icon(Icons.call, size: 16),
+                  label: Text(
+                    callLabel,
+                    style: const TextStyle(
+                      fontFamily: 'Cairo',
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                  ),
+                ),
               ),
-              padding: const EdgeInsets.symmetric(vertical: 8),
-            ),
-          ),
+            ],
+          ],
         ),
-        if (canCall) ...[
-          const SizedBox(width: 8),
-          Expanded(
-            child: FilledButton.icon(
-              onPressed: () => _openCall(context),
-              icon: const Icon(Icons.call, size: 16),
-              label: Text(
-                callLabel,
-                style: const TextStyle(
-                  fontFamily: 'Cairo',
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              style: FilledButton.styleFrom(
-                backgroundColor: AppColors.primary,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                padding: const EdgeInsets.symmetric(vertical: 8),
-              ),
+        if (blockedMessage != null &&
+            (receiverPhone?.trim().isNotEmpty ?? false)) ...[
+          const SizedBox(height: 8),
+          Text(
+            blockedMessage,
+            style: const TextStyle(
+              fontFamily: 'Cairo',
+              fontSize: 11,
+              color: Colors.grey,
+              height: 1.4,
             ),
           ),
         ],

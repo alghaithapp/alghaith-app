@@ -461,7 +461,6 @@ class _OrdersScreenState extends State<OrdersScreen> {
               otherPartyName: order.merchantStoreName ?? 'التاجر',
               receiverPhone: order.merchantPhone,
               chatLabel: 'مراسلة التاجر',
-              callLabel: 'اتصال',
             ),
           ],
         ],

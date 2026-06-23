@@ -12,6 +12,7 @@ import '../utils/guest_gate.dart';
 import '../utils/merchant_product_sections.dart';
 import '../utils/merchant_profile_fields.dart';
 import '../widgets/app_image.dart';
+import '../widgets/internal_contact_buttons.dart';
 import '../widgets/product_image_preview.dart';
 import '../widgets/service_navigation_buttons.dart';
 import 'cart_screen.dart';
@@ -92,9 +93,7 @@ class _ShoppingStoreMenuScreenState extends State<ShoppingStoreMenuScreen> {
     final products = _filterProducts(filteredBySection);
 
     final customerPhone =
-        MerchantProfileFields.customerVisiblePhone(widget.profile);
-    final customerWhatsApp =
-        MerchantProfileFields.customerVisibleWhatsApp(widget.profile);
+        MerchantProfileFields.merchantInternalContactPhone(widget.profile);
     return Scaffold(
       backgroundColor: const Color(0xFFF5F6FA),
       appBar: AppBar(
@@ -132,8 +131,7 @@ class _ShoppingStoreMenuScreenState extends State<ShoppingStoreMenuScreen> {
           children: [
             ShopStoreHeader(
               profile: widget.profile,
-              visiblePhone: customerPhone,
-              visibleWhatsApp: customerWhatsApp,
+              merchantPhone: customerPhone,
             ),
             const SizedBox(height: 12),
             CupertinoSearchTextField(
@@ -219,6 +217,7 @@ class _ShoppingStoreMenuScreenState extends State<ShoppingStoreMenuScreen> {
                       context,
                       merchantPhone: phone,
                       storeName: MerchantProfileFields.name(widget.profile),
+                      merchantProfile: widget.profile,
                     );
                   },
                   onAdd: (buttonContext) {
@@ -265,23 +264,18 @@ class _ShoppingStoreMenuScreenState extends State<ShoppingStoreMenuScreen> {
 
 class ShopStoreHeader extends StatelessWidget {
   final Map<String, dynamic> profile;
-  final String visiblePhone;
-  final String visibleWhatsApp;
+  final String merchantPhone;
 
   const ShopStoreHeader({
     super.key,
     required this.profile,
-    required this.visiblePhone,
-    required this.visibleWhatsApp,
+    required this.merchantPhone,
   });
 
   @override
   Widget build(BuildContext context) {
     final address = MerchantProfileFields.addressFromMap(profile);
-    final hasContact = visiblePhone.trim().isNotEmpty || visibleWhatsApp.trim().isNotEmpty;
-    final contactPhone = visiblePhone.trim().isNotEmpty
-        ? visiblePhone.trim()
-        : visibleWhatsApp.trim();
+    final contactPhone = merchantPhone.trim();
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -324,9 +318,9 @@ class ShopStoreHeader extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 12),
-          if (!hasContact)
+          if (contactPhone.isEmpty)
             const Text(
-              'التاجر أخفى وسائل التواصل حالياً.',
+              'لا يتوفر تواصل مع هذا المتجر حالياً.',
               style: TextStyle(
                 fontFamily: 'Cairo',
                 color: Colors.grey,
@@ -334,36 +328,12 @@ class ShopStoreHeader extends StatelessWidget {
               ),
             )
           else
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton.icon(
-                onPressed: () {
-                  if (!GuestGate.requireAccount(
-                    context,
-                    message: 'سجّل دخولك للتواصل مع المتجر.',
-                  )) {
-                    return;
-                  }
-                  ChatNavigation.openStoreChat(
-                    context,
-                    merchantPhone: contactPhone,
-                    storeName: MerchantProfileFields.name(profile),
-                  );
-                },
-                icon: const Icon(Icons.chat_bubble_outline_rounded),
-                label: const Text(
-                  'مراسلة داخل التطبيق',
-                  style: TextStyle(fontFamily: 'Cairo'),
-                ),
-                style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  foregroundColor: const Color(0xFFF5A01D),
-                  side: const BorderSide(color: Color(0xFFF5A01D)),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                ),
-              ),
+            InternalContactButtons.store(
+              merchantPhone: contactPhone,
+              storeName: MerchantProfileFields.name(profile),
+              merchantProfile: profile,
+              chatLabel: 'مراسلة داخل التطبيق',
+              callLabel: 'اتصال',
             ),
         ],
       ),

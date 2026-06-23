@@ -169,6 +169,9 @@ class PushNotificationService {
     if (eventKey == 'call:incoming') {
       onIncomingCall?.call(Map<String, dynamic>.from(message.data));
     }
+    if (eventKey == 'chat:new') {
+      onChatMessage?.call(Map<String, dynamic>.from(message.data));
+    }
 
     if (eventKey.contains(':approved') || eventKey.contains(':rejected')) {
       await PushNotificationInbox.onCourierStatusPush?.call();
@@ -216,6 +219,7 @@ class PushNotificationService {
   }
   void Function(Map<String, dynamic> data)? _onNotificationOpened;
   void Function(Map<String, dynamic> data)? onIncomingCall;
+  void Function(Map<String, dynamic> data)? onChatMessage;
 
   void setOnNotificationOpened(void Function(Map<String, dynamic> data) callback) {
     _onNotificationOpened = callback;

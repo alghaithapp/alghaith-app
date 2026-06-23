@@ -17,6 +17,7 @@ import 'account_full_screen.dart';
 import 'admin/admin_dashboard_screen.dart';
 import 'addresses_screen.dart';
 import 'app_settings_screen.dart';
+import 'merchant/merchant_chat_inbox_screen.dart';
 import 'orders_screen.dart';
 import 'payment_methods_screen.dart';
 
@@ -343,6 +344,14 @@ class _SettingsListCard extends StatelessWidget {
         title: 'سجل الطلبات',
         onTap: () => Navigator.of(context, rootNavigator: true).push(
           CupertinoPageRoute(builder: (_) => const OrdersScreen()),
+        ),
+      ),
+      _SettingsItemData(
+        icon: CupertinoIcons.chat_bubble_2_fill,
+        color: const Color(0xFF1E88E5),
+        title: 'الرسائل داخل التطبيق',
+        onTap: () => Navigator.of(context, rootNavigator: true).push(
+          CupertinoPageRoute(builder: (_) => const ChatInboxScreen()),
         ),
       ),
       _SettingsItemData(

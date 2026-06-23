@@ -26,18 +26,24 @@ class MerchantProfileFields {
   }
 
   static String name(Map<String, dynamic>? map) {
-    if (map == null) return 'المحل';
+    final resolved = storeNameOrEmpty(map);
+    return resolved.isNotEmpty ? resolved : 'المحل';
+  }
+
+  /// اسم المتجر الفعلي أو سلسلة فارغة (للتحقق من اكتمال الملف).
+  static String storeNameOrEmpty(Map<String, dynamic>? map) {
+    if (map == null) return '';
     for (final key in [
+      'name',
       'store_name',
       'storeName',
-      'name',
       'merchant_store_name',
       'merchantStoreName',
     ]) {
       final value = map[key]?.toString().trim() ?? '';
       if (value.isNotEmpty) return value;
     }
-    return 'المحل';
+    return '';
   }
 
   static String timeFromMap(
@@ -205,6 +211,73 @@ class MerchantProfileFields {
     }
     final phone = map['phone']?.toString().trim() ?? '';
     return phone;
+  }
+
+  /// رقم التاجر للمراسلة/الاتصال داخل التطبيق — دائماً متاح بغض النظر عن إعدادات الإظهار.
+  static String merchantInternalContactPhone(Map<String, dynamic>? map) {
+    if (map == null) return '';
+    for (final key in ['phone', 'customer_phone', 'customerPhone']) {
+      final value = map[key]?.toString().trim() ?? '';
+      if (value.isNotEmpty) return value;
+    }
+    return '';
+  }
+
+  /// الوقت الحالي بتوقيت بغداد (UTC+3).
+  static DateTime nowInBaghdad() {
+    return DateTime.now().toUtc().add(const Duration(hours: 3));
+  }
+
+  /// هل الوقت الحالي ضمن ساعات الدوام المحددة؟
+  static bool isWithinWorkingHours(
+    Map<String, dynamic>? map, {
+    DateTime? now,
+  }) {
+    final open = toTimeOfDay(timeFromMap(map, isOpen: true));
+    final close = toTimeOfDay(timeFromMap(map, isOpen: false));
+    if (open == null || close == null) return true;
+
+    final current = now ?? nowInBaghdad();
+    final nowMinutes = current.hour * 60 + current.minute;
+    final openMinutes = open.hour * 60 + open.minute;
+    final closeMinutes = close.hour * 60 + close.minute;
+
+    if (openMinutes == closeMinutes) return true;
+    if (closeMinutes > openMinutes) {
+      return nowMinutes >= openMinutes && nowMinutes < closeMinutes;
+    }
+    return nowMinutes >= openMinutes || nowMinutes < closeMinutes;
+  }
+
+  /// هل يقبل التاجر/المطعم اتصالات الزبائن الآن؟
+  static bool isAcceptingCustomerCalls(
+    Map<String, dynamic>? map, {
+    DateTime? now,
+  }) {
+    if (map != null &&
+        !boolValue(map['isOpen'] ?? map['is_open'], fallback: true)) {
+      return false;
+    }
+    return isWithinWorkingHours(map, now: now);
+  }
+
+  /// رسالة عربية عند تعذّر الاتصال — أو null إذا مسموح.
+  static String? callsUnavailableMessageAr(
+    Map<String, dynamic>? map, {
+    DateTime? now,
+  }) {
+    if (map != null &&
+        !boolValue(map['isOpen'] ?? map['is_open'], fallback: true)) {
+      return 'المتجر مغلق حالياً — الاتصال غير متاح.';
+    }
+    if (!isWithinWorkingHours(map, now: now)) {
+      final hours = workingHoursLabel(map);
+      if (hours == 'غير محدد') {
+        return 'انتهى وقت الدوام. الاتصال متاح خلال ساعات العمل فقط.';
+      }
+      return 'انتهى وقت الدوام ($hours). الاتصال متاح خلال ساعات العمل فقط.';
+    }
+    return null;
   }
 
   /// مصدر واحد غير متكرر لحالة الاعتماد — يمنع التكرار اللانهائي

@@ -59,7 +59,7 @@ class CustomerService extends ChangeNotifier {
   List<CartItem> get cart => _cart;
 
   String get merchantStoreName =>
-      (_merchantStore?['name'] as String?)?.trim() ?? '';
+      MerchantProfileFields.storeNameOrEmpty(_merchantStore);
   double? get merchantLatitude =>
       _toDoubleValue(_merchantStore?['latitude']) ??
       _toDoubleValue(_merchantStore?['lat']);
@@ -253,18 +253,12 @@ class CustomerService extends ChangeNotifier {
     Map<String, dynamic> product,
     Map<String, dynamic> profile,
   ) {
-    final visiblePhone = MerchantProfileFields.customerVisiblePhone(profile);
-    final visibleWhatsApp =
-        MerchantProfileFields.customerVisibleWhatsApp(profile);
-    final showPhone = MerchantProfileFields.showPhoneToCustomers(profile);
-    final showWhatsApp = MerchantProfileFields.showWhatsAppToCustomers(profile);
+    final internalPhone =
+        MerchantProfileFields.merchantInternalContactPhone(profile);
     final row = Map<String, dynamic>.from(product)
-      ..['merchant_phone'] = profile['phone']?.toString()
-      ..['merchant_whatsapp'] = visibleWhatsApp
-      ..['merchant_customer_phone'] = visiblePhone
-      ..['merchant_customer_whatsapp'] = visibleWhatsApp
-      ..['merchant_show_phone_to_customers'] = showPhone
-      ..['merchant_show_whatsapp_to_customers'] = showWhatsApp
+      ..['merchant_phone'] = internalPhone.isNotEmpty
+          ? internalPhone
+          : profile['phone']?.toString()
       ..['merchant_store_name'] = profile['store_name']?.toString() ?? ''
       ..['merchant_address'] = MerchantProfileFields.addressFromMap(profile)
       ..['merchant_open_time'] =

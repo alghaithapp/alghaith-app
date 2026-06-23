@@ -7,6 +7,7 @@ import '../../utils/sync_error_message.dart';
 import '../../utils/account_role_switch.dart';
 import '../../widgets/app_image.dart';
 import '../../widgets/app_logo.dart';
+import 'merchant_chat_inbox_screen.dart';
 import 'merchant_notifications_screen.dart';
 import 'merchant_offers_screen.dart';
 import 'merchant_profile_screen.dart';
@@ -148,6 +149,15 @@ class MerchantMoreScreen extends StatelessWidget {
           icon: Icons.settings_rounded,
           onTap: () => Navigator.of(context).push(MaterialPageRoute(
               builder: (_) => const MerchantStoreSettingsScreen())),
+        ),
+        _MoreTile(
+          cardColor: cardColor,
+          title: 'الرسائل داخل التطبيق',
+          subtitle: 'كل محادثاتك مع الزبائن والطلبات',
+          icon: Icons.chat_bubble_outline,
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => const MerchantChatInboxScreen()),
+          ),
         ),
         _MoreTile(
           cardColor: cardColor,

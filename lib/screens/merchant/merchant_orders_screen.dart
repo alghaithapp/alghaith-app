@@ -982,7 +982,6 @@ class _PremiumOrderCard extends StatelessWidget {
               otherPartyName: order.customerNameAr,
               receiverPhone: order.customerPhone,
               chatLabel: 'مراسلة الزبون',
-              callLabel: 'اتصال',
             ),
             const SizedBox(height: 12),
           ],

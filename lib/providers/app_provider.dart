@@ -113,6 +113,7 @@ class AppProvider extends ChangeNotifier {
     // Auth → snapshot apply callbacks
     auth.setOnApplyMerchantSnapshot((snapshot) {
       merchant.applyMerchantStoreSnapshot(snapshot);
+      auth.updateMerchantStore(merchant.merchantStore);
     });
     auth.setOnCollectLocalBackupData(() => {
       'merchantStore': merchant.merchantStore,
@@ -122,7 +123,10 @@ class AppProvider extends ChangeNotifier {
       'orders': _orders,
       'merchantOffers': merchant.merchantOffers,
     });
-    auth.setOnApplyMerchantStore((store) => merchant.applyMerchantStoreSnapshot(store));
+    auth.setOnApplyMerchantStore((store) {
+      merchant.applyMerchantStoreSnapshot(store);
+      auth.updateMerchantStore(merchant.merchantStore);
+    });
     auth.setOnApplyDriverProfile((profile) => driver.loadProfileFromRemoteState({'driverProfile': profile}));
     auth.setOnApplyCourierProfile((profile) => delivery.loadProfileFromRemoteState({'courierProfile': profile}));
     auth.setOnApplyLocalBackupItems((items) => merchant.loadInitialData(items));
@@ -155,6 +159,15 @@ class AppProvider extends ChangeNotifier {
         longitude: (state['customerLongitude'] as num?)?.toDouble(),
         avatarBase64: (state['customerAvatarBase64'] ?? state['customerAvatarUrl']) as String?,
       );
+      final remoteMerchantStore = state['merchantStore'];
+      if (remoteMerchantStore is Map &&
+          remoteMerchantStore.isNotEmpty &&
+          !merchant.hasCompletedMerchantProfile) {
+        merchant.applyMerchantStoreSnapshot(
+          Map<String, dynamic>.from(remoteMerchantStore),
+        );
+        auth.updateMerchantStore(merchant.merchantStore);
+      }
     });
 
     // مزامنة مباشرة من customer-profile / app-user بعد الاستعادة
@@ -175,6 +188,22 @@ class AppProvider extends ChangeNotifier {
         avatarBase64: avatarBase64,
       );
     });
+
+    auth.setOnEnsureMerchantProfileSynced(() async {
+      await merchant.ensureMerchantProfileSynced();
+      auth.updateMerchantStore(merchant.merchantStore);
+    });
+    auth.setOnPersistMerchantStoreAndState(() async {
+      await merchant.persistMerchantStoreAndStateForAuth();
+      await auth.persistSessionBackup();
+    });
+    auth.setOnSyncMerchantDataBeforeLeavingMerchantMode(
+      () => merchant.syncMerchantDataBeforeLeavingMerchantModeForAuth(),
+    );
+    auth.setOnPersistMerchantItems(
+      () => merchant.persistMerchantItemsForAuth(),
+    );
+    merchant.requestSessionBackup = auth.persistSessionBackup;
 
     // Delivery → refresh account from cloud
     delivery.setOnRefreshAccountFromCloud(() async {

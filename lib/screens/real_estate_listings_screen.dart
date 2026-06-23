@@ -193,7 +193,8 @@ class _PropertyCard extends StatelessWidget {
     );
 
     final merchantName = merchant['store_name']?.toString().trim();
-    final whatsapp = MerchantProfileFields.customerVisibleWhatsApp(merchant).trim();
+    final merchantPhone =
+        MerchantProfileFields.merchantInternalContactPhone(merchant).trim();
 
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
@@ -296,7 +297,8 @@ class _PropertyCard extends StatelessWidget {
                       ),
                     ),
                     FilledButton.icon(
-                      onPressed: (whatsapp.isEmpty && (product['merchant_phone']?.toString().trim().isEmpty ?? true))
+                      onPressed: merchantPhone.isEmpty &&
+                              (product['merchant_phone']?.toString().trim().isEmpty ?? true)
                           ? null
                           : () {
                               if (!GuestGate.requireAccount(
@@ -305,14 +307,16 @@ class _PropertyCard extends StatelessWidget {
                               )) {
                                 return;
                               }
-                              final contact = (product['merchant_phone']?.toString().trim().isNotEmpty == true)
-                                  ? product['merchant_phone'].toString().trim()
-                                  : whatsapp.trim();
+                              final contact =
+                                  (product['merchant_phone']?.toString().trim().isNotEmpty == true)
+                                      ? product['merchant_phone'].toString().trim()
+                                      : merchantPhone.trim();
                               if (contact.isEmpty) return;
                               ChatNavigation.openStoreChat(
                                 context,
                                 merchantPhone: contact,
                                 storeName: merchantName ?? product['name_ar']?.toString() ?? 'المعلن',
+                                merchantProfile: merchant,
                               );
                             },
                       icon: const Icon(Icons.chat_bubble_outline_rounded),

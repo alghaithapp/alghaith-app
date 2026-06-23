@@ -85,7 +85,8 @@ class ShopRestaurantCard extends StatelessWidget {
     final ratingLabel = hasRating ? dbRating.toStringAsFixed(1) : 'جديد';
 
     final primaryOrange = const Color(0xFFF5A01D);
-    final customerPhone = MerchantProfileFields.customerVisiblePhone(profile);
+    final customerPhone =
+        MerchantProfileFields.merchantInternalContactPhone(profile);
     final storeName = MerchantProfileFields.name(profile);
 
     final productsCount = profile['totalProducts'] ?? products.length;
@@ -412,6 +413,7 @@ class ShopRestaurantCard extends StatelessWidget {
                             context,
                             merchantPhone: customerPhone,
                             storeName: storeName,
+                            merchantProfile: profile,
                           );
                         },
                       ),

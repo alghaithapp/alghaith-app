@@ -52,6 +52,34 @@ class RealtimeService {
         .subscribe();
   }
 
+  RealtimeChannel subscribeToChatMessages({
+    required String threadType,
+    required String threadId,
+    required void Function() onInsert,
+  }) {
+    final normalizedType = threadType.trim();
+    final normalizedId = threadId.trim();
+    return _client
+        .channel('chat:$normalizedType:$normalizedId')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.insert,
+          schema: 'public',
+          table: 'chat_messages',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'thread_id',
+            value: normalizedId,
+          ),
+          callback: (payload) {
+            final record = payload.newRecord;
+            if (record['thread_type']?.toString() == normalizedType) {
+              onInsert();
+            }
+          },
+        )
+        .subscribe();
+  }
+
   RealtimeChannel subscribeToTable({
     required String table,
     required String filterColumn,

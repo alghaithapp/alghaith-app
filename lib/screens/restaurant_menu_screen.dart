@@ -61,15 +61,9 @@ class _RestaurantMenuScreenState extends State<RestaurantMenuScreen>
         'assets/images/cat_restaurant.png';
   }
 
-  String? get _whatsappNumber {
-    final whatsapp =
-        MerchantProfileFields.customerVisibleWhatsApp(widget.storeProfile).trim();
-    if (whatsapp.isEmpty) return null;
-    return whatsapp;
-  }
-
   String? get _storeCustomerPhone {
-    final phone = MerchantProfileFields.customerVisiblePhone(widget.storeProfile).trim();
+    final phone =
+        MerchantProfileFields.merchantInternalContactPhone(widget.storeProfile).trim();
     if (phone.isEmpty) return null;
     return phone;
   }
@@ -343,6 +337,7 @@ class _RestaurantMenuScreenState extends State<RestaurantMenuScreen>
                           context,
                           merchantPhone: phone,
                           storeName: restaurant.nameAr,
+                          merchantProfile: widget.storeProfile,
                         );
                       },
                     ),

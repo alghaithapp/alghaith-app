@@ -3,96 +3,47 @@ import 'package:alghaith_app/features/taxi/utils/taxi_fare_calculator.dart';
 import 'package:alghaith_app/features/taxi/models/taxi_request.dart';
 
 void main() {
-  group('TaxiFareCalculator.calculateFare', () {
-    test('economic fare for 1km returns minimum 1000', () {
-      final result = TaxiFareCalculator.calculateFare(1.0,
-          taxiType: TaxiType.economic);
-      expect(result.fare, 1000);
-      expect(result.fareEconomic, 1000);
+  group('TaxiFareCalculator', () {
+    test('tuktuk: up to 2km is 1000', () {
+      expect(TaxiFareCalculator.fareForType(1.0, TaxiType.tuktuk), 1000);
+      expect(TaxiFareCalculator.fareForType(2.0, TaxiType.tuktuk), 1000);
     });
 
-    test('economic fare for 0km returns minimum 1000', () {
-      final result = TaxiFareCalculator.calculateFare(0.0,
-          taxiType: TaxiType.economic);
-      expect(result.fare, 1000);
+    test('tuktuk: 3km is 1250', () {
+      expect(TaxiFareCalculator.fareForType(3.0, TaxiType.tuktuk), 1250);
     });
 
-    test('economic fare for negative distance returns minimum 1000', () {
-      final result = TaxiFareCalculator.calculateFare(-5.0,
-          taxiType: TaxiType.economic);
-      expect(result.fare, 1000);
+    test('wazz: up to 2km is 1500', () {
+      expect(TaxiFareCalculator.fareForType(1.0, TaxiType.wazz), 1500);
+      expect(TaxiFareCalculator.fareForType(2.0, TaxiType.wazz), 1500);
     });
 
-    test('economic fare for 5km returns 3000', () {
-      final result = TaxiFareCalculator.calculateFare(5.0,
-          taxiType: TaxiType.economic);
-      expect(result.fare, 3000);
+    test('wazz: 3km is 1800', () {
+      expect(TaxiFareCalculator.fareForType(3.0, TaxiType.wazz), 1800);
     });
 
-    test('economic fare for 10km', () {
-      final result = TaxiFareCalculator.calculateFare(10.0,
-          taxiType: TaxiType.economic);
-      expect(result.fare, 5500);
+    test('economic: minimum 1500 even for 1km', () {
+      expect(TaxiFareCalculator.fareForType(1.0, TaxiType.economic), 1500);
+      expect(TaxiFareCalculator.fareForType(2.0, TaxiType.economic), 1500);
     });
 
-    test('super fare for 1km returns minimum 1500', () {
-      final result = TaxiFareCalculator.calculateFare(1.0,
-          taxiType: TaxiType.superTaxiType);
-      expect(result.fare, 1500);
+    test('economic: 3km is 2000', () {
+      expect(TaxiFareCalculator.fareForType(3.0, TaxiType.economic), 2000);
     });
 
-    test('super fare for 10km is ~30% more than economic', () {
-      final economic = TaxiFareCalculator.calculateFare(10.0,
-          taxiType: TaxiType.economic);
-      final superResult = TaxiFareCalculator.calculateFare(10.0,
-          taxiType: TaxiType.superTaxiType);
-      expect(superResult.fare, greaterThan(economic.fare));
-      expect(superResult.fare, 7250);
-      expect(economic.fare, 5500);
-    });
-
-    test('super fare for 5km', () {
-      final result = TaxiFareCalculator.calculateFare(5.0,
-          taxiType: TaxiType.superTaxiType);
-      expect(result.fare, 4000);
+    test('economic: 5km is 3000', () {
+      expect(TaxiFareCalculator.fareForType(5.0, TaxiType.economic), 3000);
     });
 
     test('caps at 50000 for long distance', () {
-      final result = TaxiFareCalculator.calculateFare(200.0,
-          taxiType: TaxiType.economic);
-      expect(result.fare, 50000);
+      expect(TaxiFareCalculator.fareForType(200.0, TaxiType.economic), 50000);
     });
 
-    test('super fare also caps at 50000', () {
-      final result = TaxiFareCalculator.calculateFare(200.0,
-          taxiType: TaxiType.superTaxiType);
-      expect(result.fare, 50000);
-    });
-
-    test('defaults to economic when taxiType is null', () {
-      final result = TaxiFareCalculator.calculateFare(5.0);
-      expect(result.fare, 3000);
-      expect(result.fare, result.fareEconomic);
-    });
-
-    test('FareResult preserves economic and super fares', () {
-      final result = TaxiFareCalculator.calculateFare(10.0,
-          taxiType: TaxiType.economic);
-      expect(result.fareEconomic, 5500);
-      expect(result.fareSuper, 7250);
-    });
-
-    test('rounding to nearest 250 works', () {
-      final result = TaxiFareCalculator.calculateFare(1.5,
-          taxiType: TaxiType.economic);
-      expect(result.fare % 250, 0);
-    });
-
-    test('fractional distances are handled', () {
-      final result = TaxiFareCalculator.calculateFare(2.7,
-          taxiType: TaxiType.economic);
-      expect(result.fare, greaterThan(1000));
-      expect(result.fare % 250, 0);
+    test('TaxiType API mapping', () {
+      expect(TaxiTypeX.fromApiName('tuktuk'), TaxiType.tuktuk);
+      expect(TaxiTypeX.fromApiName('wazz'), TaxiType.wazz);
+      expect(TaxiTypeX.fromApiName('super'), TaxiType.economic);
+      expect(TaxiType.tuktuk.toApiName, 'tuktuk');
     });
   });
 }

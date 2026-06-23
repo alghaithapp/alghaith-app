@@ -4,13 +4,18 @@ import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 import '../core/theme/app_colors.dart';
+import '../screens/incoming_call_screen.dart';
 import '../services/agora_voice_service.dart';
+import '../services/incoming_call_ringtone.dart';
 import '../services/voice_call_service.dart';
 import '../utils/guest_gate.dart';
+import '../utils/merchant_profile_fields.dart';
 
 /// فتح مكالمة صوتية داخلية عبر Agora.
 class CallNavigation {
   CallNavigation._();
+
+  static bool _incomingCallVisible = false;
 
   static Future<void> openOutgoing(
     BuildContext context, {
@@ -19,6 +24,7 @@ class CallNavigation {
     required String otherPartyName,
     required String receiverPhone,
     String? callerName,
+    Map<String, dynamic>? merchantProfile,
   }) async {
     if (!GuestGate.requireAccount(
       context,
@@ -27,6 +33,20 @@ class CallNavigation {
       return;
     }
     if (!context.mounted) return;
+
+    final blocked =
+        MerchantProfileFields.callsUnavailableMessageAr(merchantProfile);
+    if (blocked != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            blocked,
+            style: const TextStyle(fontFamily: 'Cairo'),
+          ),
+        ),
+      );
+      return;
+    }
 
     final micGranted = await _ensureMicrophonePermission(context);
     if (!micGranted || !context.mounted) return;
@@ -51,6 +71,7 @@ class CallNavigation {
     required String threadId,
     required String otherPartyName,
     String? channelName,
+    String? otherPartyPhone,
   }) async {
     if (!GuestGate.requireAccount(
       context,
@@ -70,6 +91,7 @@ class CallNavigation {
           threadId: threadId,
           otherPartyName: otherPartyName,
           channelName: channelName,
+          otherPartyPhone: otherPartyPhone,
           isIncoming: true,
         ),
       ),
@@ -82,6 +104,7 @@ class CallNavigation {
   ) async {
     final eventKey = data['eventKey']?.toString() ?? '';
     if (eventKey != 'call:incoming') return;
+    if (_incomingCallVisible) return;
 
     final threadType = data['threadType']?.toString() ?? 'order';
     final threadId = data['threadId']?.toString() ?? '';
@@ -89,40 +112,42 @@ class CallNavigation {
 
     final callerName = data['callerName']?.toString().trim();
     final channelName = data['channelName']?.toString().trim();
+    final callerPhone = data['callerPhone']?.toString().trim();
 
-    final accepted = await showDialog<bool>(
-      context: context,
-      barrierDismissible: false,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text(
-          'مكالمة واردة',
-          style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold),
-        ),
-        content: Text(
-          'مكالمة من ${callerName?.isNotEmpty == true ? callerName! : 'مستخدم'}',
-          style: const TextStyle(fontFamily: 'Cairo'),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: const Text('رفض', style: TextStyle(fontFamily: 'Cairo')),
+    _incomingCallVisible = true;
+    bool accepted = false;
+    try {
+      await IncomingCallRingtone.instance.start();
+      final result = await Navigator.of(context, rootNavigator: true).push<bool>(
+        PageRouteBuilder<bool>(
+          opaque: true,
+          fullscreenDialog: true,
+          pageBuilder: (_, __, ___) => IncomingCallScreen(
+            callerName: callerName?.isNotEmpty == true ? callerName! : 'متصل',
+            threadType: threadType,
+            threadId: threadId,
+            channelName: channelName,
+            callerPhone: callerPhone,
           ),
-          FilledButton(
-            onPressed: () => Navigator.of(dialogContext).pop(true),
-            style: FilledButton.styleFrom(backgroundColor: AppColors.primary),
-            child: const Text('رد', style: TextStyle(fontFamily: 'Cairo')),
-          ),
-        ],
-      ),
-    );
+          transitionsBuilder: (_, animation, __, child) {
+            return FadeTransition(opacity: animation, child: child);
+          },
+        ),
+      );
+      accepted = result == true;
+    } finally {
+      _incomingCallVisible = false;
+      await IncomingCallRingtone.instance.stop();
+    }
 
-    if (accepted != true || !context.mounted) return;
+    if (!accepted || !context.mounted) return;
     await openIncoming(
       context,
       threadType: threadType,
       threadId: threadId,
       otherPartyName: callerName?.isNotEmpty == true ? callerName! : 'متصل',
       channelName: channelName,
+      otherPartyPhone: callerPhone,
     );
   }
 
@@ -195,6 +220,7 @@ class CallNavigation {
     required String merchantPhone,
     required String storeName,
     String? callerName,
+    Map<String, dynamic>? merchantProfile,
   }) {
     final phone = merchantPhone.trim();
     return openOutgoing(
@@ -204,6 +230,7 @@ class CallNavigation {
       otherPartyName: storeName,
       receiverPhone: phone,
       callerName: callerName,
+      merchantProfile: merchantProfile,
     );
   }
 }
@@ -215,6 +242,7 @@ class VoiceCallScreen extends StatefulWidget {
   final String? receiverPhone;
   final String? callerName;
   final String? channelName;
+  final String? otherPartyPhone;
   final bool isIncoming;
 
   const VoiceCallScreen({
@@ -225,6 +253,7 @@ class VoiceCallScreen extends StatefulWidget {
     this.receiverPhone,
     this.callerName,
     this.channelName,
+    this.otherPartyPhone,
     this.isIncoming = false,
   });
 
@@ -233,18 +262,27 @@ class VoiceCallScreen extends StatefulWidget {
 }
 
 class _VoiceCallScreenState extends State<VoiceCallScreen> {
-  final AgoraVoiceService _voice = AgoraVoiceService();
+  final AgoraVoiceService _voice = AgoraVoiceService.instance;
   bool _muted = false;
   bool _speaker = true;
   String _statusText = 'جاري الاتصال...';
   String? _errorText;
+  String? _callLogId;
+  String? _channelName;
+  DateTime? _startedAt;
+  DateTime? _connectedAt;
+  bool _logFinalized = false;
+  bool _wasConnected = false;
+  bool _disposing = false;
 
   @override
   void initState() {
     super.initState();
+    _startedAt = DateTime.now();
     _voice.onStateChanged = _onCallStateChanged;
     _voice.onRemoteUserLeft = () {
-      if (!mounted) return;
+      if (!mounted || _disposing) return;
+      if (!_wasConnected) return;
       _endCall(popRoute: true);
     };
     WidgetsBinding.instance.addPostFrameCallback((_) => _startCall());
@@ -252,8 +290,11 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
 
   @override
   void dispose() {
+    _disposing = true;
     _voice.onStateChanged = null;
     _voice.onRemoteUserLeft = null;
+    unawaited(IncomingCallRingtone.instance.stop());
+    unawaited(_finalizeCallLog(status: _errorText != null ? 'failed' : 'ended'));
     unawaited(_voice.leave());
     super.dispose();
   }
@@ -261,6 +302,7 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
   Future<void> _startCall() async {
     try {
       final config = await VoiceCallService.fetchConfig();
+      if (!mounted || _disposing) return;
       if (!config.enabled || config.appId.isEmpty) {
         throw StateError('خدمة الاتصال الداخلي غير مفعّلة حالياً.');
       }
@@ -283,7 +325,14 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
           receiverPhone: receiver,
           callerName: widget.callerName,
         );
+        _callLogId = session.callLogId;
       }
+
+      if (!mounted || _disposing) return;
+      _channelName = session.channelName;
+
+      // إيقاف الرنين قبل تفعيل Agora لتجنب تعارض جلسة الصوت على أندرويد.
+      await IncomingCallRingtone.instance.stop();
 
       await _voice.joinVoiceCall(
         appId: session.appId.isNotEmpty ? session.appId : config.appId,
@@ -291,18 +340,60 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
         channelName: session.channelName,
         uid: session.uid,
       );
+      if (!mounted || _disposing) return;
       await _voice.setSpeakerphone(_speaker);
     } catch (error) {
-      if (!mounted) return;
+      if (!mounted || _disposing) return;
       setState(() {
         _errorText = error.toString().replaceFirst('StateError: ', '');
         _statusText = 'تعذّر الاتصال';
       });
+      unawaited(_finalizeCallLog(status: 'failed'));
     }
   }
 
+  Future<void> _finalizeCallLog({required String status}) async {
+    if (_logFinalized) return;
+    _logFinalized = true;
+
+    final started = _startedAt ?? DateTime.now();
+    final duration = _connectedAt != null
+        ? DateTime.now().difference(_connectedAt!).inSeconds
+        : 0;
+    final normalizedStatus =
+        duration > 0 || status == 'ended' ? 'ended' : status;
+
+    try {
+      await VoiceCallService.completeCall(
+        callLogId: _callLogId,
+        threadType: widget.threadType,
+        threadId: widget.threadId,
+        otherPartyPhone: widget.isIncoming
+            ? widget.otherPartyPhone
+            : widget.receiverPhone,
+        direction: widget.isIncoming ? 'incoming' : 'outgoing',
+        status: normalizedStatus,
+        durationSeconds: duration,
+        channelName: _channelName,
+      );
+    } catch (_) {}
+  }
+
   void _onCallStateChanged(AgoraCallState state) {
-    if (!mounted) return;
+    if (!mounted || _disposing) return;
+    switch (state) {
+      case AgoraCallState.ringing:
+        // لا نشغّل رنين audioplayers أثناء جلسة Agora — يسبب تعارض صوت/خروج التطبيق.
+        break;
+      case AgoraCallState.connected:
+      case AgoraCallState.ended:
+      case AgoraCallState.failed:
+      case AgoraCallState.idle:
+        unawaited(IncomingCallRingtone.instance.stop());
+        break;
+      case AgoraCallState.connecting:
+        break;
+    }
     setState(() {
       switch (state) {
         case AgoraCallState.connecting:
@@ -310,6 +401,8 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
         case AgoraCallState.ringing:
           _statusText = widget.isIncoming ? 'متصل' : 'يرن...';
         case AgoraCallState.connected:
+          _wasConnected = true;
+          _connectedAt ??= DateTime.now();
           _statusText = 'متصل';
         case AgoraCallState.ended:
           _statusText = 'انتهت المكالمة';
@@ -336,6 +429,7 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
   }
 
   Future<void> _endCall({bool popRoute = false}) async {
+    await _finalizeCallLog(status: 'ended');
     await _voice.leave();
     if (!mounted) return;
     if (popRoute) {

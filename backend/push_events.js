@@ -667,21 +667,25 @@ async function notifyChatMessage(receiverPhone, customerMessage) {
   const threadType = String(customerMessage?.threadType || customerMessage?.thread_type || 'order').trim();
   const threadId = String(customerMessage?.threadId || customerMessage?.thread_id || customerMessage?.orderId || '').trim();
 
-  await sendPushToPhone(receiverPhone, {
-    title: `رسالة جديدة من ${customerName}`,
-    body: message || 'وصلتك رسالة جديدة داخل التطبيق',
-    data: {
-      eventKey: 'chat:new',
-      threadType,
-      threadId,
-      senderName: customerName,
-      senderPhone: String(
-        customerMessage?.senderPhone || customerMessage?.sender_phone || ''
-      ).trim(),
-      orderId: threadType === 'order' ? threadId : '',
-      category: 'chat',
+  await sendPushToPhone(
+    receiverPhone,
+    {
+      title: `رسالة جديدة من ${customerName}`,
+      body: message || 'وصلتك رسالة جديدة داخل التطبيق',
+      data: {
+        eventKey: 'chat:new',
+        threadType,
+        threadId,
+        senderName: customerName,
+        senderPhone: String(
+          customerMessage?.senderPhone || customerMessage?.sender_phone || ''
+        ).trim(),
+        orderId: threadType === 'order' ? threadId : '',
+        category: 'chat',
+      },
     },
-  });
+    { showSystemBanner: false }
+  );
 }
 
 async function notifyIncomingCall(receiverPhone, callInfo) {

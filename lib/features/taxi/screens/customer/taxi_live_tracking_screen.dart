@@ -6,7 +6,6 @@ import '../../providers/taxi_provider.dart';
 import '../../widgets/taxi_map_widget.dart';
 import '../../widgets/taxi_plate_badge.dart';
 import '../../../../core/theme/app_colors.dart';
-import '../../../../utils/call_navigation.dart';
 import '../../../../utils/chat_navigation.dart';
 
 /// شاشة التتبع المباشر — خريطة حقيقية + موقع السائق + بيانات الرحلة.
@@ -73,35 +72,6 @@ class _TaxiLiveTrackingScreenState extends State<TaxiLiveTrackingScreen> {
           ? driverName!.trim()
           : 'السائق',
       receiverPhone: driverPhone,
-    );
-  }
-
-  Future<void> _onCallDriver(
-    String? requestId,
-    String? driverName,
-    String? driverPhone,
-  ) async {
-    final id = requestId?.trim() ?? '';
-    final phone = driverPhone?.trim() ?? '';
-    if (id.isEmpty || phone.isEmpty) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'لا يمكن إجراء المكالمة حالياً',
-            style: TextStyle(fontFamily: 'Cairo'),
-          ),
-        ),
-      );
-      return;
-    }
-    await CallNavigation.openTaxiCall(
-      context,
-      requestId: id,
-      otherPartyName: driverName?.trim().isNotEmpty == true
-          ? driverName!.trim()
-          : 'السائق',
-      receiverPhone: phone,
     );
   }
 
@@ -290,28 +260,6 @@ class _TaxiLiveTrackingScreenState extends State<TaxiLiveTrackingScreen> {
                                     ],
                                   ),
                                 ),
-                                Material(
-                                  color: AppColors.primary,
-                                  borderRadius: BorderRadius.circular(14),
-                                  child: InkWell(
-                                    onTap: () => _onCallDriver(
-                                      request?.id,
-                                      request?.driverName,
-                                      request?.driverPhone,
-                                    ),
-                                    borderRadius: BorderRadius.circular(14),
-                                    child: const SizedBox(
-                                      width: 52,
-                                      height: 52,
-                                      child: Icon(
-                                        Icons.call,
-                                        color: Colors.white,
-                                        size: 24,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
                                 Material(
                                   color: AppColors.accent,
                                   borderRadius: BorderRadius.circular(14),

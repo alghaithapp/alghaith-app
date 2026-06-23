@@ -42,4 +42,46 @@ class NotificationSound {
     presentSound: true,
     threadIdentifier: 'alghaith_unread',
   );
+
+  static const String incomingCallFileName = 'alghaith_incoming_call.wav';
+  static const String incomingCallAndroidResource = 'alghaith_incoming_call';
+  static const String incomingCallChannelId = 'alghaith_incoming_calls_v2';
+  static const String incomingCallChannelName = 'المكالمات الواردة';
+
+  static const AndroidNotificationSound incomingCallAndroidSound =
+      RawResourceAndroidNotificationSound(incomingCallAndroidResource);
+
+  static const AndroidNotificationChannel incomingCallAndroidChannel =
+      AndroidNotificationChannel(
+    incomingCallChannelId,
+    incomingCallChannelName,
+    description: 'رنين المكالمات الصوتية داخل التطبيق',
+    importance: Importance.max,
+    playSound: true,
+    sound: incomingCallAndroidSound,
+  );
+
+  static const AndroidNotificationDetails incomingCallAndroidDetails =
+      AndroidNotificationDetails(
+    incomingCallChannelId,
+    incomingCallChannelName,
+    channelDescription: 'رنين المكالمات الصوتية داخل التطبيق',
+    importance: Importance.max,
+    priority: Priority.high,
+    playSound: true,
+    sound: incomingCallAndroidSound,
+    fullScreenIntent: true,
+    category: AndroidNotificationCategory.call,
+    ongoing: true,
+    autoCancel: false,
+  );
+
+  static const DarwinNotificationDetails incomingCallIosDetails =
+      DarwinNotificationDetails(
+    sound: incomingCallFileName,
+    presentSound: true,
+    presentAlert: true,
+    presentBadge: true,
+    interruptionLevel: InterruptionLevel.timeSensitive,
+  );
 }

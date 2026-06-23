@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../screens/chat_screen.dart';
+import '../services/chat_thread_refresh.dart';
 import 'guest_gate.dart';
 import 'helpers.dart';
 
@@ -14,6 +15,7 @@ class ChatNavigation {
     required String threadId,
     required String otherPartyName,
     String? receiverPhone,
+    Map<String, dynamic>? merchantProfile,
   }) async {
     if (!GuestGate.requireAccount(
       context,
@@ -29,6 +31,7 @@ class ChatNavigation {
           threadId: threadId,
           otherPartyName: otherPartyName,
           receiverPhone: receiverPhone,
+          merchantProfile: merchantProfile,
         ),
       ),
     );
@@ -68,6 +71,7 @@ class ChatNavigation {
     BuildContext context, {
     required String merchantPhone,
     required String storeName,
+    Map<String, dynamic>? merchantProfile,
   }) {
     final phone = merchantPhone.trim();
     return open(
@@ -76,20 +80,55 @@ class ChatNavigation {
       threadId: phone,
       otherPartyName: storeName,
       receiverPhone: phone,
+      merchantProfile: merchantProfile,
     );
   }
 
-  static Future<void> openSupportChat(
-    BuildContext context, {
-    required String userPhone,
-  }) {
-    final phone = userPhone.trim();
-    return open(
+  static Future<void> openSupportChat(BuildContext context) {
+    return AppHelpers.launchWhatsApp(
+      AppHelpers.supportWhatsAppNumber,
+      'مرحباً، أحتاج مساعدة في تطبيق الغيث',
+    );
+  }
+
+  static Future<void> handlePushData(
+    BuildContext context,
+    Map<String, dynamic> data,
+  ) async {
+    final eventKey = data['eventKey']?.toString() ?? '';
+    if (eventKey != 'chat:new') return;
+
+    final threadType = data['threadType']?.toString() ?? 'order';
+    final threadId = data['threadId']?.toString() ?? '';
+    if (threadId.isEmpty) return;
+
+    final senderName = data['senderName']?.toString().trim();
+    final senderPhone = data['senderPhone']?.toString().trim();
+
+    final refreshed = ChatThreadRefreshHub.instance.notifyIfActive(
+      threadType: threadType,
+      threadId: threadId,
+    );
+    if (refreshed) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'رسالة جديدة من ${senderName?.isNotEmpty == true ? senderName! : 'مراسل'}',
+            style: const TextStyle(fontFamily: 'Cairo'),
+          ),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
+
+    await open(
       context,
-      threadType: 'support',
-      threadId: phone,
-      otherPartyName: 'الدعم الفني',
-      receiverPhone: AppHelpers.supportWhatsAppNumber,
+      threadType: threadType,
+      threadId: threadId,
+      otherPartyName: senderName?.isNotEmpty == true ? senderName! : 'مراسل',
+      receiverPhone: senderPhone?.isNotEmpty == true ? senderPhone : null,
     );
   }
 }

@@ -399,7 +399,6 @@ class _CurrentRequestTabState extends State<_CurrentRequestTab> {
                               : 'السائق',
                           receiverPhone: request.driverPhone,
                           chatLabel: 'مراسلة السائق',
-                          callLabel: 'اتصال',
                         ),
                       ],
                     ],

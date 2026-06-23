@@ -331,34 +331,27 @@ class _MerchantStoreSettingsScreenState
             hintText: 'اختياري — اتركه فارغاً لاستخدام نفس رقم الهاتف',
             keyboardType: TextInputType.phone,
           ),
-          SwitchListTile(
-            value: _showPhoneToCustomers,
-            onChanged: (value) => setState(() => _showPhoneToCustomers = value),
-            title: const Text(
-              'إظهار رقم الهاتف للزبائن',
-              style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w800),
+          const SizedBox(height: 8),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: const Color(0xFFE8F4FD),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: const Color(0xFFBBDEFB)),
             ),
-            subtitle: Text(
-              _showPhoneToCustomers
-                  ? 'سيظهر زر الاتصال للزبائن'
-                  : 'سيتم إخفاء زر الاتصال عن الزبائن',
-              style: const TextStyle(fontFamily: 'Cairo'),
-            ),
-          ),
-          SwitchListTile(
-            value: _showWhatsAppToCustomers,
-            onChanged: (value) => setState(() => _showWhatsAppToCustomers = value),
-            title: const Text(
-              'إظهار رقم واتساب للزبائن',
-              style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w800),
-            ),
-            subtitle: Text(
-              _showWhatsAppToCustomers
-                  ? 'سيظهر زر واتساب للزبائن'
-                  : 'سيتم إخفاء زر واتساب عن الزبائن',
-              style: const TextStyle(fontFamily: 'Cairo'),
+            child: const Text(
+              'التواصل مع الزبائن يتم داخل التطبيق فقط (مراسلة + اتصال). '
+              'رقم الهاتف وواتساب هنا للإدارة الداخلية ولا يظهران للزبائن.',
+              style: TextStyle(
+                fontFamily: 'Cairo',
+                fontSize: 13,
+                height: 1.5,
+                color: Color(0xFF1565C0),
+              ),
             ),
           ),
+          const SizedBox(height: 12),
           _Field(
               label: 'العنوان',
               controller: _addressController),
@@ -476,10 +469,10 @@ class _MerchantStoreSettingsScreenState
                 return;
               }
               final contactVisibility = <String, dynamic>{
-                'showPhoneToCustomers': _showPhoneToCustomers,
-                'showWhatsAppToCustomers': _showWhatsAppToCustomers,
-                'show_phone_to_customers': _showPhoneToCustomers,
-                'show_whatsapp_to_customers': _showWhatsAppToCustomers,
+                'showPhoneToCustomers': false,
+                'showWhatsAppToCustomers': false,
+                'show_phone_to_customers': false,
+                'show_whatsapp_to_customers': false,
               };
               final professionalInfoPayload = isProfessional
                   ? {
@@ -521,10 +514,10 @@ class _MerchantStoreSettingsScreenState
                 'description': _descController.text.trim(),
                 'phone': _phoneController.text.trim(),
                 'whatsapp': _resolveWhatsAppNumber(),
-                'showPhoneToCustomers': _showPhoneToCustomers,
-                'showWhatsAppToCustomers': _showWhatsAppToCustomers,
-                'show_phone_to_customers': _showPhoneToCustomers,
-                'show_whatsapp_to_customers': _showWhatsAppToCustomers,
+                'showPhoneToCustomers': false,
+                'showWhatsAppToCustomers': false,
+                'show_phone_to_customers': false,
+                'show_whatsapp_to_customers': false,
                 'address': _addressController.text.trim(),
                 'latitude': _storeLatitude,
                 'longitude': _storeLongitude,

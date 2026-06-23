@@ -13,6 +13,8 @@ const {
   completeCallLog,
   getCallHistory,
 } = require('../supabase_repo');
+const { getMerchantProfile } = require('../supabase_repo/merchants');
+const { merchantAcceptsCustomerCalls } = require('../services/merchant_working_hours');
 const { notifyIncomingCall } = require('../push_events');
 
 router.get('/config', async (req, res) => {
@@ -118,6 +120,14 @@ router.post('/call', async (req, res) => {
     }
     if (!receiverPhone) {
       return res.status(400).json({ message: 'receiverPhone is required.' });
+    }
+
+    const merchantProfile = await getMerchantProfile(receiverPhone);
+    if (merchantProfile) {
+      const callCheck = merchantAcceptsCustomerCalls(merchantProfile);
+      if (!callCheck.allowed) {
+        return res.status(403).json({ message: callCheck.messageAr });
+      }
     }
 
     const session = buildCallSession(threadType, threadId, phone);

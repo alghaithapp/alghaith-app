@@ -46,7 +46,7 @@ workflows:
         - push
       branch_patterns:
         - pattern: main
-          include: false # ❌ إيقاف البناء التلقائي لأيفون عند الرفع
+          include: true # ✅ بناء iOS تلقائياً عند كل push إلى main
 
     scripts:
       # يجب توليد ملفات iOS قبل use-profiles حتى يُعثر Codemagic على Scheme Runner
@@ -100,20 +100,45 @@ workflows:
           keychain add-certificates
 
       - name: Set up code signing on Xcode project
-        script: xcode-project use-profiles --project ios/Runner.xcodeproj
+        script: |
+          set -e
+          xcode-project use-profiles \
+            --export-options-plist=/Users/builder/export_options.plist
+
+      - name: Verify iOS code signing
+        script: |
+          set -e
+          EXPORT_PLIST="/Users/builder/export_options.plist"
+          if [ ! -f "$EXPORT_PLIST" ] && [ -f "$HOME/export_options.plist" ]; then
+            EXPORT_PLIST="$HOME/export_options.plist"
+          fi
+          if [ ! -f "$EXPORT_PLIST" ]; then
+            echo "ERROR: export_options.plist غير موجود."
+            echo "تحقق من Codemagic → Code signing → شهادة Distribution + Profile لـ com.alghaith.app"
+            echo "وتحقق من Integrations → App Store Connect (algaith)"
+            exit 1
+          fi
+          echo "export_options.plist OK: $EXPORT_PLIST"
+          ls -la "$EXPORT_PLIST"
+          security find-identity -v -p codesigning | head -20
 
       - name: Build iOS IPA
         script: |
-          set -e
-          flutter build ipa --release \
-            --export-options-plist=$HOME/export_options.plist \
+          set -euxo pipefail
+          EXPORT_PLIST="/Users/builder/export_options.plist"
+          if [ ! -f "$EXPORT_PLIST" ] && [ -f "$HOME/export_options.plist" ]; then
+            EXPORT_PLIST="$HOME/export_options.plist"
+          fi
+          flutter build ipa --release --verbose \
+            --export-options-plist="$EXPORT_PLIST" \
             --dart-define=DATABASE_BACKEND_BASE_URL="$DATABASE_BACKEND_BASE_URL" \
             --dart-define=PHONE_AUTH_BASE_URL="$PHONE_AUTH_BASE_URL" \
-            --dart-define=MAPBOX_PUBLIC_TOKEN="$MAPBOX_PUBLIC_TOKEN"
+            --dart-define=MAPBOX_PUBLIC_TOKEN="${MAPBOX_PUBLIC_TOKEN:-}"
 
     artifacts:
       - build/ios/ipa/*.ipa
       - build/ios/ipa/*.dSYM.zip
+      - /tmp/xcodebuild_logs/*.log
 
     publishing:
       email:

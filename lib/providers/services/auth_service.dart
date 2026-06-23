@@ -11,6 +11,7 @@ import '../../models/app_user_view.dart';
 import '../../models/app_models.dart';
 import '../../models/app_notification.dart';
 import '../../models/merchant_models.dart';
+import '../../utils/merchant_profile_fields.dart';
 
 class AuthService extends ChangeNotifier {
   // ── Auth state ─────────────────────────────────────────────────
@@ -103,7 +104,7 @@ class AuthService extends ChangeNotifier {
   }
 
   String get merchantStoreName =>
-      (_merchantStore?['name'] as String?)?.trim() ?? '';
+      MerchantProfileFields.storeNameOrEmpty(_merchantStore);
   bool get hasCompletedMerchantProfile =>
       _merchantStore != null && merchantStoreName.isNotEmpty;
 
@@ -189,6 +190,11 @@ class AuthService extends ChangeNotifier {
       if (!hasPhoneSession) return;
       _resolveRoleAfterAuth();
       _hydrateCustomerIdentityFromRestoredData();
+      if ((_userRole == 'merchant' || appUserView.role == 'merchant') &&
+          _onEnsureMerchantProfileSynced != null) {
+        await _onEnsureMerchantProfileSynced!();
+        _resolveRoleAfterAuth();
+      }
       notifyListeners();
       await _enrichRemoteSessionInBackground(phone);
     } catch (error) {
@@ -352,7 +358,7 @@ class AuthService extends ChangeNotifier {
     }
 
     if (_merchantStore != null &&
-        (_merchantStore?['name']?.toString().trim().isNotEmpty ?? false)) {
+        MerchantProfileFields.storeNameOrEmpty(_merchantStore).isNotEmpty) {
       _userRole = 'merchant';
       return;
     }
@@ -865,11 +871,9 @@ class AuthService extends ChangeNotifier {
       }
 
       if (merchantProfile != null) {
-        final hasLocalStore =
-            _merchantStore != null && merchantStoreName.isNotEmpty;
         final remoteStoreName =
-            (merchantProfile['store_name'] as String?)?.trim() ?? '';
-        if (!hasLocalStore || remoteStoreName.isNotEmpty) {
+            MerchantProfileFields.storeNameOrEmpty(merchantProfile);
+        if (remoteStoreName.isNotEmpty) {
           if (_onApplyMerchantSnapshot != null) {
             _onApplyMerchantSnapshot!(merchantProfile);
           }
@@ -996,6 +1000,8 @@ class AuthService extends ChangeNotifier {
       debugPrint('ENRICH_SESSION_ERROR: $error');
     }
   }
+
+  Future<void> persistSessionBackup() => _persistLocalBackup();
 
   Future<void> _persistLocalBackup() async {
     final phone = _trimmedOrNull(_authPhone);

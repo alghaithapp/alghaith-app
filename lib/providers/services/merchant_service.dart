@@ -47,7 +47,7 @@ class MerchantService extends ChangeNotifier {
   List<ActiveOrder> get orders => _orders;
 
   String get merchantStoreName =>
-      (_merchantStore?['name'] as String?)?.trim() ?? '';
+      MerchantProfileFields.storeNameOrEmpty(_merchantStore);
   String get merchantCategoryId =>
       (_merchantStore?['category'] as String?)?.trim() ?? '';
   String get merchantDescription =>
@@ -845,7 +845,7 @@ class MerchantService extends ChangeNotifier {
   Future<void> _persistMerchantStore() async {
     if (_merchantStore == null) return;
 
-    if ((_merchantStore?['name']?.toString() ?? '').isEmpty) {
+    if (merchantStoreName.isEmpty) {
       return;
     }
 
@@ -979,6 +979,8 @@ class MerchantService extends ChangeNotifier {
     }
   }
 
+  Future<void> Function()? requestSessionBackup;
+
   Future<void> _persistMerchantStoreAndState() async {
     await _persistMerchantStore();
     final phone =
@@ -986,6 +988,7 @@ class MerchantService extends ChangeNotifier {
     if (phone != null) {
       await SupabaseService.saveUserState(phone, _buildRemoteState());
     }
+    await requestSessionBackup?.call();
     await _persistLocalBackup();
   }
 
@@ -1013,9 +1016,42 @@ class MerchantService extends ChangeNotifier {
     await _persistLocalBackup();
   }
 
-  Future<void> _ensureMerchantProfileSynced() async {
+  Future<void> hydrateMerchantProfileFromCloud() async {
+    if (hasCompletedMerchantProfile) return;
+    final phone =
+        _trimmedOrNull(_authPhone) ?? _trimmedOrNull(_customerPhone);
+    if (phone == null || phone.isEmpty) return;
+    try {
+      final row = await SupabaseService.loadMerchantProfile(phone);
+      if (row == null || row.isEmpty) return;
+      if (MerchantProfileFields.storeNameOrEmpty(row).isEmpty) return;
+      applyMerchantStoreSnapshot(row);
+      notifyListeners();
+    } catch (error) {
+      debugPrint('HYDRATE_MERCHANT_PROFILE: $error');
+    }
+  }
+
+  Future<void> ensureMerchantProfileSynced() async {
+    await hydrateMerchantProfileFromCloud();
     if (_merchantStore == null || merchantStoreName.isEmpty) return;
     await _persistMerchantStore();
+  }
+
+  Future<void> persistMerchantStoreAndStateForAuth() async {
+    await _persistMerchantStoreAndState();
+  }
+
+  Future<void> syncMerchantDataBeforeLeavingMerchantModeForAuth() async {
+    await _syncMerchantDataBeforeLeavingMerchantMode();
+  }
+
+  Future<void> persistMerchantItemsForAuth() async {
+    await _persistMerchantItems();
+  }
+
+  Future<void> _ensureMerchantProfileSynced() async {
+    await ensureMerchantProfileSynced();
   }
 
   Future<void> _syncMerchantDataBeforeLeavingMerchantMode() async {
@@ -1055,6 +1091,25 @@ class MerchantService extends ChangeNotifier {
     _applyMerchantStoreSnapshot(snapshot);
   }
 
+  Map<String, dynamic> _normalizeMerchantSnapshot(
+    Map<String, dynamic> snapshot,
+  ) {
+    final copy = Map<String, dynamic>.from(snapshot);
+    final looksLikeRemoteRow = copy.containsKey('store_name') ||
+        copy.containsKey('service_ids') ||
+        copy.containsKey('is_approved') ||
+        copy.containsKey('approval_status');
+    if (looksLikeRemoteRow) {
+      return _mapMerchantProfileRow(copy);
+    }
+    final resolvedName = MerchantProfileFields.storeNameOrEmpty(copy);
+    if (resolvedName.isNotEmpty &&
+        (copy['name']?.toString().trim() ?? '').isEmpty) {
+      copy['name'] = resolvedName;
+    }
+    return copy;
+  }
+
   void _applyMerchantStoreSnapshot(Map<String, dynamic> snapshot) {
     if (snapshot.isEmpty) return;
     final previousStore = _merchantStore == null
@@ -1067,7 +1122,7 @@ class MerchantService extends ChangeNotifier {
     final previousRejectionMessage =
         MerchantProfileFields.rejectionMessage(previousStore);
 
-    _merchantStore = Map<String, dynamic>.from(snapshot);
+    _merchantStore = _normalizeMerchantSnapshot(snapshot);
     _notifyMerchantApprovalTransition(
       wasApproved: wasApproved,
       wasRejected: wasRejected,

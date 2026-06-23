@@ -120,7 +120,7 @@ class _CatalogProductsScreenState extends State<CatalogProductsScreen> {
                   alignment: Alignment.centerRight,
                   child: Text(
                     _contactOnly
-                        ? 'تواصل مع صاحب الإعلان عبر واتساب أو الاتصال'
+                        ? 'تواصل مع صاحب الإعلان داخل التطبيق (مراسلة أو اتصال)'
                         : widget.subtitleAr!,
                     style: const TextStyle(
                       fontFamily: 'Cairo',

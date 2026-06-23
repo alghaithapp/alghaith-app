@@ -27,6 +27,7 @@ import 'screens/driver/driver_shell.dart';
 import 'utils/driver_profile_fields.dart';
 import 'services/supabase_service.dart';
 import 'utils/call_navigation.dart';
+import 'utils/chat_navigation.dart';
 import 'widgets/splash_screen.dart';
 import 'widgets/main_shell.dart';
 import 'widgets/push_notification_lifecycle_scope.dart';
@@ -192,9 +193,16 @@ class _AlGhaithAppState extends State<AlGhaithApp> {
       debugPrint('TaxiPushAction: فتح طلب $requestId من الإشعار');
     };
     PushNotificationService.instance.onIncomingCall = _handleIncomingCallPush;
+    PushNotificationService.instance.onChatMessage = _handleChatPush;
     PushNotificationInbox.onIncomingCallTapped = (data) {
       _handleIncomingCallPush({
         'eventKey': 'call:incoming',
+        ...data,
+      });
+    };
+    PushNotificationInbox.onChatMessageTapped = (data) {
+      _handleChatPush({
+        'eventKey': 'chat:new',
         ...data,
       });
     };
@@ -205,6 +213,10 @@ class _AlGhaithAppState extends State<AlGhaithApp> {
       final eventKey = data['eventKey']?.toString() ?? '';
       if (eventKey == 'call:incoming') {
         _handleIncomingCallPush(data);
+        return;
+      }
+      if (eventKey == 'chat:new') {
+        _handleChatPush(data);
         return;
       }
       try {
@@ -218,6 +230,13 @@ class _AlGhaithAppState extends State<AlGhaithApp> {
     if (nav == null || !nav.mounted) return;
     final context = nav.context;
     unawaited(CallNavigation.handlePushData(context, data));
+  }
+
+  void _handleChatPush(Map<String, dynamic> data) {
+    final nav = _navigatorKey.currentState;
+    if (nav == null || !nav.mounted) return;
+    final context = nav.context;
+    unawaited(ChatNavigation.handlePushData(context, data));
   }
 
   @override

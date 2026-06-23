@@ -5,7 +5,6 @@ import 'package:provider/provider.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../../providers/app_provider.dart';
-import '../../../../utils/call_navigation.dart';
 import '../../../../utils/chat_navigation.dart';
 import '../../../../utils/helpers.dart';
 import '../../models/taxi_request.dart';
@@ -268,17 +267,7 @@ class _ActiveTripCardState extends State<_ActiveTripCard> {
                     style: const TextStyle(fontFamily: 'Cairo', fontSize: 13),
                   ),
                 ),
-                if (req.customerPhone.trim().isNotEmpty) ...[
-                  IconButton(
-                    tooltip: 'اتصال بالزبون',
-                    onPressed: () => CallNavigation.openTaxiCall(
-                      context,
-                      requestId: req.id,
-                      otherPartyName: req.customerNameAr,
-                      receiverPhone: req.customerPhone,
-                    ),
-                    icon: const Icon(Icons.call, size: 20),
-                  ),
+                if (req.customerPhone.trim().isNotEmpty)
                   IconButton(
                     tooltip: 'مراسلة الزبون',
                     onPressed: () => ChatNavigation.openTaxiChat(
@@ -289,7 +278,6 @@ class _ActiveTripCardState extends State<_ActiveTripCard> {
                     ),
                     icon: const Icon(Icons.chat_bubble_outline, size: 20),
                   ),
-                ],
               ],
             ),
             const SizedBox(height: 6),

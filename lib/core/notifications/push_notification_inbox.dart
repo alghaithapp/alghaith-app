@@ -100,6 +100,17 @@ class PushNotificationInbox {
       return;
     }
 
+    if (eventKey == 'chat:new') {
+      final threadId = message.data['threadId']?.toString() ?? requestId;
+      await _showChatNotification(
+        id: 'chat:$threadId'.hashCode,
+        title: title,
+        body: body,
+        payload: _encodeChatPayload(message.data),
+      );
+      return;
+    }
+
     if (body.isEmpty && title == 'الغيث') return;
 
     final prefs = await SharedPreferences.getInstance();
@@ -205,8 +216,22 @@ class PushNotificationInbox {
       } catch (error) {
         debugPrint('PushAction: failed to decode call payload: $error');
       }
+      return;
+    }
+    if (payload.startsWith('chat:')) {
+      try {
+        final raw = payload.replaceFirst('chat:', '');
+        final decoded = jsonDecode(raw);
+        if (decoded is Map) {
+          onChatMessageTapped?.call(Map<String, dynamic>.from(decoded));
+        }
+      } catch (error) {
+        debugPrint('PushAction: failed to decode chat payload: $error');
+      }
     }
   }
+
+  static void Function(Map<String, dynamic> data)? onChatMessageTapped;
 
   /// Callback عندما يضغط السائق على الإشعار لفتح نافذة الطلب
   static void Function(String requestId)? onTaxiNotificationTapped;
@@ -221,6 +246,34 @@ class PushNotificationInbox {
       'callerName': data['callerName'] ?? '',
       'callerPhone': data['callerPhone'] ?? '',
     })}';
+  }
+
+  static String _encodeChatPayload(Map<String, dynamic> data) {
+    return 'chat:${jsonEncode({
+      'eventKey': 'chat:new',
+      'threadType': data['threadType'] ?? 'order',
+      'threadId': data['threadId'] ?? '',
+      'senderName': data['senderName'] ?? '',
+      'senderPhone': data['senderPhone'] ?? '',
+    })}';
+  }
+
+  static Future<void> _showChatNotification({
+    required int id,
+    required String title,
+    required String body,
+    required String payload,
+  }) async {
+    await _localNotifications.show(
+      id,
+      title.isNotEmpty ? title : 'رسالة جديدة',
+      body.isNotEmpty ? body : 'وصلتك رسالة داخل التطبيق',
+      NotificationDetails(
+        android: NotificationSound.androidDetails,
+        iOS: NotificationSound.iosDetails,
+      ),
+      payload: payload,
+    );
   }
 
   static int incomingCallNotificationId(String threadId) {

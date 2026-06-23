@@ -11,6 +11,7 @@ import '../../utils/helpers.dart';
 import '../../widgets/app_image.dart';
 import '../../widgets/account/account_page_header.dart';
 import '../../screens/notifications_screen.dart';
+import '../merchant/merchant_chat_inbox_screen.dart';
 import 'delivery_earnings_screen.dart';
 import '../shared/operator_setup_screen.dart';
 import 'delivery_shared_widgets.dart';
@@ -197,6 +198,20 @@ class DeliveryAccountScreen extends StatelessWidget {
                       Navigator.of(context).push(
                         CupertinoPageRoute(
                           builder: (_) => const DeliveryEarningsScreen(),
+                        ),
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 14),
+                  DeliveryNavigationCard(
+                    icon: Icons.chat_bubble_outline_rounded,
+                    iconColor: AppColors.primary,
+                    title: 'الرسائل داخل التطبيق',
+                    subtitle: 'محادثاتك مع الزبائن والطلبات',
+                    onTap: () {
+                      Navigator.of(context).push(
+                        CupertinoPageRoute(
+                          builder: (_) => const ChatInboxScreen(),
                         ),
                       );
                     },

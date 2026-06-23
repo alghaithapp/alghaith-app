@@ -1,4 +1,5 @@
 import '../core/network/api_client.dart';
+import '../models/voice_call_log.dart';
 
 class AgoraCallConfig {
   final bool enabled;
@@ -24,6 +25,7 @@ class AgoraCallSession {
   final int uid;
   final String threadType;
   final String threadId;
+  final String? callLogId;
 
   const AgoraCallSession({
     required this.appId,
@@ -32,6 +34,7 @@ class AgoraCallSession {
     required this.uid,
     required this.threadType,
     required this.threadId,
+    this.callLogId,
   });
 
   factory AgoraCallSession.fromMap(Map<String, dynamic> map) {
@@ -42,6 +45,7 @@ class AgoraCallSession {
       uid: _readUid(map['uid']),
       threadType: map['threadType']?.toString() ?? 'order',
       threadId: map['threadId']?.toString() ?? '',
+      callLogId: map['callLogId']?.toString(),
     );
   }
 
@@ -58,6 +62,28 @@ class VoiceCallService {
       return const AgoraCallConfig(enabled: false, appId: '');
     }
     return AgoraCallConfig.fromMap(Map<String, dynamic>.from(data));
+  }
+
+  static Future<List<VoiceCallLog>> fetchHistory({
+    String? threadType,
+    String? threadId,
+    int limit = 50,
+  }) async {
+    final query = <String, String>{
+      if (threadType != null && threadType.trim().isNotEmpty)
+        'threadType': threadType.trim(),
+      if (threadId != null && threadId.trim().isNotEmpty) 'threadId': threadId.trim(),
+      'limit': '$limit',
+    };
+    final data = await ApiClient.instance.get(
+      '/db/agora/history',
+      queryParameters: query,
+    );
+    if (data is! List) return const [];
+    return data
+        .whereType<Map>()
+        .map((item) => VoiceCallLog.fromMap(Map<String, dynamic>.from(item)))
+        .toList();
   }
 
   static Future<AgoraCallSession> fetchToken({
@@ -100,5 +126,32 @@ class VoiceCallService {
       throw StateError('تعذّر بدء المكالمة.');
     }
     return AgoraCallSession.fromMap(Map<String, dynamic>.from(data));
+  }
+
+  static Future<void> completeCall({
+    String? callLogId,
+    required String threadType,
+    required String threadId,
+    String? otherPartyPhone,
+    required String direction,
+    required String status,
+    required int durationSeconds,
+    String? channelName,
+  }) async {
+    await ApiClient.instance.post(
+      '/db/agora/call/complete',
+      body: {
+        if (callLogId != null && callLogId.trim().isNotEmpty) 'callLogId': callLogId.trim(),
+        'threadType': threadType,
+        'threadId': threadId,
+        if (otherPartyPhone != null && otherPartyPhone.trim().isNotEmpty)
+          'otherPartyPhone': otherPartyPhone.trim(),
+        'direction': direction,
+        'status': status,
+        'durationSeconds': durationSeconds,
+        if (channelName != null && channelName.trim().isNotEmpty)
+          'channelName': channelName.trim(),
+      },
+    );
   }
 }

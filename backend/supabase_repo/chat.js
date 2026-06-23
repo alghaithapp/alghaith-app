@@ -1,8 +1,10 @@
 const {
   assertSupabaseAdmin,
   selectSingle,
+  selectSingleByPhone,
   selectMany,
   resolvePhoneKey,
+  getPhoneVariants,
   phonesOverlap,
   normalizeObject,
   PLATFORM_ADMIN_PHONES,
@@ -23,6 +25,121 @@ function formatMessage(row) {
     message_type: row.message_type || 'text',
     content: row.content,
     created_at: row.created_at,
+  };
+}
+
+function shortThreadId(value) {
+  const trimmed = String(value || '').trim();
+  if (trimmed.length <= 8) return trimmed;
+  return trimmed.slice(-8);
+}
+
+function orderDisplayNumber(row) {
+  const payload = normalizeObject(row?.payload ?? row?.order_payload);
+  const explicit =
+    payload.orderNumber ||
+    payload.order_number ||
+    row?.order_number ||
+    row?.orderNumber;
+  if (explicit) return String(explicit).trim();
+  return shortThreadId(row?.id || '');
+}
+
+async function resolveOtherPartyName(threadType, threadId, otherPartyPhone, fallbackName) {
+  const name = String(fallbackName || '').trim();
+  if (name) return name;
+
+  const phone = String(otherPartyPhone || '').trim();
+  if (!phone) return null;
+
+  const merchant = await selectSingleByPhone('merchant_profiles', phone);
+  if (merchant?.store_name) return String(merchant.store_name).trim();
+
+  const user = await selectSingleByPhone('app_users', phone);
+  if (user?.full_name) return String(user.full_name).trim();
+
+  if (threadType === 'store') {
+    return merchant?.store_name ? String(merchant.store_name).trim() : 'متجر';
+  }
+
+  return null;
+}
+
+async function buildThreadContext(threadType, threadId, myPhone, otherPartyPhone, fallbackName) {
+  const trimmedId = String(threadId || '').trim();
+  let contextLabel = 'محادثة داخل التطبيق';
+  let threadTitle = null;
+
+  switch (threadType) {
+    case 'order': {
+      const row = await selectSingle('customer_orders', 'id', trimmedId);
+      const orderNo = row ? orderDisplayNumber(row) : shortThreadId(trimmedId);
+      contextLabel = row ? `طلب #${orderNo}` : `طلب #${shortThreadId(trimmedId)}`;
+      const payload = normalizeObject(row?.payload);
+      const customerPhone =
+        row?.customer_phone || payload.customerPhone || payload.customer_phone || '';
+      const merchantPhone =
+        row?.merchant_phone || payload.merchantPhone || payload.merchant_phone || '';
+      if (phonesOverlap(myPhone, customerPhone)) {
+        const merchant = merchantPhone
+          ? await selectSingleByPhone('merchant_profiles', merchantPhone)
+          : null;
+        threadTitle = merchant?.store_name
+          ? String(merchant.store_name).trim()
+          : 'التاجر';
+      } else {
+        const customer = customerPhone
+          ? await selectSingleByPhone('app_users', customerPhone)
+          : null;
+        threadTitle = customer?.full_name
+          ? String(customer.full_name).trim()
+          : 'الزبون';
+      }
+      break;
+    }
+    case 'taxi': {
+      contextLabel = `رحلة تكسي #${shortThreadId(trimmedId)}`;
+      const row = await selectSingle('taxi_requests', 'id', trimmedId);
+      const meta = row ? readTaxiMeta(row) : {};
+      const customerPhone = meta.customerPhone || row?.customer_phone || '';
+      const driverPhone = meta.driverPhone || row?.driver_phone || '';
+      if (phonesOverlap(myPhone, customerPhone)) {
+        threadTitle = 'السائق';
+      } else if (phonesOverlap(myPhone, driverPhone)) {
+        const customer = customerPhone
+          ? await selectSingleByPhone('app_users', customerPhone)
+          : null;
+        threadTitle = customer?.full_name
+          ? String(customer.full_name).trim()
+          : 'الزبون';
+      } else {
+        threadTitle = 'رحلة تكسي';
+      }
+      break;
+    }
+    case 'store': {
+      const merchant = await selectSingleByPhone('merchant_profiles', trimmedId);
+      threadTitle = merchant?.store_name
+        ? String(merchant.store_name).trim()
+        : 'متجر';
+      contextLabel = 'محادثة متجر';
+      break;
+    }
+    default:
+      break;
+  }
+
+  const resolvedName = await resolveOtherPartyName(
+    threadType,
+    trimmedId,
+    otherPartyPhone,
+    threadTitle || fallbackName
+  );
+
+  return {
+    context_label: contextLabel,
+    thread_title: resolvedName || threadTitle || fallbackName || null,
+    other_party_name: resolvedName || fallbackName || null,
   };
 }
 
@@ -163,19 +280,22 @@ async function getChatMessages(threadType, threadId, requestPhone) {
 
 async function getChatInbox(requestPhone) {
   const phone = await resolvePhoneKey(requestPhone);
+  const variants = getPhoneVariants(phone);
+  if (variants.length === 0) return [];
+
   const supabase = assertSupabaseAdmin();
 
   const [sentResult, receivedResult] = await Promise.all([
     supabase
       .from('chat_messages')
       .select('*')
-      .eq('sender_phone', phone)
+      .in('sender_phone', variants)
       .order('created_at', { ascending: false })
       .limit(300),
     supabase
       .from('chat_messages')
       .select('*')
-      .eq('receiver_phone', phone)
+      .in('receiver_phone', variants)
       .order('created_at', { ascending: false })
       .limit(300),
   ]);
@@ -195,7 +315,24 @@ async function getChatInbox(requestPhone) {
       threads.set(key, formatThreadSummary(row, phone));
     }
   }
-  return Array.from(threads.values());
+
+  const summaries = Array.from(threads.values());
+  const enriched = await Promise.all(
+    summaries.map(async (summary) => {
+      const context = await buildThreadContext(
+        summary.thread_type,
+        summary.thread_id,
+        phone,
+        summary.other_party_phone,
+        summary.other_party_name
+      );
+      return { ...summary, ...context };
+    })
+  );
+
+  return enriched.sort(
+    (a, b) => new Date(b.last_at).getTime() - new Date(a.last_at).getTime()
+  );
 }
 
 async function saveChatMessage(payload) {
