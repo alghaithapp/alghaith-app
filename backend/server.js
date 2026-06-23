@@ -111,14 +111,20 @@ app.get('/db/debug/user-bundle', async (req, res) => {
     if (!phone) return res.status(400).json({ message: 'phone required' });
     const { getAppUser, getUserState, assertSupabaseAdmin } = require('./supabase_repo');
     const supabase = assertSupabaseAdmin();
-    const [appUser, userState, merchantRes, productRes] = await Promise.all([
+    let merchantProfile = null;
+    let productCount = 0;
+    try {
+      const { data } = await supabase.from('merchant_profiles').select('store_name, is_approved, approval_status').eq('phone', phone).maybeSingle();
+      merchantProfile = data;
+    } catch (_) {}
+    try {
+      const { count } = await supabase.from('merchant_products').select('id', { count: 'exact', head: true }).eq('phone', phone);
+      productCount = count || 0;
+    } catch (_) {}
+    const [appUser, userState] = await Promise.all([
       getAppUser(phone).catch(e => ({ error: e.message })),
       getUserState(phone).catch(e => ({ error: e.message })),
-      supabase.from('merchant_profiles').select('store_name, is_approved, approval_status').eq('phone', phone).maybeSingle().catch(e => ({ error: e.message })),
-      supabase.from('merchant_products').select('id', { count: 'exact', head: true }).eq('phone', phone).catch(e => ({ error: e.message })),
     ]);
-    const merchantProfile = merchantRes?.data || null;
-    const productCount = productRes?.count ?? productRes?.data?.length ?? 0;
     return res.json({
       phone,
       appUser: appUser?.phone ? { phone: appUser.phone, full_name: appUser.full_name, role: appUser.role } : null,
