@@ -174,7 +174,7 @@ app.get('/__/recover-products', async (req, res) => {
             name_en: String(item.nameEn || item.name || ''),
             description_ar: String(item.descriptionAr || item.description || ''),
             description_en: String(item.descriptionEn || item.description || ''),
-            price: (item.price as num?)?.toInt() ?? 0,
+            price: parseInt(item.price) || 0,
             category: String(item.category || 'general'),
             sub_category: String(item.subCategory || item.sub_category || ''),
             image: String(item.image || ''),
