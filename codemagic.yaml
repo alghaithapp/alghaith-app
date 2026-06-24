@@ -93,6 +93,13 @@ workflows:
             find . -name Podfile -not -path "*/.*/*" -execdir pod install \;
           fi
 
+      - name: Prepare iOS bundle resources
+        script: |
+          set -e
+          cp -f assets/sounds/alghaith_incoming_call.wav ios/Runner/alghaith_incoming_call.wav
+          test -s ios/Runner/alghaith_incoming_call.wav
+          echo "iOS notification sounds OK"
+
       - name: Set up keychain and certificates
         script: |
           set -e
@@ -103,7 +110,10 @@ workflows:
         script: |
           set -e
           xcode-project use-profiles \
+            --project ios/Runner.xcodeproj \
             --export-options-plist=/Users/builder/export_options.plist
+          echo "Provisioning profiles applied to Runner.xcodeproj"
+          grep -E "PROVISIONING_PROFILE|CODE_SIGN_IDENTITY|DEVELOPMENT_TEAM" ios/Runner.xcodeproj/project.pbxproj | head -30 || true
 
       - name: Verify iOS code signing
         script: |
@@ -129,11 +139,20 @@ workflows:
           if [ ! -f "$EXPORT_PLIST" ] && [ -f "$HOME/export_options.plist" ]; then
             EXPORT_PLIST="$HOME/export_options.plist"
           fi
-          flutter build ipa --release --verbose \
+          if ! flutter build ipa --release --verbose \
             --export-options-plist="$EXPORT_PLIST" \
             --dart-define=DATABASE_BACKEND_BASE_URL="$DATABASE_BACKEND_BASE_URL" \
             --dart-define=PHONE_AUTH_BASE_URL="$PHONE_AUTH_BASE_URL" \
-            --dart-define=MAPBOX_PUBLIC_TOKEN="${MAPBOX_PUBLIC_TOKEN:-}"
+            --dart-define=MAPBOX_PUBLIC_TOKEN="${MAPBOX_PUBLIC_TOKEN:-}"; then
+            echo "===== xcodebuild error summary ====="
+            if [ -d /tmp/xcodebuild_logs ]; then
+              find /tmp/xcodebuild_logs -type f -print -exec tail -n 120 {} \;
+            fi
+            if [ -f build/ios/archive/Runner.xcarchive/Logs/Build/*.xcactivitylog ]; then
+              ls -la build/ios/archive/Runner.xcarchive/Logs/Build/ || true
+            fi
+            exit 1
+          fi
 
     artifacts:
       - build/ios/ipa/*.ipa
