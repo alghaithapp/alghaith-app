@@ -1549,10 +1549,17 @@ async function preRegisterMerchantAccount(adminPhone, payload = {}) {
     }
   }
 
+  const placeholderStoreName =
+    fullName || `تاجر ${phoneKey.slice(-4)}`;
+
   const existingProfile = await getMerchantProfile(phoneKey);
   if (existingProfile) {
+    const existingState = (await getUserState(phoneKey)) || {};
+    if (existingState.merchantProfileComplete === true) {
+      throw new Error('يوجد ملف تاجر مكتمل لهذا الرقم بالفعل.');
+    }
     const storeName = String(existingProfile.store_name ?? '').trim();
-    if (storeName) {
+    if (storeName && !existingState.adminPreRegisteredMerchant) {
       throw new Error('يوجد ملف تاجر مكتمل لهذا الرقم بالفعل.');
     }
   }
@@ -1564,6 +1571,7 @@ async function preRegisterMerchantAccount(adminPhone, payload = {}) {
   });
 
   await saveMerchantProfile(phoneKey, {
+    store_name: placeholderStoreName,
     primary_service_id: primary,
     service_ids: serviceIds,
     active_service_id: primary,
@@ -1583,8 +1591,8 @@ async function preRegisterMerchantAccount(adminPhone, payload = {}) {
     isApproved: false,
     approvalStatus: 'pending',
     adminPreRegistered: true,
-    name: '',
-    store_name: '',
+    name: placeholderStoreName,
+    store_name: placeholderStoreName,
   };
 
   await saveUserState(phoneKey, {

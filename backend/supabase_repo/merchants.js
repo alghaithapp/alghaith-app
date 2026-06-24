@@ -708,6 +708,14 @@ async function saveMerchantProfile(phone, data = {}) {
         basePayload.approval_status = 'pending';
       }
     }
+    const incomingStoreName = String(
+      basePayload.store_name ?? data.store_name ?? data.storeName ?? ''
+    ).trim();
+    if (!incomingStoreName) {
+      basePayload.store_name =
+        String(appUser?.full_name ?? data.full_name ?? data.fullName ?? '').trim() ||
+        `تاجر ${phoneKey.slice(-4)}`;
+    }
   }
   return saveRow('merchant_profiles', { ...basePayload, phone: phoneKey }, 'phone');
 }
