@@ -11,7 +11,6 @@ import '../../utils/sync_error_message.dart';
 import '../../utils/extensions.dart';
 import '../../utils/merchant_service_labels.dart';
 import '../../widgets/app_image.dart';
-import '../../widgets/merchant/quick_publish_panel.dart';
 import '../real_estate_form_screen.dart';
 import 'merchant_store_sections_screen.dart';
 import 'product_form_screen.dart';
@@ -36,9 +35,11 @@ class MerchantProductsScreen extends StatefulWidget {
 
 class _MerchantProductsScreenState extends State<MerchantProductsScreen> {
   final _searchController = TextEditingController();
+  final _searchFocusNode = FocusNode();
   bool _isSyncingCatalog = false;
   bool _showBazaarApprovedNotice = false;
   bool? _lastBazaarApproved;
+  bool _showSearch = false;
 
   bool _ensureCanPublish(AppProvider provider, String serviceId) {
     if (provider.canPublishForService(serviceId)) return true;
@@ -173,9 +174,33 @@ class _MerchantProductsScreenState extends State<MerchantProductsScreen> {
     }
   }
 
+  void _toggleSearch() {
+    setState(() {
+      _showSearch = !_showSearch;
+      if (!_showSearch) {
+        _searchController.clear();
+        _searchFocusNode.unfocus();
+      }
+    });
+    if (_showSearch) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _searchFocusNode.requestFocus();
+      });
+    }
+  }
+
+  void _closeSearch() {
+    setState(() {
+      _showSearch = false;
+      _searchController.clear();
+      _searchFocusNode.unfocus();
+    });
+  }
+
   @override
   void dispose() {
     _searchController.dispose();
+    _searchFocusNode.dispose();
     super.dispose();
   }
 
@@ -231,7 +256,19 @@ class _MerchantProductsScreenState extends State<MerchantProductsScreen> {
             _PageHeader(
               title: labels.productsTitleAr,
               subtitle: _pageSubtitle(serviceId, labels),
+              searchActive:
+                  _showSearch || _searchController.text.trim().isNotEmpty,
+              onSearchTap: _toggleSearch,
             ),
+            if (_showSearch) ...[
+              const SizedBox(height: 12),
+              _SearchField(
+                controller: _searchController,
+                focusNode: _searchFocusNode,
+                onChanged: (_) => setState(() {}),
+                onClose: _closeSearch,
+              ),
+            ],
             if (serviceIds.isNotEmpty) ...[
               const SizedBox(height: 16),
               _ServiceChipsRow(
@@ -263,11 +300,6 @@ class _MerchantProductsScreenState extends State<MerchantProductsScreen> {
                 const _BazaarVisibilityBanner(),
             ],
             const SizedBox(height: 14),
-            _SearchField(
-              controller: _searchController,
-              onChanged: (_) => setState(() {}),
-            ),
-            const SizedBox(height: 18),
             if (serviceId == 'product' ||
                 serviceId == 'restaurant' ||
                 serviceId == 'bazar_ghaith') ...[
@@ -284,16 +316,6 @@ class _MerchantProductsScreenState extends State<MerchantProductsScreen> {
               ),
               const SizedBox(height: 14),
             ],
-            _QuickPublishSection(
-              serviceIds: serviceIds,
-              onPublish: (id) async {
-                await provider.setMerchantActiveService(id);
-                if (!context.mounted) return;
-                if (!_ensureCanPublish(provider, id)) return;
-                openMerchantPublisher(context, id);
-              },
-            ),
-            const SizedBox(height: 16),
             _ActionRow(
               addLabel: 'إضافة جديد',
               isSyncing: _isSyncingCatalog,
@@ -316,7 +338,21 @@ class _MerchantProductsScreenState extends State<MerchantProductsScreen> {
                         : null,
                     onToggle: () async {
                       final newValue = !item.isAvailable;
-                      await provider.updateProduct(item.copyWith(isAvailable: newValue));
+                      try {
+                        await provider.updateProduct(
+                          item.copyWith(isAvailable: newValue),
+                        );
+                      } catch (error) {
+                        if (!context.mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              'تعذّر تحديث حالة المنتج. تحقق من الاتصال وحاول مجدداً.',
+                              style: const TextStyle(fontFamily: 'Cairo'),
+                            ),
+                          ),
+                        );
+                      }
                     },
                     onEdit: () => _openEditForm(provider, item, serviceId),
                     onDelete: () => _confirmDelete(provider, item),
@@ -418,35 +454,92 @@ class _StoreSectionsBanner extends StatelessWidget {
 class _PageHeader extends StatelessWidget {
   final String title;
   final String subtitle;
+  final VoidCallback onSearchTap;
+  final bool searchActive;
 
-  const _PageHeader({required this.title, required this.subtitle});
+  const _PageHeader({
+    required this.title,
+    required this.subtitle,
+    required this.onSearchTap,
+    this.searchActive = false,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Column(
+    return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          title,
-          style: const TextStyle(
-            fontFamily: 'Cairo',
-            fontSize: 28,
-            fontWeight: FontWeight.w900,
-            color: Color(0xFF1C1C1E),
-            height: 1.15,
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: const TextStyle(
+                  fontFamily: 'Cairo',
+                  fontSize: 28,
+                  fontWeight: FontWeight.w900,
+                  color: Color(0xFF1C1C1E),
+                  height: 1.15,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                subtitle,
+                style: const TextStyle(
+                  fontFamily: 'Cairo',
+                  fontSize: 13,
+                  color: Color(0xFF636366),
+                  height: 1.45,
+                ),
+              ),
+            ],
           ),
         ),
-        const SizedBox(height: 6),
-        Text(
-          subtitle,
-          style: const TextStyle(
-            fontFamily: 'Cairo',
-            fontSize: 13,
-            color: Color(0xFF636366),
-            height: 1.45,
-          ),
+        const SizedBox(width: 10),
+        _SearchIconButton(
+          active: searchActive,
+          onTap: onSearchTap,
         ),
       ],
+    );
+  }
+}
+
+class _SearchIconButton extends StatelessWidget {
+  final bool active;
+  final VoidCallback onTap;
+
+  const _SearchIconButton({
+    required this.active,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: active ? _brand.withValues(alpha: 0.14) : Colors.white,
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          width: 46,
+          height: 46,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: _shadowSoft,
+            border: active
+                ? Border.all(color: _brand.withValues(alpha: 0.45))
+                : null,
+          ),
+          child: Icon(
+            Icons.search_rounded,
+            color: active ? _brand : const Color(0xFF1C1C1E),
+            size: 22,
+          ),
+        ),
+      ),
     );
   }
 }
@@ -675,11 +768,15 @@ class _StatColumn extends StatelessWidget {
 
 class _SearchField extends StatelessWidget {
   final TextEditingController controller;
+  final FocusNode focusNode;
   final ValueChanged<String> onChanged;
+  final VoidCallback onClose;
 
   const _SearchField({
     required this.controller,
+    required this.focusNode,
     required this.onChanged,
+    required this.onClose,
   });
 
   @override
@@ -692,6 +789,7 @@ class _SearchField extends StatelessWidget {
       ),
       child: TextField(
         controller: controller,
+        focusNode: focusNode,
         onChanged: onChanged,
         textDirection: TextDirection.rtl,
         style: const TextStyle(fontFamily: 'Cairo', fontSize: 14),
@@ -706,6 +804,15 @@ class _SearchField extends StatelessWidget {
             Icons.search_rounded,
             color: Color(0xFF8E8E93),
           ),
+          suffixIcon: IconButton(
+            onPressed: onClose,
+            icon: const Icon(
+              Icons.close_rounded,
+              color: Color(0xFF8E8E93),
+              size: 20,
+            ),
+            tooltip: 'إغلاق البحث',
+          ),
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(16),
             borderSide: BorderSide.none,
@@ -713,168 +820,6 @@ class _SearchField extends StatelessWidget {
           filled: true,
           fillColor: Colors.white,
           contentPadding: const EdgeInsets.symmetric(vertical: 14),
-        ),
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────
-// Quick publish grid
-// ─────────────────────────────────────────────────────────────
-
-class _QuickPublishAction {
-  final String serviceId;
-  final String label;
-  final IconData icon;
-  final Color iconColor;
-  final Color bgColor;
-
-  const _QuickPublishAction({
-    required this.serviceId,
-    required this.label,
-    required this.icon,
-    required this.iconColor,
-    required this.bgColor,
-  });
-}
-
-const _allQuickActions = [
-  _QuickPublishAction(
-    serviceId: 'restaurant',
-    label: 'نشر منيو',
-    icon: Icons.menu_book_rounded,
-    iconColor: Color(0xFFF5A01D),
-    bgColor: Color(0xFFFFEBEE),
-  ),
-  _QuickPublishAction(
-    serviceId: 'product',
-    label: 'إضافة منتج',
-    icon: Icons.shopping_bag_rounded,
-    iconColor: Color(0xFFFF9500),
-    bgColor: Color(0xFFFFF3E0),
-  ),
-  _QuickPublishAction(
-    serviceId: 'real_estate',
-    label: 'إضافة عقار',
-    icon: Icons.home_work_rounded,
-    iconColor: Color(0xFF007AFF),
-    bgColor: Color(0xFFE3F2FD),
-  ),
-  _QuickPublishAction(
-    serviceId: 'cars',
-    label: 'إضافة سيارة',
-    icon: Icons.directions_car_rounded,
-    iconColor: Color(0xFF5856D6),
-    bgColor: Color(0xFFEDE7F6),
-  ),
-  _QuickPublishAction(
-    serviceId: 'professionals',
-    label: 'تحديث مهني',
-    icon: Icons.badge_rounded,
-    iconColor: Color(0xFF30B0C7),
-    bgColor: Color(0xFFE0F7FA),
-  ),
-];
-
-class _QuickPublishSection extends StatelessWidget {
-  final List<String> serviceIds;
-  final Future<void> Function(String serviceId) onPublish;
-
-  const _QuickPublishSection({
-    required this.serviceIds,
-    required this.onPublish,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final actions = _allQuickActions
-        .where((a) => serviceIds.isEmpty || serviceIds.contains(a.serviceId))
-        .toList();
-    if (actions.isEmpty) return const SizedBox.shrink();
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'النشر السريع',
-          style: TextStyle(
-            fontFamily: 'Cairo',
-            fontSize: 17,
-            fontWeight: FontWeight.w900,
-            color: Color(0xFF1C1C1E),
-          ),
-        ),
-        const SizedBox(height: 12),
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(22),
-            boxShadow: _shadowSoft,
-          ),
-          child: Wrap(
-            spacing: 12,
-            runSpacing: 12,
-            alignment: WrapAlignment.start,
-            children: actions
-                .map(
-                  (action) => _QuickPublishTile(
-                    action: action,
-                    onTap: () => onPublish(action.serviceId),
-                  ),
-                )
-                .toList(),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _QuickPublishTile extends StatelessWidget {
-  final _QuickPublishAction action;
-  final VoidCallback onTap;
-
-  const _QuickPublishTile({required this.action, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
-        child: SizedBox(
-          width: 88,
-          child: Column(
-            children: [
-              Container(
-                width: 64,
-                height: 64,
-                decoration: BoxDecoration(
-                  color: action.bgColor,
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Icon(action.icon, color: action.iconColor, size: 28),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                action.label,
-                textAlign: TextAlign.center,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontFamily: 'Cairo',
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                  color: Color(0xFF1C1C1E),
-                  height: 1.25,
-                ),
-              ),
-            ],
-          ),
         ),
       ),
     );

@@ -11,6 +11,7 @@ import '../../utils/merchant_product_sections.dart';
 import '../../utils/merchant_service_labels.dart';
 import '../../core/notifications/notification_hub.dart';
 import '../../core/orders/order_adjustment.dart';
+import '../../core/network/api_exception.dart';
 import '../../core/utils/phone_utils.dart';
 
 class MerchantService extends ChangeNotifier {
@@ -32,6 +33,7 @@ class MerchantService extends ChangeNotifier {
   String? _customerName;
   String? _userRole;
   String? _sessionToken;
+  bool? _merchantProfileOnServer;
 
   late final NotificationHub _notificationHub =
       NotificationHub(_emitNotification);
@@ -95,6 +97,18 @@ class MerchantService extends ChangeNotifier {
       _merchantStore != null && merchantStoreName.isNotEmpty;
   bool get isMerchantApproved =>
       MerchantProfileFields.isApproved(_merchantStore);
+  bool? get merchantProfileOnServer => _merchantProfileOnServer;
+  bool get isMerchantProfileServerCheckPending =>
+      _merchantProfileOnServer == null;
+  bool get isMerchantProfileOnServer => _merchantProfileOnServer == true;
+  bool get needsMerchantProfileResubmit =>
+      hasCompletedMerchantProfile &&
+      !isMerchantApproved &&
+      _merchantProfileOnServer == false;
+  bool get shouldShowMerchantPendingApproval =>
+      hasCompletedMerchantProfile &&
+      !isMerchantApproved &&
+      _merchantProfileOnServer == true;
   bool get canUseMerchantAccount =>
       hasCompletedMerchantProfile && isMerchantApproved;
   bool get isBazaarApproved =>
@@ -389,7 +403,12 @@ class MerchantService extends ChangeNotifier {
       _merchantStore!['approvalStatus'] = 'approved';
     }
     notifyListeners();
-    await _persistMerchantStoreAndState();
+    try {
+      await _persistMerchantStoreAndState();
+    } catch (error) {
+      _markMerchantProfileOnServer(false);
+      rethrow;
+    }
   }
 
   Future<void> updateMerchantStore(Map<String, dynamic> updates) async {
@@ -530,8 +549,7 @@ class MerchantService extends ChangeNotifier {
         phone,
         _productRowFromListItem(finalItem),
       );
-      final statePhone =
-          _trimmedOrNull(_authPhone) ?? _trimmedOrNull(_customerPhone);
+      final statePhone = _merchantSessionPhone();
       if (statePhone != null) {
         await SupabaseService.saveUserState(
             statePhone, _buildRemoteState());
@@ -546,21 +564,43 @@ class MerchantService extends ChangeNotifier {
   Future<void> updateProduct(ListItem updatedItem) async {
     final index = _items.indexWhere((item) => item.id == updatedItem.id);
     if (index == -1) return;
-    final wasAvailable = _items[index].isAvailable;
+    final previous = _items[index];
+    final wasAvailable = previous.isAvailable;
     _items[index] = updatedItem;
     if (wasAvailable && !updatedItem.isAvailable) {
       _notificationHub.onProductUnavailable(updatedItem.nameAr);
     }
-    await _persistMerchantItems();
-    await _persistLocalBackup();
     notifyListeners();
+
+    try {
+      final phone = _normalizeStoredPhone(_authPhone ?? merchantPhone);
+      if (phone.isNotEmpty) {
+        await SupabaseService.saveMerchantProduct(
+          phone,
+          _productRowFromListItem(updatedItem),
+        );
+      }
+      final statePhone = _merchantSessionPhone();
+      if (statePhone != null) {
+        await SupabaseService.saveUserState(
+          statePhone,
+          _buildRemoteState(),
+        );
+      }
+      await _persistLocalBackup();
+    } catch (error) {
+      debugPrint('UPDATE_PRODUCT_REMOTE_ERROR: $error');
+      _items[index] = previous;
+      notifyListeners();
+      rethrow;
+    }
   }
 
   Future<void> deleteProduct(String id) async {
-    if (_authPhone != null && _authPhone!.isNotEmpty) {
+    final phone = _merchantSessionPhone();
+    if (phone != null && phone.isNotEmpty) {
       try {
-        await SupabaseService.deleteMerchantProduct(
-            id, phone: _authPhone);
+        await SupabaseService.deleteMerchantProduct(id, phone: phone);
       } catch (error) {
         debugPrint('DELETE_PRODUCT_REMOTE_ERROR: $error');
         rethrow;
@@ -572,9 +612,13 @@ class MerchantService extends ChangeNotifier {
     notifyListeners();
   }
 
+  String? _merchantSessionPhone() =>
+      _trimmedOrNull(_authPhone) ??
+      _trimmedOrNull(_customerPhone) ??
+      _trimmedOrNull(merchantPhone);
+
   Future<void> syncMerchantCatalogToCloud() async {
-    final phone =
-        _trimmedOrNull(_authPhone) ?? _trimmedOrNull(_customerPhone);
+    final phone = _merchantSessionPhone();
     if (phone == null) {
       throw StateError(
           'لا يوجد رقم هاتف مرتبط بالجلسة. أعد تسجيل الدخول.');
@@ -973,8 +1017,10 @@ class MerchantService extends ChangeNotifier {
         'approval_status':
             MerchantProfileFields.approvalStatus(_merchantStore),
       });
+      await _confirmMerchantProfileOnServerAfterSave();
     } catch (error) {
       debugPrint('Merchant store sync failed: $error');
+      _markMerchantProfileOnServer(false);
       rethrow;
     }
   }
@@ -983,8 +1029,7 @@ class MerchantService extends ChangeNotifier {
 
   Future<void> _persistMerchantStoreAndState() async {
     await _persistMerchantStore();
-    final phone =
-        _trimmedOrNull(_authPhone) ?? _trimmedOrNull(_customerPhone);
+    final phone = _merchantSessionPhone();
     if (phone != null) {
       await SupabaseService.saveUserState(phone, _buildRemoteState());
     }
@@ -999,16 +1044,14 @@ class MerchantService extends ChangeNotifier {
       debugPrint(
           'MERCHANT_PROFILE_SYNC_SKIPPED_WHILE_SAVING_ITEMS: $error');
     }
-    final phone =
-        _normalizeStoredPhone(_authPhone ?? merchantPhone);
+    final phone = _normalizeStoredPhone(_merchantSessionPhone() ?? '');
     if (phone.isNotEmpty) {
       for (final item in _items) {
         await SupabaseService.saveMerchantProduct(
             phone, _productRowFromListItem(item));
       }
     }
-    final statePhone =
-        _trimmedOrNull(_authPhone) ?? _trimmedOrNull(_customerPhone);
+    final statePhone = _merchantSessionPhone();
     if (statePhone != null) {
       await SupabaseService.saveUserState(
           statePhone, _buildRemoteState());
@@ -1018,8 +1061,7 @@ class MerchantService extends ChangeNotifier {
 
   Future<void> hydrateMerchantProfileFromCloud() async {
     if (hasCompletedMerchantProfile) return;
-    final phone =
-        _trimmedOrNull(_authPhone) ?? _trimmedOrNull(_customerPhone);
+    final phone = _merchantSessionPhone();
     if (phone == null || phone.isEmpty) return;
     try {
       final row = await SupabaseService.loadMerchantProfile(phone);
@@ -1036,6 +1078,99 @@ class MerchantService extends ChangeNotifier {
     await hydrateMerchantProfileFromCloud();
     if (_merchantStore == null || merchantStoreName.isEmpty) return;
     await _persistMerchantStore();
+    await _confirmMerchantProfileOnServerAfterSave();
+  }
+
+  void resetMerchantProfileServerStatus() {
+    _merchantProfileOnServer = null;
+    notifyListeners();
+  }
+
+  void _markMerchantProfileOnServer(bool onServer) {
+    _merchantProfileOnServer = onServer;
+    if (_merchantStore != null) {
+      _merchantStore!['profileOnServer'] = onServer;
+    }
+    notifyListeners();
+  }
+
+  void _mergeMerchantApprovalFromServerRow(Map<String, dynamic> row) {
+    if (_merchantStore == null) return;
+    _merchantStore!['approvalStatus'] =
+        MerchantProfileFields.approvalStatus(row);
+    _merchantStore!['approval_status'] =
+        MerchantProfileFields.approvalStatus(row);
+    _merchantStore!['isApproved'] = MerchantProfileFields.isApproved(row);
+    _merchantStore!['is_approved'] = MerchantProfileFields.isApproved(row);
+    final rejectionKey = row['rejection_reason_key'] ?? row['rejectionReasonKey'];
+    final rejectionMessage =
+        row['rejection_message_ar'] ?? row['rejectionMessageAr'];
+    if (rejectionKey != null) {
+      _merchantStore!['rejectionReasonKey'] = rejectionKey.toString();
+    }
+    if (rejectionMessage != null) {
+      _merchantStore!['rejectionMessageAr'] = rejectionMessage.toString();
+    }
+  }
+
+  Future<bool> _confirmMerchantProfileOnServerAfterSave() async {
+    final onServer = await refreshMerchantProfileServerStatus(
+      mergeApprovalFields: false,
+    );
+    if (!onServer) {
+      _markMerchantProfileOnServer(false);
+    }
+    return onServer;
+  }
+
+  Future<bool> refreshMerchantProfileServerStatus({
+    bool mergeApprovalFields = true,
+  }) async {
+    final phone = _merchantSessionPhone();
+    if (phone == null || phone.isEmpty) {
+      _markMerchantProfileOnServer(false);
+      return false;
+    }
+    try {
+      final row = await SupabaseService.loadMerchantProfile(phone);
+      final onServer = row != null &&
+          MerchantProfileFields.storeNameOrEmpty(row).isNotEmpty;
+      _markMerchantProfileOnServer(onServer);
+      if (onServer && mergeApprovalFields && row != null) {
+        _mergeMerchantApprovalFromServerRow(row);
+        notifyListeners();
+      }
+      return onServer;
+    } catch (error) {
+      debugPrint('MERCHANT_SERVER_STATUS: $error');
+      if (error is ApiException && error.statusCode == 401) {
+        _markMerchantProfileOnServer(false);
+        return false;
+      }
+      return _merchantProfileOnServer == true;
+    }
+  }
+
+  Future<bool> resubmitMerchantProfileToServer() async {
+    if (!hasCompletedMerchantProfile) {
+      throw StateError('لا توجد بيانات متجر لإرسالها.');
+    }
+    final phone = _merchantSessionPhone();
+    if (phone == null || phone.isEmpty) {
+      throw StateError(
+          'لا يوجد رقم هاتف مرتبط بالجلسة. أعد تسجيل الدخول.');
+    }
+    if (_sessionToken == null || _sessionToken!.trim().isEmpty) {
+      throw StateError(
+          'انتهت جلسة الدخول. أعد تسجيل الدخول برمز التحقق ثم حاول مجدداً.');
+    }
+    await _persistMerchantStoreAndState();
+    final onServer = await refreshMerchantProfileServerStatus();
+    if (!onServer) {
+      throw StateError(
+          'لم يُؤكَّد وصول الطلب للسيرفر. تحقق من الإنترنت وحاول مرة أخرى.');
+    }
+    return true;
   }
 
   Future<void> persistMerchantStoreAndStateForAuth() async {
@@ -1068,15 +1203,15 @@ class MerchantService extends ChangeNotifier {
   }
 
   Future<void> _persistMerchantOffers() async {
-    if (_authPhone == null || _authPhone!.isEmpty) return;
-    await SupabaseService.saveUserState(
-        _authPhone!, _buildRemoteState());
+    final phone = _merchantSessionPhone();
+    if (phone == null) return;
+    await SupabaseService.saveUserState(phone, _buildRemoteState());
   }
 
   Future<void> _persistMerchantReviews() async {
-    if (_authPhone == null || _authPhone!.isEmpty) return;
-    await SupabaseService.saveUserState(
-        _authPhone!, _buildRemoteState());
+    final phone = _merchantSessionPhone();
+    if (phone == null) return;
+    await SupabaseService.saveUserState(phone, _buildRemoteState());
   }
 
   Future<void> _persistCustomerOrder(ActiveOrder order) async {
@@ -1123,6 +1258,14 @@ class MerchantService extends ChangeNotifier {
         MerchantProfileFields.rejectionMessage(previousStore);
 
     _merchantStore = _normalizeMerchantSnapshot(snapshot);
+    final looksLikeRemoteRow = snapshot.containsKey('store_name') ||
+        snapshot.containsKey('service_ids') ||
+        snapshot.containsKey('is_approved') ||
+        snapshot.containsKey('approval_status');
+    if (looksLikeRemoteRow &&
+        MerchantProfileFields.storeNameOrEmpty(snapshot).isNotEmpty) {
+      _markMerchantProfileOnServer(true);
+    }
     _notifyMerchantApprovalTransition(
       wasApproved: wasApproved,
       wasRejected: wasRejected,
@@ -1132,9 +1275,7 @@ class MerchantService extends ChangeNotifier {
   }
 
   Future<void> _restoreMerchantItems() async {
-    final phone = _trimmedOrNull(_authPhone) ??
-        _trimmedOrNull(_customerPhone) ??
-        _trimmedOrNull(_merchantStore?['phone']);
+    final phone = _merchantSessionPhone();
     if (phone == null || phone.isEmpty) return;
     try {
       final rows = await SupabaseService.loadMerchantProducts(phone);

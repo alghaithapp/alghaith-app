@@ -1,5 +1,7 @@
 import 'dart:async';
+import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 
@@ -48,7 +50,7 @@ class CallNavigation {
       return;
     }
 
-    final micGranted = await _ensureMicrophonePermission(context);
+    final micGranted = await _ensureCallPermissions(context);
     if (!micGranted || !context.mounted) return;
 
     await Navigator.of(context).push(
@@ -81,7 +83,7 @@ class CallNavigation {
     }
     if (!context.mounted) return;
 
-    final micGranted = await _ensureMicrophonePermission(context);
+    final micGranted = await _ensureCallPermissions(context);
     if (!micGranted || !context.mounted) return;
 
     await Navigator.of(context).push(
@@ -151,34 +153,43 @@ class CallNavigation {
     );
   }
 
-  static Future<bool> _ensureMicrophonePermission(BuildContext context) async {
-    var status = await Permission.microphone.status;
-    if (status.isGranted) return true;
-
-    status = await Permission.microphone.request();
-    if (status.isGranted) return true;
-
-    if (!context.mounted) return false;
-    await showDialog<void>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text(
-          'إذن الميكروفون',
-          style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold),
-        ),
-        content: const Text(
-          'يلزم السماح بالوصول إلى الميكروفون لإجراء المكالمات داخل التطبيق.',
-          style: TextStyle(fontFamily: 'Cairo'),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(),
-            child: const Text('حسناً', style: TextStyle(fontFamily: 'Cairo')),
+  static Future<bool> _ensureCallPermissions(BuildContext context) async {
+    var micStatus = await Permission.microphone.status;
+    if (!micStatus.isGranted) {
+      micStatus = await Permission.microphone.request();
+    }
+    if (!micStatus.isGranted) {
+      if (!context.mounted) return false;
+      await showDialog<void>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text(
+            'إذن الميكروفون',
+            style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold),
           ),
-        ],
-      ),
-    );
-    return false;
+          content: const Text(
+            'يلزم السماح بالوصول إلى الميكروفون لإجراء المكالمات داخل التطبيق.',
+            style: TextStyle(fontFamily: 'Cairo'),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('حسناً', style: TextStyle(fontFamily: 'Cairo')),
+            ),
+          ],
+        ),
+      );
+      return false;
+    }
+
+    if (!kIsWeb && Platform.isAndroid) {
+      final btStatus = await Permission.bluetoothConnect.status;
+      if (!btStatus.isGranted && !btStatus.isLimited) {
+        await Permission.bluetoothConnect.request();
+      }
+    }
+
+    return true;
   }
 
   static Future<void> openOrderCall(
@@ -293,10 +304,14 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
     _disposing = true;
     _voice.onStateChanged = null;
     _voice.onRemoteUserLeft = null;
-    unawaited(IncomingCallRingtone.instance.stop());
-    unawaited(_finalizeCallLog(status: _errorText != null ? 'failed' : 'ended'));
-    unawaited(_voice.leave());
+    unawaited(_cleanupCall());
     super.dispose();
+  }
+
+  Future<void> _cleanupCall() async {
+    await IncomingCallRingtone.instance.stop();
+    await _finalizeCallLog(status: _errorText != null ? 'failed' : 'ended');
+    await _voice.leave();
   }
 
   Future<void> _startCall() async {
@@ -342,14 +357,26 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
       );
       if (!mounted || _disposing) return;
       await _voice.setSpeakerphone(_speaker);
-    } catch (error) {
+    } catch (error, stack) {
+      debugPrint('VOICE_CALL_START_ERROR: $error\n$stack');
       if (!mounted || _disposing) return;
       setState(() {
-        _errorText = error.toString().replaceFirst('StateError: ', '');
+        _errorText = _friendlyCallError(error);
         _statusText = 'تعذّر الاتصال';
       });
       unawaited(_finalizeCallLog(status: 'failed'));
     }
+  }
+
+  String _friendlyCallError(Object error) {
+    final raw = error.toString().replaceFirst('StateError: ', '');
+    if (raw.contains('not configured') || raw.contains('غير مفعّل')) {
+      return 'خدمة الاتصال الداخلي غير مفعّلة حالياً.';
+    }
+    if (raw.contains('401') || raw.contains('authorization')) {
+      return 'انتهت جلسة الدخول. أعد تسجيل الدخول.';
+    }
+    return raw.length > 120 ? 'تعذّر بدء المكالمة. حاول مجدداً.' : raw;
   }
 
   Future<void> _finalizeCallLog({required String status}) async {
@@ -394,6 +421,7 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
       case AgoraCallState.connecting:
         break;
     }
+    if (!mounted || _disposing) return;
     setState(() {
       switch (state) {
         case AgoraCallState.connecting:

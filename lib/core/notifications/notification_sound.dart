@@ -70,7 +70,6 @@ class NotificationSound {
     priority: Priority.high,
     playSound: true,
     sound: incomingCallAndroidSound,
-    fullScreenIntent: true,
     category: AndroidNotificationCategory.call,
     ongoing: true,
     autoCancel: false,

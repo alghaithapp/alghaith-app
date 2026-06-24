@@ -258,34 +258,50 @@ class ListItem {
 
     return ListItem(
       id: (map['id'] as String?) ?? '',
-      nameAr: (map['nameAr'] as String?) ?? '',
-      nameEn: (map['nameEn'] as String?) ?? '',
-      descriptionAr: (map['descriptionAr'] as String?) ?? '',
-      descriptionEn: (map['descriptionEn'] as String?) ?? '',
+      nameAr: (map['nameAr'] ?? map['name_ar'])?.toString() ?? '',
+      nameEn: (map['nameEn'] ?? map['name_en'])?.toString() ?? '',
+      descriptionAr:
+          (map['descriptionAr'] ?? map['description_ar'])?.toString() ?? '',
+      descriptionEn:
+          (map['descriptionEn'] ?? map['description_en'])?.toString() ?? '',
       price: (map['price'] as num?)?.toInt() ?? 0,
       rating: (map['rating'] as num?)?.toDouble(),
-      category: (map['category'] as String?) ?? '',
-      subCategory: map['subCategory'] as String?,
+      category: (map['category'] ?? map['service_id'])?.toString() ?? '',
+      subCategory: (map['subCategory'] ?? map['sub_category'])?.toString(),
       sectionId: (map['sectionId'] as String?)?.trim().isNotEmpty == true
           ? (map['sectionId'] as String?)?.trim()
           : (map['section_id'] as String?)?.trim(),
-      categoryLabelAr: (map['categoryLabelAr'] as String?) ?? '',
-      categoryLabelEn: (map['categoryLabelEn'] as String?) ?? '',
+      categoryLabelAr:
+          (map['categoryLabelAr'] ?? map['category_label_ar'])?.toString() ??
+              '',
+      categoryLabelEn:
+          (map['categoryLabelEn'] ?? map['category_label_en'])?.toString() ??
+              '',
       image: (map['image'] as String?) ?? '',
-      imageBase64: map['imageBase64'] as String?,
+      imageBase64: (map['imageBase64'] ?? map['image_base64'])?.toString(),
       isFavorite: (map['isFavorite'] as bool?) ?? false,
-      avgPriceLabelAr: (map['avgPriceLabelAr'] as String?) ?? '',
-      avgPriceLabelEn: (map['avgPriceLabelEn'] as String?) ?? '',
-      actionLabelAr: (map['actionLabelAr'] as String?) ?? '',
-      actionLabelEn: (map['actionLabelEn'] as String?) ?? '',
+      avgPriceLabelAr:
+          (map['avgPriceLabelAr'] ?? map['avg_price_label_ar'])?.toString() ??
+              '',
+      avgPriceLabelEn:
+          (map['avgPriceLabelEn'] ?? map['avg_price_label_en'])?.toString() ??
+              '',
+      actionLabelAr:
+          (map['actionLabelAr'] ?? map['action_label_ar'])?.toString() ?? '',
+      actionLabelEn:
+          (map['actionLabelEn'] ?? map['action_label_en'])?.toString() ?? '',
       address: map['address'] as String?,
       bedrooms: (map['bedrooms'] as num?)?.toInt(),
       bathrooms: (map['bathrooms'] as num?)?.toInt(),
-      areaSquareMeter: (map['areaSquareMeter'] as num?)?.toInt(),
-      floorCount: (map['floorCount'] as num?)?.toInt(),
-      listingMode: map['listingMode'] as String?,
-      prepMinutes: (map['prepMinutes'] as num?)?.toInt(),
-      isAvailable: (map['isAvailable'] as bool?) ?? true,
+      areaSquareMeter: (map['areaSquareMeter'] as num?)?.toInt() ??
+          (map['area_square_meter'] as num?)?.toInt(),
+      floorCount: (map['floorCount'] as num?)?.toInt() ??
+          (map['floor_count'] as num?)?.toInt(),
+      listingMode: (map['listingMode'] ?? map['listing_mode'])?.toString(),
+      prepMinutes: (map['prepMinutes'] as num?)?.toInt() ??
+          (map['prep_minutes'] as num?)?.toInt(),
+      isAvailable:
+          parseOptionalBool(map['isAvailable'] ?? map['is_available']) ?? true,
       isApproved: (map['isApproved'] as bool?) ??
           (map['is_approved'] as bool?) ??
           true,

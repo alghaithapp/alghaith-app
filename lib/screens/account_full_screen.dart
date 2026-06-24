@@ -8,6 +8,7 @@ import '../utils/helpers.dart';
 import '../utils/merchant_service_labels.dart';
 
 import '../widgets/app_image.dart';
+import '../widgets/account/account_server_loading_view.dart';
 
 class AccountFullScreen extends StatelessWidget {
   const AccountFullScreen({super.key});
@@ -24,6 +25,8 @@ class AccountFullScreen extends StatelessWidget {
     String showOrDash(String value) =>
         value.trim().isNotEmpty ? value.trim() : '-';
 
+    final isLoading = provider.isLoadingAccountFromServer;
+
     return Scaffold(
       backgroundColor: const Color(0xFFF5F6FA),
       appBar: AppBar(
@@ -33,7 +36,14 @@ class AccountFullScreen extends StatelessWidget {
               TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w900),
         ),
       ),
-      body: ListView(
+      body: isLoading
+          ? const Column(
+              children: [
+                SizedBox(height: 48),
+                AccountServerLoadingView(),
+              ],
+            )
+          : ListView(
         padding: const EdgeInsets.all(16),
         children: [
           Container(

@@ -141,6 +141,10 @@ class AppProvider extends ChangeNotifier {
       _inAppAlertsEnabled = state['inAppAlertsEnabled'] as bool? ??
           state['notificationsEnabled'] as bool? ??
           _inAppAlertsEnabled;
+      merchant.updateAuthPhone(auth.authPhone);
+      merchant.updateCustomerPhone(customer.customerPhone);
+      merchant.updateUserRole(auth.userRole);
+      merchant.updateSessionToken(auth.sessionToken);
       driver.updateAuthPhone(auth.authPhone);
       driver.updateUserRole(auth.userRole);
       delivery.updateAuthPhone(auth.authPhone);
@@ -235,7 +239,18 @@ class AppProvider extends ChangeNotifier {
         auth.authPhone!.isNotEmpty) {
       unawaited(PushNotificationService.instance.bindToUser(auth.authPhone!));
       unawaited(_preloadAllOperatorProfiles());
+      unawaited(_checkMerchantServerProfileIfNeeded());
     }
+    notifyListeners();
+  }
+
+  Future<void> _checkMerchantServerProfileIfNeeded() async {
+    if (auth.userRole != 'merchant') return;
+    if (!merchant.hasCompletedMerchantProfile || merchant.isMerchantApproved) {
+      return;
+    }
+    if (!merchant.isMerchantProfileServerCheckPending) return;
+    await merchant.refreshMerchantProfileServerStatus();
     notifyListeners();
   }
 
@@ -386,6 +401,11 @@ class AppProvider extends ChangeNotifier {
   bool get hasSelectedRole => auth.hasSelectedRole;
   bool get isGuestMode => auth.isGuestMode;
   bool get isRestoring => auth.isRestoring;
+  bool get isSessionDataReady => auth.isReady;
+  /// بيانات الحساب ما زالت تُحمَّل من السيرفر بعد تسجيل الدخول أو استعادة الجلسة.
+  bool get isLoadingAccountFromServer =>
+      hasPhoneSession &&
+      (isLoggingIn || isRestoring || !isSessionDataReady);
   bool get isReady => _isReady;
   bool get isHydrating => _isHydrating;
 
@@ -408,6 +428,10 @@ class AppProvider extends ChangeNotifier {
     final result = await auth.setUserRole(role);
     if (result) {
       _propagateCrossDomainState();
+      if (role == 'merchant') {
+        merchant.resetMerchantProfileServerStatus();
+        unawaited(_checkMerchantServerProfileIfNeeded());
+      }
       notifyListeners();
     }
     return result;
@@ -457,6 +481,10 @@ class AppProvider extends ChangeNotifier {
   Future<void> refreshAccountFromCloud() async {
     if (auth.authPhone != null && auth.authPhone!.isNotEmpty) {
       await auth.setPhoneSession(auth.authPhone!, sessionToken: auth.sessionToken);
+    }
+    if (merchant.hasCompletedMerchantProfile && !merchant.isMerchantApproved) {
+      await merchant.refreshMerchantProfileServerStatus();
+      auth.updateMerchantStore(merchant.merchantStore);
     }
     notifyListeners();
   }
@@ -1391,6 +1419,12 @@ class AppProvider extends ChangeNotifier {
   bool get isMerchant => merchant.isMerchant;
   bool get hasCompletedMerchantProfile => merchant.hasCompletedMerchantProfile;
   bool get isMerchantApproved => merchant.isMerchantApproved;
+  bool get isCheckingMerchantServerProfile =>
+      merchant.isMerchantProfileServerCheckPending;
+  bool get isMerchantProfileOnServer => merchant.isMerchantProfileOnServer;
+  bool get needsMerchantProfileResubmit => merchant.needsMerchantProfileResubmit;
+  bool get shouldShowMerchantPendingApproval =>
+      merchant.shouldShowMerchantPendingApproval;
   bool get canUseMerchantAccount => merchant.canUseMerchantAccount;
   MerchantStoreView get merchantStoreView => MerchantStoreView(merchant.merchantStore);
   bool get isMerchantStoreOpen => merchant.isMerchantStoreOpen;
@@ -1468,6 +1502,12 @@ class AppProvider extends ChangeNotifier {
       merchant.replyMerchantReview(reviewId, reply);
   Future<void> setMerchantStore(Map<String, dynamic> storeData) =>
       merchant.setMerchantStore(storeData);
+  Future<void> ensureMerchantProfileSynced() =>
+      merchant.ensureMerchantProfileSynced();
+  Future<bool> resubmitMerchantProfileToServer() =>
+      merchant.resubmitMerchantProfileToServer();
+  Future<bool> refreshMerchantProfileServerStatus() =>
+      merchant.refreshMerchantProfileServerStatus();
   Future<void> updateMerchantStore(Map<String, dynamic> updates) =>
       merchant.updateMerchantStore(updates);
   Future<void> setMerchantProductSections(

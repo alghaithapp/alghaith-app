@@ -17,6 +17,7 @@ import 'screens/phone_login_screen.dart';
 import 'screens/customer_setup_screen.dart';
 import 'screens/merchant/merchant_setup_screen.dart';
 import 'screens/merchant/merchant_pending_approval_screen.dart';
+import 'screens/merchant/merchant_profile_sync_screen.dart';
 import 'screens/merchant/merchant_shell.dart';
 import 'screens/admin/admin_dashboard_screen.dart';
 import 'screens/delivery/delivery_pending_approval_screen.dart';
@@ -266,7 +267,18 @@ class _AlGhaithAppState extends State<AlGhaithApp> {
           return const ExitConfirmScope(child: MerchantSetupScreen());
         }
         if (!appProvider.isMerchantApproved) {
-          return const ExitConfirmScope(child: MerchantPendingApprovalScreen());
+          if (appProvider.isCheckingMerchantServerProfile) {
+            return const ExitConfirmScope(child: _LoadingOverlay());
+          }
+          if (appProvider.needsMerchantProfileResubmit) {
+            return const ExitConfirmScope(child: MerchantProfileSyncScreen());
+          }
+          if (appProvider.shouldShowMerchantPendingApproval) {
+            return const ExitConfirmScope(
+              child: MerchantPendingApprovalScreen(),
+            );
+          }
+          return const ExitConfirmScope(child: MerchantProfileSyncScreen());
         }
         return const ExitConfirmScope(child: MerchantShell());
       } else if (appProvider.userRole == 'driver') {

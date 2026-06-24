@@ -60,6 +60,9 @@ class _MerchantPendingApprovalScreenState
       final provider = context.read<AppProvider>();
       final wasApproved = provider.isMerchantApproved;
       await provider.refreshAccountFromCloud();
+      if (!provider.isMerchantApproved) {
+        await provider.refreshMerchantProfileServerStatus();
+      }
       if (!mounted) return;
       final approved = context.read<AppProvider>().isMerchantApproved;
       if (!wasApproved && approved) {

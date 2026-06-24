@@ -48,7 +48,6 @@ class PushNotificationInbox {
         NotificationSound.incomingCallAndroidChannel,
       );
       await androidPlugin?.requestNotificationsPermission();
-      await androidPlugin?.requestFullScreenIntentPermission();
       await androidPlugin?.createNotificationChannel(
         const AndroidNotificationChannel(
           'alghaith_taxi_requests',
@@ -158,7 +157,6 @@ class PushNotificationInbox {
       importance: Importance.high,
       priority: Priority.high,
       playSound: true,
-      fullScreenIntent: true,
       showWhen: true,
     );
 
@@ -316,7 +314,6 @@ class PushNotificationInbox {
           priority: Priority.high,
           playSound: true,
           sound: NotificationSound.incomingCallAndroidSound,
-          fullScreenIntent: true,
           category: AndroidNotificationCategory.call,
           ongoing: true,
           autoCancel: false,

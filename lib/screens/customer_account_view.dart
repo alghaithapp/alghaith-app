@@ -11,6 +11,7 @@ import '../utils/account_role_switch.dart';
 import '../utils/app_update_checker.dart';
 import '../utils/helpers.dart';
 import '../widgets/account/account_page_header.dart';
+import '../widgets/account/account_server_loading_view.dart';
 import '../widgets/app_image.dart';
 import 'account_deletion_screen.dart';
 import 'account_full_screen.dart';
@@ -29,7 +30,7 @@ class CustomerAccountView extends StatelessWidget {
   Widget build(BuildContext context) {
     final provider = context.watch<AppProvider>();
     final notificationCount = provider.unreadNotificationCount;
-    final isLoading = provider.isRestoring && !provider.isReady;
+    final isLoading = provider.isLoadingAccountFromServer;
 
     return Scaffold(
       backgroundColor: accountBackground,
@@ -39,7 +40,7 @@ class CustomerAccountView extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             AccountPageHeader(notificationCount: notificationCount),
-            if (isLoading) const _AccountLoadingView(),
+            if (isLoading) const AccountServerLoadingView(),
             if (!isLoading) Expanded(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
@@ -780,60 +781,4 @@ Widget _profileField({
       ),
     ],
   );
-}
-
-/// شاشة تحميل بيانات الحساب
-class _AccountLoadingView extends StatelessWidget {
-  const _AccountLoadingView();
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    return Expanded(
-      child: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 80,
-              height: 80,
-              decoration: BoxDecoration(
-                color: isDark
-                    ? const Color(0xFF1E1E2E)
-                    : const Color(0xFFF0F4FF),
-                shape: BoxShape.circle,
-              ),
-              child: const Padding(
-                padding: EdgeInsets.all(20),
-                child: CircularProgressIndicator(
-                  strokeWidth: 3,
-                  color: AppColors.primary,
-                ),
-              ),
-            ),
-            const SizedBox(height: 20),
-            Text(
-              'جارٍ تحميل بيانات حسابك...',
-              style: TextStyle(
-                fontFamily: 'Cairo',
-                fontSize: 15,
-                fontWeight: FontWeight.w700,
-                color: isDark ? Colors.white70 : const Color(0xFF555555),
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'لحظة من فضلك',
-              style: TextStyle(
-                fontFamily: 'Cairo',
-                fontSize: 12,
-                color: isDark ? Colors.white38 : Colors.grey.shade400,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 }
