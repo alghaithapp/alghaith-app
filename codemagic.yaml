@@ -139,18 +139,26 @@ workflows:
           if [ ! -f "$EXPORT_PLIST" ] && [ -f "$HOME/export_options.plist" ]; then
             EXPORT_PLIST="$HOME/export_options.plist"
           fi
-          if ! flutter build ipa --release --verbose \
+
+          echo "Flutter: $(flutter --version | head -1)"
+          echo "Xcode: $(xcodebuild -version | tr '\n' ' ')"
+
+          LOG_FILE="/tmp/flutter_ipa_build.log"
+          set +e
+          flutter build ipa --release --verbose \
             --export-options-plist="$EXPORT_PLIST" \
             --dart-define=DATABASE_BACKEND_BASE_URL="$DATABASE_BACKEND_BASE_URL" \
             --dart-define=PHONE_AUTH_BASE_URL="$PHONE_AUTH_BASE_URL" \
-            --dart-define=MAPBOX_PUBLIC_TOKEN="${MAPBOX_PUBLIC_TOKEN:-}"; then
-            echo "===== xcodebuild error summary ====="
-            if [ -d /tmp/xcodebuild_logs ]; then
-              find /tmp/xcodebuild_logs -type f -print -exec tail -n 120 {} \;
-            fi
-            if [ -f build/ios/archive/Runner.xcarchive/Logs/Build/*.xcactivitylog ]; then
-              ls -la build/ios/archive/Runner.xcarchive/Logs/Build/ || true
-            fi
+            --dart-define=MAPBOX_PUBLIC_TOKEN="${MAPBOX_PUBLIC_TOKEN:-}" \
+            2>&1 | tee "$LOG_FILE"
+          BUILD_STATUS=${PIPESTATUS[0]}
+          set -e
+
+          if [ "$BUILD_STATUS" -ne 0 ]; then
+            echo "===== Build errors (grep) ====="
+            grep -E "error:|Error:|fatal error|ConformanceIsolation|ARCHIVE FAILED|CodeSign|Provisioning" "$LOG_FILE" | tail -100 || true
+            echo "===== Last 250 log lines ====="
+            tail -250 "$LOG_FILE" || true
             exit 1
           fi
 
@@ -158,6 +166,7 @@ workflows:
       - build/ios/ipa/*.ipa
       - build/ios/ipa/*.dSYM.zip
       - /tmp/xcodebuild_logs/*.log
+      - /tmp/flutter_ipa_build.log
 
     publishing:
       email:
