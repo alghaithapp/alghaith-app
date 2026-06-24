@@ -81,16 +81,18 @@ workflows:
       - name: Get Flutter packages
         script: |
           set -e
+          flutter config --no-enable-swift-package-manager
           flutter pub get
           flutter precache --ios
 
       - name: Install CocoaPods dependencies
         script: |
           set -e
+          rm -rf ios/Pods ios/Podfile.lock ios/.symlinks ios/Flutter/ephemeral/Packages
           if [ -f ios/Podfile ]; then
-            cd ios && pod install
+            cd ios && pod install --repo-update
           else
-            find . -name Podfile -not -path "*/.*/*" -execdir pod install \;
+            find . -name Podfile -not -path "*/.*/*" -execdir pod install --repo-update \;
           fi
 
       - name: Prepare iOS bundle resources
