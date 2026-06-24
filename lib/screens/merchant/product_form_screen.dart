@@ -732,7 +732,8 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
     final name = _nameController.text.trim();
     final description = _descController.text.trim();
     final item = ListItem(
-      id: widget.item?.id ?? DateTime.now().millisecondsSinceEpoch.toString(),
+      id: widget.item?.id ??
+          DateTime.now().microsecondsSinceEpoch.toString(),
       nameAr: name,
       nameEn: widget.item?.nameEn ?? name,
       descriptionAr: description,

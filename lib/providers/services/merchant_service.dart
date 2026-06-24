@@ -535,6 +535,7 @@ class MerchantService extends ChangeNotifier {
     }
 
     _items.insert(0, finalItem);
+    _items = _dedupeMerchantItemsById(_items);
     notifyListeners();
     final phone = _normalizeStoredPhone(_authPhone ?? merchantPhone);
     if (phone.isEmpty) return;
@@ -607,9 +608,8 @@ class MerchantService extends ChangeNotifier {
       }
     }
     _items.removeWhere((item) => item.id == id);
-    await _persistMerchantItems();
-    await _persistLocalBackup();
     notifyListeners();
+    await _persistMerchantCatalogState();
   }
 
   String? _merchantSessionPhone() =>
@@ -636,11 +636,27 @@ class MerchantService extends ChangeNotifier {
     }
   }
 
-  void loadInitialData(List<ListItem> initialItems) {
-    _items = initialItems;
+  void loadInitialData(
+    List<ListItem> initialItems, {
+    bool persist = false,
+  }) {
+    _items = _dedupeMerchantItemsById(initialItems);
     _applyFavoriteSelections();
-    unawaited(_persistMerchantItems());
+    if (persist) {
+      unawaited(_persistMerchantItems());
+    }
     notifyListeners();
+  }
+
+  List<ListItem> _dedupeMerchantItemsById(List<ListItem> items) {
+    final seen = <String>{};
+    final unique = <ListItem>[];
+    for (final item in items) {
+      final id = item.id.trim();
+      if (id.isEmpty || !seen.add(id)) continue;
+      unique.add(item);
+    }
+    return unique;
   }
 
   // ── Merchant offers ──────────────────────────────────────────
@@ -1051,11 +1067,15 @@ class MerchantService extends ChangeNotifier {
             phone, _productRowFromListItem(item));
       }
     }
+    await _persistMerchantCatalogState();
+  }
+
+  Future<void> _persistMerchantCatalogState() async {
     final statePhone = _merchantSessionPhone();
     if (statePhone != null) {
-      await SupabaseService.saveUserState(
-          statePhone, _buildRemoteState());
+      await SupabaseService.saveUserState(statePhone, _buildRemoteState());
     }
+    await requestSessionBackup?.call();
     await _persistLocalBackup();
   }
 
@@ -1280,7 +1300,9 @@ class MerchantService extends ChangeNotifier {
     try {
       final rows = await SupabaseService.loadMerchantProducts(phone);
       if (rows.isEmpty) return;
-      _items = rows.map((row) => ListItem.fromMap(row)).toList();
+      _items = _dedupeMerchantItemsById(
+        rows.map((row) => ListItem.fromMap(row)).toList(),
+      );
       notifyListeners();
     } catch (e) {
       debugPrint('RESTORE_MERCHANT_ITEMS_ERROR: $e');

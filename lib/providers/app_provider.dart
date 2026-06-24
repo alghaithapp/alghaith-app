@@ -129,12 +129,19 @@ class AppProvider extends ChangeNotifier {
     });
     auth.setOnApplyDriverProfile((profile) => driver.loadProfileFromRemoteState({'driverProfile': profile}));
     auth.setOnApplyCourierProfile((profile) => delivery.loadProfileFromRemoteState({'courierProfile': profile}));
-    auth.setOnApplyLocalBackupItems((items) => merchant.loadInitialData(items));
+    auth.setOnApplyLocalBackupItems(
+      (items) => merchant.loadInitialData(items, persist: false),
+    );
     auth.setOnApplyLocalBackupOrders((orders) { _orders = orders; notifyListeners(); });
     auth.setOnApplyLocalBackupOffers((offers) { /* merchant offers callback */ });
     auth.setOnApplyRemoteOrders((orders) { _orders = orders; _lastOrdersFetch = DateTime.now(); notifyListeners(); });
     auth.setOnApplyRemoteAddresses((addresses) { /* restore addresses later */ });
-    auth.setOnApplyRemoteProducts((products) { merchant.loadInitialData(products.map((p) => ListItem.fromMap(p)).toList()); });
+    auth.setOnApplyRemoteProducts((products) {
+      merchant.loadInitialData(
+        products.map((p) => ListItem.fromMap(p)).toList(),
+        persist: false,
+      );
+    });
 
     auth.setOnApplyRemoteState((state) {
       _darkMode = state['darkMode'] as bool? ?? _darkMode;
@@ -1613,7 +1620,7 @@ class AppProvider extends ChangeNotifier {
   }
 
   void loadInitialData(List<ListItem> initialItems) =>
-      merchant.loadInitialData(initialItems);
+      merchant.loadInitialData(initialItems, persist: false);
 
   void updateOrderStatus(
     String orderId,

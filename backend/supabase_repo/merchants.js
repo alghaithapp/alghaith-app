@@ -862,13 +862,37 @@ async function saveMerchantProduct(phone, data = {}) {
 }
 
 async function deleteMerchantProduct(id, phone) {
+  const productId = String(id || '').trim();
+  if (!productId) {
+    throw new Error('Product id is required.');
+  }
+
   const supabase = assertSupabaseAdmin();
-  let query = supabase.from('merchant_products').delete().eq('id', id);
-  if (phone && String(phone).trim().length > 0) {
-    query = query.eq('phone', phone);
+  const phoneKey = phone ? await resolvePhoneKey(phone) : null;
+  let query = supabase.from('merchant_products').delete().eq('id', productId);
+  if (phoneKey) {
+    query = query.eq('phone', phoneKey);
   }
   const { error } = await query;
   if (error) throw new Error(error.message);
+
+  if (phoneKey) {
+    await removeMerchantProductFromUserState(phoneKey, productId);
+  }
+}
+
+async function removeMerchantProductFromUserState(phoneKey, productId) {
+  const state = (await getUserState(phoneKey)) || {};
+  const items = Array.isArray(state.items) ? state.items : [];
+  const targetId = String(productId || '').trim();
+  if (!targetId || items.length === 0) return;
+
+  const filtered = items.filter(
+    (item) => String(item?.id || '').trim() !== targetId
+  );
+  if (filtered.length === items.length) return;
+
+  await saveUserState(phoneKey, { items: filtered });
 }
 
 function enrichProfessionalProfileRow(row) {
