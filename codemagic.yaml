@@ -46,7 +46,7 @@ workflows:
         - push
       branch_patterns:
         - pattern: main
-          include: true # بناء iOS تلقائياً عند push إلى main
+          include: false # إيقاف البناء التلقائي لـ iOS — شغّل يدوياً من Codemagic
 
     scripts:
       # يجب توليد ملفات iOS قبل use-profiles حتى يُعثر Codemagic على Scheme Runner
