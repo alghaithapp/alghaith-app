@@ -360,14 +360,42 @@ function canMerchantPublishInBazaar(profile) {
   return profile?.is_bazaar_member === true;
 }
 
+function readServiceEnabledMap(profile) {
+  const raw =
+    profile?.service_enabled ??
+    profile?.serviceEnabled ??
+    profile?.store_data?.service_enabled ??
+    profile?.store_data?.serviceEnabled ??
+    null;
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+  return raw;
+}
+
+function isMerchantServiceEnabled(profile, serviceId) {
+  const id = String(serviceId || '').trim();
+  if (!id) return true;
+  const map = readServiceEnabledMap(profile);
+  if (Object.prototype.hasOwnProperty.call(map, id)) {
+    return map[id] !== false;
+  }
+  return true;
+}
+
 function merchantQualifiesForServiceListing(profile, serviceId) {
   const normalizedServiceId = String(serviceId || '').trim();
   if (normalizedServiceId === 'bazar_ghaith') {
     if (!canMerchantPublishInBazaar(profile)) return false;
     const services = profileServiceIds(profile);
-    return services.includes('restaurant') || services.includes('product');
+    const hasRestaurant =
+      services.includes('restaurant') &&
+      isMerchantServiceEnabled(profile, 'restaurant');
+    const hasProduct =
+      services.includes('product') &&
+      isMerchantServiceEnabled(profile, 'product');
+    return hasRestaurant || hasProduct;
   }
-  return profileHasService(profile, normalizedServiceId);
+  if (!profileHasService(profile, normalizedServiceId)) return false;
+  return isMerchantServiceEnabled(profile, normalizedServiceId);
 }
 
 function isBazaarEligibleProductCategory(value) {
@@ -657,6 +685,21 @@ async function saveMerchantProfile(phone, data = {}) {
   }
   if (await hasColumn('merchant_profiles', 'service_ids')) {
     basePayload.service_ids = normalizeArray(data.service_ids ?? data.serviceIds);
+  }
+  if (await hasColumn('merchant_profiles', 'service_enabled')) {
+    if (data.service_enabled !== undefined || data.serviceEnabled !== undefined) {
+      basePayload.service_enabled = normalizeObject(
+        data.service_enabled ?? data.serviceEnabled
+      );
+    }
+  } else {
+    const storeData = normalizeObject(basePayload.store_data);
+    if (data.service_enabled !== undefined || data.serviceEnabled !== undefined) {
+      storeData.serviceEnabled = normalizeObject(
+        data.service_enabled ?? data.serviceEnabled
+      );
+      basePayload.store_data = storeData;
+    }
   }
   if (await hasColumn('merchant_profiles', 'active_service_id')) {
     assignIfDefined(
@@ -985,6 +1028,7 @@ async function listProfessionalProfiles(professionId = '') {
         .map((item) => String(item))
         .includes('professionals');
       if (!hasProfessionals) return false;
+      if (!isMerchantServiceEnabled(row, 'professionals')) return false;
       if (!target) return true;
       const categoryId = String(row.professional_category_id || '').trim();
       return categoryId === target;
@@ -1353,6 +1397,16 @@ async function listCatalogProducts(category = '', subCategoryId = '') {
       const profile = findProfileForPhone(profileByPhone, phone);
       if (!profile) return false;
 
+      const productService = String(
+        row.category || row.service_id || ''
+      ).trim();
+      if (
+        productService &&
+        !isMerchantServiceEnabled(profile, productService)
+      ) {
+        return false;
+      }
+
       if (categoryFilter === 'bazar_ghaith') {
         if (!canMerchantPublishInBazaar(profile)) return false;
         const listingService = resolveListingProductService(row, profile);
@@ -1457,7 +1511,13 @@ async function listRealEstateListings(subCategoryId = '', listingMode = '') {
         merchant: merchant ? withMerchantCustomerContacts(merchant) : null,
       };
     })
-    .filter(({ merchant }) => merchant && merchant.is_open !== false && !isMerchantFrozen(merchant));
+    .filter(({ merchant }) => merchant && merchant.is_open !== false && !isMerchantFrozen(merchant))
+    .filter(({ merchant, product }) => {
+      const productService = String(
+        product.category || product.service_id || 'real_estate'
+      ).trim();
+      return isMerchantServiceEnabled(merchant, productService || 'real_estate');
+    });
 }
 
 function merchantProfilePayloadFromAppState(state, appUser) {
@@ -1496,6 +1556,9 @@ function merchantProfilePayloadFromAppState(state, appUser) {
     delivery_fee: merchantStore.deliveryFee ?? merchantStore.delivery_fee,
     delivery_areas: merchantStore.deliveryAreas ?? merchantStore.delivery_areas,
     is_open: merchantStore.isOpen ?? merchantStore.is_open ?? true,
+    service_enabled: normalizeObject(
+      merchantStore.service_enabled ?? merchantStore.serviceEnabled ?? {}
+    ),
     restaurant_category:
       merchantStore.restaurantCategory ?? merchantStore.restaurant_category,
     service_sub_category:
