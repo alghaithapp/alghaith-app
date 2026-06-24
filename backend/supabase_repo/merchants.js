@@ -1487,6 +1487,57 @@ async function ensureMerchantProfileRecord(phone, options = {}) {
   return profile;
 }
 
+function hasMerchantDataInState(state) {
+  const normalized = normalizeObject(state);
+  if (normalized.merchantProfileComplete === true) return true;
+  const store = normalizeObject(normalized.merchantStore);
+  if (!store || Object.keys(store).length === 0) return false;
+  const storeName = String(store.name ?? store.store_name ?? '').trim();
+  return storeName.length > 0;
+}
+
+async function merchantProfileExistsForPhone(phone, existingPhones) {
+  const phoneKey = String(phone || '').trim();
+  if (!phoneKey) return true;
+  if (getPhoneVariants(phoneKey).some((variant) => existingPhones.has(variant))) {
+    return true;
+  }
+  const profile = await getMerchantProfile(phoneKey);
+  return Boolean(profile);
+}
+
+async function createMerchantProfileIfMissing(phone, state, appUser, existingPhones) {
+  const phoneKey = String(phone || '').trim();
+  if (!phoneKey) return false;
+  if (await merchantProfileExistsForPhone(phoneKey, existingPhones)) {
+    return false;
+  }
+
+  const payload = merchantProfilePayloadFromAppState(state, appUser);
+  const role = String(appUser?.role ?? '').trim();
+  const isMerchantIntent =
+    role === 'merchant' || payload !== null || hasMerchantDataInState(state);
+  if (!isMerchantIntent) return false;
+
+  const toSave =
+    payload ||
+    ({
+      store_name:
+        String(appUser?.full_name ?? '').trim() || `تاجر ${phoneKey.slice(-4)}`,
+      primary_service_id: 'product',
+      is_approved: false,
+      approval_status: 'pending',
+    });
+
+  if (!String(toSave.store_name ?? '').trim()) return false;
+
+  await saveMerchantProfile(phoneKey, toSave);
+  for (const variant of getPhoneVariants(phoneKey)) {
+    existingPhones.add(variant);
+  }
+  return true;
+}
+
 async function syncMissingMerchantProfilesFromAppState() {
   const [users, states, existingMerchants] = await Promise.all([
     selectMany('app_users', [], { column: 'updated_at', ascending: false }),
@@ -1511,36 +1562,48 @@ async function syncMissingMerchantProfilesFromAppState() {
   }
 
   let synced = 0;
+
   for (const user of users) {
     const phone = String(user.phone || '').trim();
     if (!phone) continue;
-
-    const hasProfile =
-      (await getMerchantProfile(phone)) ||
-      getPhoneVariants(phone).some((variant) => existingPhones.has(variant));
-    if (hasProfile) continue;
-
     const state = resolveStateForPhone(stateByPhone, phone);
-    const payload = merchantProfilePayloadFromAppState(state, user);
-    const role = String(user.role ?? '').trim();
-    const isMerchantIntent = role === 'merchant' || payload !== null;
-    if (!isMerchantIntent) continue;
+    const created = await createMerchantProfileIfMissing(
+      phone,
+      state,
+      user,
+      existingPhones
+    );
+    if (created) synced += 1;
+  }
 
-    const toSave =
-      payload ||
-      ({
-        store_name:
-          String(user.full_name ?? '').trim() || `تاجر ${phone.slice(-4)}`,
-        primary_service_id: 'product',
-        is_approved: false,
-        approval_status: 'pending',
-      });
-
-    await saveMerchantProfile(phone, toSave);
+  // تغطية حالات app_state التي لا يوجد لها صف مطابق في app_users
+  const scannedStatePhones = new Set();
+  for (const row of states) {
+    const phone = String(row.phone || '').trim();
+    if (!phone) continue;
+    let alreadyScanned = false;
     for (const variant of getPhoneVariants(phone)) {
-      existingPhones.add(variant);
+      if (scannedStatePhones.has(variant)) {
+        alreadyScanned = true;
+        break;
+      }
     }
-    synced += 1;
+    if (alreadyScanned) continue;
+    for (const variant of getPhoneVariants(phone)) {
+      scannedStatePhones.add(variant);
+    }
+
+    const state = row.state || {};
+    if (!hasMerchantDataInState(state)) continue;
+
+    const appUser = await getAppUser(phone).catch(() => null);
+    const created = await createMerchantProfileIfMissing(
+      phone,
+      state,
+      appUser,
+      existingPhones
+    );
+    if (created) synced += 1;
   }
 
   if (synced > 0) {

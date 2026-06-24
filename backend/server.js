@@ -123,8 +123,8 @@ app.get('/__/recover-merchant', async (req, res) => {
       store_name: store.name || store.store_name || '',
       description: store.description || '',
       is_open: store.isOpen ?? store.is_open ?? true,
-      is_approved: store.isApproved ?? store.is_approved ?? true,
-      approval_status: store.approvalStatus || store.approval_status || 'approved',
+      is_approved: store.isApproved ?? store.is_approved ?? false,
+      approval_status: store.approvalStatus || store.approval_status || 'pending',
       latitude: store.latitude ?? store.lat ?? null,
       longitude: store.longitude ?? store.lng ?? null,
       address: store.address || '',
@@ -274,12 +274,18 @@ app.get('/__/make-admin', async (req, res) => {
 app.get('/__/recover-all-merchants', async (req, res) => {
   try {
     const { getAppUser, getUserState, assertSupabaseAdmin } = require('./supabase_repo');
+    const { getPhoneVariants } = require('./supabase_repo/common');
     const supabase = assertSupabaseAdmin();
     const { data: states } = await supabase.from('app_state').select('phone, state').limit(500);
     if (!states) return res.json({ recovered: 0, errors: [] });
     
     const { data: existingProfiles } = await supabase.from('merchant_profiles').select('phone');
-    const existingPhones = new Set((existingProfiles || []).map(r => r.phone));
+    const existingPhones = new Set();
+    for (const row of existingProfiles || []) {
+      for (const variant of getPhoneVariants(row.phone)) {
+        existingPhones.add(variant);
+      }
+    }
     
     let recovered = 0;
     const errors = [];
@@ -289,7 +295,7 @@ app.get('/__/recover-all-merchants', async (req, res) => {
       const store = state.merchantStore || state.store || state.merchant_profile;
       if (!store) continue;
       const phone = row.phone;
-      if (existingPhones.has(phone)) continue;
+      if (getPhoneVariants(phone).some((variant) => existingPhones.has(variant))) continue;
       
       try {
         const profileRow = {
@@ -309,6 +315,9 @@ app.get('/__/recover-all-merchants', async (req, res) => {
         };
         if (!profileRow.store_name) continue;
         await supabase.from('merchant_profiles').upsert(profileRow, { onConflict: 'phone' });
+        for (const variant of getPhoneVariants(phone)) {
+          existingPhones.add(variant);
+        }
         recovered++;
       } catch (e) {
         errors.push({ phone, error: e.message });
