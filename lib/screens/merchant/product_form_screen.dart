@@ -44,6 +44,7 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
   bool _isAvailable = true;
   String? _selectedServiceId;
   String? _selectedSubCategoryId;
+  String? _selectedSchoolSupplySubCategoryId;
   String? _selectedSectionId;
   String _selectedPaymentMethod = 'نقداً';
 
@@ -61,8 +62,7 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
     _imageLabel = item == null ? null : 'selected';
     _isAvailable = item?.isAvailable ?? true;
     _selectedServiceId = widget.serviceId;
-    _selectedSubCategoryId =
-        item?.subCategory ?? widget.initialSubCategoryId;
+    _initSubCategoriesFromItem(item?.subCategory ?? widget.initialSubCategoryId);
     _selectedSectionId = item?.sectionId;
     _selectedPaymentMethod = item?.paymentMethod ?? 'نقداً';
   }
@@ -76,6 +76,29 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
     _carColorController.dispose();
     _carLocationController.dispose();
     super.dispose();
+  }
+
+  void _initSubCategoriesFromItem(String? subCategory) {
+    final sub = subCategory?.trim();
+    if (sub == null || sub.isEmpty) return;
+    if (MarketplaceCatalog.isSchoolSuppliesSubCategory(sub)) {
+      _selectedSubCategoryId = 'school';
+      _selectedSchoolSupplySubCategoryId = sub;
+      return;
+    }
+    if (sub == 'books_magazines') {
+      _selectedSubCategoryId = 'school';
+      _selectedSchoolSupplySubCategoryId = 'school_books_magazines';
+      return;
+    }
+    _selectedSubCategoryId = sub;
+  }
+
+  String? _resolvedSubCategoryForSave() {
+    if (_selectedSubCategoryId == 'school') {
+      return _selectedSchoolSupplySubCategoryId;
+    }
+    return _selectedSubCategoryId;
   }
 
   @override
@@ -227,7 +250,12 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                           );
                         }).toList(),
                         onChanged: (value) {
-                          setState(() => _selectedSubCategoryId = value);
+                          setState(() {
+                            _selectedSubCategoryId = value;
+                            if (value != 'school') {
+                              _selectedSchoolSupplySubCategoryId = null;
+                            }
+                          });
                         },
                         validator: (value) {
                           if (showSubCategoryPicker &&
@@ -235,6 +263,57 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                             return showShoppingSubCategoryPicker
                                 ? 'اختر قسمًا فرعيًا للمنتج'
                                 : 'اختر نوع الخدمة (4 راكب، حمل، باص، …)';
+                          }
+                          return null;
+                        },
+                        decoration: InputDecoration(
+                          filled: true,
+                          fillColor: const Color(0xFFF7F8FC),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(14),
+                            borderSide: BorderSide.none,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                    ],
+                    if (showShoppingSubCategoryPicker &&
+                        _selectedSubCategoryId == 'school') ...[
+                      Text(
+                        'اختر فئة اللوازم',
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w800,
+                          fontFamily: 'Cairo',
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      DropdownButtonFormField<String>(
+                        value: MarketplaceCatalog.schoolSuppliesSubCategories.any(
+                          (element) =>
+                              element.id == _selectedSchoolSupplySubCategoryId,
+                        )
+                            ? _selectedSchoolSupplySubCategoryId
+                            : null,
+                        items: MarketplaceCatalog.schoolSuppliesSubCategories
+                            .map((subCategory) {
+                          return DropdownMenuItem<String>(
+                            value: subCategory.id,
+                            child: Text(
+                              subCategory.titleAr,
+                              style: const TextStyle(fontFamily: 'Cairo'),
+                            ),
+                          );
+                        }).toList(),
+                        onChanged: (value) {
+                          setState(
+                            () => _selectedSchoolSupplySubCategoryId = value,
+                          );
+                        },
+                        validator: (value) {
+                          if (_selectedSubCategoryId == 'school' &&
+                              (value == null || value.isEmpty)) {
+                            return 'اختر فئة اللوازم (كتب، أقلام، ملازم، …)';
                           }
                           return null;
                         },
@@ -745,7 +824,7 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
           (serviceId == 'product' ||
                   serviceId == 'cars' ||
                   serviceId == 'bazar_ghaith')
-          ? (_selectedSubCategoryId ?? widget.item?.subCategory)
+          ? (_resolvedSubCategoryForSave() ?? widget.item?.subCategory)
           : widget.item?.subCategory,
       sectionId: (serviceId == 'product' ||
               serviceId == 'restaurant' ||

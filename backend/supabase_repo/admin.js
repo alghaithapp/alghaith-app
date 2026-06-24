@@ -1496,7 +1496,6 @@ const MERCHANT_SIGNUP_SERVICE_IDS = new Set([
   'real_estate',
   'offers',
   'used',
-  'eden_printing',
 ]);
 
 async function preRegisterMerchantAccount(adminPhone, payload = {}) {

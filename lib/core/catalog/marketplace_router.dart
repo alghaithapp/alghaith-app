@@ -87,6 +87,19 @@ class MarketplaceRouter {
 
     final mode = sub.browseMode;
 
+    if (mode == SubCategoryBrowseMode.schoolHub) {
+      Navigator.of(context).push(
+        CupertinoPageRoute(
+          builder: (_) => CategoryHubScreen(
+            category: category,
+            subCategories: MarketplaceCatalog.schoolSuppliesSubCategories,
+            hideBack: false,
+          ),
+        ),
+      );
+      return;
+    }
+
     if (mode == SubCategoryBrowseMode.stores) {
       Navigator.of(context).push(
         CupertinoPageRoute(

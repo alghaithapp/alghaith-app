@@ -30,12 +30,15 @@ class ListItem {
   final String categoryLabelEn;
   final String image;
   final String? imageBase64;
+  final List<String> galleryImagesBase64;
   bool isFavorite;
   final String avgPriceLabelAr;
   final String avgPriceLabelEn;
   final String actionLabelAr;
   final String actionLabelEn;
   final String? address;
+  final String? neighborhood;
+  final String? facade;
   final int? bedrooms;
   final int? bathrooms;
   final int? areaSquareMeter;
@@ -75,12 +78,15 @@ class ListItem {
     required this.categoryLabelEn,
     required this.image,
     this.imageBase64,
+    this.galleryImagesBase64 = const [],
     this.isFavorite = false,
     required this.avgPriceLabelAr,
     required this.avgPriceLabelEn,
     required this.actionLabelAr,
     required this.actionLabelEn,
     this.address,
+    this.neighborhood,
+    this.facade,
     this.bedrooms,
     this.bathrooms,
     this.areaSquareMeter,
@@ -121,12 +127,15 @@ class ListItem {
     String? categoryLabelEn,
     String? image,
     String? imageBase64,
+    List<String>? galleryImagesBase64,
     bool? isFavorite,
     String? avgPriceLabelAr,
     String? avgPriceLabelEn,
     String? actionLabelAr,
     String? actionLabelEn,
     String? address,
+    String? neighborhood,
+    String? facade,
     int? bedrooms,
     int? bathrooms,
     int? areaSquareMeter,
@@ -166,12 +175,15 @@ class ListItem {
       categoryLabelEn: categoryLabelEn ?? this.categoryLabelEn,
       image: image ?? this.image,
       imageBase64: imageBase64 ?? this.imageBase64,
+      galleryImagesBase64: galleryImagesBase64 ?? this.galleryImagesBase64,
       isFavorite: isFavorite ?? this.isFavorite,
       avgPriceLabelAr: avgPriceLabelAr ?? this.avgPriceLabelAr,
       avgPriceLabelEn: avgPriceLabelEn ?? this.avgPriceLabelEn,
       actionLabelAr: actionLabelAr ?? this.actionLabelAr,
       actionLabelEn: actionLabelEn ?? this.actionLabelEn,
       address: address ?? this.address,
+      neighborhood: neighborhood ?? this.neighborhood,
+      facade: facade ?? this.facade,
       bedrooms: bedrooms ?? this.bedrooms,
       bathrooms: bathrooms ?? this.bathrooms,
       areaSquareMeter: areaSquareMeter ?? this.areaSquareMeter,
@@ -215,12 +227,15 @@ class ListItem {
       'categoryLabelEn': categoryLabelEn,
       'image': image,
       'imageBase64': imageBase64,
+      'galleryImagesBase64': galleryImagesBase64,
       'isFavorite': isFavorite,
       'avgPriceLabelAr': avgPriceLabelAr,
       'avgPriceLabelEn': avgPriceLabelEn,
       'actionLabelAr': actionLabelAr,
       'actionLabelEn': actionLabelEn,
       'address': address,
+      'neighborhood': neighborhood,
+      'facade': facade,
       'bedrooms': bedrooms,
       'bathrooms': bathrooms,
       'areaSquareMeter': areaSquareMeter,
@@ -279,6 +294,16 @@ class ListItem {
               '',
       image: (map['image'] as String?) ?? '',
       imageBase64: (map['imageBase64'] ?? map['image_base64'])?.toString(),
+      galleryImagesBase64: () {
+        final raw = map['galleryImagesBase64'] ?? map['gallery_images_base64'];
+        if (raw is List) {
+          return raw
+              .map((entry) => entry?.toString().trim() ?? '')
+              .where((entry) => entry.isNotEmpty)
+              .toList();
+        }
+        return const <String>[];
+      }(),
       isFavorite: (map['isFavorite'] as bool?) ?? false,
       avgPriceLabelAr:
           (map['avgPriceLabelAr'] ?? map['avg_price_label_ar'])?.toString() ??
@@ -291,6 +316,12 @@ class ListItem {
       actionLabelEn:
           (map['actionLabelEn'] ?? map['action_label_en'])?.toString() ?? '',
       address: map['address'] as String?,
+      neighborhood: (map['neighborhood'] as String?)?.trim().isNotEmpty == true
+          ? (map['neighborhood'] as String?)?.trim()
+          : null,
+      facade: (map['facade'] as String?)?.trim().isNotEmpty == true
+          ? (map['facade'] as String?)?.trim()
+          : null,
       bedrooms: (map['bedrooms'] as num?)?.toInt(),
       bathrooms: (map['bathrooms'] as num?)?.toInt(),
       areaSquareMeter: (map['areaSquareMeter'] as num?)?.toInt() ??

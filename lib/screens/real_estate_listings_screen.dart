@@ -173,7 +173,7 @@ class _RealEstateListingsScreenState extends State<RealEstateListingsScreen> {
   }
 }
 
-class _PropertyCard extends StatelessWidget {
+class _PropertyCard extends StatefulWidget {
   final Map<String, dynamic> product;
   final Map<String, dynamic> merchant;
 
@@ -183,18 +183,49 @@ class _PropertyCard extends StatelessWidget {
   });
 
   @override
+  State<_PropertyCard> createState() => _PropertyCardState();
+}
+
+class _PropertyCardState extends State<_PropertyCard> {
+  int _imageIndex = 0;
+
+  List<String> _galleryImages() {
+    final raw = widget.product['gallery_images_base64'];
+    if (raw is List) {
+      final parsed = raw
+          .map((entry) => entry?.toString().trim() ?? '')
+          .where((entry) => entry.isNotEmpty)
+          .toList();
+      if (parsed.isNotEmpty) return parsed;
+    }
+    final single = widget.product['image_base64']?.toString().trim() ?? '';
+    if (single.isNotEmpty) return [single];
+    final asset = widget.product['image']?.toString().trim() ?? '';
+    if (asset.isNotEmpty) return [asset];
+    return const [];
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final product = widget.product;
+    final merchant = widget.merchant;
     final price = (product['price'] as num?)?.toInt() ?? 0;
-    final imageBase64 = product['image_base64']?.toString();
-    final image = AppImage(
-      imageData: imageBase64 != null && imageBase64.isNotEmpty
-          ? imageBase64
-          : product['image']?.toString(),
-    );
+    final gallery = _galleryImages();
+    final imageData = gallery.isNotEmpty
+        ? gallery[_imageIndex.clamp(0, gallery.length - 1)]
+        : product['image']?.toString();
 
     final merchantName = merchant['store_name']?.toString().trim();
     final merchantPhone =
         MerchantProfileFields.merchantInternalContactPhone(merchant).trim();
+    final neighborhood = product['neighborhood']?.toString().trim();
+    final facade = product['facade']?.toString().trim();
+    final floors = product['floor_count'];
+    final subCategoryId = product['sub_category']?.toString();
+    final propertyType = DummyData.realEstateSubCategories
+        .where((entry) => entry.id == subCategoryId)
+        .map((entry) => entry.titleAr)
+        .firstOrNull;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
@@ -217,7 +248,38 @@ class _PropertyCard extends StatelessWidget {
             child: SizedBox(
               height: 210,
               width: double.infinity,
-              child: image,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  AppImage(imageData: imageData),
+                  if (gallery.length > 1)
+                    Positioned(
+                      bottom: 10,
+                      left: 0,
+                      right: 0,
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: List.generate(gallery.length, (index) {
+                          final active = index == _imageIndex;
+                          return GestureDetector(
+                            onTap: () => setState(() => _imageIndex = index),
+                            child: Container(
+                              width: active ? 18 : 8,
+                              height: 8,
+                              margin: const EdgeInsets.symmetric(horizontal: 3),
+                              decoration: BoxDecoration(
+                                color: active
+                                    ? Colors.white
+                                    : Colors.white.withValues(alpha: 0.55),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                            ),
+                          );
+                        }),
+                      ),
+                    ),
+                ],
+              ),
             ),
           ),
           Padding(
@@ -247,24 +309,30 @@ class _PropertyCard extends StatelessWidget {
                   spacing: 8,
                   runSpacing: 8,
                   children: [
-                    _InfoChip(
-                      icon: Icons.location_on_outlined,
-                      label: product['address']?.toString() ?? 'غير محدد',
-                    ),
+                    if (propertyType != null && propertyType.isNotEmpty)
+                      _InfoChip(
+                        icon: Icons.home_work_outlined,
+                        label: propertyType,
+                      ),
+                    if (neighborhood != null && neighborhood.isNotEmpty)
+                      _InfoChip(
+                        icon: Icons.location_on_outlined,
+                        label: 'الحي: $neighborhood',
+                      ),
+                    if (facade != null && facade.isNotEmpty)
+                      _InfoChip(
+                        icon: Icons.signpost_outlined,
+                        label: 'الواجهة: $facade',
+                      ),
+                    if (floors != null)
+                      _InfoChip(
+                        icon: Icons.stairs_outlined,
+                        label: 'النزال: $floors',
+                      ),
                     if (product['area_square_meter'] != null)
                       _InfoChip(
                         icon: Icons.square_foot_outlined,
                         label: '${product['area_square_meter']} م²',
-                      ),
-                    if (product['bedrooms'] != null)
-                      _InfoChip(
-                        icon: Icons.bed_outlined,
-                        label: '${product['bedrooms']} غرف',
-                      ),
-                    if (product['bathrooms'] != null)
-                      _InfoChip(
-                        icon: Icons.bathtub_outlined,
-                        label: '${product['bathrooms']} حمامات',
                       ),
                   ],
                 ),

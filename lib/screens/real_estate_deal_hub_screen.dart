@@ -29,10 +29,10 @@ class RealEstateDealHubScreen extends StatelessWidget {
             const SliverToBoxAdapter(
               child: Padding(
                 padding: EdgeInsets.fromLTRB(20, 12, 20, 8),
-                child: Align(
+                  child: Align(
                   alignment: Alignment.centerRight,
                   child: Text(
-                    'اختر نوع العملية',
+                    'بيع عقار — شراء عقار — إيجار عقار',
                     style: TextStyle(
                       fontFamily: 'Cairo',
                       fontSize: 14,

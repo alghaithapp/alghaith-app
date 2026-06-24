@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/catalog/marketplace_catalog.dart';
 import '../../core/theme/app_colors.dart';
 import '../../providers/app_provider.dart';
 import '../../utils/dummy_data.dart';
@@ -125,7 +126,7 @@ class _MerchantStoreSettingsScreenState
     final provider = context.watch<AppProvider>();
     final labels = provider.merchantActiveLabels;
     final serviceIds = provider.merchantServiceIds;
-    final availableToAdd = DummyData.categories
+    final availableToAdd = MarketplaceCatalog.merchantAvailableCategories
         .where((category) => !serviceIds.contains(category.id))
         .toList();
     final isProfessional = provider.merchantActiveServiceId == 'professionals';

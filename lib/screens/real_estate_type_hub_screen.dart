@@ -24,20 +24,20 @@ class RealEstateTypeHubScreen extends StatelessWidget {
       case 'buy':
         return 'اختر نوع العقار الذي تبحث عن شرائه';
       case 'sell':
-        return 'اختر نوع العقار الذي تريد بيعه';
+        return 'اختر نوع العقار الذي تريد بيعه ثم أكمل بيانات الإعلان';
       case 'rent':
-        return 'اختر نوع العقار الذي تريد استئجاره';
+        return 'اختر نوع العقار الذي تريد تأجيره ثم أكمل بيانات الإعلان';
       default:
         return 'اختر نوع العقار';
     }
   }
 
   void _openType(BuildContext context, ServiceCategory type) {
-    if (dealId == 'sell') {
+    if (dealId == 'sell' || dealId == 'rent') {
       Navigator.of(context).push(
         CupertinoPageRoute(
           builder: (_) => RealEstateFormScreen(
-            mode: 'sell',
+            mode: dealId,
             initialSubCategoryId: type.id,
           ),
         ),
@@ -45,12 +45,11 @@ class RealEstateTypeHubScreen extends StatelessWidget {
       return;
     }
 
-    final listingMode = dealId == 'buy' ? 'sell' : 'rent';
     Navigator.of(context).push(
       CupertinoPageRoute(
         builder: (_) => RealEstateListingsScreen(
           subCategoryId: type.id,
-          listingMode: listingMode,
+          listingMode: 'sell',
           titleAr: '${dealTitleAr.trim()} — ${type.titleAr}',
         ),
       ),

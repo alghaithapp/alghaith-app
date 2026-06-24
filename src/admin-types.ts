@@ -39,8 +39,13 @@ export const TOGGLEABLE_HOME_CATEGORIES = [
   { id: 'real_estate', titleAr: 'العقارات' },
   { id: 'offers', titleAr: 'العروض والخصومات' },
   { id: 'used', titleAr: 'المنتجات المستعملة' },
-  { id: 'eden_printing', titleAr: 'مطبعة جنة عدن' },
+  { id: 'eden_printing', titleAr: 'طباعة وإعلانات' },
 ] as const;
+
+/** أقسام يمكن اختيارها عند تسجيل التاجر (باستثناء الأقسام المُدارة من المنصة). */
+export const MERCHANT_SIGNUP_CATEGORIES = TOGGLEABLE_HOME_CATEGORIES.filter(
+  (category) => category.id !== 'eden_printing',
+);
 
 export interface MerchantPreRegisterPayload {
   merchantPhone: string;

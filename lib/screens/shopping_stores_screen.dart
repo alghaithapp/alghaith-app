@@ -4,6 +4,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../core/catalog/marketplace_catalog.dart';
 import '../core/storage/catalog_cache.dart';
 import '../core/theme/app_colors.dart';
 import '../models/app_models.dart';
@@ -183,7 +184,10 @@ class _ShoppingStoresScreenState extends State<ShoppingStoresScreen> {
       if (entry is! Map) return false;
       final map = Map<String, dynamic>.from(entry);
       final raw = map['sub_category'] ?? map['subCategory'];
-      return raw?.toString().trim() == subId;
+      return MarketplaceCatalog.shoppingSubCategoryMatches(
+        raw?.toString().trim(),
+        subId,
+      );
     });
   }
 

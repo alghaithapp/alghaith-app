@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { LoaderCircle, UserPlus } from 'lucide-react';
-import { TOGGLEABLE_HOME_CATEGORIES } from '../admin-types';
+import { MERCHANT_SIGNUP_CATEGORIES } from '../admin-types';
 import type { MerchantPreRegisterPayload } from '../admin-types';
 
 interface PreRegisterMerchantModalProps {
@@ -32,7 +32,7 @@ export default function PreRegisterMerchantModal({
   }, [open]);
 
   const selectedCategories = useMemo(
-    () => TOGGLEABLE_HOME_CATEGORIES.filter((item) => selectedIds.includes(item.id)),
+    () => MERCHANT_SIGNUP_CATEGORIES.filter((item) => selectedIds.includes(item.id)),
     [selectedIds],
   );
 
@@ -123,7 +123,7 @@ export default function PreRegisterMerchantModal({
             الأقسام المتاحة للتاجر *
           </span>
           <div className="reject-quick-fill">
-            {TOGGLEABLE_HOME_CATEGORIES.map((category) => {
+            {MERCHANT_SIGNUP_CATEGORIES.map((category) => {
               const active = selectedIds.includes(category.id);
               return (
                 <button

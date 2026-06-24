@@ -265,6 +265,34 @@ async function updateMerchantApprovalRecord(phoneKey, patch = {}) {
 /** أقسام التسوق العالمي فقط — لا تُخلط مع التسوق المحلي. */
 const GLOBAL_SHOPPING_SUB_CATEGORY_IDS = new Set(['iran', 'china']);
 
+const SCHOOL_SUPPLIES_SUB_CATEGORY_IDS = new Set([
+  'school_books_magazines',
+  'school_pens',
+  'school_notebooks',
+  'school_colors',
+  'school_erasers',
+]);
+
+const LEGACY_SCHOOL_SUB_CATEGORY_ALIASES = {
+  books_magazines: 'school_books_magazines',
+};
+
+function normalizeShoppingSubCategoryId(sub) {
+  const value = String(sub || '').trim();
+  if (!value) return '';
+  return LEGACY_SCHOOL_SUB_CATEGORY_ALIASES[value] || value;
+}
+
+function shoppingSubCategoryMatches(productSub, filterSub) {
+  const filter = normalizeShoppingSubCategoryId(filterSub);
+  if (!filter) return true;
+  const product = normalizeShoppingSubCategoryId(productSub);
+  if (product === filter) return true;
+  const rawProduct = String(productSub || '').trim();
+  if (rawProduct === 'school' && filter.startsWith('school_')) return true;
+  return false;
+}
+
 function profileHasService(profile, serviceId) {
   const target = String(serviceId || '').trim();
   if (!target) return false;
@@ -304,17 +332,17 @@ function productMatchesStoreListing({
     if (productService == 'product' && GLOBAL_SHOPPING_SUB_CATEGORY_IDS.has(sub)) {
       return false;
     }
-    if (target) return sub === target;
+    if (target) return shoppingSubCategoryMatches(sub, target);
     return true;
   }
 
   if (channel === 'product' || channel === '') {
     if (GLOBAL_SHOPPING_SUB_CATEGORY_IDS.has(sub)) return false;
-    if (target) return sub === target;
+    if (target) return shoppingSubCategoryMatches(sub, target);
     return true;
   }
 
-  if (target) return sub === target;
+  if (target) return shoppingSubCategoryMatches(sub, target);
   return true;
 }
 
@@ -852,6 +880,20 @@ async function saveMerchantProduct(phone, data = {}) {
     payload.floor_count = Number.parseInt(data.floor_count, 10);
   }
   assignIfDefined(payload, 'listing_mode', data.listing_mode ?? data.listingMode);
+  if (await hasColumn('merchant_products', 'neighborhood')) {
+    assignIfDefined(payload, 'neighborhood', data.neighborhood);
+  }
+  if (await hasColumn('merchant_products', 'facade')) {
+    assignIfDefined(payload, 'facade', data.facade);
+  }
+  if (await hasColumn('merchant_products', 'gallery_images_base64')) {
+    if (data.gallery_images_base64 !== undefined || data.galleryImagesBase64 !== undefined) {
+      const raw = data.gallery_images_base64 ?? data.galleryImagesBase64;
+      payload.gallery_images_base64 = Array.isArray(raw)
+        ? raw.map((entry) => String(entry || '').trim()).filter(Boolean)
+        : normalizeArray(raw);
+    }
+  }
   if (data.prep_minutes !== undefined && data.prep_minutes !== null) {
     payload.prep_minutes = Number.parseInt(data.prep_minutes, 10);
   }
@@ -1339,7 +1381,7 @@ async function listCatalogProducts(category = '', subCategoryId = '') {
       ) {
         return false;
       }
-      if (target && String(row.sub_category || '').trim() !== target) {
+      if (target && !shoppingSubCategoryMatches(row.sub_category, target)) {
         return false;
       }
       return true;

@@ -8,30 +8,40 @@ import '../widgets/service_navigation_buttons.dart';
 
 class CategoryHubScreen extends StatelessWidget {
   final MarketplaceCategoryDefinition category;
+  final List<MarketplaceSubCategory>? subCategories;
   final bool hideBack;
 
   const CategoryHubScreen({
     super.key,
     required this.category,
+    this.subCategories,
     this.hideBack = false,
   });
 
+  List<MarketplaceSubCategory> get _subs =>
+      subCategories ??
+      (category.id == 'product'
+          ? MarketplaceCatalog.shoppingSubCategories
+          : category.subCategories);
+
   @override
   Widget build(BuildContext context) {
-    final subs = category.id == 'product'
-        ? MarketplaceCatalog.shoppingSubCategories
-        : category.subCategories;
+    final subs = _subs;
+    final hubTitle = subCategories != null ? 'لوازم مكتبية ومدرسية' : category.hubTitleAr;
+    final hubSubtitle = subCategories != null
+        ? 'اختر الفئة المناسبة'
+        : category.hubSubtitleAr;
     return CupertinoPageScaffold(
       backgroundColor: const Color(0xFFF2F2F7),
       navigationBar: ServiceNavigationBar(
-        title: category.hubTitleAr,
+        title: hubTitle,
         hideBack: hideBack,
       ),
       child: SafeArea(
         child: subs.isEmpty
             ? _EmptyHubState(
-                title: category.hubTitleAr,
-                subtitle: category.hubSubtitleAr,
+                title: hubTitle,
+                subtitle: hubSubtitle,
               )
             : CustomScrollView(
                 physics: const BouncingScrollPhysics(),
@@ -40,7 +50,7 @@ class CategoryHubScreen extends StatelessWidget {
                     child: Padding(
                       padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
                       child: Text(
-                        category.hubSubtitleAr,
+                        hubSubtitle,
                         style: const TextStyle(
                           fontFamily: 'Cairo',
                           fontSize: 14,

@@ -469,12 +469,24 @@ class CustomerService extends ChangeNotifier {
         imageBase64: row['image_base64']?.toString(),
         image: row['image']?.toString(),
       ),
+      galleryImagesBase64: () {
+        final raw = row['gallery_images_base64'];
+        if (raw is List) {
+          return raw
+              .map((entry) => entry?.toString().trim() ?? '')
+              .where((entry) => entry.isNotEmpty)
+              .toList();
+        }
+        return const <String>[];
+      }(),
       isFavorite: row['is_favorite'] as bool? ?? false,
       avgPriceLabelAr: row['avg_price_label_ar']?.toString() ?? '',
       avgPriceLabelEn: row['avg_price_label_en']?.toString() ?? '',
       actionLabelAr: row['action_label_ar']?.toString() ?? '',
       actionLabelEn: row['action_label_en']?.toString() ?? '',
       address: row['address']?.toString(),
+      neighborhood: row['neighborhood']?.toString(),
+      facade: row['facade']?.toString(),
       bedrooms: (row['bedrooms'] as num?)?.toInt(),
       bathrooms: (row['bathrooms'] as num?)?.toInt(),
       areaSquareMeter: (row['area_square_meter'] as num?)?.toInt(),

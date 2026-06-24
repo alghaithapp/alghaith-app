@@ -9,6 +9,9 @@ enum SubCategoryBrowseMode {
 
   /// منتجات من API catalog
   catalog,
+
+  /// لوازم مكتبية ومدرسية → شبكة فئات فرعية
+  schoolHub,
 }
 
 /// نقطة دخول القسم الرئيسي.
@@ -238,8 +241,8 @@ class MarketplaceCatalog {
     ),
     MarketplaceCategoryDefinition(
       id: 'eden_printing',
-      titleAr: 'مطبعة جنة عدن',
-      titleEn: 'Eden Printing',
+      titleAr: 'طباعة وإعلانات',
+      titleEn: 'Printing & Advertising',
       image: 'assets/images/cat_eden_printing.png',
       entryMode: CategoryEntryMode.directStores,
       apiServiceId: 'eden_printing',
@@ -322,9 +325,15 @@ class MarketplaceCatalog {
     return true;
   }
 
+  /// أقسام لا يختارها التاجر عند التسجيل (إدارية أو مُدارة من المنصة).
+  static const Set<String> merchantExcludedCategoryIds = {
+    'bazar_ghaith',
+    'eden_printing',
+  };
+
   /// الأقسام المتاحة للتجار للتسجيل فيها (باستثناء الأقسام الإدارية أو الخاصة).
   static List<ServiceCategory> get merchantAvailableCategories => categories
-      .where((entry) => entry.id != 'bazar_ghaith')
+      .where((entry) => !merchantExcludedCategoryIds.contains(entry.id))
       .map((entry) => entry.asServiceCategory)
       .toList();
 
@@ -337,8 +346,7 @@ class MarketplaceCatalog {
     MarketplaceSubCategory(id: 'electrical_appliances', titleAr: 'أجهزة كهربائية', titleEn: 'Electrical Appliances', image: 'assets/images/shop_electronics.png'),
     MarketplaceSubCategory(id: 'food_items', titleAr: 'مواد غذائية', titleEn: 'Food Items', image: 'assets/images/shop_food_items.png'),
     MarketplaceSubCategory(id: 'construction', titleAr: 'مواد إنشائية', titleEn: 'Construction', image: 'assets/images/shop_construction.png'),
-    MarketplaceSubCategory(id: 'school', titleAr: 'لوازم مدرسية', titleEn: 'School Supplies', image: 'assets/images/shop_school.png'),
-    MarketplaceSubCategory(id: 'books_magazines', titleAr: 'الكتب والمجلات', titleEn: 'Books & Magazines', image: 'assets/images/shop_school.png'),
+    MarketplaceSubCategory(id: 'school', titleAr: 'لوازم مكتبية ومدرسية', titleEn: 'Office & School Supplies', image: 'assets/images/shop_school.png', browseMode: SubCategoryBrowseMode.schoolHub),
     MarketplaceSubCategory(id: 'bakery', titleAr: 'مخابز ومعجنات', titleEn: 'Bakeries', image: 'assets/images/shop_bakery.png'),
     MarketplaceSubCategory(id: 'meat', titleAr: 'لحوم', titleEn: 'Meat', image: 'assets/images/shop_meat.png'),
     MarketplaceSubCategory(id: 'grocery', titleAr: 'بقالة', titleEn: 'Grocery', image: 'assets/images/shop_grocery.png'),
@@ -349,6 +357,68 @@ class MarketplaceCatalog {
     MarketplaceSubCategory(id: 'cosmetics', titleAr: 'مستحضرات تجميل', titleEn: 'Cosmetics', image: 'assets/images/shop_cosmetics.png'),
     MarketplaceSubCategory(id: 'gifts', titleAr: 'زهور وهدايا', titleEn: 'Flowers & Gifts', image: 'assets/images/shop_gifts.png'),
   ];
+
+  /// فئات لوازم مكتبية ومدرسية (داخل قسم التسوق).
+  static const List<MarketplaceSubCategory> schoolSuppliesSubCategories = [
+    MarketplaceSubCategory(id: 'school_books_magazines', titleAr: 'الكتب والمجلات', titleEn: 'Books & Magazines', image: 'assets/images/shop_school.png'),
+    MarketplaceSubCategory(id: 'school_pens', titleAr: 'الأقلام', titleEn: 'Pens', image: 'assets/images/shop_school.png'),
+    MarketplaceSubCategory(id: 'school_notebooks', titleAr: 'الكتب والملازم', titleEn: 'Notebooks', image: 'assets/images/shop_school.png'),
+    MarketplaceSubCategory(id: 'school_colors', titleAr: 'الألوان', titleEn: 'Colors', image: 'assets/images/shop_school.png'),
+    MarketplaceSubCategory(id: 'school_erasers', titleAr: 'الممحات', titleEn: 'Erasers', image: 'assets/images/shop_school.png'),
+  ];
+
+  static const Set<String> schoolSuppliesSubCategoryIds = {
+    'school_books_magazines',
+    'school_pens',
+    'school_notebooks',
+    'school_colors',
+    'school_erasers',
+  };
+
+  static bool isSchoolSuppliesSubCategory(String? id) {
+    final value = id?.trim();
+    if (value == null || value.isEmpty) return false;
+    return schoolSuppliesSubCategoryIds.contains(value);
+  }
+
+  static String? schoolSuppliesSubCategoryTitle(String? id) {
+    final value = id?.trim();
+    if (value == null || value.isEmpty) return null;
+    for (final sub in schoolSuppliesSubCategories) {
+      if (sub.id == value) return sub.titleAr;
+    }
+    if (value == 'books_magazines') return 'الكتب والمجلات';
+    if (value == 'school') return 'لوازم مكتبية ومدرسية';
+    return null;
+  }
+
+  static String? shoppingSubCategoryTitle(String? id) {
+    final schoolTitle = schoolSuppliesSubCategoryTitle(id);
+    if (schoolTitle != null) return schoolTitle;
+    final value = id?.trim();
+    if (value == null || value.isEmpty) return null;
+    for (final sub in _shoppingSubCategories) {
+      if (sub.id == value) return sub.titleAr;
+    }
+    return null;
+  }
+
+  static String normalizeShoppingSubCategoryId(String? id) {
+    final value = id?.trim();
+    if (value == null || value.isEmpty) return '';
+    if (value == 'books_magazines') return 'school_books_magazines';
+    return value;
+  }
+
+  static bool shoppingSubCategoryMatches(String? productSub, String? filterSub) {
+    final filter = normalizeShoppingSubCategoryId(filterSub);
+    if (filter.isEmpty) return true;
+    final product = normalizeShoppingSubCategoryId(productSub);
+    if (product == filter) return true;
+    final rawProduct = productSub?.trim() ?? '';
+    if (rawProduct == 'school' && filter.startsWith('school_')) return true;
+    return false;
+  }
 
   static const List<MarketplaceSubCategory> _carsSubCategories = [
     MarketplaceSubCategory(id: 'taxi_request', titleAr: 'طلب تكسي', titleEn: 'Taxi Request', image: 'assets/images/taxi_economy.png', browseMode: SubCategoryBrowseMode.catalog),
@@ -415,8 +485,7 @@ class MarketplaceCatalog {
     MarketplaceSubCategory(id: 'used_home_goods', titleAr: 'مواد منزلية مستعملة', titleEn: 'Used Home Goods', image: 'assets/images/shop_home_goods.png', browseMode: SubCategoryBrowseMode.catalog),
     MarketplaceSubCategory(id: 'used_electrical_appliances', titleAr: 'أجهزة كهربائية مستعملة', titleEn: 'Used Electrical Appliances', image: 'assets/images/shop_electronics.png', browseMode: SubCategoryBrowseMode.catalog),
     MarketplaceSubCategory(id: 'used_construction', titleAr: 'مواد إنشائية مستعملة', titleEn: 'Used Construction', image: 'assets/images/shop_construction.png', browseMode: SubCategoryBrowseMode.catalog),
-    MarketplaceSubCategory(id: 'used_school', titleAr: 'لوازم مدرسية مستعملة', titleEn: 'Used School Supplies', image: 'assets/images/shop_school.png', browseMode: SubCategoryBrowseMode.catalog),
-    MarketplaceSubCategory(id: 'used_books_magazines', titleAr: 'كتب ومجلات مستعملة', titleEn: 'Used Books & Magazines', image: 'assets/images/shop_school.png', browseMode: SubCategoryBrowseMode.catalog),
+    MarketplaceSubCategory(id: 'used_school', titleAr: 'لوازم مكتبية ومدرسية مستعملة', titleEn: 'Used Office & School Supplies', image: 'assets/images/shop_school.png', browseMode: SubCategoryBrowseMode.catalog),
     MarketplaceSubCategory(id: 'used_shoes_bags', titleAr: 'أحذية وحقائب مستعملة', titleEn: 'Used Shoes & Bags', image: 'assets/images/shop_shoes_bags.png', browseMode: SubCategoryBrowseMode.catalog),
     MarketplaceSubCategory(id: 'used_kids_clothing', titleAr: 'ملابس أطفال مستعملة', titleEn: 'Used Kids Clothing', image: 'assets/images/shop_kids_clothing.png', browseMode: SubCategoryBrowseMode.catalog),
     MarketplaceSubCategory(id: 'used_women_clothing', titleAr: 'ملابس نسائية مستعملة', titleEn: 'Used Women Clothing', image: 'assets/images/shop_women_clothing.png', browseMode: SubCategoryBrowseMode.catalog),

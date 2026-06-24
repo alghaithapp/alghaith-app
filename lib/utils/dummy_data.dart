@@ -101,20 +101,20 @@ class DummyData {
   static final List<ServiceCategory> realEstateDealOptions = [
     ServiceCategory(
       id: 'buy',
-      titleAr: 'شراء',
-      titleEn: 'Buy',
+      titleAr: 'شراء عقار',
+      titleEn: 'Buy Property',
       image: 'assets/images/re_buy.png',
     ),
     ServiceCategory(
       id: 'sell',
-      titleAr: 'بيع',
-      titleEn: 'Sell',
+      titleAr: 'بيع عقار',
+      titleEn: 'Sell Property',
       image: 'assets/images/re_sell.png',
     ),
     ServiceCategory(
       id: 'rent',
-      titleAr: 'إيجار',
-      titleEn: 'Rent',
+      titleAr: 'إيجار عقار',
+      titleEn: 'Rent Property',
       image: 'assets/images/re_rent.png',
     ),
   ];

@@ -2,6 +2,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/catalog/marketplace_catalog.dart';
 import '../../core/storage/bazaar_approval_notice_store.dart';
 import '../../core/theme/app_theme.dart';
 import '../../models/app_models.dart';
@@ -929,7 +930,8 @@ class _PremiumProductCard extends StatelessWidget {
       return sectionLabel!.trim();
     }
     if (item.subCategory != null && item.subCategory!.trim().isNotEmpty) {
-      return item.subCategory!.trim();
+      return MarketplaceCatalog.shoppingSubCategoryTitle(item.subCategory) ??
+          item.subCategory!.trim();
     }
     if (item.categoryLabelAr.trim().isNotEmpty) return item.categoryLabelAr;
     return item.category;

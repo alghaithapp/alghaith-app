@@ -9,6 +9,7 @@ import '../models/app_models.dart';
 import '../providers/app_provider.dart';
 import '../utils/dummy_data.dart';
 import '../widgets/app_image.dart';
+import '../widgets/merchant/merchant_image_upload_slot.dart';
 
 class RealEstateFormScreen extends StatefulWidget {
   final String mode;
@@ -27,51 +28,67 @@ class RealEstateFormScreen extends StatefulWidget {
 }
 
 class _RealEstateFormScreenState extends State<RealEstateFormScreen> {
-  final _formKey = GlobalKey<FormState>();
-  final _titleController = TextEditingController();
-  final _priceController = TextEditingController();
-  final _areaController = TextEditingController();
-  final _addressController = TextEditingController();
-  final _descController = TextEditingController();
-  final _bedroomsController = TextEditingController();
-  final _floorsController = TextEditingController();
+  static const int _maxGalleryImages = 4;
 
-  String? _imageBase64;
+  final _formKey = GlobalKey<FormState>();
+  final _neighborhoodController = TextEditingController();
+  final _facadeController = TextEditingController();
+  final _floorsController = TextEditingController();
+  final _areaController = TextEditingController();
+  final _priceController = TextEditingController();
+
+  final List<String?> _galleryImages = List<String?>.filled(_maxGalleryImages, null);
   String? _selectedSubCategoryId;
+  String? _imageValidationError;
 
   @override
   void initState() {
     super.initState();
     final item = widget.item;
-    _titleController.text = item?.nameAr ?? '';
-    _priceController.text = item?.price.toString() ?? '';
-    _areaController.text = item?.areaSquareMeter?.toString() ?? '';
-    _addressController.text = item?.address ?? '';
-    _descController.text = item?.descriptionAr ?? '';
-    _bedroomsController.text = item?.bedrooms?.toString() ?? '';
+    _neighborhoodController.text =
+        item?.neighborhood?.trim().isNotEmpty == true
+            ? item!.neighborhood!.trim()
+            : (item?.address?.trim() ?? '');
+    _facadeController.text = item?.facade ?? '';
     _floorsController.text = item?.floorCount?.toString() ?? '';
-    _imageBase64 = item?.imageBase64;
+    _areaController.text = item?.areaSquareMeter?.toString() ?? '';
+    _priceController.text = item?.price.toString() ?? '';
     _selectedSubCategoryId = item?.subCategory ??
         widget.initialSubCategoryId ??
-        (widget.mode == 'sell' ? 'house' : 'land');
+        'house';
+
+    final existingGallery = <String>[
+      if (item?.galleryImagesBase64.isNotEmpty == true)
+        ...item!.galleryImagesBase64,
+      if ((item?.galleryImagesBase64.isEmpty ?? true) &&
+          item?.imageBase64?.trim().isNotEmpty == true)
+        item!.imageBase64!.trim(),
+    ];
+    for (var i = 0; i < _maxGalleryImages && i < existingGallery.length; i++) {
+      _galleryImages[i] = existingGallery[i];
+    }
   }
 
   @override
   void dispose() {
-    _titleController.dispose();
-    _priceController.dispose();
-    _areaController.dispose();
-    _addressController.dispose();
-    _descController.dispose();
-    _bedroomsController.dispose();
+    _neighborhoodController.dispose();
+    _facadeController.dispose();
     _floorsController.dispose();
+    _areaController.dispose();
+    _priceController.dispose();
     super.dispose();
   }
 
-  bool get _isHouseLike =>
-      _selectedSubCategoryId != null &&
-      _selectedSubCategoryId != 'land' &&
-      _selectedSubCategoryId != 'shops';
+  List<String> get _uploadedGalleryImages => _galleryImages
+      .whereType<String>()
+      .map((entry) => entry.trim())
+      .where((entry) => entry.isNotEmpty)
+      .toList();
+
+  String get _formTitle {
+    if (widget.item != null) return 'تعديل إعلان العقار';
+    return widget.mode == 'rent' ? 'إعلان عقار للإيجار' : 'إعلان عقار للبيع';
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -147,11 +164,7 @@ class _RealEstateFormScreenState extends State<RealEstateFormScreen> {
       backgroundColor: const Color(0xFFF4F5F9),
       appBar: AppBar(
         title: Text(
-          isEdit
-              ? 'تعديل العقار'
-              : (widget.mode == 'sell'
-                  ? 'عرض عقار للبيع'
-                  : 'عرض عقار للإيجار'),
+          _formTitle,
           style:
               const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w900),
         ),
@@ -202,11 +215,45 @@ class _RealEstateFormScreenState extends State<RealEstateFormScreen> {
               child: Column(
                 children: [
                   _buildField(
-                    label: 'عنوان الإعلان',
-                    controller: _titleController,
+                    label: 'الحي',
+                    controller: _neighborhoodController,
                     validator: (value) {
                       if (value == null || value.trim().isEmpty) {
-                        return 'هذا الحقل مطلوب';
+                        return 'أدخل اسم الحي';
+                      }
+                      return null;
+                    },
+                  ),
+                  _buildField(
+                    label: 'الواجهة',
+                    controller: _facadeController,
+                    validator: (value) {
+                      if (value == null || value.trim().isEmpty) {
+                        return 'أدخل الواجهة';
+                      }
+                      return null;
+                    },
+                  ),
+                  _buildField(
+                    label: 'النزال',
+                    controller: _floorsController,
+                    keyboardType: TextInputType.number,
+                    validator: (value) {
+                      final parsed = int.tryParse(value?.trim() ?? '');
+                      if (parsed == null || parsed <= 0) {
+                        return 'أدخل النزال';
+                      }
+                      return null;
+                    },
+                  ),
+                  _buildField(
+                    label: 'المساحة الكلية (م²)',
+                    controller: _areaController,
+                    keyboardType: TextInputType.number,
+                    validator: (value) {
+                      final parsed = int.tryParse(value?.trim() ?? '');
+                      if (parsed == null || parsed <= 0) {
+                        return 'أدخل المساحة الكلية';
                       }
                       return null;
                     },
@@ -226,93 +273,55 @@ class _RealEstateFormScreenState extends State<RealEstateFormScreen> {
                       return null;
                     },
                   ),
-                  _buildField(
-                    label: 'العنوان',
-                    controller: _addressController,
-                    validator: (value) {
-                      if (value == null || value.trim().isEmpty) {
-                        return 'أدخل العنوان';
-                      }
-                      return null;
-                    },
-                  ),
-                  _buildField(
-                    label: 'المساحة (م²)',
-                    controller: _areaController,
-                    keyboardType: TextInputType.number,
-                    validator: (value) {
-                      final parsed = int.tryParse(value?.trim() ?? '');
-                      if (parsed == null || parsed <= 0) {
-                        return 'أدخل المساحة';
-                      }
-                      return null;
-                    },
-                  ),
-                  if (_isHouseLike)
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _buildField(
-                            label: 'عدد الغرف',
-                            controller: _bedroomsController,
-                            keyboardType: TextInputType.number,
-                            validator: (value) {
-                              final parsed = int.tryParse(value?.trim() ?? '');
-                              if (parsed == null || parsed <= 0) {
-                                return 'أدخل عدد الغرف';
-                              }
-                              return null;
-                            },
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: _buildField(
-                            label: 'عدد الطوابق',
-                            controller: _floorsController,
-                            keyboardType: TextInputType.number,
-                            validator: (value) {
-                              final parsed = int.tryParse(value?.trim() ?? '');
-                              if (parsed == null || parsed <= 0) {
-                                return 'أدخل عدد الطوابق';
-                              }
-                              return null;
-                            },
-                          ),
-                        ),
-                      ],
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            _SectionCard(
+              title: 'صور العقار',
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'يمكنك رفع حتى 4 صور. يجب رفع صورة واحدة على الأقل.',
+                    style: TextStyle(
+                      fontFamily: 'Cairo',
+                      color: Colors.grey,
+                      fontSize: 12,
+                      height: 1.5,
                     ),
-                  _buildField(
-                    label: 'الوصف',
-                    controller: _descController,
-                    maxLines: 4,
-                    validator: (value) {
-                      if (value == null || value.trim().isEmpty) {
-                        return 'أدخل الوصف';
-                      }
-                      return null;
-                    },
                   ),
-                  const SizedBox(height: 8),
-                  GestureDetector(
-                    onTap: _pickImage,
-                    child: Container(
-                      height: 190,
-                      width: double.infinity,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF7F8FC),
-                        borderRadius: BorderRadius.circular(18),
-                        border: Border.all(color: const Color(0xFFE6E8F0)),
-                      ),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(18),
-                        child: AppImage(
-                          imageData: _imageBase64 != null && _imageBase64!.isNotEmpty
-                              ? _imageBase64
-                              : _imageForSubCategory(selectedSubCategory.id),
-                        ),
+                  if (_imageValidationError != null) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      _imageValidationError!,
+                      style: const TextStyle(
+                        fontFamily: 'Cairo',
+                        color: Colors.red,
+                        fontSize: 12,
                       ),
                     ),
+                  ],
+                  const SizedBox(height: 12),
+                  GridView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: _maxGalleryImages,
+                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: 2,
+                      crossAxisSpacing: 10,
+                      mainAxisSpacing: 10,
+                      childAspectRatio: 1.1,
+                    ),
+                    itemBuilder: (context, index) {
+                      final imageRef = _galleryImages[index];
+                      return MerchantImageUploadSlot(
+                        title: 'صورة ${index + 1}',
+                        imageRef: imageRef,
+                        style: MerchantImageUploadStyle.card,
+                        onTap: () => _pickImage(index),
+                      );
+                    },
                   ),
                 ],
               ),
@@ -327,54 +336,7 @@ class _RealEstateFormScreenState extends State<RealEstateFormScreen> {
                 ),
                 padding: const EdgeInsets.symmetric(vertical: 15),
               ),
-              onPressed: () {
-                if (!(_formKey.currentState?.validate() ?? false)) return;
-                final price = int.parse(_priceController.text.trim());
-                final area = int.parse(_areaController.text.trim());
-                final title = _titleController.text.trim();
-                final description = _descController.text.trim();
-                final address = _addressController.text.trim();
-                final bedrooms = _bedroomsController.text.trim().isEmpty
-                    ? null
-                    : int.tryParse(_bedroomsController.text.trim());
-                final floors = _floorsController.text.trim().isEmpty
-                    ? null
-                    : int.tryParse(_floorsController.text.trim());
-
-                final item = ListItem(
-                  id: widget.item?.id ??
-                      DateTime.now().millisecondsSinceEpoch.toString(),
-                  nameAr: title,
-                  nameEn: widget.item?.nameEn ?? title,
-                  descriptionAr: description,
-                  descriptionEn: widget.item?.descriptionEn ?? description,
-                  price: price,
-                  rating: widget.item?.rating ?? 4.8,
-                  category: 'real_estate',
-                  subCategory: _selectedSubCategoryId,
-                  categoryLabelAr: 'العقارات',
-                  categoryLabelEn: 'Real Estate',
-                  image: _imageForSubCategory(selectedSubCategory.id),
-                  imageBase64: _imageBase64,
-                  avgPriceLabelAr: 'السعر',
-                  avgPriceLabelEn: 'Price',
-                  actionLabelAr: 'تواصل',
-                  actionLabelEn: 'Contact',
-                  address: address,
-                  bedrooms: bedrooms,
-                  floorCount: floors,
-                  areaSquareMeter: area,
-                  listingMode: widget.mode,
-                  isAvailable: true,
-                );
-
-                if (isEdit) {
-                  provider.updateProduct(item);
-                } else {
-                  provider.addProduct(item);
-                }
-                Navigator.pop(context);
-              },
+              onPressed: () => _saveItem(context, provider, selectedSubCategory),
               child: Text(
                 isEdit ? 'حفظ التعديل' : 'نشر العقار',
                 style: const TextStyle(
@@ -389,7 +351,7 @@ class _RealEstateFormScreenState extends State<RealEstateFormScreen> {
     );
   }
 
-  Future<void> _pickImage() async {
+  Future<void> _pickImage(int index) async {
     final picker = ImagePicker();
     final picked = await picker.pickImage(
       source: ImageSource.gallery,
@@ -399,8 +361,75 @@ class _RealEstateFormScreenState extends State<RealEstateFormScreen> {
     final bytes = await picked.readAsBytes();
     if (!mounted) return;
     setState(() {
-      _imageBase64 = base64Encode(bytes);
+      _galleryImages[index] = base64Encode(bytes);
+      _imageValidationError = null;
     });
+  }
+
+  Future<void> _saveItem(
+    BuildContext context,
+    AppProvider provider,
+    ServiceCategory selectedSubCategory,
+  ) async {
+    if (!(_formKey.currentState?.validate() ?? false)) return;
+
+    final gallery = _uploadedGalleryImages;
+    if (gallery.isEmpty) {
+      setState(() {
+        _imageValidationError = 'يجب رفع صورة واحدة على الأقل للعقار';
+      });
+      return;
+    }
+
+    final neighborhood = _neighborhoodController.text.trim();
+    final facade = _facadeController.text.trim();
+    final floors = int.parse(_floorsController.text.trim());
+    final area = int.parse(_areaController.text.trim());
+    final price = int.parse(_priceController.text.trim());
+    final title = '${selectedSubCategory.titleAr} — $neighborhood';
+    final description = [
+      'الحي: $neighborhood',
+      'الواجهة: $facade',
+      'النزال: $floors',
+      'المساحة الكلية: $area م²',
+      'نوع العقار: ${selectedSubCategory.titleAr}',
+    ].join('\n');
+
+    final item = ListItem(
+      id: widget.item?.id ?? DateTime.now().microsecondsSinceEpoch.toString(),
+      nameAr: title,
+      nameEn: widget.item?.nameEn ?? title,
+      descriptionAr: description,
+      descriptionEn: widget.item?.descriptionEn ?? description,
+      price: price,
+      rating: widget.item?.rating ?? 4.8,
+      category: 'real_estate',
+      subCategory: _selectedSubCategoryId,
+      categoryLabelAr: 'العقارات',
+      categoryLabelEn: 'Real Estate',
+      image: _imageForSubCategory(selectedSubCategory.id),
+      imageBase64: gallery.first,
+      galleryImagesBase64: gallery,
+      avgPriceLabelAr: 'السعر',
+      avgPriceLabelEn: 'Price',
+      actionLabelAr: 'تواصل',
+      actionLabelEn: 'Contact',
+      address: neighborhood,
+      neighborhood: neighborhood,
+      facade: facade,
+      floorCount: floors,
+      areaSquareMeter: area,
+      listingMode: widget.mode == 'rent' ? 'rent' : 'sell',
+      isAvailable: true,
+    );
+
+    if (widget.item != null) {
+      provider.updateProduct(item);
+    } else {
+      await provider.addProduct(item);
+    }
+    if (!context.mounted) return;
+    Navigator.pop(context);
   }
 
   Widget _buildField({
@@ -408,7 +437,6 @@ class _RealEstateFormScreenState extends State<RealEstateFormScreen> {
     required TextEditingController controller,
     required String? Function(String?) validator,
     TextInputType keyboardType = TextInputType.text,
-    int maxLines = 1,
   }) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 14),
@@ -428,7 +456,6 @@ class _RealEstateFormScreenState extends State<RealEstateFormScreen> {
           TextFormField(
             controller: controller,
             keyboardType: keyboardType,
-            maxLines: maxLines,
             validator: validator,
             decoration: InputDecoration(
               filled: true,
