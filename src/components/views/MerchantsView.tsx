@@ -4,10 +4,12 @@ import type {
   AdminAccountSummary,
   MerchantDetails,
   MerchantFilter,
+  MerchantPreRegisterPayload,
   MerchantSummary,
 } from '../../admin-types';
 import MerchantCard from '../MerchantCard';
 import MerchantDetailPanel from './MerchantDetailPanel';
+import PreRegisterMerchantModal from '../PreRegisterMerchantModal';
 
 interface MerchantsViewProps {
   merchants: MerchantSummary[];
@@ -35,6 +37,7 @@ interface MerchantsViewProps {
     kind: 'merchant';
   }) => void;
   onOpenDelete: (account: AdminAccountSummary) => void;
+  onPreRegisterMerchant: (payload: MerchantPreRegisterPayload) => Promise<void>;
   pendingMerchantQueue: MerchantSummary[];
   approvalQueue: MerchantSummary[];
 }
@@ -86,9 +89,13 @@ export default function MerchantsView({
   onBazaarSync,
   onOpenReject,
   onOpenDelete,
+  onPreRegisterMerchant,
   pendingMerchantQueue,
   approvalQueue,
 }: MerchantsViewProps) {
+
+  const [showPreRegister, setShowPreRegister] = useState(false);
+  const [isPreRegisterBusy, setIsPreRegisterBusy] = useState(false);
 
   const [sortField, setSortField] = useState<MerchantSortField | null>(null);
   const [sortDir, setSortDir] = useState<SortDir>('desc');
@@ -126,6 +133,33 @@ export default function MerchantsView({
 
   return (
     <>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
+        <button
+          type="button"
+          className="primary-button"
+          onClick={() => setShowPreRegister(true)}
+        >
+          + تسجيل تاجر برقم
+        </button>
+      </div>
+
+      <PreRegisterMerchantModal
+        open={showPreRegister}
+        isBusy={isPreRegisterBusy}
+        onClose={() => {
+          if (!isPreRegisterBusy) setShowPreRegister(false);
+        }}
+        onSubmit={async (payload) => {
+          setIsPreRegisterBusy(true);
+          try {
+            await onPreRegisterMerchant(payload);
+            setShowPreRegister(false);
+          } finally {
+            setIsPreRegisterBusy(false);
+          }
+        }}
+      />
+
       {/* Filter chips */}
       <div className="account-filter-row">
         {FILTERS.map(([filter, label]) => (

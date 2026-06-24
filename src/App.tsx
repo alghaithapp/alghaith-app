@@ -14,6 +14,7 @@ import {
   saveHomeCategoriesConfig,
   rejectCourierApplication,
   rejectDriverApplication,
+  preRegisterMerchant,
   rejectMerchantApplication,
   sendCode,
   suspendAdminAccount,
@@ -33,6 +34,7 @@ import type {
   AppUpdatePolicy,
   CourierSummary,
   HomeCategoriesConfig,
+  MerchantPreRegisterPayload,
   MerchantDetails,
   MerchantSummary,
 } from './admin-types';
@@ -488,6 +490,25 @@ export default function App() {
     } finally { setActiveActionKey(''); }
   }
 
+  async function handlePreRegisterMerchant(payload: MerchantPreRegisterPayload) {
+    if (!token) return;
+    setActionError('');
+    setSuccessMessage('');
+    try {
+      const result = await preRegisterMerchant(token, payload);
+      setSuccessMessage(
+        `تم تسجيل حساب التاجر ${result.phone}. عند تسجيل الدخول سيكمل بيانات متجره فقط.`,
+      );
+      await refreshCoreData(token, result.phone);
+      setMerchantFilter('pending');
+      setSelectedMerchantPhone(result.phone);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'تعذر تسجيل التاجر.';
+      setActionError(message);
+      throw error;
+    }
+  }
+
   async function handleMerchantAction(merchant: MerchantSummary, kind: 'freeze' | 'bazaar') {
     if (!token) return;
     setActiveActionKey(`${kind}:${merchant.phone}`);
@@ -835,6 +856,7 @@ export default function App() {
                       onBazaarSync={handleBazaarSync}
                       onOpenReject={(target) => openRejectConfirm({ phone: target.phone, displayName: target.displayName, kind: 'merchant' })}
                       onOpenDelete={openDeleteConfirm}
+                      onPreRegisterMerchant={handlePreRegisterMerchant}
                       pendingMerchantQueue={pendingMerchantQueue}
                       approvalQueue={approvalQueue}
                     />

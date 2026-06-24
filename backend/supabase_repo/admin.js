@@ -3,6 +3,7 @@ const {
   normalizeObject,
   getPhoneVariants,
   resolvePhoneKey,
+  normalizeArray,
   selectMany,
   assertSupabaseAdmin,
   hasColumn,
@@ -14,6 +15,7 @@ const {
   getAppUser,
   getUserState,
   saveUserState,
+  saveAppUser,
   assertAdminAccess,
   getConfiguredAdminPhones,
   getAppUserId,
@@ -34,6 +36,7 @@ const {
   evaluateBazaarCustomerVisibility,
   ensureMerchantProfileRecord,
   syncMissingMerchantProfilesFromAppState,
+  saveMerchantProfile,
 } = require('./merchants');
 const {
   readCourierProfileFromState,
@@ -290,7 +293,11 @@ async function getAllMerchants(adminPhone) {
       visibleProductCount: bazaarVisibility.visibleProductCount,
       visibilityNotes: bazaarVisibility.visibilityNotes,
       phone: m.phone,
-      storeName: merchantProfileDisplayName(m) || m.store_name || '',
+      storeName:
+        merchantProfileDisplayName(m) ||
+        String(m.store_name || '').trim() ||
+        String(userByPhone[m.phone]?.full_name || '').trim() ||
+        `تاجر ${String(m.phone || '').slice(-4)}`,
       isProfessional: isProfessionalMerchantProfile(m),
       description: (m.description || '').slice(0, 80),
       primaryServiceId: m.primary_service_id || '',
@@ -1478,6 +1485,134 @@ async function ensurePlatformAdminAccess(phone) {
   return true;
 }
 
+const MERCHANT_SIGNUP_SERVICE_IDS = new Set([
+  'restaurant',
+  'product',
+  'cars',
+  'global_shopping',
+  'professionals',
+  'beauty',
+  'tourism',
+  'real_estate',
+  'offers',
+  'used',
+  'eden_printing',
+]);
+
+async function preRegisterMerchantAccount(adminPhone, payload = {}) {
+  await assertAdminAccess(adminPhone);
+
+  const rawPhone = String(
+    payload.merchantPhone ?? payload.phone ?? ''
+  ).trim();
+  if (!rawPhone) {
+    throw new Error('رقم الهاتف مطلوب.');
+  }
+
+  const phoneKey = await resolvePhoneKey(rawPhone);
+  const fullName = String(payload.fullName ?? payload.full_name ?? '').trim();
+  const note = String(payload.note ?? payload.notes ?? '').trim();
+
+  let serviceIds = normalizeArray(payload.serviceIds ?? payload.service_ids);
+  const primaryServiceId = String(
+    payload.primaryServiceId ?? payload.primary_service_id ?? serviceIds[0] ?? ''
+  ).trim();
+
+  if (serviceIds.length === 0 && primaryServiceId) {
+    serviceIds = [primaryServiceId];
+  }
+  if (serviceIds.length === 0) {
+    throw new Error('يرجى اختيار قسم واحد على الأقل.');
+  }
+
+  for (const id of serviceIds) {
+    if (!MERCHANT_SIGNUP_SERVICE_IDS.has(String(id).trim())) {
+      throw new Error(`قسم غير صالح: ${id}`);
+    }
+  }
+
+  const primary =
+    primaryServiceId && serviceIds.includes(primaryServiceId)
+      ? primaryServiceId
+      : serviceIds[0];
+
+  const existingUser = await getAppUser(phoneKey);
+  if (existingUser) {
+    const accountType = String(existingUser.account_type ?? '').trim();
+    if (accountType === 'delivery' || accountType === 'driver') {
+      throw new Error(
+        'هذا الرقم مرتبط بحساب مندوب أو سائق ولا يمكن تحويله لتاجر.'
+      );
+    }
+    if (String(existingUser.role ?? '').trim() === 'admin') {
+      throw new Error('لا يمكن تسجيل رقم المشرف كتاجر.');
+    }
+  }
+
+  const existingProfile = await getMerchantProfile(phoneKey);
+  if (existingProfile) {
+    const storeName = String(existingProfile.store_name ?? '').trim();
+    if (storeName) {
+      throw new Error('يوجد ملف تاجر مكتمل لهذا الرقم بالفعل.');
+    }
+  }
+
+  await saveAppUser(phoneKey, {
+    role: 'merchant',
+    account_type: 'marketplace',
+    full_name: fullName || undefined,
+  });
+
+  await saveMerchantProfile(phoneKey, {
+    primary_service_id: primary,
+    service_ids: serviceIds,
+    active_service_id: primary,
+    is_approved: false,
+    approval_status: 'pending',
+    is_open: false,
+    description: note || undefined,
+  });
+
+  const merchantStoreStub = {
+    category: primary,
+    serviceIds,
+    service_ids: serviceIds,
+    activeServiceId: primary,
+    active_service_id: primary,
+    primary_service_id: primary,
+    isApproved: false,
+    approvalStatus: 'pending',
+    adminPreRegistered: true,
+    name: '',
+    store_name: '',
+  };
+
+  await saveUserState(phoneKey, {
+    userRole: 'merchant',
+    user_role: 'merchant',
+    merchantProfileComplete: false,
+    merchantStore: merchantStoreStub,
+    adminPreRegisteredMerchant: true,
+    adminPreRegisteredAt: nowIso(),
+    adminPreRegisteredBy: adminPhone,
+  });
+
+  const refreshed = await getMerchantProfile(phoneKey);
+  const user = await getAppUser(phoneKey);
+
+  return {
+    success: true,
+    phone: phoneKey,
+    fullName: String(user?.full_name ?? fullName ?? '').trim(),
+    primaryServiceId: primary,
+    serviceIds,
+    isApproved: false,
+    approvalStatus: 'pending',
+    merchantProfileComplete: false,
+    storeName: String(refreshed?.store_name ?? '').trim(),
+  };
+}
+
 module.exports = {
   getAdminReports,
   getAllMerchants,
@@ -1506,4 +1641,5 @@ module.exports = {
   adminSuspendAccount,
   isPlatformAdminPhone,
   ensurePlatformAdminAccess,
+  preRegisterMerchantAccount,
 };

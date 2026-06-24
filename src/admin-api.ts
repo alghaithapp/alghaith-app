@@ -7,6 +7,8 @@ import type {
   HomeCategoriesConfig,
   HomeCategoryPlatformOverride,
   MerchantDetails,
+  MerchantPreRegisterPayload,
+  MerchantPreRegisterResponse,
   MerchantSummary,
   ToggleBazaarResponse,
 } from './admin-types';
@@ -250,6 +252,21 @@ export async function toggleMerchantBazaar(token: string, merchantPhone: string,
   return request<ToggleBazaarResponse>(DATABASE_API_BASE_URL, '/db/admin/merchant-bazaar', {
     method: 'PUT', token, body: JSON.stringify({ merchantPhone, isBazaarMember }),
   });
+}
+
+export async function preRegisterMerchant(
+  token: string,
+  payload: MerchantPreRegisterPayload,
+) {
+  return request<MerchantPreRegisterResponse>(
+    DATABASE_API_BASE_URL,
+    '/db/admin/merchant-pre-register',
+    {
+      method: 'POST',
+      token,
+      body: JSON.stringify(payload),
+    },
+  );
 }
 
 export async function loadAppUpdatePolicy(token: string): Promise<AppUpdatePolicy> {

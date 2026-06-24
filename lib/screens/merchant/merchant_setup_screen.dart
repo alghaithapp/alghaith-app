@@ -185,13 +185,12 @@ class _MerchantSetupScreenState extends State<MerchantSetupScreen> {
           ImageStorageService.merchantUploadedImageRef(
             provider.merchantProfileImageBase64,
           );
-      // استعادة الخدمات فقط إذا كان المتجر مكتملاً (إعداد موجود)
-      // في حالة الإنشاء لأول مرة نبدأ من شاشة الاختيار دائماً
-      if (_selectedServiceIds.isEmpty && provider.hasCompletedMerchantProfile) {
+      // استعادة الأقسام من حساب مُسجَّل مسبقاً أو من إعداد موجود
+      if (_selectedServiceIds.isEmpty) {
         final existingServices = provider.merchantServiceIds;
         if (existingServices.isNotEmpty) {
           _selectedServiceIds.addAll(existingServices);
-        } else {
+        } else if (provider.hasCompletedMerchantProfile) {
           final category = provider.merchantStore?['category']?.toString();
           if (category != null && category.isNotEmpty) {
             _selectedServiceIds.add(category);

@@ -27,6 +27,7 @@ const {
   saveUserState,
   deleteUserState,
   ensurePlatformAdminAccess,
+  preRegisterMerchantAccount,
 } = require('../supabase_repo');
 const logger = require('../lib/logger');
 const {
@@ -247,6 +248,27 @@ router.put('/admin/merchant-freeze', async (req, res) => {
     console.error('toggle freeze error:', error);
     const message = error?.message || 'Failed to toggle freeze status.';
     const status = message.includes('Admin access') ? 403 : 500;
+    return res.status(status).json({ message });
+  }
+});
+
+router.post('/admin/merchant-pre-register', async (req, res) => {
+  try {
+    const phone = requireOptionalAuthorizedPhone(req, res);
+    if (!phone) return;
+    const result = await preRegisterMerchantAccount(phone, req.body || {});
+    return res.json(result);
+  } catch (error) {
+    console.error('merchant pre-register error:', error);
+    const message = error?.message || 'Failed to pre-register merchant.';
+    const status = message.includes('Admin access')
+      ? 403
+      : message.includes('بالفعل') ||
+          message.includes('لا يمكن') ||
+          message.includes('مطلوب') ||
+          message.includes('غير صالح')
+        ? 400
+        : 500;
     return res.status(status).json({ message });
   }
 });

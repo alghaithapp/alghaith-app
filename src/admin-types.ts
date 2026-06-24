@@ -42,6 +42,26 @@ export const TOGGLEABLE_HOME_CATEGORIES = [
   { id: 'eden_printing', titleAr: 'مطبعة جنة عدن' },
 ] as const;
 
+export interface MerchantPreRegisterPayload {
+  merchantPhone: string;
+  fullName?: string;
+  primaryServiceId: string;
+  serviceIds: string[];
+  note?: string;
+}
+
+export interface MerchantPreRegisterResponse {
+  success: boolean;
+  phone: string;
+  fullName: string;
+  primaryServiceId: string;
+  serviceIds: string[];
+  isApproved: boolean;
+  approvalStatus: string;
+  merchantProfileComplete: boolean;
+  storeName: string;
+}
+
 export interface AdminReports {
   totalOrders: number;
   completedOrders: number;
