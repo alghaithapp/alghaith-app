@@ -1397,9 +1397,6 @@ async function listCatalogProducts(category = '', subCategoryId = '') {
       const profile = findProfileForPhone(profileByPhone, phone);
       if (!profile) return false;
 
-      const productService = String(
-        row.category || row.service_id || ''
-      ).trim();
       if (
         productService &&
         !isMerchantServiceEnabled(profile, productService)
