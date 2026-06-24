@@ -334,31 +334,91 @@ app.get('/db/debug/user-bundle', async (req, res) => {
   try {
     const phone = String(req.query?.phone || '').trim();
     if (!phone) return res.status(400).json({ message: 'phone required' });
-    const { getAppUser, getUserState, assertSupabaseAdmin } = require('./supabase_repo');
+    const {
+      getAppUser,
+      getUserState,
+      getMerchantProfile,
+      assertSupabaseAdmin,
+    } = require('./supabase_repo');
+    const { getPhoneVariants } = require('./supabase_repo/common');
     const supabase = assertSupabaseAdmin();
+    const phoneVariants = [...new Set([...getPhoneVariants(phone), phone].filter(Boolean))];
+
     let merchantProfile = null;
     let productCount = 0;
+    let matchedMerchantPhone = null;
     try {
-      const { data } = await supabase.from('merchant_profiles').select('store_name, is_approved, approval_status').eq('phone', phone).maybeSingle();
-      merchantProfile = data;
-    } catch (_) {}
-    try {
-      const { count } = await supabase.from('merchant_products').select('id', { count: 'exact', head: true }).eq('phone', phone);
+      merchantProfile = await getMerchantProfile(phone);
+      if (merchantProfile?.phone) {
+        matchedMerchantPhone = merchantProfile.phone;
+      }
+      const countPhone = matchedMerchantPhone || phoneVariants[0] || phone;
+      const { count } = await supabase
+        .from('merchant_products')
+        .select('id', { count: 'exact', head: true })
+        .in('phone', phoneVariants.length > 0 ? phoneVariants : [countPhone]);
       productCount = count || 0;
     } catch (_) {}
+
     const [appUser, userState] = await Promise.all([
-      getAppUser(phone).catch(e => ({ error: e.message })),
-      getUserState(phone).catch(e => ({ error: e.message })),
+      getAppUser(phone).catch((e) => ({ error: e.message })),
+      getUserState(phone).catch((e) => ({ error: e.message })),
     ]);
+
+    let similarUsers = [];
+    try {
+      const suffix = String(phone).replace(/\D/g, '').slice(-8);
+      if (suffix.length >= 6) {
+        const { data } = await supabase
+          .from('app_users')
+          .select('phone, role, full_name')
+          .ilike('phone', `%${suffix}%`)
+          .limit(5);
+        similarUsers = (data || []).filter(
+          (row) => !phoneVariants.includes(String(row.phone || '').trim())
+        );
+      }
+    } catch (_) {}
+
+    const hasServerData = Boolean(
+      appUser?.phone ||
+        merchantProfile?.store_name ||
+        (userState && typeof userState === 'object' && !userState.error)
+    );
+
     return res.json({
       phone,
-      appUser: appUser?.phone ? { phone: appUser.phone, full_name: appUser.full_name, role: appUser.role } : null,
-      merchantProfile: merchantProfile?.store_name ? { store_name: merchantProfile.store_name, is_approved: merchantProfile.is_approved, approval_status: merchantProfile.approval_status } : null,
+      phoneVariantsChecked: phoneVariants,
+      appUser: appUser?.phone
+        ? {
+            phone: appUser.phone,
+            full_name: appUser.full_name,
+            role: appUser.role,
+          }
+        : null,
+      merchantProfile: merchantProfile?.store_name
+        ? {
+            phone: merchantProfile.phone,
+            store_name: merchantProfile.store_name,
+            is_approved: merchantProfile.is_approved,
+            approval_status: merchantProfile.approval_status,
+          }
+        : null,
       merchantProductsCount: productCount,
-      userStateKeys: userState ? Object.keys(userState) : null,
+      userStateKeys:
+        userState && typeof userState === 'object' && !userState.error
+          ? Object.keys(userState)
+          : null,
       hasDriver: userState?.driverProfile?.name ? true : false,
       hasCourier: userState?.courierProfile?.name ? true : false,
-      hasMerchantInState: userState?.merchantStore?.name || userState?.merchantStore?.store_name ? true : false,
+      hasMerchantInState:
+        userState?.merchantStore?.name || userState?.merchantStore?.store_name
+          ? true
+          : false,
+      similarUsers,
+      diagnosis: hasServerData
+        ? 'يوجد سجل على السيرفر لهذا الرقم أو أحد صيغه.'
+        : 'لا يوجد أي بيانات على السيرفر لهذا الرقم. الطلب موجود على جهاز التاجر فقط ولم يُرفع بعد — اطلب منه إعادة تسجيل الدخول ثم حفظ بيانات المتجر من شاشة الانتظار.',
     });
   } catch (error) {
     return res.status(500).json({ error: error.message });

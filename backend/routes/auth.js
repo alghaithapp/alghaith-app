@@ -6,6 +6,7 @@ const rateLimit = rateLimitLib.default || rateLimitLib;
 const ipKeyGenerator = rateLimitLib.ipKeyGenerator || ((ip) => ip);
 const {
   ensurePlatformAdminAccess,
+  ensureAppUser,
 } = require('../supabase_repo');
 const {
   normalizePhone,
@@ -235,6 +236,7 @@ router.post('/verify-code', authVerifyCodeLimiter, async (req, res) => {
 
     if (isAppleReviewPhone(phone) && code === APPLE_REVIEW_CODE) {
       await ensurePlatformAdminAccess(phone);
+      await ensureAppUser(phone);
       const token = createSessionToken(phone);
       return res.json({
         success: true,
@@ -256,6 +258,7 @@ router.post('/verify-code', authVerifyCodeLimiter, async (req, res) => {
 
     pendingOtps.delete(phone);
     await ensurePlatformAdminAccess(phone);
+    await ensureAppUser(phone);
     const token = createSessionToken(phone);
     return res.json({
       success: true,
