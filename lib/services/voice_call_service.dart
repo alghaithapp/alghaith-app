@@ -109,7 +109,7 @@ class VoiceCallService {
   static Future<AgoraCallSession> startCall({
     required String threadType,
     required String threadId,
-    required String receiverPhone,
+    String? receiverPhone,
     String? callerName,
   }) async {
     final data = await ApiClient.instance.post(
@@ -117,7 +117,8 @@ class VoiceCallService {
       body: {
         'threadType': threadType,
         'threadId': threadId,
-        'receiverPhone': receiverPhone.trim(),
+        if (receiverPhone != null && receiverPhone.trim().isNotEmpty)
+          'receiverPhone': receiverPhone.trim(),
         if (callerName != null && callerName.trim().isNotEmpty)
           'callerName': callerName.trim(),
       },

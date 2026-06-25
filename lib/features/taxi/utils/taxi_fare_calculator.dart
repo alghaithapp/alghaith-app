@@ -34,6 +34,15 @@ class TaxiFareCalculator {
   static const int economicExtraKm = 500;
   static const int economicMin = 1500;
 
+  static const int fareRoundingStep = 250;
+
+  /// تقريب لأقرب 250 د.ع (1430→1500، 1700→1700)
+  static int roundFareToNearestStep(int raw) {
+    final safe = raw < 0 ? 0 : raw;
+    if (safe <= 0) return fareRoundingStep;
+    return ((safe / fareRoundingStep).round()) * fareRoundingStep;
+  }
+
   static FareResult calculateFare(double distanceKm, {TaxiType? taxiType}) {
     final type = taxiType ?? TaxiType.economic;
     final fare = fareForType(distanceKm, type);
@@ -75,7 +84,8 @@ class TaxiFareCalculator {
         break;
     }
 
-    final rounded = raw < minFare ? minFare : raw;
-    return rounded > maxFare ? maxFare : rounded;
+    final bounded = raw < minFare ? minFare : raw;
+    final capped = bounded > maxFare ? maxFare : bounded;
+    return roundFareToNearestStep(capped);
   }
 }

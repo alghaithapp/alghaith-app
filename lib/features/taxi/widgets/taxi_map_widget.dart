@@ -159,7 +159,7 @@ class _TaxiMapWidgetState extends State<TaxiMapWidget> {
           icon: gmaps.BitmapDescriptor.defaultMarkerWithHue(
             gmaps.BitmapDescriptor.hueGreen,
           ),
-          infoWindow: const gmaps.InfoWindow(title: 'السائق'),
+          infoWindow: const gmaps.InfoWindow(title: 'الكابتن'),
         ),
       );
     }

@@ -127,7 +127,7 @@ class TaxiRequest {
   final String id;
   final String requestNumber; // TX-XXXXXX
   final String customerName; // فقط اسم أول + أب
-  final String customerPhone; // مخفي عن السائق حتى القبول
+  final String customerPhone; // مخفي عن السائق — التواصل عبر التطبيق فقط
   final String pickupAddress;
   final String dropoffAddress;
   final double pickupLat;
@@ -230,6 +230,15 @@ class TaxiRequest {
   /// يمكن للزبون فتح شاشة التتبع المباشر ولوحة الرحلة
   bool get canShowLiveTracking => hasAssignedDriver;
 
+  /// يمكن إعادة نفس المسار (انطلاق + وجهة) من سجل الرحلات.
+  bool get canReplayTrip =>
+      pickupAddress.trim().isNotEmpty &&
+      dropoffAddress.trim().isNotEmpty &&
+      pickupLat.abs() > 0.001 &&
+      pickupLng.abs() > 0.001 &&
+      dropoffLat.abs() > 0.001 &&
+      dropoffLng.abs() > 0.001;
+
   String get taxiTypeLabelAr => taxiType.customerServiceLabelAr;
 
   String get statusLabelAr {
@@ -239,7 +248,7 @@ class TaxiRequest {
       case 'accepted':
         return 'تم القبول';
       case 'arrived':
-        return 'وصل السائق';
+        return 'وصل الكابتن';
       case 'picked_up':
         return 'تم الاستلام';
       case 'completed':
@@ -247,7 +256,7 @@ class TaxiRequest {
       case 'cancelled':
         return 'ملغي';
       case 'cancel_requested':
-        return 'بانتظار موافقة السائق على الإلغاء';
+        return 'بانتظار موافقة الكابتن على الإلغاء';
       default:
         return statusAr.isNotEmpty ? statusAr : statusKey;
     }

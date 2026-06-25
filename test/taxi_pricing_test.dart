@@ -39,6 +39,12 @@ void main() {
       expect(TaxiFareCalculator.fareForType(200.0, TaxiType.economic), 50000);
     });
 
+    test('rounds to nearest 250 IQD', () {
+      expect(TaxiFareCalculator.roundFareToNearestStep(1430), 1500);
+      expect(TaxiFareCalculator.roundFareToNearestStep(1700), 1700);
+      expect(TaxiFareCalculator.roundFareToNearestStep(1370), 1250);
+    });
+
     test('TaxiType API mapping', () {
       expect(TaxiTypeX.fromApiName('tuktuk'), TaxiType.tuktuk);
       expect(TaxiTypeX.fromApiName('wazz'), TaxiType.wazz);

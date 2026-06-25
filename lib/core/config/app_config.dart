@@ -114,9 +114,9 @@ class AppConfig {
   static const int taxiFareExtraKmPriceIqd = 500;
   static const int taxiFareRoundingStepIqd = 250;
 
-  /// التقريب للأعلى لأقرب 250 (1,100→1,250 / 1,300→1,500)
+  /// التقريب لأقرب 250 (1,430→1,500 / 1,700→1,700)
   static int roundFareToNearestStep(int raw) =>
-      (raw / taxiFareRoundingStepIqd).ceil() * taxiFareRoundingStepIqd;
+      ((raw / taxiFareRoundingStepIqd).round()) * taxiFareRoundingStepIqd;
 
   static int calculateTaxiFare(double distanceKm, {double multiplier = 1.0}) {
     final safeDistance = distanceKm.isFinite && distanceKm > 0 ? distanceKm : 0;
@@ -132,7 +132,7 @@ class AppConfig {
     // تطبيق الـ multiplier (افتراضي 1.0 — تكسي اقتصادي فقط)
     rawFare = (rawFare * multiplier).round();
 
-    // تقريب للأعلى لأقرب 250
+    // تقريب لأقرب 250
     final roundedFare = roundFareToNearestStep(rawFare);
 
     if (roundedFare <= 0) return taxiFareRoundingStepIqd;

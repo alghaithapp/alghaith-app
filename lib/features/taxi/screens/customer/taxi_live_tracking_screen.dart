@@ -7,9 +7,11 @@ import '../../../../providers/app_provider.dart';
 import '../../../../utils/chat_navigation.dart';
 import '../../providers/taxi_provider.dart';
 import '../../services/taxi_places_service.dart';
+import '../../utils/taxi_labels.dart';
 import '../../utils/taxi_rating_navigation.dart';
 import '../../widgets/taxi_cancel_dialog.dart';
 import '../../widgets/taxi_driver_contact_buttons.dart';
+import '../../../../widgets/internal_contact_buttons.dart';
 import '../../widgets/taxi_map_widget.dart';
 import '../../widgets/taxi_plate_badge.dart';
 
@@ -71,13 +73,13 @@ class _TaxiLiveTrackingScreenState extends State<TaxiLiveTrackingScreen> {
     switch (statusKey) {
       case 'accepted':
       case 'on_way':
-        return 'السائق في الطريق إليك';
+        return 'الكابتن في الطريق إليك';
       case 'arrived':
-        return 'السائق وصل إلى موقعك';
+        return 'وصل الكابتن إلى موقعك';
       case 'picked_up':
         return 'أنت في الرحلة الآن';
       case 'cancel_requested':
-        return 'بانتظار موافقة السائق على الإلغاء';
+        return 'بانتظار موافقة الكابتن على الإلغاء';
       default:
         return 'جاري تتبع الرحلة';
     }
@@ -106,7 +108,7 @@ class _TaxiLiveTrackingScreenState extends State<TaxiLiveTrackingScreen> {
       requestId: id,
       otherPartyName: driverName?.trim().isNotEmpty == true
           ? driverName!.trim()
-          : 'السائق',
+          : TaxiLabels.theCaptain,
       receiverPhone: driverPhone,
     );
   }
@@ -120,7 +122,7 @@ class _TaxiLiveTrackingScreenState extends State<TaxiLiveTrackingScreen> {
         SnackBar(
           content: Text(
             request?.isCancelRequested == true
-                ? 'طلب الإلغاء قيد المراجعة من السائق'
+                ? 'طلب الإلغاء قيد المراجعة من الكابتن'
                 : 'لا يمكن إلغاء الطلب حالياً',
             style: const TextStyle(fontFamily: 'Cairo'),
           ),
@@ -138,7 +140,7 @@ class _TaxiLiveTrackingScreenState extends State<TaxiLiveTrackingScreen> {
     if (ok) {
       final updated = provider.currentRequest;
       final message = updated?.isCancelRequested == true
-          ? 'تم إرسال طلب الإلغاء — بانتظار موافقة السائق'
+          ? 'تم إرسال طلب الإلغاء — بانتظار موافقة الكابتن'
           : 'تم إلغاء الرحلة';
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -287,7 +289,7 @@ class _TaxiLiveTrackingScreenState extends State<TaxiLiveTrackingScreen> {
                           const Icon(Icons.schedule, color: Colors.white, size: 18),
                           const SizedBox(width: 8),
                           Text(
-                            'وصول السائق خلال ${request.liveEtaLabelAr}',
+                            'وصول الكابتن خلال ${request.liveEtaLabelAr}',
                             style: const TextStyle(
                               fontFamily: 'Cairo',
                               fontSize: 14,
@@ -317,7 +319,7 @@ class _TaxiLiveTrackingScreenState extends State<TaxiLiveTrackingScreen> {
                         border: Border.all(color: Colors.orange.shade200),
                       ),
                       child: const Text(
-                        'جاري تحديث موقع السائق...',
+                        'جاري تحديث موقع الكابتن...',
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           fontFamily: 'Cairo',
@@ -414,7 +416,7 @@ class _TaxiLiveTrackingScreenState extends State<TaxiLiveTrackingScreen> {
                                         CrossAxisAlignment.start,
                                     children: [
                                       Text(
-                                        request?.driverName ?? 'السائق',
+                                        request?.driverName ?? TaxiLabels.theCaptain,
                                         style: const TextStyle(
                                           fontFamily: 'Cairo',
                                           fontSize: 18,
@@ -459,9 +461,24 @@ class _TaxiLiveTrackingScreenState extends State<TaxiLiveTrackingScreen> {
                             if (request?.driverPhone?.trim().isNotEmpty ==
                                 true) ...[
                               const SizedBox(height: 12),
+                              InternalContactButtons.taxi(
+                                requestId: request!.id,
+                                otherPartyName: request.driverName ?? TaxiLabels.theCaptain,
+                                chatLabel: 'مراسلة داخلية',
+                                callLabel: 'اتصال داخلي',
+                              ),
+                              const SizedBox(height: 8),
                               TaxiDriverContactButtons(
-                                driverPhone: request?.driverPhone,
-                                driverName: request?.driverName ?? 'السائق',
+                                driverPhone: request.driverPhone,
+                                driverName: request.driverName ?? TaxiLabels.theCaptain,
+                              ),
+                            ] else if (request != null) ...[
+                              const SizedBox(height: 12),
+                              InternalContactButtons.taxi(
+                                requestId: request.id,
+                                otherPartyName: request.driverName ?? TaxiLabels.theCaptain,
+                                chatLabel: 'مراسلة داخلية',
+                                callLabel: 'اتصال داخلي',
                               ),
                             ],
                             const SizedBox(height: 16),

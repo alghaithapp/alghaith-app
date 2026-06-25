@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import '../../providers/taxi_provider.dart';
 import '../../models/taxi_request.dart';
 import '../../widgets/taxi_type_image.dart';
+import '../../utils/taxi_labels.dart';
 import '../../utils/taxi_rating_navigation.dart';
 import 'taxi_live_tracking_screen.dart';
 import '../../../../core/theme/app_colors.dart';
@@ -166,7 +167,7 @@ class _TaxiWaitingScreenState extends State<TaxiWaitingScreen> {
     if (ok) {
       final updated = provider.currentRequest;
       final message = updated?.isCancelRequested == true
-          ? 'تم إرسال طلب الإلغاء — بانتظار موافقة السائق'
+          ? 'تم إرسال طلب الإلغاء — بانتظار موافقة الكابتن'
           : 'تم إلغاء الرحلة';
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -246,7 +247,7 @@ class _TaxiWaitingScreenState extends State<TaxiWaitingScreen> {
                 ? _createError!
                 : _isCreating
                     ? 'جاري إرسال طلبك...'
-                    : 'جاري البحث عن سائق قريب...';
+                    : 'جاري البحث عن كابتن قريب...';
             final waitingType = request?.taxiType ??
                 TaxiTypeX.fromApiName(widget.createParams?.taxiType);
 
@@ -294,7 +295,7 @@ class _TaxiWaitingScreenState extends State<TaxiWaitingScreen> {
                           Text(
                             _createError != null
                                 ? 'تعذر إرسال الطلب'
-                                : 'بانتظار سائق...',
+                                : 'بانتظار كابتن...',
                             style: const TextStyle(
                               fontFamily: 'Cairo',
                               fontSize: 18,

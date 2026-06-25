@@ -5,8 +5,11 @@ import 'package:supabase_flutter/supabase_flutter.dart' show PostgresChangeEvent
 
 import '../../../services/supabase_service.dart';
 import '../models/taxi_request.dart';
+import '../models/taxi_favorite_place.dart';
+import '../models/taxi_saved_place_use.dart';
 import '../models/driver_model.dart';
 import '../services/taxi_api_service.dart';
+import '../services/taxi_favorites_service.dart';
 
 /// مزود حالة التكسي (Provider) — يدير الطلبات، السائقين القريبين، والـ Polling
 class TaxiProvider extends ChangeNotifier {
@@ -21,6 +24,9 @@ class TaxiProvider extends ChangeNotifier {
   String? _error;
   Timer? _pollTimer;
   Timer? _incomingPoolTimer;
+  List<TaxiFavoritePlace> _favoritePlaces = [];
+  TaxiPendingSavedPlace? _pendingSavedPlace;
+  TaxiRequest? _pendingTripReplay;
   RealtimeChannel? _activeRequestChannel;
   RealtimeChannel? _incomingRequestChannel;
   double? _incomingPollLat;
@@ -67,6 +73,68 @@ class TaxiProvider extends ChangeNotifier {
   bool get isOnline => _isOnline;
 
   String? get error => _error;
+
+  List<TaxiFavoritePlace> get favoritePlaces =>
+      List<TaxiFavoritePlace>.unmodifiable(_favoritePlaces);
+
+  TaxiPendingSavedPlace? get pendingSavedPlace => _pendingSavedPlace;
+
+  void setPendingSavedPlace(TaxiFavoritePlace place, TaxiSavedPlaceField field) {
+    _pendingSavedPlace = TaxiPendingSavedPlace(place: place, field: field);
+    notifyListeners();
+  }
+
+  TaxiPendingSavedPlace? takePendingSavedPlace() {
+    final pending = _pendingSavedPlace;
+    _pendingSavedPlace = null;
+    return pending;
+  }
+
+  TaxiRequest? get pendingTripReplay => _pendingTripReplay;
+
+  void setPendingTripReplay(TaxiRequest request) {
+    _pendingTripReplay = request;
+    notifyListeners();
+  }
+
+  TaxiRequest? takePendingTripReplay() {
+    final trip = _pendingTripReplay;
+    _pendingTripReplay = null;
+    return trip;
+  }
+
+  Future<void> loadFavoritePlaces() async {
+    try {
+      _favoritePlaces = await TaxiFavoritesService.loadPlaces();
+      notifyListeners();
+    } catch (_) {}
+  }
+
+  Future<bool> saveFavoritePlace(TaxiFavoritePlace place) async {
+    try {
+      _favoritePlaces = await TaxiFavoritesService.savePlace(place);
+      _error = null;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _error = e.toString();
+      notifyListeners();
+      return false;
+    }
+  }
+
+  Future<bool> deleteFavoritePlace(String id) async {
+    try {
+      _favoritePlaces = await TaxiFavoritesService.deletePlace(id);
+      _error = null;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _error = e.toString();
+      notifyListeners();
+      return false;
+    }
+  }
 
   int get todayTrips => completedRequests.length;
 
@@ -602,6 +670,9 @@ class TaxiProvider extends ChangeNotifier {
     _nearbyDrivers = [];
     _isOnline = false;
     _error = null;
+    _favoritePlaces = [];
+    _pendingSavedPlace = null;
+    _pendingTripReplay = null;
     notifyListeners();
   }
 

@@ -102,12 +102,14 @@ class PushNotificationInbox {
 
     if (eventKey == 'chat:new') {
       final threadId = message.data['threadId']?.toString() ?? requestId;
-      await _showChatNotification(
-        id: 'chat:$threadId'.hashCode,
-        title: title,
-        body: body,
-        payload: _encodeChatPayload(message.data),
-      );
+      if (message.notification == null) {
+        await _showChatNotification(
+          id: 'chat:$threadId'.hashCode,
+          title: title,
+          body: body,
+          payload: _encodeChatPayload(message.data),
+        );
+      }
       return;
     }
 

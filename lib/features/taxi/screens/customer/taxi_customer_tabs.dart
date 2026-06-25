@@ -8,10 +8,12 @@ import '../../widgets/taxi_type_image.dart';
 import '../../widgets/taxi_plate_badge.dart';
 import '../../widgets/taxi_order_tracking_map.dart';
 import '../../utils/taxi_rating_navigation.dart';
+import '../../utils/taxi_labels.dart';
 import 'taxi_live_tracking_screen.dart';
 import '../../../../utils/helpers.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../widgets/taxi_driver_contact_buttons.dart';
+import '../../../../widgets/internal_contact_buttons.dart';
 
 /// تبويب طلبي الحالي.
 class TaxiCurrentRequestTab extends StatefulWidget {
@@ -285,7 +287,7 @@ class _TaxiCurrentRequestTabState extends State<TaxiCurrentRequestTab> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const Text(
-                        'معلومات السائق',
+                        'معلومات الكابتن',
                         style: TextStyle(
                           fontFamily: 'Cairo',
                           fontSize: 16,
@@ -298,7 +300,7 @@ class _TaxiCurrentRequestTabState extends State<TaxiCurrentRequestTab> {
                         'الاسم',
                         (request.driverName?.trim().isNotEmpty == true)
                             ? request.driverName!
-                            : 'سائق',
+                            : TaxiLabels.captain,
                       ),
                       if (request.vehicleModelDisplay.isNotEmpty) ...[
                         const SizedBox(height: 8),
@@ -341,10 +343,19 @@ class _TaxiCurrentRequestTabState extends State<TaxiCurrentRequestTab> {
                       ],
                       if (request.hasAssignedDriver) ...[
                         const SizedBox(height: 12),
-                        TaxiDriverContactButtons(
-                          driverPhone: request.driverPhone,
-                          driverName: request.driverName ?? 'السائق',
+                        InternalContactButtons.taxi(
+                          requestId: request.id,
+                          otherPartyName: request.driverName ?? TaxiLabels.theCaptain,
+                          chatLabel: 'مراسلة داخلية',
+                          callLabel: 'اتصال داخلي',
                         ),
+                        if (request.driverPhone?.trim().isNotEmpty == true) ...[
+                          const SizedBox(height: 8),
+                          TaxiDriverContactButtons(
+                            driverPhone: request.driverPhone,
+                            driverName: request.driverName ?? TaxiLabels.theCaptain,
+                          ),
+                        ],
                       ],
                     ],
                   ),
@@ -469,12 +480,12 @@ class _TaxiCurrentRequestTabState extends State<TaxiCurrentRequestTab> {
   String _statusLabel(String key) {
     switch (key) {
       case 'pending':
-        return 'بانتظار سائق';
+        return 'بانتظار كابتن';
       case 'accepted':
       case 'on_way':
-        return 'السائق في الطريق';
+        return 'الكابتن في الطريق';
       case 'arrived':
-        return 'السائق في مكان الالتقاء';
+        return 'الكابتن في مكان الالتقاء';
       case 'picked_up':
         return 'تم الاستلام';
       case 'completed':
@@ -482,7 +493,7 @@ class _TaxiCurrentRequestTabState extends State<TaxiCurrentRequestTab> {
       case 'cancelled':
         return 'ملغية';
       case 'cancel_requested':
-        return 'بانتظار موافقة السائق على الإلغاء';
+        return 'بانتظار موافقة الكابتن على الإلغاء';
       default:
         return key;
     }
@@ -491,7 +502,9 @@ class _TaxiCurrentRequestTabState extends State<TaxiCurrentRequestTab> {
 
 /// تبويب سجل الطلبات.
 class TaxiHistoryTab extends StatelessWidget {
-  const TaxiHistoryTab({super.key});
+  const TaxiHistoryTab({super.key, this.onReplayTrip});
+
+  final ValueChanged<TaxiRequest>? onReplayTrip;
 
   @override
   Widget build(BuildContext context) {
@@ -540,8 +553,10 @@ class TaxiHistoryTab extends StatelessWidget {
           child: ListView.builder(
             padding: const EdgeInsets.all(12),
             itemCount: requests.length,
-            itemBuilder: (context, index) =>
-                _HistoryTripCard(request: requests[index]),
+            itemBuilder: (context, index) => _HistoryTripCard(
+              request: requests[index],
+              onReplayTrip: onReplayTrip,
+            ),
           ),
         );
       },
@@ -551,7 +566,12 @@ class TaxiHistoryTab extends StatelessWidget {
 
 class _HistoryTripCard extends StatelessWidget {
   final TaxiRequest request;
-  const _HistoryTripCard({required this.request});
+  final ValueChanged<TaxiRequest>? onReplayTrip;
+
+  const _HistoryTripCard({
+    required this.request,
+    this.onReplayTrip,
+  });
 
   String _formatDate(DateTime? date) {
     if (date == null) return '--';
@@ -737,7 +757,7 @@ class _HistoryTripCard extends StatelessWidget {
                     ),
                     const SizedBox(width: 8),
                     Text(
-                      'تقييم السائق',
+                      'تقييم الكابتن',
                       style: TextStyle(
                         fontFamily: 'Cairo',
                         fontSize: 12,
@@ -754,7 +774,7 @@ class _HistoryTripCard extends StatelessWidget {
                         TaxiRatingNavigation.openIfNeeded(context, request),
                     icon: const Icon(Icons.star_border, size: 18),
                     label: const Text(
-                      'قيّم السائق',
+                      'قيّم الكابتن',
                       style: TextStyle(fontFamily: 'Cairo'),
                     ),
                     style: TextButton.styleFrom(
@@ -763,6 +783,25 @@ class _HistoryTripCard extends StatelessWidget {
                     ),
                   ),
                 ),
+            ],
+            if (request.canReplayTrip && onReplayTrip != null) ...[
+              const SizedBox(height: 10),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: () => onReplayTrip!(request),
+                  icon: const Icon(Icons.replay_rounded, size: 18),
+                  label: const Text(
+                    'إعادة الطلب',
+                    style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w600),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.primary,
+                    side: const BorderSide(color: AppColors.primary),
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                  ),
+                ),
+              ),
             ],
           ],
         ),
@@ -878,7 +917,7 @@ class TaxiSupportTab extends StatelessWidget {
             ),
             const SizedBox(height: 16),
             Text(
-              'ساعات العمل: ٨ صباحاً - ١٠ مساءً',
+              'ساعات العمل: من ٩ صباحاً إلى ١٢ ليلاً',
               style: TextStyle(
                 fontFamily: 'Cairo',
                 fontSize: 13,

@@ -5,8 +5,8 @@ import 'package:provider/provider.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../../providers/app_provider.dart';
-import '../../../../utils/chat_navigation.dart';
 import '../../../../utils/helpers.dart';
+import '../../../../widgets/internal_contact_buttons.dart';
 import '../../models/taxi_request.dart';
 
 /// شاشة الرحلات النشطة للسائق — تقرأ من AppProvider مباشرة
@@ -259,26 +259,16 @@ class _ActiveTripCardState extends State<_ActiveTripCard> {
             const SizedBox(height: 10),
 
             // الزبون
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    '${req.customerNameAr} • ${req.fare} د.ع',
-                    style: const TextStyle(fontFamily: 'Cairo', fontSize: 13),
-                  ),
-                ),
-                if (req.customerPhone.trim().isNotEmpty)
-                  IconButton(
-                    tooltip: 'مراسلة الزبون',
-                    onPressed: () => ChatNavigation.openTaxiChat(
-                      context,
-                      requestId: req.id,
-                      otherPartyName: req.customerNameAr,
-                      receiverPhone: req.customerPhone,
-                    ),
-                    icon: const Icon(Icons.chat_bubble_outline, size: 20),
-                  ),
-              ],
+            Text(
+              '${req.customerNameAr} • ${req.fare} د.ع',
+              style: const TextStyle(fontFamily: 'Cairo', fontSize: 13),
+            ),
+            const SizedBox(height: 8),
+            InternalContactButtons.taxi(
+              requestId: req.id,
+              otherPartyName: req.customerNameAr,
+              chatLabel: 'مراسلة',
+              callLabel: 'اتصال داخلي',
             ),
             const SizedBox(height: 6),
 

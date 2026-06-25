@@ -7,6 +7,8 @@ import 'package:provider/provider.dart';
 
 import 'package:flutter/cupertino.dart';
 import '../../models/taxi_request.dart';
+import '../../models/taxi_favorite_place.dart';
+import '../../models/taxi_saved_place_use.dart';
 import '../../providers/taxi_provider.dart';
 import '../../utils/taxi_distance_calculator.dart';
 import '../../utils/taxi_fare_calculator.dart';
@@ -20,6 +22,10 @@ import '../../services/taxi_places_service.dart';
 import '../../widgets/taxi_map_widget.dart';
 import '../../widgets/taxi_type_image.dart';
 import '../../widgets/taxi_driver_contact_buttons.dart';
+import '../../widgets/taxi_favorite_places_row.dart';
+import '../../widgets/taxi_saved_place_role_sheet.dart';
+import '../../utils/taxi_labels.dart';
+import '../../../../widgets/internal_contact_buttons.dart';
 
 /// شاشة طلب التكسي (مستوى الزبون)
 class TaxiRequestScreen extends StatefulWidget {
@@ -107,23 +113,126 @@ class _TaxiRequestScreenState extends State<TaxiRequestScreen> {
     if (!mounted) return;
     _applyActiveRequestState(taxi.currentRequest);
     if (!mounted) return;
+    await _applyPendingSavedPlaceIfAny();
+    if (!mounted) return;
+    await _applyPendingTripReplayIfAny();
+    if (!mounted) return;
     await _autoSetPickupFromCurrentLocation(taxi.currentRequest);
+  }
+
+  Future<void> _applyPendingTripReplayIfAny() async {
+    final trip = context.read<TaxiProvider>().takePendingTripReplay();
+    if (trip == null) return;
+    await _applyTripReplay(trip);
+  }
+
+  Future<void> _applyTripReplay(TaxiRequest request) async {
+    if (!request.canReplayTrip) return;
+
+    for (final stop in _stops) {
+      stop.dispose();
+    }
+    _stops.clear();
+
+    _pickupController.text = request.pickupAddress;
+    _dropoffController.text = request.dropoffAddress;
+    _pickupCoord = LatLng(request.pickupLat, request.pickupLng);
+    _dropoffCoord = LatLng(request.dropoffLat, request.dropoffLng);
+    _selectedTaxiType = request.taxiType;
+
+    for (final wp in request.waypoints) {
+      if (wp.address.trim().isEmpty || wp.lat.abs() <= 0.001 || wp.lng.abs() <= 0.001) {
+        continue;
+      }
+      final draft = _TripStopDraft();
+      draft.controller.text = wp.address;
+      draft.coord = LatLng(wp.lat, wp.lng);
+      _stops.add(draft);
+    }
+
+    _isPickupField = false;
+    _isSettingPickupByTap = false;
+    _showCarSelection = true;
+    _suggestions = [];
+    _editingStopIndex = null;
+    FocusScope.of(context).unfocus();
+
+    if (_stops.isEmpty) {
+      await _fetchRoute(_pickupCoord!, _dropoffCoord!);
+    } else {
+      await _refreshRouteWithStops();
+    }
+
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _applyPendingSavedPlaceIfAny() async {
+    final pending = context.read<TaxiProvider>().takePendingSavedPlace();
+    if (pending == null) return;
+    await _applySavedPlace(pending.place, pending.field);
+  }
+
+  Future<void> _promptAndApplySavedPlace(TaxiFavoritePlace place) async {
+    final field = await showTaxiSavedPlaceRoleSheet(context, place: place);
+    if (field == null || !mounted) return;
+    await _applySavedPlace(place, field);
+  }
+
+  Future<void> _applySavedPlace(
+    TaxiFavoritePlace place,
+    TaxiSavedPlaceField field,
+  ) async {
+    _showCarSelection = false;
+    _suggestions = [];
+    _editingStopIndex = null;
+    FocusScope.of(context).unfocus();
+
+    if (field == TaxiSavedPlaceField.dropoff) {
+      _dropoffController.text = place.address;
+      _dropoffCoord = place.coord;
+      _isPickupField = true;
+      _isSettingPickupByTap = true;
+      final pickup = _pickupCoord;
+      if (pickup != null) {
+        await _fetchRoute(pickup, place.coord);
+      }
+    } else {
+      _pickupController.text = place.address;
+      _pickupCoord = place.coord;
+      _isPickupField = false;
+      _isSettingPickupByTap = false;
+      final dropoff = _dropoffCoord;
+      if (dropoff != null) {
+        await _fetchRoute(place.coord, dropoff);
+      } else {
+        _dropoffFocus.requestFocus();
+      }
+    }
+
+    if (mounted) setState(() {});
   }
 
   /// عند فتح الخدمة: طلب إذن الموقع وتعيين الموقع الحالي كنقطة انطلاق.
   Future<void> _autoSetPickupFromCurrentLocation(TaxiRequest? request) async {
+    if (_pickupCoord != null || _dropoffCoord != null) return;
     if (request != null &&
         !request.isCompleted &&
         !request.isCancelled &&
         (request.hasAssignedDriver || request.isPending)) {
       return;
     }
-    await _getCurrentLocation(focusDropoffOnSuccess: true);
+    await _getCurrentLocation(focusDropoffOnSuccess: _dropoffCoord == null);
   }
 
   void _onTaxiProviderChanged() {
     if (!mounted) return;
     _applyActiveRequestState(context.read<TaxiProvider>().currentRequest);
+    if (context.read<TaxiProvider>().pendingSavedPlace != null) {
+      unawaited(_applyPendingSavedPlaceIfAny());
+    }
+    if (context.read<TaxiProvider>().pendingTripReplay != null) {
+      unawaited(_applyPendingTripReplayIfAny());
+    }
   }
 
   void _applyActiveRequestState(TaxiRequest? request) {
@@ -610,6 +719,10 @@ class _TaxiRequestScreenState extends State<TaxiRequestScreen> {
                       _editingStopIndex = null;
                       _isPickupField = false;
                     },
+                  ),
+                  const SizedBox(height: 10),
+                  TaxiFavoritePlacesRow(
+                    onSelected: (place) => _promptAndApplySavedPlace(place),
                   ),
                   for (var i = 0; i < _stops.length; i++) ...[
                     const SizedBox(height: 8),
@@ -1174,7 +1287,7 @@ class _ActiveTripBanner extends StatelessWidget {
                 child: Text(
                   request.isPickedUp
                       ? 'رحلتك جارية الآن'
-                      : 'السائق قبل طلبك',
+                      : '${TaxiLabels.theCaptain} قبل طلبك',
                   style: const TextStyle(
                     fontFamily: 'Cairo',
                     fontSize: 16,
@@ -1186,7 +1299,7 @@ class _ActiveTripBanner extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           const Text(
-            'تم إخفاء موقع الانطلاق والوجهة — تابع السائق من الخريطة.',
+            'تم إخفاء موقع الانطلاق والوجهة — تابع ${TaxiLabels.theCaptain} من الخريطة.',
             style: TextStyle(
               fontFamily: 'Cairo',
               fontSize: 13,
@@ -1194,12 +1307,20 @@ class _ActiveTripBanner extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 14),
-          if (request.hasAssignedDriver &&
-              request.driverPhone?.trim().isNotEmpty == true) ...[
-            TaxiDriverContactButtons(
-              driverPhone: request.driverPhone,
-              driverName: request.driverName ?? 'السائق',
+          if (request.hasAssignedDriver) ...[
+            InternalContactButtons.taxi(
+              requestId: request.id,
+              otherPartyName: request.driverName ?? TaxiLabels.theCaptain,
+              chatLabel: 'مراسلة داخلية',
+              callLabel: 'اتصال داخلي',
             ),
+            if (request.driverPhone?.trim().isNotEmpty == true) ...[
+              const SizedBox(height: 8),
+              TaxiDriverContactButtons(
+                driverPhone: request.driverPhone,
+                driverName: request.driverName ?? TaxiLabels.theCaptain,
+              ),
+            ],
             const SizedBox(height: 12),
           ],
           SizedBox(
@@ -1208,7 +1329,7 @@ class _ActiveTripBanner extends StatelessWidget {
               onPressed: onTrack,
               icon: const Icon(Icons.map_rounded, color: Colors.white),
               label: const Text(
-                'تتبع السائق',
+                'تتبع ${TaxiLabels.theCaptain}',
                 style: TextStyle(
                   fontFamily: 'Cairo',
                   fontWeight: FontWeight.w700,
@@ -1268,7 +1389,7 @@ class _PendingTripBanner extends StatelessWidget {
               SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  'لديك طلب قيد البحث عن سائق',
+                  'لديك طلب قيد البحث عن ${TaxiLabels.captain}',
                   style: TextStyle(
                     fontFamily: 'Cairo',
                     fontSize: 15,

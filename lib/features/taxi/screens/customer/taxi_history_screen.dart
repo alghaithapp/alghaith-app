@@ -278,7 +278,7 @@ class _TripCard extends StatelessWidget {
                   ),
                   const SizedBox(width: 8),
                   Text(
-                    'تقييم السائق',
+                    'تقييم الكابتن',
                     style: TextStyle(
                       fontFamily: 'Cairo',
                       fontSize: 12,

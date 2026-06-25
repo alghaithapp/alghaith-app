@@ -82,9 +82,13 @@ class InternalContactButtons extends StatelessWidget {
     );
   }
 
-  bool get _canCall =>
-      (receiverPhone?.trim().isNotEmpty ?? false) &&
-      MerchantProfileFields.isAcceptingCustomerCalls(merchantProfile);
+  bool get _canCall {
+    if (threadType == 'taxi' && threadId.trim().isNotEmpty) {
+      return MerchantProfileFields.isAcceptingCustomerCalls(merchantProfile);
+    }
+    return (receiverPhone?.trim().isNotEmpty ?? false) &&
+        MerchantProfileFields.isAcceptingCustomerCalls(merchantProfile);
+  }
 
   String? get _callsBlockedMessage =>
       MerchantProfileFields.callsUnavailableMessageAr(merchantProfile);
@@ -108,7 +112,7 @@ class InternalContactButtons extends StatelessWidget {
 
   Future<void> _startCall(BuildContext context) async {
     final phone = receiverPhone?.trim() ?? '';
-    if (phone.isEmpty) return;
+    if (phone.isEmpty && threadType != 'taxi') return;
 
     final blocked = _callsBlockedMessage;
     if (blocked != null) {
@@ -136,7 +140,7 @@ class InternalContactButtons extends StatelessWidget {
       threadType: threadType,
       threadId: threadId,
       otherPartyName: otherPartyName,
-      receiverPhone: phone,
+      receiverPhone: phone.isNotEmpty ? phone : null,
       merchantProfile: merchantProfile,
     );
   }

@@ -5,10 +5,13 @@ import 'package:provider/provider.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/ui/app_bottom_nav_style.dart';
 import '../../../../providers/app_provider.dart';
-import '../../../../screens/account_screen.dart';
 import '../../../../widgets/safe_bottom_bar.dart';
 import '../../providers/taxi_provider.dart';
+import '../../models/taxi_favorite_place.dart';
+import '../../models/taxi_saved_place_use.dart';
+import '../../models/taxi_request.dart';
 import '../../utils/taxi_rating_navigation.dart';
+import 'taxi_customer_account_screen.dart';
 import 'taxi_customer_tabs.dart';
 import 'taxi_request_screen.dart';
 
@@ -39,6 +42,7 @@ class _TaxiCustomerShellState extends State<TaxiCustomerShell> {
     provider.startPolling(phone: phone);
     await provider.loadActiveRequest();
     await provider.loadHistory();
+    await provider.loadFavoritePlaces();
     await provider.checkPendingRating();
   }
 
@@ -49,6 +53,40 @@ class _TaxiCustomerShellState extends State<TaxiCustomerShell> {
   }
 
   void _openMapTab() => setState(() => _currentIndex = 0);
+
+  void _useSavedPlaceForTrip(TaxiFavoritePlace place, TaxiSavedPlaceField field) {
+    context.read<TaxiProvider>().setPendingSavedPlace(place, field);
+    _openMapTab();
+  }
+
+  void _replayTripFromHistory(TaxiRequest request) {
+    final provider = context.read<TaxiProvider>();
+    final active = provider.currentRequest;
+    if (active != null && !active.isCompleted && !active.isCancelled) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'لديك طلب نشط حالياً. أكمله أو ألغِه قبل إعادة طلب رحلة سابقة.',
+            style: TextStyle(fontFamily: 'Cairo'),
+          ),
+        ),
+      );
+      return;
+    }
+    if (!request.canReplayTrip) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'لا يمكن إعادة هذه الرحلة — بيانات المسار غير متوفرة.',
+            style: TextStyle(fontFamily: 'Cairo'),
+          ),
+        ),
+      );
+      return;
+    }
+    provider.setPendingTripReplay(request);
+    _openMapTab();
+  }
 
   void _openBottomTab(int tabIndex) {
     setState(() => _currentIndex = tabIndex + 1);
@@ -76,14 +114,20 @@ class _TaxiCustomerShellState extends State<TaxiCustomerShell> {
             _TaxiTabPage(
               title: 'سجل الطلبات',
               onBackToMap: _openMapTab,
-              child: const TaxiHistoryTab(),
+              child: TaxiHistoryTab(onReplayTrip: _replayTripFromHistory),
             ),
             _TaxiTabPage(
               title: 'تواصل معنا',
               onBackToMap: _openMapTab,
               child: const TaxiSupportTab(),
             ),
-            const AccountScreen(),
+            _TaxiTabPage(
+              title: 'حسابي',
+              onBackToMap: _openMapTab,
+              child: TaxiCustomerAccountScreen(
+                onUseSavedPlace: _useSavedPlaceForTrip,
+              ),
+            ),
           ],
         ),
         bottomNavigationBar: SafeBottomBar(

@@ -3,6 +3,11 @@ const router = express.Router();
 const { normalizeTaxiType } = require('../services/taxi_pricing_service');
 const repo = require('../supabase_repo/taxi');
 const { getUserState } = require('../supabase_repo/users');
+const {
+  getTaxiFavoritePlaces,
+  saveTaxiFavoritePlace,
+  deleteTaxiFavoritePlace,
+} = require('../supabase_repo/taxi_favorites');
 const { requireOptionalAuthorizedPhone } = require('./_middleware');
 
 function formatRequestRow(row) {
@@ -287,6 +292,45 @@ router.get('/incoming-requests', async (req, res) => {
   } catch (error) {
     console.error('taxi incoming-requests error:', error);
     return res.status(500).json({ message: error?.message || 'Failed to get incoming requests.' });
+  }
+});
+
+// GET /db/taxi/favorite-places — أماكن مفضلة للزبون
+router.get('/favorite-places', async (req, res) => {
+  try {
+    const phone = requireOptionalAuthorizedPhone(req, res);
+    if (!phone) return;
+    const places = await getTaxiFavoritePlaces(phone);
+    return res.json(places);
+  } catch (error) {
+    console.error('taxi favorite-places get error:', error);
+    return res.status(500).json({ message: error?.message || 'Failed to load favorite places.' });
+  }
+});
+
+// PUT /db/taxi/favorite-places — حفظ/تحديث مكان مفضل
+router.put('/favorite-places', async (req, res) => {
+  try {
+    const phone = requireOptionalAuthorizedPhone(req, res);
+    if (!phone) return;
+    const places = await saveTaxiFavoritePlace(phone, req.body || {});
+    return res.json(places);
+  } catch (error) {
+    console.error('taxi favorite-places save error:', error);
+    return res.status(500).json({ message: error?.message || 'Failed to save favorite place.' });
+  }
+});
+
+// DELETE /db/taxi/favorite-places/:id — حذف مكان مفضل
+router.delete('/favorite-places/:id', async (req, res) => {
+  try {
+    const phone = requireOptionalAuthorizedPhone(req, res);
+    if (!phone) return;
+    const places = await deleteTaxiFavoritePlace(phone, req.params.id);
+    return res.json(places);
+  } catch (error) {
+    console.error('taxi favorite-places delete error:', error);
+    return res.status(500).json({ message: error?.message || 'Failed to delete favorite place.' });
   }
 });
 

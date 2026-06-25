@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:latlong2/latlong.dart';
 
 import '../models/taxi_request.dart';
+import '../utils/taxi_labels.dart';
 import 'taxi_map_widget.dart';
 import '../../../core/theme/app_colors.dart';
 
@@ -22,13 +23,13 @@ class TaxiOrderTrackingMap extends StatelessWidget {
     switch (request.statusKey) {
       case 'accepted':
       case 'on_way':
-        return 'السائق في الطريق إليك';
+        return 'الكابتن في الطريق إليك';
       case 'arrived':
-        return 'السائق وصل إلى موقعك';
+        return 'وصل الكابتن إلى موقعك';
       case 'picked_up':
         return 'أنت في الرحلة الآن';
       default:
-        return 'تتبع السائق مباشرة';
+        return 'تتبع الكابتن مباشرة';
     }
   }
 
@@ -115,7 +116,7 @@ class TaxiOrderTrackingMap extends StatelessWidget {
                           borderRadius: BorderRadius.circular(10),
                         ),
                         child: const Text(
-                          'جاري تحديث موقع السائق على الخريطة...',
+                          'جاري تحديث موقع الكابتن على الخريطة...',
                           textAlign: TextAlign.center,
                           style: TextStyle(
                             fontFamily: 'Cairo',
@@ -133,7 +134,7 @@ class TaxiOrderTrackingMap extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(16, 10, 16, 14),
             child: Row(
               children: const [
-                _MapLegendDot(color: Colors.green, label: 'السائق'),
+                _MapLegendDot(color: Colors.green, label: 'الكابتن'),
                 SizedBox(width: 14),
                 _MapLegendDot(color: Colors.blue, label: 'الانطلاق'),
                 SizedBox(width: 14),

@@ -4,9 +4,10 @@ import 'package:provider/provider.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../models/taxi_request.dart';
 import '../../providers/taxi_provider.dart';
+import '../../utils/taxi_labels.dart';
 import '../../widgets/taxi_plate_badge.dart';
 
-/// شاشة تقييم السائق بعد اكتمال الرحلة.
+/// شاشة تقييم الكابتن بعد اكتمال الرحلة.
 class TaxiRatingScreen extends StatefulWidget {
   final TaxiRequest request;
 
@@ -92,7 +93,7 @@ class _TaxiRatingScreenState extends State<TaxiRatingScreen> {
     final request = widget.request;
     final driverName = request.driverName?.trim().isNotEmpty == true
         ? request.driverName!.trim()
-        : 'السائق';
+        : TaxiLabels.theCaptain;
 
     return PopScope(
       canPop: false,
@@ -142,7 +143,7 @@ class _TaxiRatingScreenState extends State<TaxiRatingScreen> {
               ),
               const SizedBox(height: 6),
               Text(
-                'كيف كانت تجربتك مع السائق؟',
+                'كيف كانت تجربتك مع الكابتن؟',
                 style: TextStyle(
                   fontFamily: 'Cairo',
                   fontSize: 15,

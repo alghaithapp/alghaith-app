@@ -2,8 +2,9 @@ import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../utils/helpers.dart';
+import '../utils/taxi_labels.dart';
 
-/// تواصل الزبون مع السائق عبر الهاتف وواتساب (رقم السائق مباشرة).
+/// تواصل الزبون مع الكابتن عبر الهاتف وواتساب (رقم الكابتن مباشرة).
 class TaxiDriverContactButtons extends StatelessWidget {
   final String? driverPhone;
   final String driverName;
@@ -11,7 +12,7 @@ class TaxiDriverContactButtons extends StatelessWidget {
   const TaxiDriverContactButtons({
     super.key,
     required this.driverPhone,
-    this.driverName = 'السائق',
+    this.driverName = TaxiLabels.theCaptain,
   });
 
   String? get _phone {
@@ -28,7 +29,7 @@ class TaxiDriverContactButtons extends StatelessWidget {
   Future<void> _whatsappDriver() async {
     final phone = _phone;
     if (phone == null) return;
-    final name = driverName.trim().isNotEmpty ? driverName.trim() : 'السائق';
+    final name = driverName.trim().isNotEmpty ? driverName.trim() : TaxiLabels.theCaptain;
     await AppHelpers.launchWhatsApp(
       phone,
       'مرحباً $name، أنا زبون رحلة تكسي في تطبيق الغيث.',
@@ -39,7 +40,7 @@ class TaxiDriverContactButtons extends StatelessWidget {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
         content: Text(
-          'رقم السائق غير متوفر حالياً',
+          'رقم الكابتن غير متوفر حالياً',
           style: TextStyle(fontFamily: 'Cairo'),
         ),
       ),

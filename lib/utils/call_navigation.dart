@@ -24,7 +24,7 @@ class CallNavigation {
     required String threadType,
     required String threadId,
     required String otherPartyName,
-    required String receiverPhone,
+    String? receiverPhone,
     String? callerName,
     Map<String, dynamic>? merchantProfile,
   }) async {
@@ -344,13 +344,13 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
         );
       } else {
         final receiver = widget.receiverPhone?.trim() ?? '';
-        if (receiver.isEmpty) {
+        if (receiver.isEmpty && widget.threadType != 'taxi') {
           throw StateError('رقم الطرف الآخر غير متوفر.');
         }
         session = await VoiceCallService.startCall(
           threadType: widget.threadType,
           threadId: widget.threadId,
-          receiverPhone: receiver,
+          receiverPhone: receiver.isNotEmpty ? receiver : null,
           callerName: widget.callerName,
         );
         _callLogId = session.callLogId;

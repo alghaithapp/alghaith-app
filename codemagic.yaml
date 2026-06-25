@@ -1,4 +1,5 @@
 # Codemagic — بناء iOS لتطبيق الغيث ورفعه إلى TestFlight
+# يُشغَّل تلقائياً عند كل push على فرع main، ويمكن أيضاً تشغيله يدوياً.
 # التوثيق: https://docs.codemagic.io/yaml-quick-start/building-a-flutter-app/
 #
 # مهم: إذا ظهر خطأ Scheme "Runner" not found أثناء "Install Flutter dependencies"
@@ -41,8 +42,14 @@ workflows:
         # أضِف MAPBOX_PUBLIC_TOKEN (pk.eyJ...) في Codemagic (Secure) و/أو Railway.
         # بدونها يُحمّل المفتاح من GET /maps/public-token على الخادم عند تشغيل التطبيق.
 
-    # البناء يدوي فقط من Codemagic → Start new build → ios-release
-    # (لا يُشغَّل تلقائياً عند push على main)
+    triggering:
+      events:
+        - push
+      branch_patterns:
+        - pattern: main
+          include: true
+          source: true
+      cancel_previous_builds: true
 
     scripts:
       # يجب توليد ملفات iOS قبل use-profiles حتى يُعثر Codemagic على Scheme Runner
