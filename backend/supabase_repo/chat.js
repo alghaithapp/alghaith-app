@@ -411,5 +411,6 @@ module.exports = {
   getChatMessages,
   getChatInbox,
   saveChatMessage,
+  resolveReceiverPhone,
   SUPPORT_PLATFORM_PHONE,
 };

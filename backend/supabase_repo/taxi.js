@@ -98,6 +98,20 @@ function formatTaxiRequestForClient(row) {
   };
 }
 
+/** إخفاء رقم الزبون عن واجهة السائق — التواصل عبر التطبيق فقط */
+function hideCustomerPhoneFromTaxiRequest(request) {
+  if (!request) return null;
+  return {
+    ...request,
+    customerPhone: '',
+    phone: '',
+  };
+}
+
+function formatTaxiRequestForDriver(row) {
+  return hideCustomerPhoneFromTaxiRequest(formatTaxiRequestForClient(row));
+}
+
 async function enrichTaxiRequestForClient(row) {
   const base = formatTaxiRequestForClient(row);
   if (!base) return null;
@@ -971,6 +985,8 @@ async function getDriverIncomingRequests(driverPhone, lat, lng, taxiType, radius
     statusKey: meta.statusKey,
     statusAr: meta.payload.statusAr || 'بانتظار سائق',
     distanceKm: roundedDistance,
+    customerPhone: '',
+    phone: '',
   });
 
   const withinRadius = [];
@@ -1268,6 +1284,8 @@ async function setDriverOnlineStatus(driverPhone, isOnline) {
 
 module.exports = {
   formatTaxiRequestForClient,
+  formatTaxiRequestForDriver,
+  hideCustomerPhoneFromTaxiRequest,
   enrichTaxiRequestForClient,
   readTaxiMeta,
   generateRequestNumber,

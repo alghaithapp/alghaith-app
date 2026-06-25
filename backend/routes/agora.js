@@ -16,6 +16,7 @@ const {
 const { getMerchantProfile } = require('../supabase_repo/merchants');
 const { merchantAcceptsCustomerCalls } = require('../services/merchant_working_hours');
 const { notifyIncomingCall } = require('../push_events');
+const { resolveReceiverPhone } = require('../supabase_repo/chat');
 
 router.get('/config', async (req, res) => {
   try {
@@ -112,11 +113,15 @@ router.post('/call', async (req, res) => {
 
     const threadType = String(req.body?.threadType || 'order').trim();
     const threadId = String(req.body?.threadId || '').trim();
-    const receiverPhone = String(req.body?.receiverPhone || '').trim();
+    let receiverPhone = String(req.body?.receiverPhone || '').trim();
     const callerName = String(req.body?.callerName || 'مستخدم').trim();
 
     if (!threadId) {
       return res.status(400).json({ message: 'threadId is required.' });
+    }
+    if (!receiverPhone) {
+      const resolved = await resolveReceiverPhone(threadType, threadId, phone, '');
+      receiverPhone = String(resolved || '').trim();
     }
     if (!receiverPhone) {
       return res.status(400).json({ message: 'receiverPhone is required.' });

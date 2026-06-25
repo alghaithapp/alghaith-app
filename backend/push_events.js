@@ -684,7 +684,7 @@ async function notifyChatMessage(receiverPhone, customerMessage) {
         category: 'chat',
       },
     },
-    { showSystemBanner: false }
+    { showSystemBanner: true }
   );
 }
 

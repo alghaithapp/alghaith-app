@@ -33,7 +33,12 @@ describe('Taxi Pricing Service', () => {
       expect(fareForType(5.0, 'economic')).toBe(3000);
     });
 
-    it('legacy super maps to economic pricing', () => {
+    it('rounds to nearest 250 IQD', () => {
+      const { roundFareToNearestStep } = require('../services/taxi_pricing_service');
+      expect(roundFareToNearestStep(1430)).toBe(1500);
+      expect(roundFareToNearestStep(1700)).toBe(1700);
+      expect(roundFareToNearestStep(1370)).toBe(1250);
+    });
       expect(fareForType(1.0, 'super')).toBe(1500);
     });
 

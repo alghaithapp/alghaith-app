@@ -143,7 +143,7 @@ Fares are calculated by `backend/services/taxi_pricing_service.js`.
 | 🟢 Economic | First 1 km = 1,000 IQD, then 500 IQD/km | 1,000 IQD | 50,000 IQD |
 | 🔵 Super | Economic × 1.3 | 1,500 IQD | 50,000 IQD |
 
-Fares are rounded up to the nearest 250 IQD.
+Fares are rounded to the nearest 250 IQD (e.g. 1430→1500, 1700→1700).
 
 ## Driver Matching
 

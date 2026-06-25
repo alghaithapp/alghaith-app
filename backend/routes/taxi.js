@@ -9,8 +9,22 @@ function formatRequestRow(row) {
   return repo.formatTaxiRequestForClient(row);
 }
 
-async function formatRequestRowEnriched(row) {
-  return repo.enrichTaxiRequestForClient(row);
+function formatDriverRequestRow(row) {
+  return repo.formatTaxiRequestForDriver(row);
+}
+
+function hideCustomerPhone(request) {
+  return repo.hideCustomerPhoneFromTaxiRequest(request);
+}
+
+async function formatRequestRowEnriched(row, { forDriver = false } = {}) {
+  const enriched = await repo.enrichTaxiRequestForClient(row);
+  if (!enriched || !forDriver) return enriched;
+  return {
+    ...enriched,
+    customerPhone: '',
+    phone: '',
+  };
 }
 
 // POST /db/taxi/create - إنشاء طلب جديد (يحسب السعر تلقائياً)
@@ -33,7 +47,7 @@ router.post('/accept', async (req, res) => {
     if (!phone) return;
     const { requestId, driverName, vehicleModel, plateNumber } = req.body || {};
     const result = await repo.acceptTaxiRequest(phone, requestId, { driverName, vehicleModel, plateNumber });
-    return res.json(result);
+    return res.json(hideCustomerPhone(result));
   } catch (error) {
     console.error('taxi accept error:', error);
     return res.status(500).json({ message: error?.message || 'Failed to accept taxi request.' });
@@ -91,7 +105,7 @@ router.post('/driver-location', async (req, res) => {
     const id = String(requestId || '').trim();
     await repo.updateDriverTripLocation(phone, id, Number(lat), Number(lng));
     const row = await require('../supabase_repo/common').selectSingle('taxi_requests', 'id', id);
-    return res.json(row ? await formatRequestRowEnriched(row) : null);
+    return res.json(row ? await formatRequestRowEnriched(row, { forDriver: true }) : null);
   } catch (error) {
     console.error('taxi driver-location error:', error);
     return res.status(500).json({ message: error?.message || 'Failed to update driver location.' });
@@ -107,7 +121,10 @@ router.post('/status', async (req, res) => {
     const result = await repo.updateTaxiRequestStatus(phone, requestId, statusKey);
     const row = await require('../supabase_repo/common').selectSingle('taxi_requests', 'id', requestId);
     if (row) {
-      return res.json(await formatRequestRowEnriched(row));
+      const driverPhone = String(row.driver_phone ?? '').trim();
+      const { phonesOverlap } = require('../supabase_repo/common');
+      const forDriver = phonesOverlap(phone, driverPhone);
+      return res.json(await formatRequestRowEnriched(row, { forDriver }));
     }
     return res.json(formatRequestRow(result));
   } catch (error) {
@@ -137,7 +154,7 @@ router.get('/driver-active', async (req, res) => {
     if (!phone) return;
     const request = await repo.getDriverActiveRequest(phone);
     if (!request) return res.json(null);
-    return res.json(await formatRequestRowEnriched(request));
+    return res.json(await formatRequestRowEnriched(request, { forDriver: true }));
   } catch (error) {
     console.error('taxi driver-active error:', error);
     return res.status(500).json({ message: error?.message || 'Failed to get driver active request.' });
@@ -191,7 +208,7 @@ router.get('/driver-history', async (req, res) => {
     const phone = requireOptionalAuthorizedPhone(req, res);
     if (!phone) return;
     const requests = await repo.getDriverHistory(phone);
-    return res.json((requests || []).map(formatRequestRow));
+    return res.json((requests || []).map(formatDriverRequestRow));
   } catch (error) {
     console.error('taxi driver-history error:', error);
     return res.status(500).json({ message: error?.message || 'Failed to get driver history.' });

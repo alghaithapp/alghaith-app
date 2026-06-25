@@ -9,6 +9,14 @@
 
 const MAX_FARE = 50000;
 const INCLUDED_KM = 2.0;
+const FARE_ROUNDING_STEP = 250;
+
+/** تقريب لأقرب 250 د.ع (1430→1500، 1700→1700، 1680→1750) */
+function roundFareToNearestStep(raw) {
+  const safe = Math.max(0, Math.round(Number(raw) || 0));
+  if (safe <= 0) return FARE_ROUNDING_STEP;
+  return Math.round(safe / FARE_ROUNDING_STEP) * FARE_ROUNDING_STEP;
+}
 
 const PRICING = {
   tuktuk: { base: 1000, extraKm: 250, min: 1000 },
@@ -34,7 +42,8 @@ function fareForType(distanceKm, taxiType) {
     ? base
     : base + Math.round((safeDistance - INCLUDED_KM) * extraKm);
 
-  return Math.min(Math.max(raw, min), MAX_FARE);
+  const bounded = Math.min(Math.max(raw, min), MAX_FARE);
+  return roundFareToNearestStep(bounded);
 }
 
 /**
@@ -50,4 +59,10 @@ function calculateFare(distanceKm, taxiType = 'economic') {
   return { fareEconomic, fareSuper: fare, fare };
 }
 
-module.exports = { calculateFare, normalizeTaxiType, fareForType };
+module.exports = {
+  calculateFare,
+  normalizeTaxiType,
+  fareForType,
+  roundFareToNearestStep,
+  FARE_ROUNDING_STEP,
+};
