@@ -164,11 +164,16 @@ class MerchantService extends ChangeNotifier {
   bool requiresMerchantLocationForService(String serviceId) =>
       serviceId == 'restaurant' || serviceId == 'product';
 
-  bool canPublishForService(String serviceId) =>
-      !requiresMerchantLocationForService(serviceId) ||
-      (merchantLatitude != null && merchantLongitude != null);
+  bool canPublishForService(String serviceId) {
+    if (!isMerchantServiceEnabled(serviceId)) return false;
+    return !requiresMerchantLocationForService(serviceId) ||
+        (merchantLatitude != null && merchantLongitude != null);
+  }
 
   void assertCanPublishForService(String serviceId) {
+    if (!isMerchantServiceEnabled(serviceId)) {
+      throw StateError('هذه الخدمة موقوفة حالياً. فعّلها من إعدادات المتجر أولاً.');
+    }
     if (canPublishForService(serviceId)) return;
     throw StateError(
       'يرجى تحديد موقع المتجر على الخريطة قبل نشر المنتجات.',
@@ -247,6 +252,25 @@ class MerchantService extends ChangeNotifier {
   }
 
   bool get merchantHasMultipleServices => merchantServiceIds.length > 1;
+
+  Map<String, bool> get merchantServiceEnabledMap =>
+      MerchantProfileFields.serviceEnabledMapForIds(
+        merchantServiceIds,
+        _merchantStore,
+      );
+
+  bool isMerchantServiceEnabled(String serviceId) {
+    final id = serviceId.trim();
+    if (id.isEmpty) return true;
+    return merchantServiceEnabledMap[id] ?? true;
+  }
+
+  void _writeServiceEnabledMap(Map<String, bool> map) {
+    if (_merchantStore == null) return;
+    final payload = MerchantProfileFields.serviceEnabledPayload(map);
+    _merchantStore!['serviceEnabled'] = payload;
+    _merchantStore!['service_enabled'] = payload;
+  }
 
   MerchantServiceLabels get merchantActiveLabels =>
       merchantServiceLabels(merchantActiveServiceId);
@@ -486,11 +510,66 @@ class MerchantService extends ChangeNotifier {
     }
     final updated = <String>[...current, normalized];
     _merchantStore!['serviceIds'] = updated;
+    _merchantStore!['service_ids'] = updated;
     _merchantStore!['activeServiceId'] = normalized;
+    _merchantStore!['active_service_id'] = normalized;
+    final enabled = Map<String, bool>.from(merchantServiceEnabledMap);
+    enabled[normalized] = true;
+    _writeServiceEnabledMap(enabled);
     final existingCategory =
         (_merchantStore?['category'] as String?)?.trim() ?? '';
     _merchantStore!['category'] =
         existingCategory.isNotEmpty ? existingCategory : updated.first;
+    notifyListeners();
+    await _persistMerchantStoreAndState();
+  }
+
+  Future<void> setMerchantServiceEnabled(
+    String serviceId,
+    bool enabled,
+  ) async {
+    if (_merchantStore == null) return;
+    final normalized = serviceId.trim();
+    if (normalized.isEmpty) return;
+    if (!merchantServiceIds.contains(normalized)) return;
+    final updated = Map<String, bool>.from(merchantServiceEnabledMap);
+    updated[normalized] = enabled;
+    _writeServiceEnabledMap(updated);
+    notifyListeners();
+    await _persistMerchantStoreAndState();
+  }
+
+  Future<void> removeMerchantService(String serviceId) async {
+    if (_merchantStore == null) return;
+    final normalized = serviceId.trim();
+    if (normalized.isEmpty) return;
+    final current = merchantServiceIds;
+    if (current.length <= 1) {
+      throw StateError('SERVICE_REMOVE_LAST');
+    }
+    if (!current.contains(normalized)) return;
+
+    final updated = current.where((id) => id != normalized).toList();
+    _merchantStore!['serviceIds'] = updated;
+    _merchantStore!['service_ids'] = updated;
+
+    final enabled = Map<String, bool>.from(merchantServiceEnabledMap)
+      ..remove(normalized);
+    _writeServiceEnabledMap(enabled);
+
+    final active = merchantActiveServiceId;
+    if (active == normalized) {
+      _merchantStore!['activeServiceId'] = updated.first;
+      _merchantStore!['active_service_id'] = updated.first;
+    }
+
+    final category = (_merchantStore?['category'] as String?)?.trim() ?? '';
+    if (category == normalized) {
+      _merchantStore!['category'] = updated.first;
+      _merchantStore!['primary_service_id'] = updated.first;
+      _merchantStore!['primaryServiceId'] = updated.first;
+    }
+
     notifyListeners();
     await _persistMerchantStoreAndState();
   }
@@ -1002,6 +1081,9 @@ class MerchantService extends ChangeNotifier {
             _merchantStore?['is_open'] ?? true,
         'service_ids': serviceIds,
         'active_service_id': _merchantStore?['activeServiceId'],
+        'service_enabled': MerchantProfileFields.serviceEnabledPayload(
+          merchantServiceEnabledMap,
+        ),
         'restaurant_category': _merchantStore?['restaurantCategory'],
         'professional_category_id':
             _merchantStore?['professionalCategoryId'],
@@ -1364,6 +1446,13 @@ class MerchantService extends ChangeNotifier {
           row['rejectionMessageAr']?.toString(),
       'serviceIds': _decodeStringList(row['service_ids']),
       'activeServiceId': row['active_service_id']?.toString(),
+      'serviceEnabled': MerchantProfileFields.serviceEnabledPayload(
+        MerchantProfileFields.serviceEnabledMapForIds(
+          _decodeStringList(row['service_ids']),
+          row,
+        ),
+      ),
+      'service_enabled': row['service_enabled'] ?? row['serviceEnabled'],
       'restaurantCategory': row['restaurant_category']?.toString(),
       'professionalCategoryId':
           row['professional_category_id']?.toString(),

@@ -78,26 +78,12 @@ class ShopRestaurantCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final profile = Map<String, dynamic>.from(data['profile'] as Map);
     final products = (data['products'] as List).cast<Map<String, dynamic>>();
-    final isOpen = profile['is_open'] as bool? ?? true;
-
-    final dbRating = profile['rating']?.toDouble() ?? 0.0;
-    final hasRating = dbRating > 0;
-    final ratingLabel = hasRating ? dbRating.toStringAsFixed(1) : 'جديد';
+    final isOpenNow = MerchantProfileFields.isAcceptingCustomerCalls(profile);
 
     final primaryOrange = const Color(0xFFF5A01D);
     final customerPhone =
         MerchantProfileFields.merchantInternalContactPhone(profile);
     final storeName = MerchantProfileFields.name(profile);
-
-    final productsCount = profile['totalProducts'] ?? products.length;
-    final dynamic completedOrdersRaw = profile['completedOrders'];
-    final ordersCount = (completedOrdersRaw is num && completedOrdersRaw > 0)
-        ? completedOrdersRaw.toString()
-        : '0';
-    final dynamic totalClientsRaw = profile['totalClients'];
-    final clientsCount = (totalClientsRaw is num && totalClientsRaw > 0)
-        ? totalClientsRaw.toString()
-        : '0';
 
     return Container(
       margin: const EdgeInsets.only(bottom: 20),
@@ -263,31 +249,20 @@ class ShopRestaurantCard extends StatelessWidget {
                           width: 8,
                           height: 8,
                           decoration: BoxDecoration(
-                            color: isOpen ? Colors.green : Colors.grey,
+                            color: isOpenNow ? Colors.green : Colors.grey,
                             shape: BoxShape.circle,
                           ),
                         ),
                         const SizedBox(width: 6),
                         Text(
-                          isOpen ? 'مفتوح الآن' : 'مغلق',
+                          isOpenNow ? 'مفتوح الآن' : 'مغلق',
                           style: TextStyle(
                             fontFamily: 'Cairo',
                             fontSize: 11,
                             fontWeight: FontWeight.w800,
-                            color: isOpen ? Colors.green : Colors.grey,
+                            color: isOpenNow ? Colors.green : Colors.grey,
                           ),
                         ),
-                        if (hasRating) ...[
-                          const SizedBox(width: 8),
-                          Container(width: 1, height: 14, color: Colors.grey.shade300),
-                          const SizedBox(width: 8),
-                          const Icon(Icons.star, color: Colors.amber, size: 14),
-                          const SizedBox(width: 4),
-                          Text(
-                            ratingLabel,
-                            style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 12),
-                          ),
-                        ],
                       ],
                     ),
                   ),
@@ -296,32 +271,7 @@ class ShopRestaurantCard extends StatelessWidget {
             ),
           ),
 
-          // 2. Stats Bar
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: Container(
-              padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
-              decoration: BoxDecoration(
-                color: const Color(0xFFF9F9F9),
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: const Color(0xFFEEEEEE)),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
-                children: [
-                  ShopStatItem(label: 'منتج', value: '$productsCount', icon: Icons.shopping_bag_outlined),
-                  _divider(),
-                  ShopStatItem(label: 'طلب', value: ordersCount, icon: Icons.shopping_cart_outlined),
-                  _divider(),
-                  ShopStatItem(label: 'عميل', value: clientsCount, icon: Icons.groups_outlined),
-                  _divider(),
-                  ShopStatItem(label: 'التقييم', value: ratingLabel, icon: Icons.star_outline_rounded, color: Colors.amber),
-                ],
-              ),
-            ),
-          ),
-
-          // 3. Product Gallery
+          // 2. Product Gallery
           if (products.isNotEmpty) ...[
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
@@ -357,7 +307,11 @@ class ShopRestaurantCard extends StatelessWidget {
                           child: ClipRRect(
                             borderRadius: BorderRadius.circular(15),
                             child: AppImage(
-                              imageData: products[idx]['image_base64'] ?? products[idx]['image'],
+                              imageData: ImageStorageService.resolveDisplayImage(
+                                imageBase64: products[idx]['image_base64']?.toString(),
+                                image: products[idx]['image']?.toString(),
+                                imageUrl: products[idx]['image_url']?.toString(),
+                              ),
                               fit: BoxFit.cover,
                             ),
                           ),
@@ -459,8 +413,6 @@ class ShopRestaurantCard extends StatelessWidget {
       ),
     );
   }
-
-  Widget _divider() => Container(width: 1, height: 24, color: Colors.grey.shade200);
 }
 
 // ── Stat Item ──────────────────────────────────────────────

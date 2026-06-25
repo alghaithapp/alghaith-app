@@ -5,8 +5,9 @@ import '../services/supabase_service.dart';
 import '../utils/dummy_data.dart';
 import '../utils/extensions.dart';
 import '../utils/guest_gate.dart';
-import '../utils/chat_navigation.dart';
 import '../utils/merchant_profile_fields.dart';
+import '../widgets/internal_contact_buttons.dart';
+import 'real_estate_form_screen.dart';
 import '../widgets/app_image.dart';
 import '../widgets/service_navigation_buttons.dart';
 
@@ -31,15 +32,23 @@ class _RealEstateListingsScreenState extends State<RealEstateListingsScreen> {
   final TextEditingController _searchController = TextEditingController();
   late Future<List<Map<String, dynamic>>> _futureListings;
   String? _selectedSubCategoryId;
+  String? _selectedNeighborhood;
+
+  bool get _isRentMode => widget.listingMode == 'rent';
+
+  void _reloadListings() {
+    _futureListings = SupabaseService.loadRealEstateListings(
+      subCategoryId: _selectedSubCategoryId,
+      listingMode: widget.listingMode,
+      neighborhood: _selectedNeighborhood,
+    );
+  }
 
   @override
   void initState() {
     super.initState();
     _selectedSubCategoryId = widget.subCategoryId;
-    _futureListings = SupabaseService.loadRealEstateListings(
-      subCategoryId: _selectedSubCategoryId,
-      listingMode: widget.listingMode,
-    );
+    _reloadListings();
   }
 
   @override
@@ -71,9 +80,22 @@ class _RealEstateListingsScreenState extends State<RealEstateListingsScreen> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          if (_isRentMode)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Text(
+                'عقارات متاحة للإيجار — تواصل مع المعلن للاستفسار',
+                style: TextStyle(
+                  fontFamily: 'Cairo',
+                  fontSize: 13,
+                  color: Colors.grey.shade700,
+                  height: 1.4,
+                ),
+              ),
+            ),
           CupertinoSearchTextField(
             controller: _searchController,
-            placeholder: 'ابحث عن عقار',
+            placeholder: _isRentMode ? 'ابحث عن عقار للإيجار' : 'ابحث عن عقار',
             onChanged: (_) => setState(() {}),
           ),
           const SizedBox(height: 12),
@@ -95,10 +117,8 @@ class _RealEstateListingsScreenState extends State<RealEstateListingsScreen> {
                   onSelected: (_) {
                     setState(() {
                       _selectedSubCategoryId = selected ? null : filter.id;
-                      _futureListings = SupabaseService.loadRealEstateListings(
-                        subCategoryId: _selectedSubCategoryId,
-                        listingMode: widget.listingMode,
-                      );
+                      _selectedNeighborhood = null;
+                      _reloadListings();
                     });
                   },
                   selectedColor: const Color(0xFFF5A01D),
@@ -129,6 +149,17 @@ class _RealEstateListingsScreenState extends State<RealEstateListingsScreen> {
               }
 
               final listings = snapshot.data ?? const [];
+              final neighborhoods = listings
+                  .map((entry) {
+                    final product =
+                        Map<String, dynamic>.from(entry['product'] as Map);
+                    return product['neighborhood']?.toString().trim() ?? '';
+                  })
+                  .where((value) => value.isNotEmpty)
+                  .toSet()
+                  .toList()
+                ..sort();
+
               final filtered = listings.where((entry) {
                 final product =
                     Map<String, dynamic>.from(entry['product'] as Map);
@@ -138,35 +169,130 @@ class _RealEstateListingsScreenState extends State<RealEstateListingsScreen> {
                     product['address']?.toString().toLowerCase() ?? '';
                 final descriptionAr =
                     product['description_ar']?.toString().toLowerCase() ?? '';
+                final neighborhood =
+                    product['neighborhood']?.toString().toLowerCase() ?? '';
                 if (query.isEmpty) return true;
                 return nameAr.contains(query) ||
                     address.contains(query) ||
-                    descriptionAr.contains(query);
+                    descriptionAr.contains(query) ||
+                    neighborhood.contains(query);
               }).toList();
 
-              if (filtered.isEmpty) {
-                return _EmptyState(
-                  message: query.isEmpty
-                      ? 'لا توجد عقارات منشورة بعد'
-                      : 'لا توجد نتائج مطابقة',
-                );
-              }
-
               return Column(
-                children: filtered.map((entry) {
-                  final product =
-                      Map<String, dynamic>.from(entry['product'] as Map);
-                  final merchant = entry['merchant'] is Map
-                      ? Map<String, dynamic>.from(entry['merchant'] as Map)
-                      : <String, dynamic>{};
-                  return _PropertyCard(
-                    product: product,
-                    merchant: merchant,
-                  );
-                }).toList(),
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  if (neighborhoods.isNotEmpty) ...[
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: Text(
+                        'فلترة حسب المنطقة (الحي)',
+                        style: TextStyle(
+                          fontFamily: 'Cairo',
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.grey.shade700,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    SizedBox(
+                      height: 40,
+                      child: ListView(
+                        scrollDirection: Axis.horizontal,
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.only(left: 8),
+                            child: FilterChip(
+                              label: const Text(
+                                'كل المناطق',
+                                style: TextStyle(fontFamily: 'Cairo'),
+                              ),
+                              selected: _selectedNeighborhood == null,
+                              onSelected: (_) {
+                                setState(() {
+                                  _selectedNeighborhood = null;
+                                  _reloadListings();
+                                });
+                              },
+                              selectedColor:
+                                  const Color(0xFFF5A01D).withValues(alpha: 0.25),
+                            ),
+                          ),
+                          ...neighborhoods.map((area) {
+                            final selected = _selectedNeighborhood == area;
+                            return Padding(
+                              padding: const EdgeInsets.only(left: 8),
+                              child: FilterChip(
+                                label: Text(
+                                  area,
+                                  style: const TextStyle(fontFamily: 'Cairo'),
+                                ),
+                                selected: selected,
+                                onSelected: (_) {
+                                  setState(() {
+                                    _selectedNeighborhood =
+                                        selected ? null : area;
+                                    _reloadListings();
+                                  });
+                                },
+                                selectedColor: const Color(0xFFF5A01D)
+                                    .withValues(alpha: 0.25),
+                              ),
+                            );
+                          }),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+                  if (filtered.isEmpty)
+                    _EmptyState(
+                      message: query.isEmpty
+                          ? (_isRentMode
+                              ? 'لا توجد عقارات للإيجار بعد'
+                              : 'لا توجد عقارات منشورة بعد')
+                          : 'لا توجد نتائج مطابقة',
+                    )
+                  else
+                    ...filtered.map((entry) {
+                      final product =
+                          Map<String, dynamic>.from(entry['product'] as Map);
+                      final merchant = entry['merchant'] is Map
+                          ? Map<String, dynamic>.from(entry['merchant'] as Map)
+                          : <String, dynamic>{};
+                      return _PropertyCard(
+                        product: product,
+                        merchant: merchant,
+                        isRent: _isRentMode,
+                      );
+                    }),
+                ],
               );
             },
           ),
+          if (_isRentMode) ...[
+            const SizedBox(height: 16),
+            OutlinedButton.icon(
+              onPressed: () {
+                if (!GuestGate.requireAccount(
+                  context,
+                  message: 'سجّل دخولك لنشر إعلان إيجار.',
+                )) {
+                  return;
+                }
+                Navigator.of(context).push(
+                  CupertinoPageRoute(
+                    builder: (_) => const RealEstateFormScreen(mode: 'rent'),
+                  ),
+                );
+              },
+              icon: const Icon(Icons.add),
+              label: const Text(
+                'نشر عقار للإيجار',
+                style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -176,10 +302,12 @@ class _RealEstateListingsScreenState extends State<RealEstateListingsScreen> {
 class _PropertyCard extends StatefulWidget {
   final Map<String, dynamic> product;
   final Map<String, dynamic> merchant;
+  final bool isRent;
 
   const _PropertyCard({
     required this.product,
     required this.merchant,
+    this.isRent = false,
   });
 
   @override
@@ -205,6 +333,17 @@ class _PropertyCardState extends State<_PropertyCard> {
     return const [];
   }
 
+  String _contactPhone() {
+    final product = widget.product;
+    final merchant = widget.merchant;
+    final merchantPhone =
+        MerchantProfileFields.merchantInternalContactPhone(merchant).trim();
+    if (product['merchant_phone']?.toString().trim().isNotEmpty == true) {
+      return product['merchant_phone'].toString().trim();
+    }
+    return merchantPhone;
+  }
+
   @override
   Widget build(BuildContext context) {
     final product = widget.product;
@@ -216,8 +355,6 @@ class _PropertyCardState extends State<_PropertyCard> {
         : product['image']?.toString();
 
     final merchantName = merchant['store_name']?.toString().trim();
-    final merchantPhone =
-        MerchantProfileFields.merchantInternalContactPhone(merchant).trim();
     final neighborhood = product['neighborhood']?.toString().trim();
     final facade = product['facade']?.toString().trim();
     final floors = product['floor_count'];
@@ -343,9 +480,9 @@ class _PropertyCardState extends State<_PropertyCard> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text(
-                            'السعر',
-                            style: TextStyle(
+                          Text(
+                            widget.isRent ? 'الإيجار' : 'السعر',
+                            style: const TextStyle(
                               fontFamily: 'Cairo',
                               color: Colors.grey,
                               fontSize: 12,
@@ -357,44 +494,27 @@ class _PropertyCardState extends State<_PropertyCard> {
                             style: const TextStyle(
                               fontFamily: 'Cairo',
                               fontWeight: FontWeight.w900,
-                              color: const Color(0xFFF5A01D),
+                              color: Color(0xFFF5A01D),
                               fontSize: 18,
                             ),
                           ),
                         ],
                       ),
                     ),
-                    FilledButton.icon(
-                      onPressed: merchantPhone.isEmpty &&
-                              (product['merchant_phone']?.toString().trim().isEmpty ?? true)
-                          ? null
-                          : () {
-                              if (!GuestGate.requireAccount(
-                                context,
-                                message: 'سجّل دخولك للتواصل مع المعلن.',
-                              )) {
-                                return;
-                              }
-                              final contact =
-                                  (product['merchant_phone']?.toString().trim().isNotEmpty == true)
-                                      ? product['merchant_phone'].toString().trim()
-                                      : merchantPhone.trim();
-                              if (contact.isEmpty) return;
-                              ChatNavigation.openStoreChat(
-                                context,
-                                merchantPhone: contact,
-                                storeName: merchantName ?? product['name_ar']?.toString() ?? 'المعلن',
-                                merchantProfile: merchant,
-                              );
-                            },
-                      icon: const Icon(Icons.chat_bubble_outline_rounded),
-                      label: const Text(
-                        'مراسلة',
-                        style: TextStyle(fontFamily: 'Cairo'),
-                      ),
-                    ),
                   ],
                 ),
+                if (_contactPhone().isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  InternalContactButtons.store(
+                    merchantPhone: _contactPhone(),
+                    storeName: merchantName ??
+                        product['name_ar']?.toString() ??
+                        'المعلن',
+                    chatLabel: widget.isRent ? 'استفسار إيجار' : 'مراسلة',
+                    callLabel: 'اتصال',
+                    merchantProfile: merchant,
+                  ),
+                ],
                 if (merchantName != null && merchantName.isNotEmpty) ...[
                   const SizedBox(height: 12),
                   Text(

@@ -11,6 +11,7 @@ import '../utils/chat_navigation.dart';
 import '../utils/guest_gate.dart';
 import '../utils/merchant_product_sections.dart';
 import '../utils/merchant_profile_fields.dart';
+import '../utils/merchant_service_labels.dart';
 import '../widgets/app_image.dart';
 import '../widgets/internal_contact_buttons.dart';
 import '../widgets/product_image_preview.dart';
@@ -132,6 +133,9 @@ class _ShoppingStoreMenuScreenState extends State<ShoppingStoreMenuScreen> {
             ShopStoreHeader(
               profile: widget.profile,
               merchantPhone: customerPhone,
+              chatLabel: widget.storeKind == MerchantStoreKind.restaurant
+                  ? 'مراسلة المطعم'
+                  : merchantChatLabelFromProfile(widget.profile),
             ),
             const SizedBox(height: 12),
             CupertinoSearchTextField(
@@ -265,11 +269,13 @@ class _ShoppingStoreMenuScreenState extends State<ShoppingStoreMenuScreen> {
 class ShopStoreHeader extends StatelessWidget {
   final Map<String, dynamic> profile;
   final String merchantPhone;
+  final String chatLabel;
 
   const ShopStoreHeader({
     super.key,
     required this.profile,
     required this.merchantPhone,
+    required this.chatLabel,
   });
 
   @override
@@ -332,7 +338,7 @@ class ShopStoreHeader extends StatelessWidget {
               merchantPhone: contactPhone,
               storeName: MerchantProfileFields.name(profile),
               merchantProfile: profile,
-              chatLabel: 'مراسلة داخل التطبيق',
+              chatLabel: chatLabel,
               callLabel: 'اتصال',
             ),
         ],
@@ -364,17 +370,14 @@ class ShopProductCard extends StatelessWidget {
     final isFavorite = context.select<AppProvider, bool>(
       (appProvider) => appProvider.isFavoriteId(productId),
     );
-    final price = (item['price'] as num?)?.toInt() ?? 0;
-    final imageBase64 = item['image_base64']?.toString();
-    final image = AppImage(
-      imageData: imageBase64 != null && imageBase64.isNotEmpty
-          ? imageBase64
-          : item['image']?.toString(),
+    final price = parseProductPrice(item);
+    final productImage = ImageStorageService.resolveDisplayImage(
+      imageBase64: item['image_base64']?.toString(),
+      image: item['image']?.toString(),
+      imageUrl: item['image_url']?.toString(),
     );
-
-    final imageSource = imageBase64 != null && imageBase64.isNotEmpty
-        ? imageBase64
-        : item['image']?.toString();
+    final image = AppImage(imageData: productImage);
+    final imageSource = productImage;
 
     return Stack(
       clipBehavior: Clip.none,

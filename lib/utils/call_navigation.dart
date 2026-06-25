@@ -285,6 +285,7 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
   bool _logFinalized = false;
   bool _wasConnected = false;
   bool _disposing = false;
+  Future<void>? _startCallFuture;
 
   @override
   void initState() {
@@ -296,7 +297,9 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
       if (!_wasConnected) return;
       _endCall(popRoute: true);
     };
-    WidgetsBinding.instance.addPostFrameCallback((_) => _startCall());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _startCallFuture = _startCall();
+    });
   }
 
   @override
@@ -304,8 +307,18 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
     _disposing = true;
     _voice.onStateChanged = null;
     _voice.onRemoteUserLeft = null;
-    unawaited(_cleanupCall());
+    unawaited(_disposeCallSafely());
     super.dispose();
+  }
+
+  Future<void> _disposeCallSafely() async {
+    final pendingStart = _startCallFuture;
+    if (pendingStart != null) {
+      try {
+        await pendingStart;
+      } catch (_) {}
+    }
+    await _cleanupCall();
   }
 
   Future<void> _cleanupCall() async {

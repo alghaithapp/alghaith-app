@@ -206,10 +206,12 @@ class SupabaseService {
   static Future<List<Map<String, dynamic>>> loadRealEstateListings({
     String? subCategoryId,
     String? listingMode,
+    String? neighborhood,
   }) =>
       _db.loadRealEstateListings(
         subCategoryId: subCategoryId,
         listingMode: listingMode,
+        neighborhood: neighborhood,
       );
 
   static Future<Map<String, dynamic>?> loadCustomerProfile(String phone) =>

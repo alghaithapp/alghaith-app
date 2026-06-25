@@ -3,10 +3,12 @@ import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
 
 import '../../providers/taxi_provider.dart';
+import '../../utils/taxi_rating_navigation.dart';
 import '../../widgets/taxi_map_widget.dart';
 import '../../widgets/taxi_plate_badge.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../utils/chat_navigation.dart';
+import '../../widgets/taxi_driver_contact_buttons.dart';
 
 /// شاشة التتبع المباشر — خريطة حقيقية + موقع السائق + بيانات الرحلة.
 class TaxiLiveTrackingScreen extends StatefulWidget {
@@ -83,6 +85,15 @@ class _TaxiLiveTrackingScreenState extends State<TaxiLiveTrackingScreen> {
         body: Consumer<TaxiProvider>(
           builder: (context, provider, _) {
             final request = provider.currentRequest;
+            final pendingRating = provider.tripAwaitingRating;
+
+            if (pendingRating != null) {
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (!mounted) return;
+                TaxiRatingNavigation.openIfNeeded(context, pendingRating);
+              });
+            }
+
             final pickup = request != null &&
                     request.pickupLat != 0 &&
                     request.pickupLng != 0
@@ -283,6 +294,13 @@ class _TaxiLiveTrackingScreenState extends State<TaxiLiveTrackingScreen> {
                                 ),
                               ],
                             ),
+                            if (request?.driverPhone?.trim().isNotEmpty == true) ...[
+                              const SizedBox(height: 12),
+                              TaxiDriverContactButtons(
+                                driverPhone: request?.driverPhone,
+                                driverName: request?.driverName ?? 'السائق',
+                              ),
+                            ],
                             const SizedBox(height: 16),
                             Container(
                               padding: const EdgeInsets.all(12),

@@ -9,16 +9,13 @@ import '../../screens/professionals_directory_screen.dart';
 import '../../screens/real_estate_deal_hub_screen.dart';
 import '../../screens/shopping_stores_screen.dart';
 import '../../screens/shopping_shared_widgets.dart';
-import '../../features/taxi/screens/customer/taxi_request_screen.dart';
+import '../../features/taxi/screens/customer/taxi_customer_shell.dart';
 import 'marketplace_catalog.dart';
 
 class MarketplaceRouter {
   const MarketplaceRouter._();
 
   static Widget screenForCategory(MarketplaceCategoryDefinition def, {bool hideBack = true}) {
-    if (def.id == 'eden_printing') {
-      return const EdenPrintingScreen();
-    }
     switch (def.entryMode) {
       case CategoryEntryMode.directStores:
         return ShoppingStoresScreen(
@@ -69,7 +66,7 @@ class MarketplaceRouter {
       if (sub.id == 'taxi_request') {
         Navigator.of(context, rootNavigator: true).push(
           CupertinoPageRoute(
-            builder: (_) => const TaxiRequestScreen(),
+            builder: (_) => const TaxiCustomerShell(),
           ),
         );
         return;
@@ -80,6 +77,15 @@ class MarketplaceRouter {
       Navigator.of(context).push(
         CupertinoPageRoute(
           builder: (_) => ProfessionalsDirectoryScreen(profession: sub),
+        ),
+      );
+      return;
+    }
+
+    if (category.id == 'eden_printing' && sub.id == 'jannat_aden') {
+      Navigator.of(context).push(
+        CupertinoPageRoute(
+          builder: (_) => const EdenPrintingScreen(),
         ),
       );
       return;

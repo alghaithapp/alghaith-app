@@ -11,7 +11,6 @@ import '../../providers/taxi_provider.dart';
 import '../../utils/taxi_distance_calculator.dart';
 import '../../utils/taxi_fare_calculator.dart';
 import 'taxi_waiting_screen.dart';
-import 'taxi_side_menu_screen.dart';
 import 'taxi_live_tracking_screen.dart';
 import '../../../../core/data/iraq_neighborhoods.dart';
 import '../../../../core/theme/app_colors.dart';
@@ -20,10 +19,18 @@ import '../../../../utils/guest_gate.dart';
 import '../../services/taxi_places_service.dart';
 import '../../widgets/taxi_map_widget.dart';
 import '../../widgets/taxi_type_image.dart';
+import '../../widgets/taxi_driver_contact_buttons.dart';
 
 /// شاشة طلب التكسي (مستوى الزبون)
 class TaxiRequestScreen extends StatefulWidget {
-  const TaxiRequestScreen({super.key});
+  const TaxiRequestScreen({
+    super.key,
+    this.onOpenCurrentOrderTab,
+    this.bottomNavInset = 0,
+  });
+
+  final VoidCallback? onOpenCurrentOrderTab;
+  final double bottomNavInset;
 
   @override
   State<TaxiRequestScreen> createState() => _TaxiRequestScreenState();
@@ -55,12 +62,27 @@ class _TaxiRequestScreenState extends State<TaxiRequestScreen> {
   /// نقاط المسار بين الانطلاق والوصول
   List<LatLng>? _routePoints;
 
+  /// مدة الرحلة بالثواني من Directions (أو تقدير من المسافة)
+  int? _routeDurationSeconds;
+
   /// عند النقر على الخريطة — true يعني تعيين موقع الانطلاق، false يعني تعيين الوصول
   bool _isSettingPickupByTap = true;
 
   bool get _hasBothLocations =>
       _pickupController.text.trim().isNotEmpty &&
       _dropoffController.text.trim().isNotEmpty;
+
+  int get _tripDurationSeconds {
+    final routeDuration = _routeDurationSeconds;
+    if (routeDuration != null && routeDuration > 0) return routeDuration;
+    if (_distanceKm > 0) {
+      return TaxiDistanceCalculator.estimateDrivingDurationSeconds(_distanceKm);
+    }
+    return 60;
+  }
+
+  String get _tripEtaLabel =>
+      'وقت الوصول: ${TaxiDistanceCalculator.formatDrivingDurationAr(_tripDurationSeconds)}';
 
   @override
   void initState() {
@@ -81,6 +103,19 @@ class _TaxiRequestScreenState extends State<TaxiRequestScreen> {
     await taxi.loadActiveRequest();
     if (!mounted) return;
     _applyActiveRequestState(taxi.currentRequest);
+    if (!mounted) return;
+    await _autoSetPickupFromCurrentLocation(taxi.currentRequest);
+  }
+
+  /// عند فتح الخدمة: طلب إذن الموقع وتعيين الموقع الحالي كنقطة انطلاق.
+  Future<void> _autoSetPickupFromCurrentLocation(TaxiRequest? request) async {
+    if (request != null &&
+        !request.isCompleted &&
+        !request.isCancelled &&
+        (request.hasAssignedDriver || request.isPending)) {
+      return;
+    }
+    await _getCurrentLocation(focusDropoffOnSuccess: true);
   }
 
   void _onTaxiProviderChanged() {
@@ -108,6 +143,7 @@ class _TaxiRequestScreenState extends State<TaxiRequestScreen> {
       _pickupCoord = null;
       _dropoffCoord = null;
       _routePoints = null;
+      _routeDurationSeconds = null;
       _showCarSelection = false;
       _suggestions = [];
       _distanceKm = 0;
@@ -187,41 +223,57 @@ class _TaxiRequestScreenState extends State<TaxiRequestScreen> {
 
     if (!mounted) return;
 
-    setState(() {
-      controller.text = address;
-      _suggestions = [];
-      _showCarSelection = false;
-
-      if (_isPickupField) {
+    if (_isPickupField) {
+      setState(() {
+        controller.text = address;
+        _suggestions = [];
+        _showCarSelection = false;
         _pickupCoord = coord;
         _dropoffCoord = null;
         _routePoints = null;
-        if (coord != null) {
-          _mapController?.animateCamera(
-            gmaps.CameraUpdate.newLatLngZoom(
-              gmaps.LatLng(coord.latitude, coord.longitude),
-              15.0,
-            ),
-          );
-        }
-      } else {
-        _dropoffCoord = coord;
-        if (_pickupCoord != null && coord != null) {
-          _fetchRoute(_pickupCoord!, coord);
-        }
+        _routeDurationSeconds = null;
+      });
+      if (coord != null) {
+        _mapController?.animateCamera(
+          gmaps.CameraUpdate.newLatLngZoom(
+            gmaps.LatLng(coord.latitude, coord.longitude),
+            15.0,
+          ),
+        );
       }
-    });
+    } else {
+      setState(() {
+        controller.text = address;
+        _suggestions = [];
+        _showCarSelection = false;
+        _dropoffCoord = coord;
+      });
+      final pickup = _pickupCoord;
+      if (pickup != null && coord != null) {
+        await _fetchRoute(pickup, coord);
+      }
+    }
     FocusScope.of(context).unfocus();
   }
 
   /// جلب المسار — Google Directions (مثل Google Maps) مع احتياط Mapbox.
   Future<void> _fetchRoute(LatLng from, LatLng to) async {
-    final points = await TaxiPlacesService.fetchDrivingRoute(from, to);
+    final route = await TaxiPlacesService.fetchDrivingRoute(from, to);
     if (!mounted) return;
     setState(() {
-      _routePoints = points.length >= 2 ? points : null;
+      _routePoints = route.points.length >= 2 ? route.points : null;
+      _routeDurationSeconds = route.durationSeconds;
+      final routeDistanceKm = route.distanceKm;
+      if (routeDistanceKm != null && routeDistanceKm > 0) {
+        _distanceKm = routeDistanceKm;
+        _fareTuktuk =
+            TaxiFareCalculator.fareForType(_distanceKm, TaxiType.tuktuk);
+        _fareWazz = TaxiFareCalculator.fareForType(_distanceKm, TaxiType.wazz);
+        _fareEconomic =
+            TaxiFareCalculator.fareForType(_distanceKm, TaxiType.economic);
+      }
     });
-    if (points.length >= 2) {
+    if (route.points.length >= 2) {
       await _fitMapToLocations();
     }
   }
@@ -268,7 +320,13 @@ class _TaxiRequestScreenState extends State<TaxiRequestScreen> {
     } catch (_) {}
   }
 
-  void _onRequestTrip() {
+  void _onRequestTrip() async {
+    final pickup = _pickupCoord;
+    final dropoff = _dropoffCoord;
+    if (pickup != null && dropoff != null && (_routePoints == null || _routePoints!.length < 2)) {
+      await _fetchRoute(pickup, dropoff);
+    }
+    if (!mounted) return;
     _calculateFares();
     setState(() => _showCarSelection = true);
   }
@@ -278,14 +336,17 @@ class _TaxiRequestScreenState extends State<TaxiRequestScreen> {
   }
 
   void _calculateFares() {
-    // استخدام الإحداثيات الحقيقية إن وُجدت
     final pickup = _pickupCoord ?? const LatLng(32.9256, 44.7766);
     final dropoff = _dropoffCoord ?? const LatLng(32.9300, 44.7800);
 
-    _distanceKm = TaxiDistanceCalculator.calculateDistance(
-      pickup.latitude, pickup.longitude,
-      dropoff.latitude, dropoff.longitude,
-    );
+    if (_distanceKm <= 0) {
+      _distanceKm = TaxiDistanceCalculator.calculateDistance(
+        pickup.latitude,
+        pickup.longitude,
+        dropoff.latitude,
+        dropoff.longitude,
+      );
+    }
     setState(() {
       _fareTuktuk =
           TaxiFareCalculator.fareForType(_distanceKm, TaxiType.tuktuk);
@@ -355,12 +416,6 @@ class _TaxiRequestScreenState extends State<TaxiRequestScreen> {
           elevation: 0,
           automaticallyImplyLeading: false,
           leading: const _TaxiBackButton(),
-          actions: const [
-            Padding(
-              padding: EdgeInsets.only(left: 15),
-              child: _TaxiMenuButton(),
-            ),
-          ],
         ),
         body: Stack(
           children: [
@@ -390,13 +445,7 @@ class _TaxiRequestScreenState extends State<TaxiRequestScreen> {
                       ),
                     );
                   },
-                  onOpenOrders: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => const TaxiSideMenuScreen(),
-                      ),
-                    );
-                  },
+                  onOpenOrders: widget.onOpenCurrentOrderTab,
                 ),
               ),
 
@@ -430,7 +479,9 @@ class _TaxiRequestScreenState extends State<TaxiRequestScreen> {
                     icon: Icons.my_location,
                     iconColor: AppColors.primary,
                     trailing: GestureDetector(
-                      onTap: _isGettingLocation ? null : _getCurrentLocation,
+                      onTap: _isGettingLocation
+                          ? null
+                          : () => _getCurrentLocation(),
                       child: Container(
                         width: 36, height: 36,
                         decoration: BoxDecoration(
@@ -518,7 +569,7 @@ class _TaxiRequestScreenState extends State<TaxiRequestScreen> {
             // ── زر "اطلب رحلة" (يظهر بعد تحديد الوجهة) ──
             if (!hideLocationFields && _hasBothLocations && !_showCarSelection)
               Positioned(
-                bottom: 40, left: 20, right: 20,
+                bottom: 40 + widget.bottomNavInset, left: 20, right: 20,
                 child: SizedBox(
                   width: double.infinity,
                   height: 56,
@@ -655,14 +706,14 @@ class _TaxiRequestScreenState extends State<TaxiRequestScreen> {
                                   color: AppColors.accent.withValues(alpha: 0.1),
                                   borderRadius: BorderRadius.circular(8),
                                 ),
-                                child: const Row(
+                                child: Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    Icon(Icons.access_time, size: 14, color: AppColors.accent),
-                                    SizedBox(width: 4),
+                                    const Icon(Icons.access_time, size: 14, color: AppColors.accent),
+                                    const SizedBox(width: 4),
                                     Text(
-                                      'وقت الوصول: 5 دقائق',
-                                      style: TextStyle(
+                                      _tripEtaLabel,
+                                      style: const TextStyle(
                                         fontFamily: 'Cairo',
                                         fontSize: 13,
                                         fontWeight: FontWeight.w600,
@@ -781,6 +832,8 @@ class _TaxiRequestScreenState extends State<TaxiRequestScreen> {
         _pickupCoord = latlng;
         _dropoffCoord = null;
         _routePoints = null;
+        _routeDurationSeconds = null;
+        _distanceKm = 0;
       });
       _mapController?.animateCamera(
         gmaps.CameraUpdate.newLatLngZoom(
@@ -806,7 +859,7 @@ class _TaxiRequestScreenState extends State<TaxiRequestScreen> {
   }
 
   /// الحصول على موقع الهاتف الحالي وتعيينه كنقطة انطلاق
-  Future<void> _getCurrentLocation() async {
+  Future<void> _getCurrentLocation({bool focusDropoffOnSuccess = false}) async {
     bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) {
       if (mounted) {
@@ -854,6 +907,9 @@ class _TaxiRequestScreenState extends State<TaxiRequestScreen> {
           _pickupCoord = latlng;
           _dropoffCoord = null;
           _routePoints = null;
+          _routeDurationSeconds = null;
+          _distanceKm = 0;
+          _isSettingPickupByTap = false;
         });
         _mapController?.animateCamera(
           gmaps.CameraUpdate.newLatLngZoom(
@@ -861,6 +917,9 @@ class _TaxiRequestScreenState extends State<TaxiRequestScreen> {
             15.0,
           ),
         );
+        if (focusDropoffOnSuccess) {
+          _dropoffFocus.requestFocus();
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -933,12 +992,12 @@ class _TaxiRequestScreenState extends State<TaxiRequestScreen> {
 class _ActiveTripBanner extends StatelessWidget {
   final TaxiRequest request;
   final VoidCallback onTrack;
-  final VoidCallback onOpenOrders;
+  final VoidCallback? onOpenOrders;
 
   const _ActiveTripBanner({
     required this.request,
     required this.onTrack,
-    required this.onOpenOrders,
+    this.onOpenOrders,
   });
 
   @override
@@ -987,6 +1046,14 @@ class _ActiveTripBanner extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 14),
+          if (request.hasAssignedDriver &&
+              request.driverPhone?.trim().isNotEmpty == true) ...[
+            TaxiDriverContactButtons(
+              driverPhone: request.driverPhone,
+              driverName: request.driverName ?? 'السائق',
+            ),
+            const SizedBox(height: 12),
+          ],
           SizedBox(
             height: 48,
             child: ElevatedButton.icon(
@@ -1008,14 +1075,16 @@ class _ActiveTripBanner extends StatelessWidget {
               ),
             ),
           ),
-          const SizedBox(height: 8),
-          TextButton(
-            onPressed: onOpenOrders,
-            child: const Text(
-              'فتح طلبي الحالي',
-              style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w600),
+          if (onOpenOrders != null) ...[
+            const SizedBox(height: 8),
+            TextButton(
+              onPressed: onOpenOrders,
+              child: const Text(
+                'فتح طلبي الحالي',
+                style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w600),
+              ),
             ),
-          ),
+          ],
         ],
       ),
     );
@@ -1110,39 +1179,6 @@ class _TaxiBackButton extends StatelessWidget {
             Icons.arrow_forward_ios_rounded,
             size: 28,
             color: AppColors.primary,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// زر القائمة الجانبية — في الزاوية اليسرى مقابل زر الرجوع
-class _TaxiMenuButton extends StatelessWidget {
-  const _TaxiMenuButton();
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: () {
-          Navigator.of(context).push(
-            MaterialPageRoute(builder: (_) => const TaxiSideMenuScreen()),
-          );
-        },
-        borderRadius: BorderRadius.circular(14),
-        child: Container(
-          width: 54,
-          height: 54,
-          decoration: BoxDecoration(
-            color: AppColors.primary,
-            borderRadius: BorderRadius.circular(14),
-          ),
-          child: const Icon(
-            Icons.menu,
-            color: Colors.white,
-            size: 28,
           ),
         ),
       ),

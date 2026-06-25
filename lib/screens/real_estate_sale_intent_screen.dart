@@ -5,52 +5,18 @@ import '../models/app_models.dart';
 import '../utils/dummy_data.dart';
 import '../widgets/app_image.dart';
 import '../widgets/service_navigation_buttons.dart';
-import 'real_estate_form_screen.dart';
-import 'real_estate_listings_screen.dart';
+import 'real_estate_type_hub_screen.dart';
 
-/// المستوى الثاني: أنواع العقار بعد اختيار شراء أو بيع أو إيجار.
-class RealEstateTypeHubScreen extends StatelessWidget {
-  final String dealId;
-  final String dealTitleAr;
+/// اختيار شراء أو بيع قبل نوع العقار.
+class RealEstateSaleIntentScreen extends StatelessWidget {
+  const RealEstateSaleIntentScreen({super.key});
 
-  const RealEstateTypeHubScreen({
-    super.key,
-    required this.dealId,
-    required this.dealTitleAr,
-  });
-
-  String get _subtitle {
-    switch (dealId) {
-      case 'buy':
-        return 'اختر نوع العقار ثم تصفّح الإعلانات مع فلترة حسب المنطقة';
-      case 'sell':
-        return 'اختر نوع العقار الذي تريد بيعه ثم أكمل بيانات الإعلان';
-      case 'rent_publish':
-        return 'اختر نوع العقار الذي تريد تأجيره ثم أكمل بيانات الإعلان';
-      default:
-        return 'اختر نوع العقار';
-    }
-  }
-
-  void _openType(BuildContext context, ServiceCategory type) {
-    if (dealId == 'sell' || dealId == 'rent_publish') {
-      Navigator.of(context).push(
-        CupertinoPageRoute(
-          builder: (_) => RealEstateFormScreen(
-            mode: dealId == 'rent_publish' ? 'rent' : 'sell',
-            initialSubCategoryId: type.id,
-          ),
-        ),
-      );
-      return;
-    }
-
+  void _openIntent(BuildContext context, ServiceCategory option) {
     Navigator.of(context).push(
       CupertinoPageRoute(
-        builder: (_) => RealEstateListingsScreen(
-          subCategoryId: type.id,
-          listingMode: dealId == 'rent' ? 'rent' : 'sell',
-          titleAr: '${dealTitleAr.trim()} — ${type.titleAr}',
+        builder: (_) => RealEstateTypeHubScreen(
+          dealId: option.id,
+          dealTitleAr: option.titleAr,
         ),
       ),
     );
@@ -58,23 +24,25 @@ class RealEstateTypeHubScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final types = DummyData.realEstateSubCategories;
+    final options = DummyData.realEstateSaleIntentOptions;
 
     return CupertinoPageScaffold(
       backgroundColor: const Color(0xFFF2F2F7),
-      navigationBar: ServiceNavigationBar(title: dealTitleAr),
+      navigationBar: const ServiceNavigationBar(
+        title: 'بيع وشراء العقارات',
+      ),
       child: SafeArea(
         child: CustomScrollView(
           physics: const BouncingScrollPhysics(),
           slivers: [
-            SliverToBoxAdapter(
+            const SliverToBoxAdapter(
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
+                padding: EdgeInsets.fromLTRB(20, 12, 20, 8),
                 child: Align(
                   alignment: Alignment.centerRight,
                   child: Text(
-                    _subtitle,
-                    style: const TextStyle(
+                    'اختر شراء (تصفّح الإعلانات) أو بيع (نشر إعلان)',
+                    style: TextStyle(
                       fontFamily: 'Cairo',
                       fontSize: 14,
                       color: CupertinoColors.systemGrey,
@@ -94,13 +62,13 @@ class RealEstateTypeHubScreen extends StatelessWidget {
                 ),
                 delegate: SliverChildBuilderDelegate(
                   (context, index) {
-                    final type = types[index];
-                    return _TypeCard(
-                      type: type,
-                      onTap: () => _openType(context, type),
+                    final option = options[index];
+                    return _IntentImageCard(
+                      option: option,
+                      onTap: () => _openIntent(context, option),
                     );
                   },
-                  childCount: types.length,
+                  childCount: options.length,
                 ),
               ),
             ),
@@ -111,12 +79,12 @@ class RealEstateTypeHubScreen extends StatelessWidget {
   }
 }
 
-class _TypeCard extends StatelessWidget {
-  final ServiceCategory type;
+class _IntentImageCard extends StatelessWidget {
+  final ServiceCategory option;
   final VoidCallback onTap;
 
-  const _TypeCard({
-    required this.type,
+  const _IntentImageCard({
+    required this.option,
     required this.onTap,
   });
 
@@ -139,7 +107,7 @@ class _TypeCard extends StatelessWidget {
         child: ClipRRect(
           borderRadius: BorderRadius.circular(16),
           child: AppImage(
-            imageData: type.image,
+            imageData: option.image,
             width: double.infinity,
             height: double.infinity,
             fit: BoxFit.cover,

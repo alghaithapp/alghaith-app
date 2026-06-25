@@ -95,7 +95,8 @@ router.get('/real-estate-listings', async (req, res) => {
   try {
     const subCategoryId = String(parseQueryValue(req.query.subCategoryId) || '').trim();
     const listingMode = String(parseQueryValue(req.query.listingMode) || '').trim();
-    const rows = await listRealEstateListings(subCategoryId, listingMode);
+    const neighborhood = String(parseQueryValue(req.query.neighborhood) || '').trim();
+    const rows = await listRealEstateListings(subCategoryId, listingMode, neighborhood);
     return res.json(rows);
   } catch (error) {
     console.error('list real-estate-listings error:', error);

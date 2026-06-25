@@ -1,4 +1,3 @@
-import '../../screens/eden_printing_screen.dart';
 import '../../models/app_models.dart';
 import '../../models/home_category_platform_override.dart';
 
@@ -244,13 +243,14 @@ class MarketplaceCatalog {
       titleAr: 'طباعة وإعلانات',
       titleEn: 'Printing & Advertising',
       image: 'assets/images/cat_eden_printing.png',
-      entryMode: CategoryEntryMode.directStores,
+      entryMode: CategoryEntryMode.subCategoryHub,
       apiServiceId: 'eden_printing',
       apiProductCategory: 'eden_printing',
-      hubTitleAr: 'مطبعة جنة عدن',
-      hubSubtitleAr: 'كل ما تحتاجه من خدمات الطباعة',
+      hubTitleAr: 'طباعة وإعلانات',
+      hubSubtitleAr: 'اختر المطبعة أو مزود الخدمة',
       storeTitleAr: 'مطبعة جنة عدن',
       storeSubtitleAr: 'خدمات طباعة احترافية',
+      subCategories: _edenPrintingSubCategories,
     ),
     MarketplaceCategoryDefinition(
       id: 'global_shopping',
@@ -456,6 +456,15 @@ class MarketplaceCatalog {
     MarketplaceSubCategory(id: 'farm', titleAr: 'مزرعة', titleEn: 'Farm', image: 'assets/images/re_farm.png', browseMode: SubCategoryBrowseMode.catalog),
   ];
 
+  static const List<MarketplaceSubCategory> _edenPrintingSubCategories = [
+    MarketplaceSubCategory(
+      id: 'jannat_aden',
+      titleAr: 'مطبعة جنة عدن',
+      titleEn: 'Jannat Aden Printing',
+      image: 'assets/images/cat_eden_printing1.png',
+    ),
+  ];
+
   static const List<MarketplaceSubCategory> _globalShoppingSubCategories = [
     MarketplaceSubCategory(id: 'china', titleAr: 'الصين', titleEn: 'China', image: 'assets/images/global_china.png'),
     MarketplaceSubCategory(id: 'iran', titleAr: 'إيران', titleEn: 'Iran', image: 'assets/images/global_iran.png'),
@@ -485,7 +494,6 @@ class MarketplaceCatalog {
     MarketplaceSubCategory(id: 'used_home_goods', titleAr: 'مواد منزلية مستعملة', titleEn: 'Used Home Goods', image: 'assets/images/shop_home_goods.png', browseMode: SubCategoryBrowseMode.catalog),
     MarketplaceSubCategory(id: 'used_electrical_appliances', titleAr: 'أجهزة كهربائية مستعملة', titleEn: 'Used Electrical Appliances', image: 'assets/images/shop_electronics.png', browseMode: SubCategoryBrowseMode.catalog),
     MarketplaceSubCategory(id: 'used_construction', titleAr: 'مواد إنشائية مستعملة', titleEn: 'Used Construction', image: 'assets/images/shop_construction.png', browseMode: SubCategoryBrowseMode.catalog),
-    MarketplaceSubCategory(id: 'used_school', titleAr: 'لوازم مكتبية ومدرسية مستعملة', titleEn: 'Used Office & School Supplies', image: 'assets/images/shop_school.png', browseMode: SubCategoryBrowseMode.catalog),
     MarketplaceSubCategory(id: 'used_shoes_bags', titleAr: 'أحذية وحقائب مستعملة', titleEn: 'Used Shoes & Bags', image: 'assets/images/shop_shoes_bags.png', browseMode: SubCategoryBrowseMode.catalog),
     MarketplaceSubCategory(id: 'used_kids_clothing', titleAr: 'ملابس أطفال مستعملة', titleEn: 'Used Kids Clothing', image: 'assets/images/shop_kids_clothing.png', browseMode: SubCategoryBrowseMode.catalog),
     MarketplaceSubCategory(id: 'used_women_clothing', titleAr: 'ملابس نسائية مستعملة', titleEn: 'Used Women Clothing', image: 'assets/images/shop_women_clothing.png', browseMode: SubCategoryBrowseMode.catalog),

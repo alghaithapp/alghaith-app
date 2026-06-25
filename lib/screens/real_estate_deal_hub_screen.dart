@@ -5,9 +5,11 @@ import '../models/app_models.dart';
 import '../utils/dummy_data.dart';
 import '../widgets/app_image.dart';
 import '../widgets/service_navigation_buttons.dart';
+import 'real_estate_listings_screen.dart';
+import 'real_estate_sale_intent_screen.dart';
 import 'real_estate_type_hub_screen.dart';
 
-/// المستوى الأول: شراء — بيع — إيجار.
+/// المستوى الأول: بيع وشراء — إيجار.
 class RealEstateDealHubScreen extends StatelessWidget {
   final bool hideBack;
   const RealEstateDealHubScreen({super.key, this.hideBack = false});
@@ -32,7 +34,7 @@ class RealEstateDealHubScreen extends StatelessWidget {
                   child: Align(
                   alignment: Alignment.centerRight,
                   child: Text(
-                    'بيع عقار — شراء عقار — إيجار عقار',
+                    'بيع وشراء العقارات — إيجار عقار',
                     style: TextStyle(
                       fontFamily: 'Cairo',
                       fontSize: 14,
@@ -56,14 +58,35 @@ class RealEstateDealHubScreen extends StatelessWidget {
                     final deal = deals[index];
                     return _DealCard(
                       deal: deal,
-                      onTap: () => Navigator.of(context).push(
-                        CupertinoPageRoute(
-                          builder: (_) => RealEstateTypeHubScreen(
-                            dealId: deal.id,
-                            dealTitleAr: deal.titleAr,
+                      onTap: () {
+                        if (deal.id == 'sale') {
+                          Navigator.of(context).push(
+                            CupertinoPageRoute(
+                              builder: (_) => const RealEstateSaleIntentScreen(),
+                            ),
+                          );
+                          return;
+                        }
+                        if (deal.id == 'rent') {
+                          Navigator.of(context).push(
+                            CupertinoPageRoute(
+                              builder: (_) => const RealEstateListingsScreen(
+                                listingMode: 'rent',
+                                titleAr: 'إيجار عقار',
+                              ),
+                            ),
+                          );
+                          return;
+                        }
+                        Navigator.of(context).push(
+                          CupertinoPageRoute(
+                            builder: (_) => RealEstateTypeHubScreen(
+                              dealId: deal.id,
+                              dealTitleAr: deal.titleAr,
+                            ),
                           ),
-                        ),
-                      ),
+                        );
+                      },
                     );
                   },
                   childCount: deals.length,

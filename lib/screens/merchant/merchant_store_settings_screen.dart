@@ -164,7 +164,7 @@ class _MerchantStoreSettingsScreenState
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'يمكنك إضافة خدمة جديدة لاحقًا من هنا، ثم التبديل بين خدماتك في أي وقت.',
+                  'يمكنك إضافة خدمة جديدة، تشغيلها أو إيقافها، أو حذفها (مع بقاء خدمة واحدة على الأقل).',
                   style: const TextStyle(
                     color: Colors.grey,
                     fontSize: 12,
@@ -173,28 +173,108 @@ class _MerchantStoreSettingsScreenState
                   ),
                 ),
                 const SizedBox(height: 12),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
+                Column(
                   children: serviceIds.map((serviceId) {
                     final service = DummyData.categories.firstWhere(
                       (category) => category.id == serviceId,
                       orElse: () => DummyData.categories.first,
                     );
-                    final selected = serviceId == provider.merchantActiveServiceId;
-                    return ChoiceChip(
-                      label: Text(
-                        service.titleAr,
-                        style: const TextStyle(fontFamily: 'Cairo'),
+                    final selected =
+                        serviceId == provider.merchantActiveServiceId;
+                    final enabled = provider.isMerchantServiceEnabled(serviceId);
+                    return Container(
+                      margin: const EdgeInsets.only(bottom: 10),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 10,
                       ),
-                      selected: selected,
-                      onSelected: (_) => provider.setMerchantActiveService(serviceId),
-                      selectedColor: AppColors.accent,
-                      backgroundColor: Colors.white,
-                      labelStyle: TextStyle(
-                        color: selected ? Colors.white : Colors.black87,
-                        fontFamily: 'Cairo',
-                        fontWeight: FontWeight.w700,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF7F8FC),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: selected
+                              ? AppColors.accent.withValues(alpha: 0.45)
+                              : const Color(0xFFE6E8F0),
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(12),
+                              onTap: () =>
+                                  provider.setMerchantActiveService(serviceId),
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 4,
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      service.titleAr,
+                                      style: TextStyle(
+                                        fontFamily: 'Cairo',
+                                        fontWeight: FontWeight.w800,
+                                        color: selected
+                                            ? AppColors.accent
+                                            : Colors.black87,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      selected
+                                          ? 'الخدمة النشطة للإدارة الآن'
+                                          : 'اضغط للتبديل إلى هذه الخدمة',
+                                      style: const TextStyle(
+                                        fontFamily: 'Cairo',
+                                        fontSize: 11,
+                                        color: Colors.grey,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                          Column(
+                            children: [
+                              Text(
+                                enabled ? 'مفعّلة' : 'موقوفة',
+                                style: TextStyle(
+                                  fontFamily: 'Cairo',
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                  color: enabled ? Colors.green : Colors.red,
+                                ),
+                              ),
+                              Switch.adaptive(
+                                value: enabled,
+                                activeColor: AppColors.accent,
+                                onChanged: (value) async {
+                                  await provider.setMerchantServiceEnabled(
+                                    serviceId,
+                                    value,
+                                  );
+                                },
+                              ),
+                            ],
+                          ),
+                          if (serviceIds.length > 1)
+                            IconButton(
+                              tooltip: 'حذف الخدمة',
+                              onPressed: () => _confirmRemoveService(
+                                context,
+                                provider,
+                                serviceId,
+                                service.titleAr,
+                              ),
+                              icon: const Icon(
+                                Icons.delete_outline_rounded,
+                                color: Colors.redAccent,
+                              ),
+                            ),
+                        ],
                       ),
                     );
                   }).toList(),
@@ -557,6 +637,55 @@ class _MerchantStoreSettingsScreenState
         ],
       ),
     );
+  }
+
+  Future<void> _confirmRemoveService(
+    BuildContext context,
+    AppProvider provider,
+    String serviceId,
+    String serviceTitleAr,
+  ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text(
+          'حذف الخدمة',
+          style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w900),
+        ),
+        content: Text(
+          'هل تريد حذف «$serviceTitleAr» من حسابك؟\nلن تظهر للزبائن في هذا القسم، لكن بياناتك السابقة تبقى محفوظة.',
+          style: const TextStyle(fontFamily: 'Cairo', height: 1.5),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('إلغاء', style: TextStyle(fontFamily: 'Cairo')),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Colors.redAccent),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('حذف', style: TextStyle(fontFamily: 'Cairo')),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+    try {
+      await provider.removeMerchantService(serviceId);
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('تم حذف خدمة $serviceTitleAr')),
+      );
+    } catch (error) {
+      if (!context.mounted) return;
+      final message = error.toString().contains('SERVICE_REMOVE_LAST')
+          ? 'يجب أن تبقى خدمة واحدة على الأقل في حسابك.'
+          : 'تعذر حذف الخدمة. حاول مرة أخرى.';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(message)),
+      );
+    }
   }
 
   Future<void> _pickStoreLocation() async {

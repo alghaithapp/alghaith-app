@@ -215,13 +215,18 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
       canPop: false,
       onPopInvokedWithResult: (didPop, result) async {
         if (didPop) return;
-        if (_currentIndex == 0) {
-          final canPop = await _homeNavigatorKey.currentState?.maybePop() ?? false;
-          if (canPop) return;
-        } else {
+
+        if (_currentIndex != 0) {
           setState(() => _currentIndex = 0);
           return;
         }
+
+        final homeNav = _homeNavigatorKey.currentState;
+        if (homeNav != null && homeNav.canPop()) {
+          homeNav.pop();
+          return;
+        }
+
         final shouldExit = await showDialog<bool>(
           context: context,
           barrierColor: Colors.black54,

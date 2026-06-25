@@ -7,6 +7,7 @@ import '../../services/supabase_service.dart';
 import '../../services/image_storage_service.dart';
 import '../../models/app_models.dart';
 import '../../utils/merchant_profile_fields.dart';
+import '../../utils/extensions.dart';
 import '../../core/utils/phone_utils.dart';
 
 class CustomerService extends ChangeNotifier {
@@ -456,7 +457,7 @@ class CustomerService extends ChangeNotifier {
       nameEn: row['name_en']?.toString() ?? '',
       descriptionAr: row['description_ar']?.toString() ?? '',
       descriptionEn: row['description_en']?.toString() ?? '',
-      price: (row['price'] as num?)?.toInt() ?? 0,
+      price: _resolveProductPrice(row),
       rating: (row['rating'] as num?)?.toDouble(),
       category: row['category']?.toString() ?? 'restaurant',
       originalCategory: row['category']?.toString() ?? 'restaurant',
@@ -468,6 +469,7 @@ class CustomerService extends ChangeNotifier {
       imageBase64: ImageStorageService.resolveDisplayImage(
         imageBase64: row['image_base64']?.toString(),
         image: row['image']?.toString(),
+        imageUrl: row['image_url']?.toString(),
       ),
       galleryImagesBase64: () {
         final raw = row['gallery_images_base64'];
@@ -533,4 +535,11 @@ class CustomerService extends ChangeNotifier {
     if (value is num) return value.toDouble();
     return double.tryParse(value?.toString() ?? '');
   }
+
+  int _toIntValue(dynamic value) {
+    if (value is num) return value.toInt();
+    return int.tryParse(value?.toString().trim() ?? '') ?? 0;
+  }
+
+  int _resolveProductPrice(Map<String, dynamic> row) => parseProductPrice(row);
 }

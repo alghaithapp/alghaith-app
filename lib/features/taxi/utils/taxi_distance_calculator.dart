@@ -23,4 +23,19 @@ class TaxiDistanceCalculator {
   }
 
   static double _toRadians(double degree) => degree * math.pi / 180;
+
+  /// تقدير مدة القيادة عند غياب بيانات Directions (متوسط ~28 كم/س في المدينة).
+  static int estimateDrivingDurationSeconds(double distanceKm) {
+    if (!distanceKm.isFinite || distanceKm <= 0) return 60;
+    const avgSpeedKmh = 28.0;
+    return ((distanceKm / avgSpeedKmh) * 3600).ceil().clamp(60, 6 * 3600);
+  }
+
+  static String formatDrivingDurationAr(int totalSeconds) {
+    final minutes = (totalSeconds / 60).ceil().clamp(1, 999);
+    if (minutes == 1) return 'دقيقة واحدة';
+    if (minutes == 2) return 'دقيقتان';
+    if (minutes <= 10) return '$minutes دقائق';
+    return '$minutes دقيقة';
+  }
 }

@@ -88,6 +88,27 @@ class TaxiApiService {
     return TaxiRequest.fromMap(Map<String, dynamic>.from(result));
   }
 
+  /// آخر رحلة مكتملة بانتظار التقييم
+  static Future<TaxiRequest?> getPendingRatingRequest() async {
+    final result = await ApiClient.instance.get('$_basePath/pending-rating');
+    if (result == null) return null;
+    return TaxiRequest.fromMap(Map<String, dynamic>.from(result));
+  }
+
+  /// تقييم السائق بعد الرحلة
+  static Future<TaxiRequest> rateTrip({
+    required String requestId,
+    required int rating,
+    String? comment,
+  }) async {
+    final result = await ApiClient.instance.post('$_basePath/rate', body: {
+      'requestId': requestId,
+      'rating': rating,
+      if (comment != null && comment.trim().isNotEmpty) 'comment': comment.trim(),
+    });
+    return TaxiRequest.fromMap(Map<String, dynamic>.from(result as Map));
+  }
+
   /// جلب تاريخ الطلبات للزبون
   static Future<List<TaxiRequest>> getHistory() async {
     final result = await ApiClient.instance.get('$_basePath/history');

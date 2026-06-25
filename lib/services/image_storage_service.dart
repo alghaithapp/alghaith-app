@@ -98,6 +98,11 @@ class ImageStorageService {
     void assignProfile(String? ref) {
       final value = ref?.trim();
       if (value == null || value.isEmpty) return;
+      if (isRemoteUrl(value)) {
+        payload['profile_image_url'] = value;
+        payload['profileImageUrl'] = value;
+        return;
+      }
       payload['profile_image_base64'] = value;
       payload['profileImageBase64'] = value;
     }
@@ -148,7 +153,7 @@ class ImageStorageService {
     if (isRemoteUrl(value)) {
       return {
         'image': value,
-        'image_base64': value,
+        'image_url': value,
       };
     }
     return {
@@ -187,11 +192,15 @@ class ImageStorageService {
     String? image,
     String? imageUrl,
   }) {
-    final primary = imageBase64?.trim();
-    if (primary != null && primary.isNotEmpty) return primary;
     final url = imageUrl?.trim();
-    if (url != null && url.isNotEmpty) return url;
+    if (url != null && url.isNotEmpty && isRemoteUrl(url)) return url;
     final path = image?.trim();
+    if (path != null && path.isNotEmpty && isRemoteUrl(path)) return path;
+    final primary = imageBase64?.trim();
+    if (primary != null && primary.isNotEmpty) {
+      if (isRemoteUrl(primary)) return primary;
+      return primary;
+    }
     if (path != null && path.isNotEmpty) return path;
     return null;
   }

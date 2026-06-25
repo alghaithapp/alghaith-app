@@ -82,6 +82,14 @@ function formatTaxiRequestForClient(row) {
     distanceKm: meta.distanceKm || payload.distanceKm || 0,
     driverLat: Number(payload.driverLat ?? 0) || null,
     driverLng: Number(payload.driverLng ?? 0) || null,
+    requestNumber: String(row.request_number ?? payload.requestNumber ?? '').trim(),
+    driverRating: Number(row.driver_rating ?? payload.driverRating ?? 0) || 0,
+    cashCollected: Boolean(row.cash_collected ?? payload.cashCollected ?? false),
+    acceptedAt: row.accepted_at ?? payload.acceptedAt ?? null,
+    completedAt: row.completed_at ?? payload.completedAt ?? null,
+    cancellationReason: row.cancellation_reason ?? payload.cancellationReason ?? null,
+    isPaid: Boolean(row.is_paid ?? payload.isPaid ?? false),
+    ratingComment: String(payload.ratingComment ?? '').trim() || null,
   };
 }
 
@@ -766,6 +774,110 @@ async function getDriverActiveRequest(driverPhone) {
   return Array.isArray(rows) && rows.length > 0 ? rows[0] : null;
 }
 
+async function updateDriverRatingStats(driverPhone, newRating) {
+  const phoneKey = await resolvePhoneKey(driverPhone);
+  if (!phoneKey) return;
+
+  const { saveUserState } = require('./users');
+  const state = (await getUserState(phoneKey)) || {};
+  const profile = { ...(state.driverProfile || {}) };
+  const prevRating = Number(profile.rating ?? 0);
+  const prevCount = Number(profile.ratingCount ?? 0);
+  const count = prevCount + 1;
+  const avg = prevCount > 0
+    ? Math.round(((prevRating * prevCount) + newRating) / count * 10) / 10
+    : newRating;
+
+  profile.rating = avg;
+  profile.ratingCount = count;
+  await saveUserState(phoneKey, { ...state, driverProfile: profile });
+}
+
+async function rateTaxiRequest(customerPhone, requestId, rating, comment) {
+  const normalizedPhone = await resolvePhoneKey(customerPhone);
+  const id = String(requestId || '').trim();
+  const stars = Number(rating);
+  if (!id) throw new Error('Request id is required.');
+  if (!Number.isFinite(stars) || stars < 1 || stars > 5) {
+    throw new Error('Rating must be between 1 and 5.');
+  }
+
+  const row = await selectSingle('taxi_requests', 'id', id);
+  if (!row) throw new Error('Request not found.');
+
+  const meta = readTaxiMeta(row);
+  if (!phonesOverlap(normalizedPhone, meta.customerPhone)) {
+    throw new Error('You are not authorized to rate this request.');
+  }
+  if (meta.statusKey !== 'completed') {
+    throw new Error('Only completed trips can be rated.');
+  }
+
+  const existingRating = Number(row.driver_rating ?? meta.payload.driverRating ?? 0);
+  if (existingRating > 0) {
+    throw new Error('This trip has already been rated.');
+  }
+
+  const trimmedComment = String(comment || '').trim().slice(0, 500);
+  const nextPayload = {
+    ...meta.payload,
+    driverRating: stars,
+    ratingComment: trimmedComment || undefined,
+    ratedAt: nowIso(),
+    updatedAt: nowIso(),
+  };
+
+  const dbUpdate = {
+    driver_rating: stars,
+    request_payload: nextPayload,
+    updated_at: nowIso(),
+  };
+
+  const updated = await updateRow('taxi_requests', 'id', id, dbUpdate);
+  if (meta.driverPhone) {
+    try {
+      await updateDriverRatingStats(meta.driverPhone, stars);
+    } catch (e) {
+      console.error('taxi driver rating stats error:', e?.message || e);
+    }
+  }
+
+  return formatTaxiRequestForClient(updated);
+}
+
+async function getCustomerPendingRatingRequest(customerPhone) {
+  const normalizedPhone = await resolvePhoneKey(customerPhone);
+  const variants = getPhoneVariants(normalizedPhone);
+  if (variants.length === 0) return null;
+
+  const rows = await selectMany(
+    'taxi_requests',
+    [
+      { method: 'in', column: 'phone', value: variants },
+      { method: 'eq', column: 'status_key', value: 'completed' },
+    ],
+    { column: 'completed_at', ascending: false },
+    10
+  );
+
+  const cutoffMs = Date.now() - 7 * 24 * 60 * 60 * 1000;
+  for (const row of rows) {
+    const payload = normalizeObject(row.request_payload);
+    const existingRating = Number(row.driver_rating ?? payload.driverRating ?? 0);
+    if (existingRating > 0) continue;
+
+    const completedAt = row.completed_at ?? payload.completedAt;
+    if (completedAt) {
+      const ts = Date.parse(completedAt);
+      if (!Number.isNaN(ts) && ts < cutoffMs) continue;
+    }
+
+    return row;
+  }
+
+  return null;
+}
+
 async function getCustomerHistory(customerPhone) {
   const normalizedPhone = await resolvePhoneKey(customerPhone);
   const variants = getPhoneVariants(normalizedPhone);
@@ -860,7 +972,9 @@ module.exports = {
   getDriverIncomingRequests,
   getCustomerActiveRequest,
   getDriverActiveRequest,
+  getCustomerPendingRatingRequest,
   getCustomerHistory,
   getDriverHistory,
+  rateTaxiRequest,
   setDriverOnlineStatus,
 };

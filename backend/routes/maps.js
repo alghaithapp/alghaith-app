@@ -70,6 +70,48 @@ function normalizeRouteProfile(value) {
   return 'driving';
 }
 
+async function computeDrivingRoute(origin, destination) {
+  const coordinates =
+    `${origin.longitude},${origin.latitude};${destination.longitude},${destination.latitude}`;
+  const params = new URLSearchParams({
+    alternatives: 'false',
+    overview: 'full',
+    geometries: 'geojson',
+    language: 'ar',
+    access_token: mapboxAccessToken,
+    continue_straight: 'false',
+  });
+  const response = await fetch(
+    `https://api.mapbox.com/directions/v5/mapbox/driving/${coordinates}?${params.toString()}`
+  );
+
+  if (!response.ok) {
+    const bodyText = await response.text();
+    throw new Error(bodyText || `Mapbox directions failed with status ${response.status}`);
+  }
+
+  const payload = await response.json();
+  const route = Array.isArray(payload?.routes) ? payload.routes[0] : null;
+  const geometry = route?.geometry;
+  const routeCoordinates = Array.isArray(geometry?.coordinates)
+    ? geometry.coordinates
+    : [];
+  if (!route || routeCoordinates.length < 2) {
+    throw new Error('No route geometry available between the selected points.');
+  }
+
+  const points = routeCoordinates.map((entry) => ({
+    latitude: Number(entry[1]),
+    longitude: Number(entry[0]),
+  }));
+
+  return {
+    points,
+    distanceMeters: Number(route.distance) || 0,
+    durationSeconds: Math.round(Number(route.duration) || 0),
+  };
+}
+
 async function computeRoadDistanceMeters(origin, destination, profile = 'driving') {
   const coordinates =
     `${origin.longitude},${origin.latitude};${destination.longitude},${destination.latitude}`;
@@ -210,6 +252,59 @@ router.post('/route-distance', async (req, res) => {
     console.error('route-distance error:', error);
     return res.status(500).json({
       message: error?.message || 'Failed to compute route distance.',
+    });
+  }
+});
+
+router.post('/driving-route', async (req, res) => {
+  try {
+    if (!mapboxAccessToken) {
+      return res.status(503).json({
+        message: 'MAPBOX_ACCESS_TOKEN is not configured on backend.',
+      });
+    }
+
+    const pickupAddress = String(req.body?.pickupAddress || '').trim();
+    const dropoffAddress = String(req.body?.dropoffAddress || '').trim();
+    const pickupLatitude = Number(req.body?.pickupLatitude);
+    const pickupLongitude = Number(req.body?.pickupLongitude);
+    const dropoffLatitude = Number(req.body?.dropoffLatitude);
+    const dropoffLongitude = Number(req.body?.dropoffLongitude);
+
+    const hasPickupCoords =
+      Number.isFinite(pickupLatitude) && Number.isFinite(pickupLongitude);
+    const hasDropoffCoords =
+      Number.isFinite(dropoffLatitude) && Number.isFinite(dropoffLongitude);
+
+    const origin = hasPickupCoords
+      ? { latitude: pickupLatitude, longitude: pickupLongitude }
+      : pickupAddress
+        ? await geocodeAddressWithMapbox(pickupAddress)
+        : null;
+    const destination = hasDropoffCoords
+      ? { latitude: dropoffLatitude, longitude: dropoffLongitude }
+      : dropoffAddress
+        ? await geocodeAddressWithMapbox(dropoffAddress)
+        : null;
+
+    if (!origin || !destination) {
+      return res.status(400).json({
+        message:
+          'Provide pickup/dropoff coordinates or valid addresses for both points.',
+      });
+    }
+
+    const route = await computeDrivingRoute(origin, destination);
+    return res.json({
+      points: route.points,
+      distanceMeters: route.distanceMeters,
+      distanceKm: route.distanceMeters / 1000,
+      durationSeconds: route.durationSeconds,
+    });
+  } catch (error) {
+    console.error('driving-route error:', error);
+    return res.status(500).json({
+      message: error?.message || 'Failed to compute driving route.',
     });
   }
 });

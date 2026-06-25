@@ -97,18 +97,12 @@ class DummyData {
     ),
   ];
 
-  /// شراء — بيع — إيجار (المستوى الأول في العقارات).
+  /// بيع وشراء — إيجار (المستوى الأول في العقارات).
   static final List<ServiceCategory> realEstateDealOptions = [
     ServiceCategory(
-      id: 'buy',
-      titleAr: 'شراء عقار',
-      titleEn: 'Buy Property',
-      image: 'assets/images/re_buy.png',
-    ),
-    ServiceCategory(
-      id: 'sell',
-      titleAr: 'بيع عقار',
-      titleEn: 'Sell Property',
+      id: 'sale',
+      titleAr: 'بيع وشراء العقارات',
+      titleEn: 'Buy & Sell Property',
       image: 'assets/images/re_sell.png',
     ),
     ServiceCategory(
@@ -116,6 +110,22 @@ class DummyData {
       titleAr: 'إيجار عقار',
       titleEn: 'Rent Property',
       image: 'assets/images/re_rent.png',
+    ),
+  ];
+
+  /// شراء أو بيع (داخل بيع وشراء العقارات).
+  static final List<ServiceCategory> realEstateSaleIntentOptions = [
+    ServiceCategory(
+      id: 'buy',
+      titleAr: 'شراء عقار',
+      titleEn: 'Buy Property',
+      image: 'assets/images/buy.png',
+    ),
+    ServiceCategory(
+      id: 'sell',
+      titleAr: 'بيع عقار',
+      titleEn: 'Sell Property',
+      image: 'assets/images/sell.png',
     ),
   ];
 

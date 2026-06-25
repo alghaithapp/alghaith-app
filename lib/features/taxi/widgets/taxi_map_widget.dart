@@ -184,8 +184,9 @@ class _TaxiMapWidgetState extends State<TaxiMapWidget> {
         gmaps.Polyline(
           polylineId: const gmaps.PolylineId('route'),
           points: _lastRoutePoints!,
-          color: Colors.orange.withValues(alpha: 0.7),
-          width: 4,
+          color: const Color(0xFFF5A01D),
+          width: 5,
+          geodesic: true,
         ),
       );
     }

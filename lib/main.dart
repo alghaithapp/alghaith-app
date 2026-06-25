@@ -250,7 +250,7 @@ class _AlGhaithAppState extends State<AlGhaithApp> {
       }
 
       if (appProvider.isGuestMode || (!appProvider.hasPhoneSession && !appProvider.hasSelectedRole)) {
-        return const ExitConfirmScope(child: MainShell());
+        return const MainShell();
       }
 
       // أثناء تحميل البيانات من السيرفر، اظهر شاشة تحميل بدلاً من الشاشات الفارغة

@@ -8,7 +8,9 @@ import '../widgets/service_navigation_buttons.dart';
 
 /// شاشة مطبعة جنة عدن — تعرض الخدمات ومراسلة داخل التطبيق.
 class EdenPrintingScreen extends StatelessWidget {
-  const EdenPrintingScreen({super.key});
+  const EdenPrintingScreen({super.key, this.hideBack = false});
+
+  final bool hideBack;
 
   static const String _whatsappNumber = '9647725053888';
 
@@ -65,7 +67,7 @@ class EdenPrintingScreen extends StatelessWidget {
       backgroundColor: const Color(0xFFF8F5F2),
       navigationBar: ServiceNavigationBar(
         title: 'مطبعة جنة عدن',
-        hideBack: true,
+        hideBack: hideBack,
       ),
       child: SafeArea(
         child: SingleChildScrollView(
@@ -78,7 +80,7 @@ class EdenPrintingScreen extends StatelessWidget {
               ClipRRect(
                 borderRadius: BorderRadius.circular(20),
                 child: AppImage(
-                  imageData: 'assets/images/cat_eden_printing.png',
+                  imageData: 'assets/images/cat_eden_printing1.png',
                   width: double.infinity,
                   height: 220,
                   fit: BoxFit.contain,

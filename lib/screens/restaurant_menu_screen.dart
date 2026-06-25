@@ -15,6 +15,7 @@ import '../widgets/app_image.dart';
 import '../widgets/product_image_preview.dart';
 import '../widgets/service_navigation_buttons.dart';
 import '../utils/merchant_product_sections.dart';
+import '../utils/merchant_service_labels.dart';
 import 'cart_screen.dart';
 
 const _brandRed = AppColors.accent;
@@ -322,6 +323,7 @@ class _RestaurantMenuScreenState extends State<RestaurantMenuScreen>
                           ? restaurant.address!
                           : 'العنوان غير متوفر',
                       hours: _workingHoursLabel,
+                      chatLabel: merchantChatLabelAr('restaurant'),
                       onMessage: _storeCustomerPhone == null
                           ? null
                           : () {
@@ -652,11 +654,13 @@ class _HeroSection extends StatelessWidget {
 class _RestaurantInfoCard extends StatelessWidget {
   final String address;
   final String hours;
+  final String chatLabel;
   final VoidCallback? onMessage;
 
   const _RestaurantInfoCard({
     required this.address,
     required this.hours,
+    required this.chatLabel,
     required this.onMessage,
   });
 
@@ -699,7 +703,7 @@ class _RestaurantInfoCard extends StatelessWidget {
             )
           else
             _ActionChip(
-              label: 'مراسلة داخل التطبيق',
+              label: chatLabel,
               icon: Icons.chat_bubble_outline_rounded,
               color: _brandRed,
               onTap: onMessage!,
@@ -767,13 +771,17 @@ class _ActionChip extends StatelessWidget {
             children: [
               Icon(icon, color: color, size: 18),
               const SizedBox(width: 8),
-              Text(
-                label,
-                style: TextStyle(
-                  fontFamily: 'Cairo',
-                  fontWeight: FontWeight.w800,
-                  color: color,
-                  fontSize: 13,
+              Flexible(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontFamily: 'Cairo',
+                    fontWeight: FontWeight.w800,
+                    color: color,
+                    fontSize: 13,
+                  ),
                 ),
               ),
             ],
@@ -999,19 +1007,21 @@ class _MenuItemCard extends StatelessWidget {
                   Row(
                     children: [
                       Expanded(
-                        child: item.price > 0
-                            ? Text(
-                                '${item.price.toPrice()} د.ع',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  fontFamily: 'Cairo',
-                                  fontWeight: FontWeight.w900,
-                                  fontSize: 16,
-                                  color: _brandRed,
-                                ),
-                              )
-                            : const SizedBox.shrink(),
+                        child: Text(
+                          item.price > 0
+                              ? '${item.price.toPrice()} د.ع'
+                              : 'السعر غير متوفر',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontFamily: 'Cairo',
+                            fontWeight: FontWeight.w900,
+                            fontSize: 16,
+                            color: item.price > 0
+                                ? _brandRed
+                                : const Color(0xFF999999),
+                          ),
+                        ),
                       ),
                       const SizedBox(width: 8),
                       SizedBox(

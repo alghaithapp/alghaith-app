@@ -1526,6 +1526,14 @@ class AppProvider extends ChangeNotifier {
       merchant.setMerchantActiveService(serviceId);
   Future<void> addMerchantService(String serviceId) =>
       merchant.addMerchantService(serviceId);
+  Future<void> setMerchantServiceEnabled(String serviceId, bool enabled) =>
+      merchant.setMerchantServiceEnabled(serviceId, enabled);
+  Future<void> removeMerchantService(String serviceId) =>
+      merchant.removeMerchantService(serviceId);
+  bool isMerchantServiceEnabled(String serviceId) =>
+      merchant.isMerchantServiceEnabled(serviceId);
+  Map<String, bool> get merchantServiceEnabledMap =>
+      merchant.merchantServiceEnabledMap;
   Future<void> addProduct(ListItem item) => merchant.addProduct(item);
   Future<void> updateProduct(ListItem updatedItem) =>
       merchant.updateProduct(updatedItem);

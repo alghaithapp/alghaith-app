@@ -25,6 +25,15 @@ const {
   getUserState,
   saveUserState,
 } = require('./users');
+const {
+  normalizeProductImagePayload,
+  serializeProductRowForClient,
+  serializeMerchantProfileForClient,
+  normalizeMerchantImageField,
+  serializeMerchantProfileForClient,
+  isRemoteImageUrl,
+  pickRemoteImageUrl,
+} = require('../services/image_refs');
 
 function resolveMerchantContactVisibility(profile = {}) {
   const info = normalizeObject(profile.professional_info ?? profile.professionalInfo);
@@ -471,8 +480,26 @@ function mapStateItemToProductPayload(item = {}) {
     section_id: item.sectionId ?? item.section_id ?? '',
     category_label_ar: item.categoryLabelAr ?? item.category_label_ar ?? '',
     category_label_en: item.categoryLabelEn ?? item.category_label_en ?? '',
-    image: item.image ?? item.imageUrl ?? '',
-    image_base64: item.imageBase64 ?? item.image_base64 ?? '',
+    image: (() => {
+      const remote = pickRemoteImageUrl(
+        item.image,
+        item.imageUrl,
+        item.image_base64,
+        item.imageBase64
+      );
+      if (remote) return remote;
+      return String(item.image ?? item.imageUrl ?? '').trim();
+    })(),
+    image_base64: (() => {
+      const remote = pickRemoteImageUrl(
+        item.image,
+        item.imageUrl,
+        item.image_base64,
+        item.imageBase64
+      );
+      if (remote) return '';
+      return item.imageBase64 ?? item.image_base64 ?? '';
+    })(),
     is_favorite: Boolean(item.isFavorite ?? item.is_favorite ?? false),
     avg_price_label_ar: item.avgPriceLabelAr ?? item.avg_price_label_ar ?? '',
     avg_price_label_en: item.avgPriceLabelEn ?? item.avg_price_label_en ?? '',
@@ -632,13 +659,31 @@ async function saveMerchantProfile(phone, data = {}) {
   if (data.rating !== undefined) {
     basePayload.rating = Number(data.rating);
   }
-  assignIfDefined(basePayload, 'cover_image_url', data.cover_image_url ?? data.coverImageUrl);
-  assignIfDefined(basePayload, 'logo_image_url', data.logo_image_url ?? data.logoImageUrl);
-  assignIfDefined(
-    basePayload,
-    'profile_image_base64',
-    data.profile_image_base64 ?? data.profileImageBase64
+  const coverRef = normalizeMerchantImageField(
+    data.cover_image_url ?? data.coverImageUrl ?? data.coverImageBase64
   );
+  if (coverRef.url) {
+    basePayload.cover_image_url = coverRef.url;
+  }
+  const logoRef = normalizeMerchantImageField(
+    data.logo_image_url ?? data.logoImageUrl ?? data.logoImageBase64
+  );
+  if (logoRef.url) {
+    basePayload.logo_image_url = logoRef.url;
+  }
+  const profileRef = normalizeMerchantImageField(
+    data.profile_image_base64 ??
+      data.profileImageBase64 ??
+      data.profile_image_url ??
+      data.profileImageUrl
+  );
+  if (profileRef.url) {
+    if (isRemoteImageUrl(profileRef.url)) {
+      basePayload.profile_image_base64 = profileRef.url;
+    } else {
+      basePayload.profile_image_base64 = profileRef.base64;
+    }
+  }
   if (await hasColumn('merchant_profiles', 'work_sample_images_base64')) {
     basePayload.work_sample_images_base64 = normalizeArray(
       data.work_sample_images_base64 ?? data.workSampleImagesBase64
@@ -884,8 +929,7 @@ async function saveMerchantProduct(phone, data = {}) {
     'category_label_en',
     data.category_label_en ?? data.categoryLabelEn
   );
-  assignIfDefined(payload, 'image', data.image ?? data.imageUrl ?? '');
-  assignIfDefined(payload, 'image_base64', data.image_base64 ?? data.imageBase64);
+  Object.assign(payload, normalizeProductImagePayload(data));
   if (data.is_favorite !== undefined) {
     payload.is_favorite = Boolean(data.is_favorite);
   }
@@ -1074,7 +1118,9 @@ async function listMerchantStoresByService({
     // خدمات التواصل المباشر: تظهر بدون منتجات
     if (isContactOnly) {
       result.push({
-        profile: withMerchantCustomerContacts(profile),
+        profile: serializeMerchantProfileForClient(
+          withMerchantCustomerContacts(profile)
+        ),
         products: [],
       });
       continue;
@@ -1101,8 +1147,10 @@ async function listMerchantStoresByService({
     if (filteredProducts.length === 0) continue;
 
     result.push({
-      profile: withMerchantCustomerContacts(profile),
-      products: filteredProducts,
+      profile: serializeMerchantProfileForClient(
+        withMerchantCustomerContacts(profile)
+      ),
+      products: filteredProducts.map(serializeProductRowForClient),
     });
   }
 
@@ -1441,7 +1489,7 @@ async function listCatalogProducts(category = '', subCategoryId = '') {
       const phone = String(row.phone || '').trim();
       const profile = findProfileForPhone(profileByPhone, phone);
       const profileContacts = withMerchantCustomerContacts(profile || {});
-      return {
+      return serializeProductRowForClient({
         ...row,
         merchant_phone: phone,
         merchant_whatsapp: profileContacts.customer_whatsapp ?? '',
@@ -1462,13 +1510,18 @@ async function listCatalogProducts(category = '', subCategoryId = '') {
         merchant_is_open:
           profile?.is_open === undefined ? true : Boolean(profile?.is_open),
         merchant_is_frozen: profile?.is_frozen === true,
-      };
+      });
     });
 }
 
-async function listRealEstateListings(subCategoryId = '', listingMode = '') {
+async function listRealEstateListings(
+  subCategoryId = '',
+  listingMode = '',
+  neighborhood = ''
+) {
   const target = String(subCategoryId || '').trim();
   const modeFilter = String(listingMode || '').trim();
+  const neighborhoodFilter = String(neighborhood || '').trim();
   const products = await selectMany(
     'merchant_products',
     [{ method: 'eq', column: 'category', value: 'real_estate' }],
@@ -1483,6 +1536,10 @@ async function listRealEstateListings(subCategoryId = '', listingMode = '') {
     if (modeFilter) {
       const rowMode = String(row.listing_mode || 'sell').trim();
       if (rowMode !== modeFilter) return false;
+    }
+    if (neighborhoodFilter) {
+      const rowNeighborhood = String(row.neighborhood || '').trim();
+      if (rowNeighborhood !== neighborhoodFilter) return false;
     }
     return true;
   });

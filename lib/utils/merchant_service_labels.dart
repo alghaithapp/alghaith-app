@@ -84,6 +84,44 @@ class MerchantServiceLabels {
   });
 }
 
+/// نص زر المراسلة للزبون حسب نوع النشاط (مطعم، متجر، …).
+String merchantChatLabelAr(String serviceId) {
+  switch (normalizeMerchantServiceId(serviceId)) {
+    case 'restaurant':
+      return 'مراسلة المطعم';
+    case 'cars':
+      return 'مراسلة المعرض';
+    case 'real_estate':
+      return 'مراسلة المكتب';
+    case 'professionals':
+      return 'مراسلة المهني';
+    case 'tourism':
+      return 'مراسلة مزود الخدمة';
+    case 'offers':
+      return 'مراسلة متجر العروض';
+    case 'used':
+      return 'مراسلة البائع';
+    case 'beauty':
+      return 'مراسلة المتجر';
+    default:
+      return 'مراسلة المتجر';
+  }
+}
+
+String merchantChatLabelFromProfile(Map<String, dynamic> profile) {
+  var serviceId = profile['primary_service_id']?.toString().trim() ?? '';
+  if (serviceId.isEmpty) {
+    final ids = profile['service_ids'];
+    if (ids is List && ids.isNotEmpty) {
+      serviceId = ids.first.toString();
+    }
+  }
+  if (serviceId.isEmpty) {
+    serviceId = profile['category']?.toString().trim() ?? 'product';
+  }
+  return merchantChatLabelAr(serviceId);
+}
+
 /// Maps marketplace / profile ids to the label set used in merchant UI.
 String normalizeMerchantServiceId(String serviceId) {
   final id = serviceId.trim();

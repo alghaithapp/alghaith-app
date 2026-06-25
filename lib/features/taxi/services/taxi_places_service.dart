@@ -4,7 +4,9 @@ import 'package:http/http.dart' as http;
 import 'package:latlong2/latlong.dart';
 
 import '../../../core/config/app_config.dart';
+import '../../../core/network/api_client.dart';
 import '../utils/polyline_decoder.dart';
+import '../utils/taxi_distance_calculator.dart';
 
 /// اقتراح مكان من Google Places أو قاعدة محلية.
 class TaxiPlaceSuggestion {
@@ -19,6 +21,25 @@ class TaxiPlaceSuggestion {
     this.latLng,
     this.googlePlaceId,
   });
+}
+
+/// مسار قيادة مع مدة ومسافة من واجهة Directions.
+class TaxiDrivingRoute {
+  final List<LatLng> points;
+  final int? durationSeconds;
+  final double? distanceMeters;
+
+  const TaxiDrivingRoute({
+    this.points = const [],
+    this.durationSeconds,
+    this.distanceMeters,
+  });
+
+  double? get distanceKm {
+    final meters = distanceMeters;
+    if (meters == null || meters <= 0) return null;
+    return meters / 1000.0;
+  }
 }
 
 /// بحث الأماكن والمسارات عبر Google Maps (نفس بيانات تطبيق Google Maps).
@@ -166,15 +187,92 @@ class TaxiPlacesService {
     return _fallbackCoordsLabel(point);
   }
 
-  /// مسار القيادة — Google Directions ثم Mapbox كاحتياط.
-  static Future<List<LatLng>> fetchDrivingRoute(LatLng from, LatLng to) async {
+  /// مسار القيادة — الخادم أولاً ثم Google ثم Mapbox ثم خط مباشر.
+  static Future<TaxiDrivingRoute> fetchDrivingRoute(LatLng from, LatLng to) async {
+    final backend = await _backendDirections(from, to);
+    if (backend.points.length >= 2) return backend;
+
     final google = await _googleDirections(from, to);
-    if (google.length >= 2) return google;
-    return _mapboxDirections(from, to);
+    if (google.points.length >= 2) return google;
+
+    final mapbox = await _mapboxDirections(from, to);
+    if (mapbox.points.length >= 2) return mapbox;
+
+    return _straightLineRoute(from, to);
   }
 
-  static Future<List<LatLng>> _googleDirections(LatLng from, LatLng to) async {
-    if (!isGoogleConfigured) return const [];
+  static Future<TaxiDrivingRoute> _backendDirections(LatLng from, LatLng to) async {
+    if (!AppConfig.isBackendConfigured) return const TaxiDrivingRoute();
+    try {
+      final result = await ApiClient.instance.post(
+        '/maps/driving-route',
+        body: {
+          'pickupLatitude': from.latitude,
+          'pickupLongitude': from.longitude,
+          'dropoffLatitude': to.latitude,
+          'dropoffLongitude': to.longitude,
+        },
+      );
+      if (result is! Map) return const TaxiDrivingRoute();
+
+      final rawPoints = result['points'];
+      if (rawPoints is! List || rawPoints.length < 2) {
+        return const TaxiDrivingRoute();
+      }
+
+      final points = <LatLng>[];
+      for (final entry in rawPoints) {
+        if (entry is! Map) continue;
+        final lat = (entry['latitude'] as num?)?.toDouble();
+        final lng = (entry['longitude'] as num?)?.toDouble();
+        if (lat == null || lng == null) continue;
+        points.add(LatLng(lat, lng));
+      }
+      if (points.length < 2) return const TaxiDrivingRoute();
+
+      final distanceMeters = (result['distanceMeters'] as num?)?.toDouble();
+      final durationSeconds = (result['durationSeconds'] as num?)?.toInt();
+
+      return TaxiDrivingRoute(
+        points: points,
+        durationSeconds: durationSeconds,
+        distanceMeters: distanceMeters,
+      );
+    } catch (_) {
+      return const TaxiDrivingRoute();
+    }
+  }
+
+  static TaxiDrivingRoute _straightLineRoute(LatLng from, LatLng to) {
+    const steps = 24;
+    final points = <LatLng>[];
+    for (var i = 0; i <= steps; i++) {
+      final t = i / steps;
+      points.add(
+        LatLng(
+          from.latitude + (to.latitude - from.latitude) * t,
+          from.longitude + (to.longitude - from.longitude) * t,
+        ),
+      );
+    }
+
+    final distanceKm = TaxiDistanceCalculator.calculateDistance(
+      from.latitude,
+      from.longitude,
+      to.latitude,
+      to.longitude,
+    );
+
+    return TaxiDrivingRoute(
+      points: points,
+      distanceMeters: distanceKm * 1000,
+      durationSeconds:
+          TaxiDistanceCalculator.estimateDrivingDurationSeconds(distanceKm),
+    );
+  }
+
+  static Future<TaxiDrivingRoute> _googleDirections(LatLng from, LatLng to) async {
+    if (!isGoogleConfigured) return const TaxiDrivingRoute();
     try {
       final params = {
         'origin': '${from.latitude},${from.longitude}',
@@ -190,25 +288,49 @@ class TaxiPlacesService {
       );
       final response =
           await http.get(uri).timeout(const Duration(seconds: 12));
-      if (response.statusCode != 200) return const [];
+      if (response.statusCode != 200) return const TaxiDrivingRoute();
 
       final data = jsonDecode(response.body);
-      if (data is! Map || data['status'] != 'OK') return const [];
+      if (data is! Map || data['status'] != 'OK') return const TaxiDrivingRoute();
       final routes = data['routes'];
-      if (routes is! List || routes.isEmpty) return const [];
+      if (routes is! List || routes.isEmpty) return const TaxiDrivingRoute();
 
-      final polyline =
-          routes.first['overview_polyline']?['points']?.toString();
-      if (polyline == null || polyline.isEmpty) return const [];
-      return decodeGooglePolyline(polyline);
+      final route = routes.first;
+      if (route is! Map) return const TaxiDrivingRoute();
+
+      final polyline = route['overview_polyline']?['points']?.toString();
+      if (polyline == null || polyline.isEmpty) return const TaxiDrivingRoute();
+
+      int? durationSeconds;
+      double? distanceMeters;
+      final legs = route['legs'];
+      if (legs is List) {
+        for (final leg in legs) {
+          if (leg is! Map) continue;
+          final legDuration = (leg['duration']?['value'] as num?)?.toInt();
+          final legDistance = (leg['distance']?['value'] as num?)?.toDouble();
+          if (legDuration != null && legDuration > 0) {
+            durationSeconds = (durationSeconds ?? 0) + legDuration;
+          }
+          if (legDistance != null && legDistance > 0) {
+            distanceMeters = (distanceMeters ?? 0) + legDistance;
+          }
+        }
+      }
+
+      return TaxiDrivingRoute(
+        points: decodeGooglePolyline(polyline),
+        durationSeconds: durationSeconds,
+        distanceMeters: distanceMeters,
+      );
     } catch (_) {
-      return const [];
+      return const TaxiDrivingRoute();
     }
   }
 
-  static Future<List<LatLng>> _mapboxDirections(LatLng from, LatLng to) async {
+  static Future<TaxiDrivingRoute> _mapboxDirections(LatLng from, LatLng to) async {
     final token = AppConfig.effectiveMapboxPublicToken;
-    if (token.isEmpty || !token.startsWith('pk.')) return const [];
+    if (token.isEmpty || !token.startsWith('pk.')) return const TaxiDrivingRoute();
     try {
       final uri = Uri.parse(
         'https://api.mapbox.com/directions/v5/mapbox/driving/'
@@ -218,25 +340,39 @@ class TaxiPlacesService {
       );
       final response =
           await http.get(uri).timeout(const Duration(seconds: 10));
-      if (response.statusCode != 200) return const [];
+      if (response.statusCode != 200) return const TaxiDrivingRoute();
 
       final data = jsonDecode(response.body);
       final routes = data['routes'] as List?;
-      if (routes == null || routes.isEmpty) return const [];
-      final geometry = routes[0]['geometry'] as Map?;
-      final coordinates = geometry?['coordinates'] as List?;
-      if (coordinates == null || coordinates.length < 2) return const [];
+      if (routes == null || routes.isEmpty) return const TaxiDrivingRoute();
+      final route = routes[0];
+      if (route is! Map) return const TaxiDrivingRoute();
 
-      return coordinates
-          .map(
-            (c) => LatLng(
-              (c[1] as num).toDouble(),
-              (c[0] as num).toDouble(),
-            ),
-          )
-          .toList();
+      final geometry = route['geometry'] as Map?;
+      final coordinates = geometry?['coordinates'] as List?;
+      if (coordinates == null || coordinates.length < 2) {
+        return const TaxiDrivingRoute();
+      }
+
+      final durationSeconds = (route['duration'] as num?)?.round();
+      final distanceMeters = (route['distance'] as num?)?.toDouble();
+
+      return TaxiDrivingRoute(
+        points: coordinates
+            .map(
+              (c) => LatLng(
+                (c[1] as num).toDouble(),
+                (c[0] as num).toDouble(),
+              ),
+            )
+            .toList(),
+        durationSeconds:
+            durationSeconds != null && durationSeconds > 0 ? durationSeconds : null,
+        distanceMeters:
+            distanceMeters != null && distanceMeters > 0 ? distanceMeters : null,
+      );
     } catch (_) {
-      return const [];
+      return const TaxiDrivingRoute();
     }
   }
 

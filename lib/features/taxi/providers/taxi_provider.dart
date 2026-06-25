@@ -12,6 +12,8 @@ import '../services/taxi_api_service.dart';
 class TaxiProvider extends ChangeNotifier {
   List<TaxiRequest> _requests = [];
   TaxiRequest? _currentRequest;
+  TaxiRequest? _tripAwaitingRating;
+  final Set<String> _dismissedRatingIds = {};
   List<DriverModel> _nearbyDrivers = [];
   List<TaxiRequest> _incomingRequests = [];
   bool _isLoading = false;
@@ -30,6 +32,8 @@ class TaxiProvider extends ChangeNotifier {
   List<TaxiRequest> get requests => List.unmodifiable(_requests);
 
   TaxiRequest? get currentRequest => _currentRequest;
+
+  TaxiRequest? get tripAwaitingRating => _tripAwaitingRating;
 
   List<TaxiRequest> get incomingRequests => List.unmodifiable(_incomingRequests);
 
@@ -260,13 +264,79 @@ class TaxiProvider extends ChangeNotifier {
 
   Future<void> loadActiveRequest() async {
     try {
+      final previous = _currentRequest;
       final request = await TaxiApiService.getActiveRequest();
-      _currentRequest = request;
+      if (request != null) {
+        _currentRequest = request;
+      } else {
+        _currentRequest = null;
+        final wasInProgress = previous != null &&
+            !previous.isCompleted &&
+            !previous.isCancelled &&
+            (previous.hasAssignedDriver || previous.isPending);
+        if (wasInProgress) {
+          await _refreshPendingRating();
+        }
+      }
       notifyListeners();
     } catch (e) {
       _error = e.toString();
       notifyListeners();
     }
+  }
+
+  Future<void> checkPendingRating() => _refreshPendingRating();
+
+  Future<void> _refreshPendingRating() async {
+    try {
+      final pending = await TaxiApiService.getPendingRatingRequest();
+      if (pending != null &&
+          pending.driverRating <= 0 &&
+          !_dismissedRatingIds.contains(pending.id)) {
+        _tripAwaitingRating = pending;
+        notifyListeners();
+      }
+    } catch (_) {}
+  }
+
+  Future<bool> rateTrip({
+    required String requestId,
+    required int rating,
+    String? comment,
+  }) async {
+    _error = null;
+    try {
+      final updated = await TaxiApiService.rateTrip(
+        requestId: requestId,
+        rating: rating,
+        comment: comment,
+      );
+      _tripAwaitingRating = null;
+      _dismissedRatingIds.remove(updated.id);
+      _currentRequest = null;
+      final index = _requests.indexWhere((r) => r.id == updated.id);
+      if (index >= 0) {
+        _requests[index] = updated;
+      } else {
+        _requests.insert(0, updated);
+      }
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _error = e.toString();
+      notifyListeners();
+      return false;
+    }
+  }
+
+  void clearTripAwaitingRating({String? requestId}) {
+    final id = (requestId ?? _tripAwaitingRating?.id)?.trim();
+    if (id != null && id.isNotEmpty) {
+      _dismissedRatingIds.add(id);
+    }
+    if (_tripAwaitingRating == null) return;
+    _tripAwaitingRating = null;
+    notifyListeners();
   }
 
   // ── تحميل الطلب النشط للسائق ──
@@ -466,6 +536,7 @@ class TaxiProvider extends ChangeNotifier {
   void clear() {
     _requests = [];
     _currentRequest = null;
+    _tripAwaitingRating = null;
     _nearbyDrivers = [];
     _isOnline = false;
     _error = null;

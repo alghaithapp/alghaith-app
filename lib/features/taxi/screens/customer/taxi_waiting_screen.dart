@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import '../../providers/taxi_provider.dart';
 import '../../models/taxi_request.dart';
 import '../../widgets/taxi_type_image.dart';
+import '../../utils/taxi_rating_navigation.dart';
 import 'taxi_live_tracking_screen.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../widgets/taxi_cancel_dialog.dart';
@@ -195,15 +196,12 @@ class _TaxiWaitingScreenState extends State<TaxiWaitingScreen> {
               });
             }
 
-            if (request != null && request.isCompleted) {
+            if (provider.tripAwaitingRating != null) {
+              final pending = provider.tripAwaitingRating!;
               WidgetsBinding.instance.addPostFrameCallback((_) {
                 if (mounted) {
                   _timer?.cancel();
-                  Navigator.of(context).pushReplacement(
-                    MaterialPageRoute(
-                      builder: (_) => const _RatingPlaceholderScreen(),
-                    ),
-                  );
+                  TaxiRatingNavigation.openIfNeeded(context, pending);
                 }
               });
             }
@@ -412,52 +410,4 @@ class _MapGridPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
-}
-
-class _RatingPlaceholderScreen extends StatelessWidget {
-  const _RatingPlaceholderScreen();
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('تقييم الرحلة'),
-        centerTitle: true,
-      ),
-      body: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.star_half,
-                size: 64, color: AppColors.accent),
-            const SizedBox(height: 16),
-            const Text(
-              'شكراً لك! تمت الرحلة بنجاح',
-              style: TextStyle(
-                  fontFamily: 'Cairo',
-                  fontSize: 20,
-                  fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: 24),
-            ElevatedButton(
-              onPressed: () {
-                Navigator.of(context).popUntil((route) => route.isFirst);
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.accent,
-                foregroundColor: AppColors.accent,
-              ),
-              child: const Text(
-                'العودة إلى الرئيسية',
-                style: TextStyle(
-                    fontFamily: 'Cairo',
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 }

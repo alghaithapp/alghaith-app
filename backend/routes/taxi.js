@@ -110,6 +110,34 @@ router.get('/driver-active', async (req, res) => {
   }
 });
 
+// GET /db/taxi/pending-rating - آخر رحلة مكتملة بانتظار التقييم
+router.get('/pending-rating', async (req, res) => {
+  try {
+    const phone = requireOptionalAuthorizedPhone(req, res);
+    if (!phone) return;
+    const request = await repo.getCustomerPendingRatingRequest(phone);
+    if (!request) return res.json(null);
+    return res.json(await formatRequestRowEnriched(request));
+  } catch (error) {
+    console.error('taxi pending-rating error:', error);
+    return res.status(500).json({ message: error?.message || 'Failed to get pending rating.' });
+  }
+});
+
+// POST /db/taxi/rate - تقييم السائق بعد الرحلة
+router.post('/rate', async (req, res) => {
+  try {
+    const phone = requireOptionalAuthorizedPhone(req, res);
+    if (!phone) return;
+    const { requestId, rating, comment } = req.body || {};
+    const result = await repo.rateTaxiRequest(phone, requestId, rating, comment);
+    return res.json(result);
+  } catch (error) {
+    console.error('taxi rate error:', error);
+    return res.status(500).json({ message: error?.message || 'Failed to rate trip.' });
+  }
+});
+
 // GET /db/taxi/history - تاريخ رحلات الزبون
 router.get('/history', async (req, res) => {
   try {

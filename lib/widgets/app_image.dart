@@ -85,9 +85,12 @@ class AppImage extends StatelessWidget {
   Widget _buildNetworkImage(String url) {
     return CachedNetworkImage(
       imageUrl: url,
+      cacheKey: url,
       width: width,
       height: height,
       fit: fit,
+      fadeInDuration: const Duration(milliseconds: 120),
+      fadeOutDuration: const Duration(milliseconds: 80),
       placeholder: (context, _) => _buildLoading(),
       errorWidget: (context, _, error) {
         debugPrint('AppImage network error for $url: $error');

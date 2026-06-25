@@ -335,4 +335,55 @@ class MerchantProfileFields {
       store?['rejectionMessageAr']?.toString().trim() ??
       store?['rejection_message_ar']?.toString().trim() ??
       '';
+
+  static Map<String, bool> serviceEnabledMap(Map<String, dynamic>? map) {
+    if (map == null) return const {};
+    final raw = map['serviceEnabled'] ??
+        map['service_enabled'] ??
+        (map['store_data'] is Map
+            ? (map['store_data'] as Map)['serviceEnabled'] ??
+                (map['store_data'] as Map)['service_enabled']
+            : null);
+    if (raw is! Map) return const {};
+    final result = <String, bool>{};
+    raw.forEach((key, value) {
+      final id = key.toString().trim();
+      if (id.isEmpty) return;
+      if (value is bool) {
+        result[id] = value;
+        return;
+      }
+      final normalized = value?.toString().trim().toLowerCase() ?? '';
+      if (normalized.isEmpty) return;
+      result[id] = ['true', '1', 'yes', 'on'].contains(normalized);
+    });
+    return result;
+  }
+
+  static Map<String, bool> serviceEnabledMapForIds(
+    Iterable<String> serviceIds,
+    Map<String, dynamic>? map,
+  ) {
+    final stored = serviceEnabledMap(map);
+    return {
+      for (final id in serviceIds)
+        if (id.trim().isNotEmpty) id.trim(): stored[id.trim()] ?? true,
+    };
+  }
+
+  static bool isServiceEnabled(
+    Map<String, dynamic>? map,
+    String serviceId, {
+    bool fallback = true,
+  }) {
+    final id = serviceId.trim();
+    if (id.isEmpty) return fallback;
+    final stored = serviceEnabledMap(map);
+    if (!stored.containsKey(id)) return fallback;
+    return stored[id] ?? fallback;
+  }
+
+  static Map<String, dynamic> serviceEnabledPayload(Map<String, bool> map) {
+    return map.map((key, value) => MapEntry(key, value));
+  }
 }

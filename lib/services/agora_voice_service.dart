@@ -17,9 +17,11 @@ class AgoraVoiceService {
   static final AgoraVoiceService instance = AgoraVoiceService._();
 
   RtcEngine? _engine;
+  RtcEngineEventHandler? _eventHandler;
   AgoraCallState _state = AgoraCallState.idle;
   int? _remoteUid;
   int _joinGeneration = 0;
+  Future<void>? _joinFuture;
 
   AgoraCallState get state => _state;
   int? get remoteUid => _remoteUid;
@@ -53,58 +55,86 @@ class AgoraVoiceService {
       throw StateError('قناة المكالمة غير صالحة.');
     }
 
+    final joinTask = _joinVoiceCallInternal(
+      appId: appId.trim(),
+      token: token,
+      channelName: channelName.trim(),
+      uid: uid,
+    );
+    _joinFuture = joinTask;
+    try {
+      await joinTask;
+    } finally {
+      if (identical(_joinFuture, joinTask)) {
+        _joinFuture = null;
+      }
+    }
+  }
+
+  Future<void> _joinVoiceCallInternal({
+    required String appId,
+    required String token,
+    required String channelName,
+    required int uid,
+  }) async {
     final generation = _joinGeneration;
     _setState(AgoraCallState.connecting);
 
     final engine = createAgoraRtcEngine();
     _engine = engine;
 
+    final handler = RtcEngineEventHandler(
+      onJoinChannelSuccess: (connection, elapsed) {
+        if (!_isJoinActive(generation, engine)) return;
+        debugPrint('Agora: joined ${connection.channelId}');
+        if (_remoteUid == null) {
+          _setState(AgoraCallState.ringing);
+        }
+      },
+      onUserJoined: (connection, remoteUid, elapsed) {
+        if (!_isJoinActive(generation, engine)) return;
+        debugPrint('Agora: remote joined $remoteUid');
+        _remoteUid = remoteUid;
+        _setState(AgoraCallState.connected);
+        onRemoteUserJoined?.call(remoteUid);
+      },
+      onUserOffline: (connection, remoteUid, reason) {
+        if (!_isJoinActive(generation, engine)) return;
+        debugPrint('Agora: remote left $remoteUid ($reason)');
+        if (_remoteUid == remoteUid) {
+          _remoteUid = null;
+          _setState(AgoraCallState.ended);
+          onRemoteUserLeft?.call();
+        }
+      },
+      onError: (err, msg) {
+        if (!_isJoinActive(generation, engine)) return;
+        debugPrint('Agora error $err: $msg');
+        _setState(AgoraCallState.failed);
+      },
+    );
+    _eventHandler = handler;
+
     try {
       await engine.initialize(
         RtcEngineContext(
-          appId: appId.trim(),
+          appId: appId,
           channelProfile: ChannelProfileType.channelProfileCommunication,
         ),
       );
       if (!_isJoinActive(generation, engine)) {
-        await _releaseEngine(engine);
+        await _releaseEngine(engine, handler);
         return;
       }
 
-      engine.registerEventHandler(
-        RtcEngineEventHandler(
-          onJoinChannelSuccess: (connection, elapsed) {
-            if (!_isJoinActive(generation, engine)) return;
-            debugPrint('Agora: joined ${connection.channelId}');
-            if (_remoteUid == null) {
-              _setState(AgoraCallState.ringing);
-            }
-          },
-          onUserJoined: (connection, remoteUid, elapsed) {
-            if (!_isJoinActive(generation, engine)) return;
-            debugPrint('Agora: remote joined $remoteUid');
-            _remoteUid = remoteUid;
-            _setState(AgoraCallState.connected);
-            onRemoteUserJoined?.call(remoteUid);
-          },
-          onUserOffline: (connection, remoteUid, reason) {
-            if (!_isJoinActive(generation, engine)) return;
-            debugPrint('Agora: remote left $remoteUid ($reason)');
-            if (_remoteUid == remoteUid) {
-              _remoteUid = null;
-              _setState(AgoraCallState.ended);
-              onRemoteUserLeft?.call();
-            }
-          },
-          onError: (err, msg) {
-            if (!_isJoinActive(generation, engine)) return;
-            debugPrint('Agora error $err: $msg');
-            _setState(AgoraCallState.failed);
-          },
-        ),
-      );
+      engine.registerEventHandler(handler);
 
       await engine.enableAudio();
+      if (!_isJoinActive(generation, engine)) {
+        await _releaseEngine(engine, handler);
+        return;
+      }
+
       await engine.setAudioProfile(
         profile: AudioProfileType.audioProfileSpeechStandard,
         scenario: AudioScenarioType.audioScenarioChatroom,
@@ -113,7 +143,7 @@ class AgoraVoiceService {
       await engine.setClientRole(role: ClientRoleType.clientRoleBroadcaster);
       await engine.joinChannel(
         token: token,
-        channelId: channelName.trim(),
+        channelId: channelName,
         uid: uid,
         options: const ChannelMediaOptions(
           channelProfile: ChannelProfileType.channelProfileCommunication,
@@ -124,14 +154,14 @@ class AgoraVoiceService {
       );
 
       if (!_isJoinActive(generation, engine)) {
-        await _releaseEngine(engine);
+        await _releaseEngine(engine, handler);
       }
     } catch (error) {
       debugPrint('Agora join failed: $error');
       if (_isJoinActive(generation, engine)) {
         _setState(AgoraCallState.failed);
       }
-      await _releaseEngine(engine);
+      await _releaseEngine(engine, handler);
       rethrow;
     }
   }
@@ -147,9 +177,19 @@ class AgoraVoiceService {
   Future<void> leave() async {
     _joinGeneration++;
     _remoteUid = null;
+
+    final pendingJoin = _joinFuture;
+    if (pendingJoin != null) {
+      try {
+        await pendingJoin;
+      } catch (_) {}
+    }
+
     final engine = _engine;
+    final handler = _eventHandler;
     _engine = null;
-    await _releaseEngine(engine);
+    _eventHandler = null;
+    await _releaseEngine(engine, handler);
     _setState(AgoraCallState.idle);
   }
 
@@ -157,8 +197,18 @@ class AgoraVoiceService {
     return generation == _joinGeneration && identical(_engine, engine);
   }
 
-  Future<void> _releaseEngine(RtcEngine? engine) async {
+  Future<void> _releaseEngine(
+    RtcEngine? engine,
+    RtcEngineEventHandler? handler,
+  ) async {
     if (engine == null) return;
+    try {
+      if (handler != null) {
+        engine.unregisterEventHandler(handler);
+      }
+    } catch (error) {
+      debugPrint('Agora unregisterEventHandler: $error');
+    }
     try {
       await engine.leaveChannel();
     } catch (error) {
@@ -171,6 +221,7 @@ class AgoraVoiceService {
     }
     if (identical(_engine, engine)) {
       _engine = null;
+      _eventHandler = null;
     }
   }
 

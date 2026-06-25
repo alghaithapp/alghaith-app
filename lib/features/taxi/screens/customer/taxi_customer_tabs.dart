@@ -1,4 +1,3 @@
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -8,107 +7,21 @@ import '../../widgets/taxi_cancel_dialog.dart';
 import '../../widgets/taxi_type_image.dart';
 import '../../widgets/taxi_plate_badge.dart';
 import '../../widgets/taxi_order_tracking_map.dart';
+import '../../utils/taxi_rating_navigation.dart';
 import 'taxi_live_tracking_screen.dart';
 import '../../../../utils/helpers.dart';
 import '../../../../core/theme/app_colors.dart';
-import '../../../../providers/app_provider.dart';
-import '../../../../widgets/internal_contact_buttons.dart';
+import '../../widgets/taxi_driver_contact_buttons.dart';
 
-/// شاشة القائمة الجانبية للتكسي — طلبي الحالي، سجل الطلبات، تواصل معنا
-class TaxiSideMenuScreen extends StatefulWidget {
-  const TaxiSideMenuScreen({super.key});
+/// تبويب طلبي الحالي.
+class TaxiCurrentRequestTab extends StatefulWidget {
+  const TaxiCurrentRequestTab({super.key});
 
   @override
-  State<TaxiSideMenuScreen> createState() => _TaxiSideMenuScreenState();
+  State<TaxiCurrentRequestTab> createState() => _TaxiCurrentRequestTabState();
 }
 
-class _TaxiSideMenuScreenState extends State<TaxiSideMenuScreen>
-    with SingleTickerProviderStateMixin {
-  late TabController _tabController;
-
-  @override
-  void initState() {
-    super.initState();
-    _tabController = TabController(length: 3, vsync: this);
-    _loadData();
-  }
-
-  Future<void> _loadData() async {
-    final provider = context.read<TaxiProvider>();
-    final phone = context.read<AppProvider>().authPhone;
-    provider.startPolling(phone: phone);
-    await provider.loadActiveRequest();
-    await provider.loadHistory();
-  }
-
-  @override
-  void dispose() {
-    _tabController.dispose();
-    super.dispose();
-  }
-
-  void _openSupportWhatsApp() {
-    AppHelpers.launchWhatsApp(
-      AppHelpers.supportWhatsAppNumber,
-      'مرحباً، أحتاج مساعدة في خدمة التكسي',
-    );
-  }
-
-  void _openSupportCall() {
-    AppHelpers.makePhoneCall(AppHelpers.supportPhoneNumber);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Directionality(
-      textDirection: TextDirection.rtl,
-      child: Scaffold(
-        appBar: AppBar(
-          title: const Text('خدمة التكسي'),
-          centerTitle: true,
-          backgroundColor: Colors.white,
-          foregroundColor: Colors.black,
-          elevation: 0,
-          automaticallyImplyLeading: false,
-          leading: const _BackButton(),
-          leadingWidth: 80,
-          bottom: TabBar(
-            controller: _tabController,
-            labelColor: AppColors.primary,
-            unselectedLabelColor: Colors.grey,
-            indicatorColor: AppColors.primary,
-            labelStyle: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w700, fontSize: 13),
-            tabs: const [
-              Tab(icon: Icon(Icons.taxi_alert), text: 'طلبي الحالي'),
-              Tab(icon: Icon(Icons.history), text: 'سجل الطلبات'),
-              Tab(icon: Icon(Icons.headset_mic), text: 'تواصل معنا'),
-            ],
-          ),
-        ),
-        body: TabBarView(
-          controller: _tabController,
-          children: [
-            _CurrentRequestTab(),
-            _HistoryTab(),
-            _SupportTab(
-              onWhatsAppTap: _openSupportWhatsApp,
-              onCallTap: _openSupportCall,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ── التبويب الأول: الطلب الحالي ──
-
-class _CurrentRequestTab extends StatefulWidget {
-  @override
-  State<_CurrentRequestTab> createState() => _CurrentRequestTabState();
-}
-
-class _CurrentRequestTabState extends State<_CurrentRequestTab> {
+class _TaxiCurrentRequestTabState extends State<TaxiCurrentRequestTab> {
   bool _isCancelling = false;
 
   Future<void> _cancelRequest(TaxiRequest request) async {
@@ -173,7 +86,7 @@ class _CurrentRequestTabState extends State<_CurrentRequestTab> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'اذهب إلى شاشة طلب التكسي لإنشاء طلب جديد',
+                  'اذهب إلى طلب رحلة لإنشاء طلب جديد',
                   style: TextStyle(
                     fontFamily: 'Cairo',
                     fontSize: 14,
@@ -190,7 +103,6 @@ class _CurrentRequestTabState extends State<_CurrentRequestTab> {
           padding: const EdgeInsets.all(16),
           child: Column(
             children: [
-              // بطاقة حالة الطلب
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(20),
@@ -198,16 +110,21 @@ class _CurrentRequestTabState extends State<_CurrentRequestTab> {
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(16),
                   boxShadow: [
-                    BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 10, offset: const Offset(0, 2)),
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.06),
+                      blurRadius: 10,
+                      offset: const Offset(0, 2),
+                    ),
                   ],
                 ),
                 child: Column(
                   children: [
-                    // أيقونة الحالة
                     Container(
-                      width: 64, height: 64,
+                      width: 64,
+                      height: 64,
                       decoration: BoxDecoration(
-                        color: _statusIconColor(request.statusKey).withValues(alpha: 0.1),
+                        color: _statusIconColor(request.statusKey)
+                            .withValues(alpha: 0.1),
                         shape: BoxShape.circle,
                       ),
                       child: Icon(
@@ -230,13 +147,16 @@ class _CurrentRequestTabState extends State<_CurrentRequestTab> {
                     if (request.requestNumber.isNotEmpty)
                       Text(
                         'رقم الطلب: ${request.requestNumber}',
-                        style: TextStyle(fontFamily: 'Cairo', fontSize: 14, color: Colors.grey[500]),
+                        style: TextStyle(
+                          fontFamily: 'Cairo',
+                          fontSize: 14,
+                          color: Colors.grey[500],
+                        ),
                       ),
                   ],
                 ),
               ),
               const SizedBox(height: 16),
-
               if (request.canShowLiveTracking) ...[
                 TaxiOrderTrackingMap(
                   request: request,
@@ -250,8 +170,6 @@ class _CurrentRequestTabState extends State<_CurrentRequestTab> {
                 ),
                 const SizedBox(height: 16),
               ],
-
-              // تفاصيل الرحلة
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(16),
@@ -259,7 +177,11 @@ class _CurrentRequestTabState extends State<_CurrentRequestTab> {
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(16),
                   boxShadow: [
-                    BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 10, offset: const Offset(0, 2)),
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.06),
+                      blurRadius: 10,
+                      offset: const Offset(0, 2),
+                    ),
                   ],
                 ),
                 child: Column(
@@ -267,7 +189,11 @@ class _CurrentRequestTabState extends State<_CurrentRequestTab> {
                   children: [
                     const Text(
                       'تفاصيل الرحلة',
-                      style: TextStyle(fontFamily: 'Cairo', fontSize: 16, fontWeight: FontWeight.w700),
+                      style: TextStyle(
+                        fontFamily: 'Cairo',
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                     const Divider(),
                     if (!request.canShowLiveTracking) ...[
@@ -278,18 +204,31 @@ class _CurrentRequestTabState extends State<_CurrentRequestTab> {
                     ],
                     Row(
                       children: [
-                        const Icon(Icons.straighten, size: 18, color: AppColors.textSecondary),
+                        const Icon(
+                          Icons.straighten,
+                          size: 18,
+                          color: AppColors.textSecondary,
+                        ),
                         const SizedBox(width: 8),
                         Text(
                           'المسافة: ${request.distanceKm.toStringAsFixed(1)} كم',
                           style: const TextStyle(fontFamily: 'Cairo', fontSize: 14),
                         ),
                         const Spacer(),
-                        const Icon(Icons.payments, size: 18, color: AppColors.primary),
+                        const Icon(
+                          Icons.payments,
+                          size: 18,
+                          color: AppColors.primary,
+                        ),
                         const SizedBox(width: 8),
                         Text(
                           '${request.fare} د.ع',
-                          style: const TextStyle(fontFamily: 'Cairo', fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.primary),
+                          style: const TextStyle(
+                            fontFamily: 'Cairo',
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.primary,
+                          ),
                         ),
                       ],
                     ),
@@ -326,8 +265,6 @@ class _CurrentRequestTabState extends State<_CurrentRequestTab> {
                   ],
                 ),
               ),
-
-              // معلومات السائق إن وجدت
               if (request.hasAssignedDriver) ...[
                 const SizedBox(height: 16),
                 Container(
@@ -337,7 +274,11 @@ class _CurrentRequestTabState extends State<_CurrentRequestTab> {
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(16),
                     boxShadow: [
-                      BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 10, offset: const Offset(0, 2)),
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.06),
+                        blurRadius: 10,
+                        offset: const Offset(0, 2),
+                      ),
                     ],
                   ),
                   child: Column(
@@ -345,7 +286,11 @@ class _CurrentRequestTabState extends State<_CurrentRequestTab> {
                     children: [
                       const Text(
                         'معلومات السائق',
-                        style: TextStyle(fontFamily: 'Cairo', fontSize: 16, fontWeight: FontWeight.w700),
+                        style: TextStyle(
+                          fontFamily: 'Cairo',
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                       const Divider(),
                       _detailRow(
@@ -367,7 +312,11 @@ class _CurrentRequestTabState extends State<_CurrentRequestTab> {
                         const SizedBox(height: 12),
                         Row(
                           children: [
-                            const Icon(Icons.pin, size: 18, color: AppColors.textSecondary),
+                            const Icon(
+                              Icons.pin,
+                              size: 18,
+                              color: AppColors.textSecondary,
+                            ),
                             const SizedBox(width: 8),
                             const Text(
                               'اللوحة:',
@@ -392,20 +341,15 @@ class _CurrentRequestTabState extends State<_CurrentRequestTab> {
                       ],
                       if (request.hasAssignedDriver) ...[
                         const SizedBox(height: 12),
-                        InternalContactButtons.taxi(
-                          requestId: request.id,
-                          otherPartyName: (request.driverName?.trim().isNotEmpty == true)
-                              ? request.driverName!.trim()
-                              : 'السائق',
-                          receiverPhone: request.driverPhone,
-                          chatLabel: 'مراسلة السائق',
+                        TaxiDriverContactButtons(
+                          driverPhone: request.driverPhone,
+                          driverName: request.driverName ?? 'السائق',
                         ),
                       ],
                     ],
                   ),
                 ),
               ],
-
               if (request.canCustomerCancel) ...[
                 const SizedBox(height: 16),
                 SizedBox(
@@ -422,9 +366,9 @@ class _CurrentRequestTabState extends State<_CurrentRequestTab> {
                             child: CircularProgressIndicator(strokeWidth: 2),
                           )
                         : const Icon(Icons.cancel_outlined),
-                    label: Text(
+                    label: const Text(
                       'إلغاء الرحلة',
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontFamily: 'Cairo',
                         fontSize: 16,
                         fontWeight: FontWeight.w600,
@@ -457,13 +401,21 @@ class _CurrentRequestTabState extends State<_CurrentRequestTab> {
           width: 40,
           child: Text(
             '$label:',
-            style: TextStyle(fontFamily: 'Cairo', fontSize: 14, color: Colors.grey[600]),
+            style: TextStyle(
+              fontFamily: 'Cairo',
+              fontSize: 14,
+              color: Colors.grey[600],
+            ),
           ),
         ),
         Expanded(
           child: Text(
             value,
-            style: const TextStyle(fontFamily: 'Cairo', fontSize: 14, fontWeight: FontWeight.w600),
+            style: const TextStyle(
+              fontFamily: 'Cairo',
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+            ),
           ),
         ),
       ],
@@ -472,53 +424,75 @@ class _CurrentRequestTabState extends State<_CurrentRequestTab> {
 
   IconData _statusIcon(String key) {
     switch (key) {
-      case 'pending': return Icons.hourglass_empty;
+      case 'pending':
+        return Icons.hourglass_empty;
       case 'accepted':
       case 'on_way':
         return Icons.directions_car;
-      case 'arrived': return Icons.location_on;
-      case 'picked_up': return Icons.trip_origin;
-      case 'completed': return Icons.check_circle;
-      case 'cancelled': return Icons.cancel;
-      case 'cancel_requested': return Icons.hourglass_top;
-      default: return Icons.info;
+      case 'arrived':
+        return Icons.location_on;
+      case 'picked_up':
+        return Icons.trip_origin;
+      case 'completed':
+        return Icons.check_circle;
+      case 'cancelled':
+        return Icons.cancel;
+      case 'cancel_requested':
+        return Icons.hourglass_top;
+      default:
+        return Icons.info;
     }
   }
 
   Color _statusIconColor(String key) {
     switch (key) {
-      case 'pending': return const Color(0xFFF9A825);
+      case 'pending':
+        return const Color(0xFFF9A825);
       case 'accepted':
       case 'on_way':
         return AppColors.primary;
-      case 'arrived': return const Color(0xFF2E7D32);
-      case 'picked_up': return const Color(0xFF145B66);
-      case 'completed': return const Color(0xFF2E7D32);
-      case 'cancelled': return const Color(0xFFC62828);
-      case 'cancel_requested': return const Color(0xFFE65100);
-      default: return Colors.grey;
+      case 'arrived':
+        return const Color(0xFF2E7D32);
+      case 'picked_up':
+        return const Color(0xFF145B66);
+      case 'completed':
+        return const Color(0xFF2E7D32);
+      case 'cancelled':
+        return const Color(0xFFC62828);
+      case 'cancel_requested':
+        return const Color(0xFFE65100);
+      default:
+        return Colors.grey;
     }
   }
 
   String _statusLabel(String key) {
     switch (key) {
-      case 'pending': return 'بانتظار سائق';
+      case 'pending':
+        return 'بانتظار سائق';
       case 'accepted':
       case 'on_way':
         return 'السائق في الطريق';
-      case 'arrived': return 'السائق في مكان الالتقاء';
-      case 'picked_up': return 'تم الاستلام';
-      case 'completed': return 'اكتملت الرحلة';
-      case 'cancelled': return 'ملغية';
-      case 'cancel_requested': return 'بانتظار موافقة السائق على الإلغاء';
-      default: return key;
+      case 'arrived':
+        return 'السائق في مكان الالتقاء';
+      case 'picked_up':
+        return 'تم الاستلام';
+      case 'completed':
+        return 'اكتملت الرحلة';
+      case 'cancelled':
+        return 'ملغية';
+      case 'cancel_requested':
+        return 'بانتظار موافقة السائق على الإلغاء';
+      default:
+        return key;
     }
   }
 }
 
-// ── التبويب الثاني: سجل الطلبات ──
+/// تبويب سجل الطلبات.
+class TaxiHistoryTab extends StatelessWidget {
+  const TaxiHistoryTab({super.key});
 
-class _HistoryTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Consumer<TaxiProvider>(
@@ -550,7 +524,11 @@ class _HistoryTab extends StatelessWidget {
                 const SizedBox(height: 8),
                 Text(
                   'قم برحلة جديدة لتظهر هنا',
-                  style: TextStyle(fontFamily: 'Cairo', fontSize: 14, color: Colors.grey[400]),
+                  style: TextStyle(
+                    fontFamily: 'Cairo',
+                    fontSize: 14,
+                    color: Colors.grey[400],
+                  ),
                 ),
               ],
             ),
@@ -562,7 +540,8 @@ class _HistoryTab extends StatelessWidget {
           child: ListView.builder(
             padding: const EdgeInsets.all(12),
             itemCount: requests.length,
-            itemBuilder: (context, index) => _HistoryTripCard(request: requests[index]),
+            itemBuilder: (context, index) =>
+                _HistoryTripCard(request: requests[index]),
           ),
         );
       },
@@ -582,7 +561,8 @@ class _HistoryTripCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isCompleted = request.isCompleted;
-    final statusColor = isCompleted ? const Color(0xFF2E7D32) : const Color(0xFFC62828);
+    final statusColor =
+        isCompleted ? const Color(0xFF2E7D32) : const Color(0xFFC62828);
     final statusText = isCompleted ? 'مكتمل' : 'ملغي';
 
     return Container(
@@ -591,7 +571,11 @@ class _HistoryTripCard extends StatelessWidget {
         color: Colors.white,
         borderRadius: BorderRadius.circular(14),
         boxShadow: [
-          BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 8, offset: const Offset(0, 2)),
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
         ],
       ),
       child: Padding(
@@ -599,7 +583,6 @@ class _HistoryTripCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // السطر الأول: رقم الطلب + التاريخ
             Row(
               children: [
                 Container(
@@ -609,26 +592,39 @@ class _HistoryTripCard extends StatelessWidget {
                     borderRadius: BorderRadius.circular(6),
                   ),
                   child: Text(
-                    request.requestNumber.isNotEmpty ? request.requestNumber : '---',
-                    style: const TextStyle(fontFamily: 'Cairo', fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFF145B66)),
+                    request.requestNumber.isNotEmpty
+                        ? request.requestNumber
+                        : '---',
+                    style: const TextStyle(
+                      fontFamily: 'Cairo',
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF145B66),
+                    ),
                   ),
                 ),
                 const Spacer(),
-                Text(_formatDate(request.completedAt ?? request.acceptedAt),
-                    style: TextStyle(fontFamily: 'Cairo', fontSize: 12, color: Colors.grey[500])),
+                Text(
+                  _formatDate(request.completedAt ?? request.acceptedAt),
+                  style: TextStyle(
+                    fontFamily: 'Cairo',
+                    fontSize: 12,
+                    color: Colors.grey[500],
+                  ),
+                ),
               ],
             ),
             const SizedBox(height: 10),
-
-            // من → إلى
             Row(
               children: [
                 const Icon(Icons.my_location, size: 14, color: AppColors.textSecondary),
                 const SizedBox(width: 4),
                 Expanded(
-                  child: Text(request.pickupAddress,
-                      style: const TextStyle(fontFamily: 'Cairo', fontSize: 13),
-                      overflow: TextOverflow.ellipsis),
+                  child: Text(
+                    request.pickupAddress,
+                    style: const TextStyle(fontFamily: 'Cairo', fontSize: 13),
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
               ],
             ),
@@ -638,26 +634,39 @@ class _HistoryTripCard extends StatelessWidget {
                 const Icon(Icons.place, size: 14, color: AppColors.accent),
                 const SizedBox(width: 4),
                 Expanded(
-                  child: Text(request.dropoffAddress,
-                      style: const TextStyle(fontFamily: 'Cairo', fontSize: 13),
-                      overflow: TextOverflow.ellipsis),
+                  child: Text(
+                    request.dropoffAddress,
+                    style: const TextStyle(fontFamily: 'Cairo', fontSize: 13),
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
               ],
             ),
             const SizedBox(height: 10),
-
-            // السطر الأخير: مسافة + سعر + حالة
             Row(
               children: [
                 Icon(Icons.straighten, size: 16, color: Colors.grey[500]),
                 const SizedBox(width: 4),
-                Text('${request.distanceKm.toStringAsFixed(1)} كم',
-                    style: TextStyle(fontFamily: 'Cairo', fontSize: 13, color: Colors.grey[600])),
+                Text(
+                  '${request.distanceKm.toStringAsFixed(1)} كم',
+                  style: TextStyle(
+                    fontFamily: 'Cairo',
+                    fontSize: 13,
+                    color: Colors.grey[600],
+                  ),
+                ),
                 const SizedBox(width: 16),
-                Icon(Icons.payments, size: 16, color: AppColors.primary),
+                const Icon(Icons.payments, size: 16, color: AppColors.primary),
                 const SizedBox(width: 4),
-                Text('${request.fare} د.ع',
-                    style: const TextStyle(fontFamily: 'Cairo', fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.primary)),
+                Text(
+                  '${request.fare} د.ع',
+                  style: const TextStyle(
+                    fontFamily: 'Cairo',
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.primary,
+                  ),
+                ),
                 const Spacer(),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
@@ -665,33 +674,95 @@ class _HistoryTripCard extends StatelessWidget {
                     color: statusColor.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child: Text(statusText,
-                      style: TextStyle(fontFamily: 'Cairo', fontSize: 12, fontWeight: FontWeight.w600, color: statusColor)),
+                  child: Text(
+                    statusText,
+                    style: TextStyle(
+                      fontFamily: 'Cairo',
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: statusColor,
+                    ),
+                  ),
                 ),
               ],
             ),
-
-            // معلومات السائق
             if (request.driverName != null && request.driverName!.isNotEmpty) ...[
               const SizedBox(height: 8),
               Row(
                 children: [
                   Icon(Icons.person, size: 14, color: Colors.grey[400]),
                   const SizedBox(width: 4),
-                  Text(request.driverName!,
-                      style: TextStyle(fontFamily: 'Cairo', fontSize: 12, color: Colors.grey[500])),
-                  if (request.driverVehicleInfo != null && request.driverVehicleInfo!.isNotEmpty) ...[
+                  Text(
+                    request.driverName!,
+                    style: TextStyle(
+                      fontFamily: 'Cairo',
+                      fontSize: 12,
+                      color: Colors.grey[500],
+                    ),
+                  ),
+                  if (request.driverVehicleInfo != null &&
+                      request.driverVehicleInfo!.isNotEmpty) ...[
                     const SizedBox(width: 8),
                     Icon(Icons.directions_car, size: 14, color: Colors.grey[400]),
                     const SizedBox(width: 4),
                     Expanded(
-                      child: Text(request.driverVehicleInfo!,
-                          style: TextStyle(fontFamily: 'Cairo', fontSize: 12, color: Colors.grey[500]),
-                          overflow: TextOverflow.ellipsis),
+                      child: Text(
+                        request.driverVehicleInfo!,
+                        style: TextStyle(
+                          fontFamily: 'Cairo',
+                          fontSize: 12,
+                          color: Colors.grey[500],
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
                   ],
                 ],
               ),
+            ],
+            if (isCompleted) ...[
+              const SizedBox(height: 10),
+              if (request.driverRating > 0)
+                Row(
+                  children: [
+                    const Icon(Icons.star, size: 16, color: Color(0xFFFCD400)),
+                    const SizedBox(width: 4),
+                    Text(
+                      '${request.driverRating}',
+                      style: const TextStyle(
+                        fontFamily: 'Cairo',
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      'تقييم السائق',
+                      style: TextStyle(
+                        fontFamily: 'Cairo',
+                        fontSize: 12,
+                        color: Colors.grey[500],
+                      ),
+                    ),
+                  ],
+                )
+              else
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton.icon(
+                    onPressed: () =>
+                        TaxiRatingNavigation.openIfNeeded(context, request),
+                    icon: const Icon(Icons.star_border, size: 18),
+                    label: const Text(
+                      'قيّم السائق',
+                      style: TextStyle(fontFamily: 'Cairo'),
+                    ),
+                    style: TextButton.styleFrom(
+                      foregroundColor: AppColors.primary,
+                      padding: EdgeInsets.zero,
+                    ),
+                  ),
+                ),
             ],
           ],
         ),
@@ -700,16 +771,20 @@ class _HistoryTripCard extends StatelessWidget {
   }
 }
 
-// ── التبويب الثالث: تواصل مع الدعم الفني ──
+/// تبويب تواصل معنا.
+class TaxiSupportTab extends StatelessWidget {
+  const TaxiSupportTab({super.key});
 
-class _SupportTab extends StatelessWidget {
-  final VoidCallback onWhatsAppTap;
-  final VoidCallback onCallTap;
+  void _openSupportWhatsApp() {
+    AppHelpers.launchWhatsApp(
+      AppHelpers.supportWhatsAppNumber,
+      'مرحباً، أحتاج مساعدة في خدمة التكسي',
+    );
+  }
 
-  const _SupportTab({
-    required this.onWhatsAppTap,
-    required this.onCallTap,
-  });
+  void _openSupportCall() {
+    AppHelpers.makePhoneCall(AppHelpers.supportPhoneNumber);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -720,7 +795,8 @@ class _SupportTab extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(
-              width: 80, height: 80,
+              width: 80,
+              height: 80,
               decoration: BoxDecoration(
                 color: const Color(0xFF25D366).withValues(alpha: 0.1),
                 shape: BoxShape.circle,
@@ -756,15 +832,22 @@ class _SupportTab extends StatelessWidget {
               width: double.infinity,
               height: 56,
               child: ElevatedButton.icon(
-                onPressed: onWhatsAppTap,
+                onPressed: _openSupportWhatsApp,
                 icon: const Icon(Icons.message, color: Colors.white),
                 label: const Text(
                   'راسلنا على واتساب',
-                  style: TextStyle(fontFamily: 'Cairo', fontSize: 18, fontWeight: FontWeight.w700, color: Colors.white),
+                  style: TextStyle(
+                    fontFamily: 'Cairo',
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.white,
+                  ),
                 ),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF25D366),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
                   elevation: 4,
                 ),
               ),
@@ -774,49 +857,35 @@ class _SupportTab extends StatelessWidget {
               width: double.infinity,
               height: 52,
               child: OutlinedButton.icon(
-                onPressed: onCallTap,
+                onPressed: _openSupportCall,
                 icon: const Icon(Icons.phone, color: AppColors.primary),
                 label: const Text(
                   'اتصال بالدعم',
-                  style: TextStyle(fontFamily: 'Cairo', fontSize: 16, fontWeight: FontWeight.w700),
+                  style: TextStyle(
+                    fontFamily: 'Cairo',
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
                 style: OutlinedButton.styleFrom(
                   foregroundColor: AppColors.primary,
                   side: const BorderSide(color: AppColors.primary),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
                 ),
               ),
             ),
             const SizedBox(height: 16),
             Text(
               'ساعات العمل: ٨ صباحاً - ١٠ مساءً',
-              style: TextStyle(fontFamily: 'Cairo', fontSize: 13, color: Colors.grey[400]),
+              style: TextStyle(
+                fontFamily: 'Cairo',
+                fontSize: 13,
+                color: Colors.grey[400],
+              ),
             ),
           ],
-        ),
-      ),
-    );
-  }
-}
-
-/// زر رجوع — بنفس مقاس زر القائمة الجانبية (مثل شاشة طلب تكسي)
-class _BackButton extends StatelessWidget {
-  const _BackButton();
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: () => Navigator.of(context).maybePop(),
-        borderRadius: BorderRadius.circular(14),
-        child: const Padding(
-          padding: EdgeInsets.all(8),
-          child: Icon(
-            Icons.arrow_forward_ios_rounded,
-            size: 28,
-            color: AppColors.primary,
-          ),
         ),
       ),
     );

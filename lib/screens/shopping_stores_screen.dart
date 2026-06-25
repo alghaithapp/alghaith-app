@@ -162,6 +162,21 @@ class _ShoppingStoresScreenState extends State<ShoppingStoresScreen> {
     return !isRestaurant;
   }
 
+  String _restaurantCategoryFromProfile(Map profile) {
+    final direct =
+        profile['restaurantCategory'] ?? profile['restaurant_category'];
+    final value = direct?.toString().trim() ?? '';
+    if (value.isNotEmpty) return value;
+
+    final storeData = profile['store_data'] ?? profile['storeData'];
+    if (storeData is Map) {
+      final nested = storeData['restaurantCategory'] ??
+          storeData['restaurant_category'];
+      return nested?.toString().trim() ?? '';
+    }
+    return '';
+  }
+
   bool _storeMatchesCuisineFilter(Map profile) {
     if (!widget.showCuisineFilters || _selectedFilter == 'الكل') {
       return true;
@@ -171,8 +186,7 @@ class _ShoppingStoresScreenState extends State<ShoppingStoresScreen> {
     if (_isBazaarChannel && !_isRestaurantStore(profile)) {
       return true;
     }
-    final resCat = profile['restaurantCategory']?.toString() ?? '';
-    return resCat == _selectedFilter;
+    return _restaurantCategoryFromProfile(profile) == _selectedFilter;
   }
 
   bool _storeHasVisibleProducts(Map<String, dynamic> store) {
