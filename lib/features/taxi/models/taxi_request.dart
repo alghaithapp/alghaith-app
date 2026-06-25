@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../utils/taxi_distance_calculator.dart';
+
 /// أنواع خدمة التنقل
 enum TaxiType { tuktuk, wazz, economic }
 
@@ -89,6 +91,37 @@ extension TaxiTypeX on TaxiType {
   }
 }
 
+/// نقطة توقف وسيطة في الرحلة.
+class TaxiWaypoint {
+  final String address;
+  final double lat;
+  final double lng;
+
+  const TaxiWaypoint({
+    required this.address,
+    required this.lat,
+    required this.lng,
+  });
+
+  Map<String, dynamic> toApiMap() => {
+        'address': address,
+        'lat': lat,
+        'lng': lng,
+      };
+
+  factory TaxiWaypoint.fromMap(Map<String, dynamic> map) {
+    return TaxiWaypoint(
+      address: (map['address'] as String?) ?? (map['addressAr'] as String?) ?? '',
+      lat: (map['lat'] as num?)?.toDouble() ??
+          (map['latitude'] as num?)?.toDouble() ??
+          0,
+      lng: (map['lng'] as num?)?.toDouble() ??
+          (map['longitude'] as num?)?.toDouble() ??
+          0,
+    );
+  }
+}
+
 /// نموذج طلب التكسي
 class TaxiRequest {
   final String id;
@@ -125,6 +158,12 @@ class TaxiRequest {
   final bool isPaid;
   final String? noteAr;
   final String? assignedDriverName;
+  final List<TaxiWaypoint> waypoints;
+  final int? liveEtaSeconds;
+  final double? liveEtaDistanceKm;
+  final bool adminReviewRequired;
+  final String? cancelRequestReason;
+  final DateTime? createdAt;
 
   const TaxiRequest({
     required this.id,
@@ -161,6 +200,12 @@ class TaxiRequest {
     this.isPaid = false,
     this.noteAr,
     this.assignedDriverName,
+    this.waypoints = const [],
+    this.liveEtaSeconds,
+    this.liveEtaDistanceKm,
+    this.adminReviewRequired = false,
+    this.cancelRequestReason,
+    this.createdAt,
   });
 
   String get pickupAddressAr => pickupAddress;
@@ -177,7 +222,7 @@ class TaxiRequest {
   bool get isCancelRequested => statusKey == 'cancel_requested';
 
   bool get canCustomerCancel =>
-      !isCompleted && !isCancelled && !isPickedUp;
+      !isCompleted && !isCancelled && !isPickedUp && !isCancelRequested;
 
   bool get hasAssignedDriver =>
       isAccepted || isOnWay || isArrived || isPickedUp || isCancelRequested;
@@ -231,6 +276,14 @@ class TaxiRequest {
   bool get hasDriverLocation =>
       driverLat != null && driverLng != null && driverLat != 0 && driverLng != 0;
 
+  bool get hasLiveEta => liveEtaSeconds != null && liveEtaSeconds! > 0;
+
+  String get liveEtaLabelAr {
+    final secs = liveEtaSeconds;
+    if (secs == null || secs <= 0) return '';
+    return TaxiDistanceCalculator.formatDrivingDurationAr(secs);
+  }
+
   Map<String, dynamic> toMap() {
     return {
       'id': id,
@@ -267,6 +320,12 @@ class TaxiRequest {
       'isPaid': isPaid,
       if (noteAr != null) 'noteAr': noteAr,
       if (assignedDriverName != null) 'assignedDriverName': assignedDriverName,
+      'waypoints': waypoints.map((wp) => wp.toApiMap()).toList(),
+      if (liveEtaSeconds != null) 'liveEtaSeconds': liveEtaSeconds,
+      if (liveEtaDistanceKm != null) 'liveEtaDistanceKm': liveEtaDistanceKm,
+      'adminReviewRequired': adminReviewRequired,
+      if (cancelRequestReason != null) 'cancelRequestReason': cancelRequestReason,
+      if (createdAt != null) 'createdAt': createdAt!.toIso8601String(),
     };
   }
 
@@ -314,6 +373,19 @@ class TaxiRequest {
       isPaid: (map['isPaid'] as bool?) ?? false,
       noteAr: map['noteAr'] as String?,
       assignedDriverName: map['assignedDriverName'] as String?,
+      waypoints: map['waypoints'] is List
+          ? (map['waypoints'] as List)
+              .whereType<Map>()
+              .map((e) => TaxiWaypoint.fromMap(Map<String, dynamic>.from(e)))
+              .toList()
+          : const [],
+      liveEtaSeconds: (map['liveEtaSeconds'] as num?)?.toInt(),
+      liveEtaDistanceKm: (map['liveEtaDistanceKm'] as num?)?.toDouble(),
+      adminReviewRequired: (map['adminReviewRequired'] as bool?) ?? false,
+      cancelRequestReason: map['cancelRequestReason'] as String?,
+      createdAt: map['createdAt'] != null
+          ? DateTime.tryParse(map['createdAt'] as String)
+          : null,
     );
   }
 
@@ -352,6 +424,12 @@ class TaxiRequest {
     bool? isPaid,
     String? noteAr,
     String? assignedDriverName,
+    List<TaxiWaypoint>? waypoints,
+    int? liveEtaSeconds,
+    double? liveEtaDistanceKm,
+    bool? adminReviewRequired,
+    String? cancelRequestReason,
+    DateTime? createdAt,
   }) {
     return TaxiRequest(
       id: id ?? this.id,
@@ -388,6 +466,12 @@ class TaxiRequest {
       isPaid: isPaid ?? this.isPaid,
       noteAr: noteAr ?? this.noteAr,
       assignedDriverName: assignedDriverName ?? this.assignedDriverName,
+      waypoints: waypoints ?? this.waypoints,
+      liveEtaSeconds: liveEtaSeconds ?? this.liveEtaSeconds,
+      liveEtaDistanceKm: liveEtaDistanceKm ?? this.liveEtaDistanceKm,
+      adminReviewRequired: adminReviewRequired ?? this.adminReviewRequired,
+      cancelRequestReason: cancelRequestReason ?? this.cancelRequestReason,
+      createdAt: createdAt ?? this.createdAt,
     );
   }
 }

@@ -5,6 +5,8 @@ import {
   deleteAdminAccount,
   loadAdminAccounts,
   loadAdminReports,
+  loadAdminTaxiComplaints,
+  loadAdminTaxiTrips,
   loadAppUpdatePolicy,
   loadCouriers,
   loadHomeCategoriesConfig,
@@ -31,6 +33,8 @@ import type {
   AdminAccountKind,
   AdminAccountSummary,
   AdminReports,
+  AdminTaxiTrip,
+  AdminView,
   AppUpdatePolicy,
   CourierSummary,
   HomeCategoriesConfig,
@@ -49,6 +53,7 @@ import DashboardView from './components/views/DashboardView';
 import MerchantsView from './components/views/MerchantsView';
 import CouriersView from './components/views/CouriersView';
 import DriversView from './components/views/DriversView';
+import TaxiAdminView from './components/views/TaxiAdminView';
 import AccountsView from './components/views/AccountsView';
 import HomeCategoriesView from './components/views/HomeCategoriesView';
 import AppUpdateView from './components/views/AppUpdateView';
@@ -62,14 +67,6 @@ type RejectAccountTarget = Pick<
 
 const SESSION_STORAGE_KEY = 'alghaith-admin-session-v1';
 
-type AdminView =
-  | 'dashboard'
-  | 'accounts'
-  | 'merchants'
-  | 'couriers'
-  | 'drivers'
-  | 'homeCategories'
-  | 'appUpdate';
 type AccountFilter = 'all' | AdminAccountKind;
 type MerchantFilter = 'all' | 'pending' | 'rejected' | 'professionals' | 'bazaar';
 
@@ -100,6 +97,12 @@ const VIEW_META: Record<
     title: 'إدارة سائقي التكسي',
     subtitle: 'راجع طلبات تفعيل سائقي التكسي وأدر حساباتهم.',
     showSearch: true,
+  },
+  taxi: {
+    eyebrow: 'عمليات التكسي',
+    title: 'مراقبة الرحلات والشكاوى',
+    subtitle: 'تتبع الرحلات النشطة، السائقين، والتقييمات المنخفضة.',
+    showSearch: false,
   },
   accounts: {
     eyebrow: 'إدارة الحسابات',
@@ -239,6 +242,10 @@ export default function App() {
   const [homeCategoriesConfig, setHomeCategoriesConfig] = useState<HomeCategoriesConfig | null>(null);
   const [homeCategorySavingKey, setHomeCategorySavingKey] = useState('');
   const [isLoadingHomeCategories, setIsLoadingHomeCategories] = useState(false);
+  const [taxiTrips, setTaxiTrips] = useState<AdminTaxiTrip[]>([]);
+  const [taxiComplaints, setTaxiComplaints] = useState<AdminTaxiTrip[]>([]);
+  const [taxiStatusFilter, setTaxiStatusFilter] = useState('');
+  const [isLoadingTaxiData, setIsLoadingTaxiData] = useState(false);
   const homeCategoriesLoadSeq = useRef(0);
   const homeCategoriesSaveSeq = useRef(0);
 
@@ -302,6 +309,28 @@ export default function App() {
         setActionError(error instanceof Error ? error.message : 'تعذر تحميل إعدادات التحديث الإجباري.');
       });
   }, [token, view]);
+
+  async function refreshTaxiAdminData(authToken: string, status = taxiStatusFilter) {
+    setIsLoadingTaxiData(true);
+    setActionError('');
+    try {
+      const [trips, complaints] = await Promise.all([
+        loadAdminTaxiTrips(authToken, status || undefined),
+        loadAdminTaxiComplaints(authToken),
+      ]);
+      setTaxiTrips(trips);
+      setTaxiComplaints(complaints);
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : 'تعذر تحميل بيانات التكسي.');
+    } finally {
+      setIsLoadingTaxiData(false);
+    }
+  }
+
+  useEffect(() => {
+    if (!token || view !== 'taxi') return;
+    refreshTaxiAdminData(token).catch(() => undefined);
+  }, [token, view, taxiStatusFilter]);
 
   useEffect(() => {
     if (!token || view !== 'homeCategories') return;
@@ -911,6 +940,28 @@ export default function App() {
                       onOpenReject={(target) => openRejectConfirm(target)}
                       onSuspend={handleSuspendAccount}
                       onOpenDelete={openDeleteConfirm}
+                    />
+                  </div>
+                </section>
+              ) : null}
+
+              {view === 'taxi' ? (
+                <section className="main-grid couriers-only">
+                  <div className="panel wide">
+                    <div className="panel-header">
+                      <div>
+                        <h3>عمليات التكسي</h3>
+                        <p>راقب الرحلات النشطة والشكاوى والتقييمات المنخفضة.</p>
+                      </div>
+                      <span className="panel-chip">{taxiTrips.length}</span>
+                    </div>
+                    <TaxiAdminView
+                      trips={taxiTrips}
+                      complaints={taxiComplaints}
+                      loading={isLoadingTaxiData}
+                      statusFilter={taxiStatusFilter}
+                      onStatusFilterChange={setTaxiStatusFilter}
+                      onRefresh={() => refreshTaxiAdminData(token!)}
                     />
                   </div>
                 </section>

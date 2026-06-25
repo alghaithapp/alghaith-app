@@ -68,6 +68,9 @@ class _TaxiRequestScreenState extends State<TaxiRequestScreen> {
   /// عند النقر على الخريطة — true يعني تعيين موقع الانطلاق، false يعني تعيين الوصول
   bool _isSettingPickupByTap = true;
 
+  final List<_TripStopDraft> _stops = [];
+  int? _editingStopIndex;
+
   bool get _hasBothLocations =>
       _pickupController.text.trim().isNotEmpty &&
       _dropoffController.text.trim().isNotEmpty;
@@ -205,7 +208,10 @@ class _TaxiRequestScreenState extends State<TaxiRequestScreen> {
   }
 
   Future<void> _selectSuggestion(TaxiPlaceSuggestion suggestion) async {
-    final controller = _isPickupField ? _pickupController : _dropoffController;
+    final stopIndex = _editingStopIndex;
+    final controller = stopIndex != null
+        ? _stops[stopIndex].controller
+        : (_isPickupField ? _pickupController : _dropoffController);
 
     LatLng? coord = suggestion.latLng;
     var address = suggestion.displayName;
@@ -222,6 +228,19 @@ class _TaxiRequestScreenState extends State<TaxiRequestScreen> {
     }
 
     if (!mounted) return;
+
+    if (stopIndex != null) {
+      setState(() {
+        controller.text = address;
+        _stops[stopIndex].coord = coord;
+        _suggestions = [];
+        _showCarSelection = false;
+        _editingStopIndex = null;
+      });
+      await _refreshRouteWithStops();
+      FocusScope.of(context).unfocus();
+      return;
+    }
 
     if (_isPickupField) {
       setState(() {
@@ -254,6 +273,77 @@ class _TaxiRequestScreenState extends State<TaxiRequestScreen> {
       }
     }
     FocusScope.of(context).unfocus();
+  }
+
+  Future<void> _refreshRouteWithStops() async {
+    final pickup = _pickupCoord;
+    final dropoff = _dropoffCoord;
+    if (pickup == null || dropoff == null) return;
+
+    final chain = <LatLng>[pickup];
+    for (final stop in _stops) {
+      final coord = stop.coord;
+      if (coord != null) chain.add(coord);
+    }
+    chain.add(dropoff);
+
+    double totalKm = 0;
+    for (var i = 0; i < chain.length - 1; i++) {
+      totalKm += TaxiDistanceCalculator.calculateDistance(
+        chain[i].latitude,
+        chain[i].longitude,
+        chain[i + 1].latitude,
+        chain[i + 1].longitude,
+      );
+    }
+
+    await _fetchRoute(pickup, dropoff);
+    if (!mounted) return;
+    if (totalKm > _distanceKm) {
+      setState(() {
+        _distanceKm = totalKm;
+        _fareTuktuk =
+            TaxiFareCalculator.fareForType(_distanceKm, TaxiType.tuktuk);
+        _fareWazz = TaxiFareCalculator.fareForType(_distanceKm, TaxiType.wazz);
+        _fareEconomic =
+            TaxiFareCalculator.fareForType(_distanceKm, TaxiType.economic);
+      });
+    }
+  }
+
+  void _addStopField() {
+    if (_stops.length >= 3) return;
+    setState(() {
+      _stops.add(_TripStopDraft());
+      _editingStopIndex = _stops.length - 1;
+      _isPickupField = false;
+    });
+  }
+
+  void _removeStopField(int index) {
+    if (index < 0 || index >= _stops.length) return;
+    setState(() {
+      _stops[index].dispose();
+      _stops.removeAt(index);
+      if (_editingStopIndex == index) _editingStopIndex = null;
+    });
+    unawaited(_refreshRouteWithStops());
+  }
+
+  List<TaxiWaypoint> _buildWaypoints() {
+    return _stops
+        .where((s) =>
+            s.controller.text.trim().isNotEmpty &&
+            s.coord != null &&
+            s.coord!.latitude != 0)
+        .map(
+          (s) => TaxiWaypoint(
+            address: s.controller.text.trim(),
+            lat: s.coord!.latitude,
+            lng: s.coord!.longitude,
+          ),
+        )
+        .toList();
   }
 
   /// جلب المسار — Google Directions (مثل Google Maps) مع احتياط Mapbox.
@@ -376,6 +466,7 @@ class _TaxiRequestScreenState extends State<TaxiRequestScreen> {
             dropoffLng: dropoff.longitude,
             distanceKm: _distanceKm,
             taxiType: _selectedTaxiType.toApiName,
+            waypoints: _buildWaypoints(),
           ),
         ),
       ),
@@ -386,6 +477,9 @@ class _TaxiRequestScreenState extends State<TaxiRequestScreen> {
   void dispose() {
     _searchDebounce?.cancel();
     context.read<TaxiProvider>().removeListener(_onTaxiProviderChanged);
+    for (final stop in _stops) {
+      stop.dispose();
+    }
     _pickupController.dispose();
     _dropoffController.dispose();
     _dropoffFocus.dispose();
@@ -478,6 +572,10 @@ class _TaxiRequestScreenState extends State<TaxiRequestScreen> {
                     hint: 'من أين؟',
                     icon: Icons.my_location,
                     iconColor: AppColors.primary,
+                    onTap: () {
+                      _editingStopIndex = null;
+                      _isPickupField = true;
+                    },
                     trailing: GestureDetector(
                       onTap: _isGettingLocation
                           ? null
@@ -508,7 +606,46 @@ class _TaxiRequestScreenState extends State<TaxiRequestScreen> {
                     icon: Icons.search,
                     iconColor: AppColors.primary,
                     focusNode: _dropoffFocus,
+                    onTap: () {
+                      _editingStopIndex = null;
+                      _isPickupField = false;
+                    },
                   ),
+                  for (var i = 0; i < _stops.length; i++) ...[
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _buildSearchField(
+                            controller: _stops[i].controller,
+                            hint: 'توقف ${i + 1}',
+                            icon: Icons.add_location_alt_outlined,
+                            iconColor: AppColors.accent,
+                            onTap: () {
+                              _editingStopIndex = i;
+                              _isPickupField = false;
+                            },
+                          ),
+                        ),
+                        IconButton(
+                          onPressed: () => _removeStopField(i),
+                          icon: const Icon(Icons.close, color: Colors.red),
+                        ),
+                      ],
+                    ),
+                  ],
+                  if (_stops.length < 3)
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: TextButton.icon(
+                        onPressed: _addStopField,
+                        icon: const Icon(Icons.add, size: 18),
+                        label: Text(
+                          'إضافة توقف (${_stops.length}/3)',
+                          style: const TextStyle(fontFamily: 'Cairo'),
+                        ),
+                      ),
+                    ),
                   // الاقتراحات
                   if (_isSearching)
                     const Padding(
@@ -943,8 +1080,11 @@ class _TaxiRequestScreenState extends State<TaxiRequestScreen> {
     required Color iconColor,
     FocusNode? focusNode,
     Widget? trailing,
+    VoidCallback? onTap,
   }) {
-    return Container(
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
@@ -985,8 +1125,16 @@ class _TaxiRequestScreenState extends State<TaxiRequestScreen> {
           ],
         ],
       ),
+    ),
     );
   }
+}
+
+class _TripStopDraft {
+  final TextEditingController controller = TextEditingController();
+  LatLng? coord;
+
+  void dispose() => controller.dispose();
 }
 
 class _ActiveTripBanner extends StatelessWidget {

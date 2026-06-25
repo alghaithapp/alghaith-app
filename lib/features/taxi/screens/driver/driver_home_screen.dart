@@ -23,13 +23,29 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
   bool _isRejecting = false;
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<TaxiProvider>().loadDriverHistory();
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     final appProvider = context.watch<AppProvider>();
     final taxiProvider = context.watch<TaxiProvider>();
     final pendingRequests = taxiProvider.incomingRequests;
-    final completedRequests = appProvider.visibleTaxiCompletedRequests;
-    final todayTrips = completedRequests.length;
-    final todayEarnings = completedRequests.fold<int>(0, (sum, r) => sum + r.fare);
+    final todayTrips = taxiProvider.requests
+        .where((r) => r.isCompleted && r.completedAt != null)
+        .where((r) {
+          final completedAt = r.completedAt!;
+          final now = DateTime.now();
+          return completedAt.year == now.year &&
+              completedAt.month == now.month &&
+              completedAt.day == now.day;
+        })
+        .length;
+    final todayEarnings = taxiProvider.todayEarnings;
     final driverProfile = appProvider.driverProfile ?? const {};
     final driverName = (driverProfile['name'] as String?)?.trim() ?? 'السائق';
 

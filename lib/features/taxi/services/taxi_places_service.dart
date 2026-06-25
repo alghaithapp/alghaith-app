@@ -28,11 +28,13 @@ class TaxiDrivingRoute {
   final List<LatLng> points;
   final int? durationSeconds;
   final double? distanceMeters;
+  final bool isApproximate;
 
   const TaxiDrivingRoute({
     this.points = const [],
     this.durationSeconds,
     this.distanceMeters,
+    this.isApproximate = false,
   });
 
   double? get distanceKm {
@@ -268,6 +270,7 @@ class TaxiPlacesService {
       distanceMeters: distanceKm * 1000,
       durationSeconds:
           TaxiDistanceCalculator.estimateDrivingDurationSeconds(distanceKm),
+      isApproximate: true,
     );
   }
 

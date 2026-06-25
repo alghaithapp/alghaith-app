@@ -68,6 +68,36 @@ router.post('/cancel', async (req, res) => {
   }
 });
 
+// POST /db/taxi/request-cancellation - طلب إلغاء بعد القبول (بانتظار موافقة السائق)
+router.post('/request-cancellation', async (req, res) => {
+  try {
+    const phone = requireOptionalAuthorizedPhone(req, res);
+    if (!phone) return;
+    const { requestId, reason } = req.body || {};
+    const result = await repo.requestTripCancellation(phone, requestId, reason);
+    return res.json(result);
+  } catch (error) {
+    console.error('taxi request-cancellation error:', error);
+    return res.status(500).json({ message: error?.message || 'Failed to request cancellation.' });
+  }
+});
+
+// POST /db/taxi/driver-location - تحديث موقع السائق أثناء الرحلة
+router.post('/driver-location', async (req, res) => {
+  try {
+    const phone = requireOptionalAuthorizedPhone(req, res);
+    if (!phone) return;
+    const { requestId, lat, lng } = req.body || {};
+    const id = String(requestId || '').trim();
+    await repo.updateDriverTripLocation(phone, id, Number(lat), Number(lng));
+    const row = await require('../supabase_repo/common').selectSingle('taxi_requests', 'id', id);
+    return res.json(row ? await formatRequestRowEnriched(row) : null);
+  } catch (error) {
+    console.error('taxi driver-location error:', error);
+    return res.status(500).json({ message: error?.message || 'Failed to update driver location.' });
+  }
+});
+
 // POST /db/taxi/status - تحديث حالة الرحلة
 router.post('/status', async (req, res) => {
   try {
@@ -75,7 +105,11 @@ router.post('/status', async (req, res) => {
     if (!phone) return;
     const { requestId, statusKey } = req.body || {};
     const result = await repo.updateTaxiRequestStatus(phone, requestId, statusKey);
-    return res.json(result);
+    const row = await require('../supabase_repo/common').selectSingle('taxi_requests', 'id', requestId);
+    if (row) {
+      return res.json(await formatRequestRowEnriched(row));
+    }
+    return res.json(formatRequestRow(result));
   } catch (error) {
     console.error('taxi status error:', error);
     return res.status(500).json({ message: error?.message || 'Failed to update taxi request status.' });
@@ -219,7 +253,7 @@ router.get('/incoming-requests', async (req, res) => {
       }
     }
 
-    // إذا لا يزال الموقع مجهولاً، نرجع كل الطلبات المعلقة بدون فلتر مسافة
+    // بدون موقع صالح لا تُعرض طلبات بعيدة
     const taxiType = normalizeTaxiType(
       req.query.taxiType ||
       (await getUserState(phone))?.driverProfile?.taxiType ||

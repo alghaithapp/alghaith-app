@@ -17,6 +17,7 @@ class TaxiApiService {
     required double dropoffLng,
     required double distanceKm,
     required String taxiType,
+    List<TaxiWaypoint> waypoints = const [],
   }) async {
     final result = await ApiClient.instance.post('$_basePath/create', body: {
       'pickupAddress': pickupAddress,
@@ -27,6 +28,8 @@ class TaxiApiService {
       'dropoffLng': dropoffLng,
       'distanceKm': distanceKm,
       'taxiType': taxiType,
+      if (waypoints.isNotEmpty)
+        'waypoints': waypoints.map((wp) => wp.toApiMap()).toList(),
     });
     return TaxiRequest.fromMap(Map<String, dynamic>.from(result));
   }
@@ -65,10 +68,40 @@ class TaxiApiService {
     });
   }
 
-  /// إلغاء الطلب من قبل الزبون — فوري بدون موافقة السائق
-  static Future<TaxiRequest?> cancelRequest(String requestId) async {
+  /// إلغاء الطلب المعلّق فوراً
+  static Future<TaxiRequest?> cancelRequest(String requestId, {String? reason}) async {
     final result = await ApiClient.instance.post('$_basePath/cancel', body: {
       'requestId': requestId,
+      if (reason != null && reason.trim().isNotEmpty) 'reason': reason.trim(),
+    });
+    if (result == null) return null;
+    return TaxiRequest.fromMap(Map<String, dynamic>.from(result as Map));
+  }
+
+  /// طلب إلغاء بعد قبول السائق (بانتظار موافقته)
+  static Future<TaxiRequest?> requestTripCancellation(
+    String requestId, {
+    String? reason,
+  }) async {
+    final result =
+        await ApiClient.instance.post('$_basePath/request-cancellation', body: {
+      'requestId': requestId,
+      if (reason != null && reason.trim().isNotEmpty) 'reason': reason.trim(),
+    });
+    if (result == null) return null;
+    return TaxiRequest.fromMap(Map<String, dynamic>.from(result as Map));
+  }
+
+  /// تحديث موقع السائق أثناء الرحلة النشطة
+  static Future<TaxiRequest?> updateDriverTripLocation({
+    required String requestId,
+    required double lat,
+    required double lng,
+  }) async {
+    final result = await ApiClient.instance.post('$_basePath/driver-location', body: {
+      'requestId': requestId,
+      'lat': lat,
+      'lng': lng,
     });
     if (result == null) return null;
     return TaxiRequest.fromMap(Map<String, dynamic>.from(result as Map));

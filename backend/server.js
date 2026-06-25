@@ -8,6 +8,7 @@ const rateLimit = rateLimitLib.default || rateLimitLib;
 const { version: backendVersion } = require('./package.json');
 const { isPushConfigured } = require('./push_notifications');
 const { startPushScheduler } = require('./push_scheduler');
+const { startTaxiScheduler } = require('./services/taxi_scheduler');
 const { validatePromoCode } = require('./promo_codes');
 const logger = require('./lib/logger');
 const { errorHandler, notFoundHandler } = require('./lib/error_handler');
@@ -504,4 +505,5 @@ app.listen(port, () => {
     startPushScheduler();
     logger.info('Push scheduler started');
   }
+  startTaxiScheduler();
 });

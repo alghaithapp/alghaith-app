@@ -2,6 +2,7 @@ import type {
   AdminAccountSummary,
   AdminReports,
   AdminSession,
+  AdminTaxiTrip,
   AppUpdatePolicy,
   CourierSummary,
   HomeCategoriesConfig,
@@ -287,4 +288,21 @@ export async function saveHomeCategoriesConfig(token: string, overrides: Record<
   return request<HomeCategoriesConfig>(DATABASE_API_BASE_URL, '/db/admin/home-categories', {
     method: 'PUT', token, body: JSON.stringify({ overrides }),
   });
+}
+
+export async function loadAdminTaxiTrips(token: string, status?: string) {
+  const query = status ? `?status=${encodeURIComponent(status)}` : '';
+  return request<AdminTaxiTrip[]>(
+    DATABASE_API_BASE_URL,
+    `/db/admin/taxi/trips${query}`,
+    { token },
+  );
+}
+
+export async function loadAdminTaxiComplaints(token: string) {
+  return request<AdminTaxiTrip[]>(
+    DATABASE_API_BASE_URL,
+    '/db/admin/taxi/complaints',
+    { token },
+  );
 }

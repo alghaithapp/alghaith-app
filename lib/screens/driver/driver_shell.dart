@@ -58,6 +58,8 @@ class _DriverShellState extends State<DriverShell> with RealtimeSubscriptionMixi
         // تحديث موقع السائق وتشغيل polling الطلبات
         _initDriverLocation(provider, phone);
         _startDriverLocationUpdates(provider);
+        context.read<TaxiProvider>().loadDriverActiveRequest();
+        context.read<TaxiProvider>().loadDriverHistory();
 
         // Realtime للرحلة النشطة (بعد القبول)
         final sub = SupabaseService.realtime.subscribeToTable(
@@ -100,7 +102,7 @@ class _DriverShellState extends State<DriverShell> with RealtimeSubscriptionMixi
 
   void _startDriverLocationUpdates(AppProvider provider) {
     _locationTimer?.cancel();
-    _locationTimer = Timer.periodic(const Duration(seconds: 12), (_) async {
+    _locationTimer = Timer.periodic(const Duration(seconds: 5), (_) async {
       if (!mounted) return;
       try {
         LocationPermission permission = await Geolocator.checkPermission();
@@ -110,9 +112,27 @@ class _DriverShellState extends State<DriverShell> with RealtimeSubscriptionMixi
         }
 
         final pos = await Geolocator.getCurrentPosition(
-          locationSettings:
-              const LocationSettings(accuracy: LocationAccuracy.high),
+          locationSettings: const LocationSettings(
+            accuracy: LocationAccuracy.high,
+            distanceFilter: 10,
+          ),
         ).timeout(const Duration(seconds: 8));
+
+        if (!mounted) return;
+        final taxi = context.read<TaxiProvider>();
+        final activeTrip = taxi.currentRequest;
+        final hasActiveTrip = activeTrip != null &&
+            activeTrip.id.isNotEmpty &&
+            !activeTrip.isCompleted &&
+            !activeTrip.isCancelled;
+
+        if (hasActiveTrip) {
+          await taxi.updateDriverTripLocation(
+            requestId: activeTrip.id,
+            lat: pos.latitude,
+            lng: pos.longitude,
+          );
+        }
 
         final profile =
             Map<String, dynamic>.from(provider.driverProfile ?? {});
@@ -123,10 +143,10 @@ class _DriverShellState extends State<DriverShell> with RealtimeSubscriptionMixi
         await provider.setDriverProfile(profile);
 
         if (!mounted) return;
-        context.read<TaxiProvider>().updateIncomingPollLocation(
-              lat: pos.latitude,
-              lng: pos.longitude,
-            );
+        taxi.updateIncomingPollLocation(
+          lat: pos.latitude,
+          lng: pos.longitude,
+        );
       } catch (_) {}
     });
   }

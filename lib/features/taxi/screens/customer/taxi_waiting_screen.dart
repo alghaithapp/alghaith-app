@@ -23,6 +23,7 @@ class TaxiTripCreateParams {
     required this.dropoffLng,
     required this.distanceKm,
     required this.taxiType,
+    this.waypoints = const [],
   });
 
   final String pickupAddress;
@@ -33,6 +34,7 @@ class TaxiTripCreateParams {
   final double dropoffLng;
   final double distanceKm;
   final String taxiType;
+  final List<TaxiWaypoint> waypoints;
 }
 
 /// شاشة انتظار السائق
@@ -82,6 +84,7 @@ class _TaxiWaitingScreenState extends State<TaxiWaitingScreen> {
       dropoffLng: params.dropoffLng,
       distanceKm: params.distanceKm,
       taxiType: params.taxiType,
+      waypoints: params.waypoints,
     );
 
     if (!mounted) return;
@@ -99,13 +102,34 @@ class _TaxiWaitingScreenState extends State<TaxiWaitingScreen> {
   }
 
   void _startTimer() {
-    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
+    _timer = Timer.periodic(const Duration(seconds: 1), (timer) async {
       if (_secondsLeft <= 0) {
         timer.cancel();
+        if (!mounted) return;
+        final provider = context.read<TaxiProvider>();
+        await provider.loadActiveRequest();
+        if (!mounted) return;
+        final request = provider.currentRequest;
+        if (request == null || request.isCancelled) {
+          _showExpiredAndExit();
+        }
         return;
       }
       setState(() => _secondsLeft--);
     });
+  }
+
+  void _showExpiredAndExit() {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+          'انتهت مهلة البحث — لم يقبل أحد الطلب. يمكنك المحاولة مجدداً.',
+          style: TextStyle(fontFamily: 'Cairo'),
+        ),
+      ),
+    );
+    Navigator.of(context).pop();
   }
 
   void _startPolling() {
@@ -140,15 +164,21 @@ class _TaxiWaitingScreenState extends State<TaxiWaitingScreen> {
     if (!mounted) return;
 
     if (ok) {
+      final updated = provider.currentRequest;
+      final message = updated?.isCancelRequested == true
+          ? 'تم إرسال طلب الإلغاء — بانتظار موافقة السائق'
+          : 'تم إلغاء الرحلة';
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
+        SnackBar(
           content: Text(
-            'تم إلغاء الرحلة',
-            style: TextStyle(fontFamily: 'Cairo'),
+            message,
+            style: const TextStyle(fontFamily: 'Cairo'),
           ),
         ),
       );
-      Navigator.of(context).pop();
+      if (updated?.isCancelRequested != true) {
+        Navigator.of(context).pop();
+      }
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -182,6 +212,12 @@ class _TaxiWaitingScreenState extends State<TaxiWaitingScreen> {
         body: Consumer<TaxiProvider>(
           builder: (context, provider, _) {
             final request = provider.currentRequest;
+
+            if (request != null && request.isCancelled) {
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (mounted) _showExpiredAndExit();
+              });
+            }
 
             if (request != null && request.isAccepted) {
               WidgetsBinding.instance.addPostFrameCallback((_) {

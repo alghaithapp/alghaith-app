@@ -87,17 +87,6 @@ class _TaxiRatingScreenState extends State<TaxiRatingScreen> {
     }
   }
 
-  void _skip() {
-    context
-        .read<TaxiProvider>()
-        .clearTripAwaitingRating(requestId: widget.request.id);
-    Navigator.of(context).pop();
-    final nav = Navigator.of(context);
-    if (nav.canPop()) {
-      nav.pop();
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final request = widget.request;
@@ -106,14 +95,7 @@ class _TaxiRatingScreenState extends State<TaxiRatingScreen> {
         : 'السائق';
 
     return PopScope(
-      canPop: !_isSubmitting,
-      onPopInvokedWithResult: (didPop, result) {
-        if (didPop && !_isSubmitting) {
-          context
-              .read<TaxiProvider>()
-              .clearTripAwaitingRating(requestId: widget.request.id);
-        }
-      },
+      canPop: false,
       child: Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
@@ -130,10 +112,7 @@ class _TaxiRatingScreenState extends State<TaxiRatingScreen> {
               fontWeight: FontWeight.w700,
             ),
           ),
-          leading: IconButton(
-            icon: const Icon(Icons.close),
-            onPressed: _isSubmitting ? null : _skip,
-          ),
+          automaticallyImplyLeading: false,
         ),
         body: SingleChildScrollView(
           padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
@@ -268,16 +247,14 @@ class _TaxiRatingScreenState extends State<TaxiRatingScreen> {
                         ),
                 ),
               ),
-              const SizedBox(height: 10),
-              TextButton(
-                onPressed: _isSubmitting ? null : _skip,
-                child: Text(
-                  'تخطي الآن',
-                  style: TextStyle(
-                    fontFamily: 'Cairo',
-                    fontSize: 15,
-                    color: Colors.grey[600],
-                  ),
+              const SizedBox(height: 8),
+              Text(
+                'التقييم مطلوب لإكمال الرحلة وتحسين جودة الخدمة',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontFamily: 'Cairo',
+                  fontSize: 13,
+                  color: Colors.grey[600],
                 ),
               ),
             ],

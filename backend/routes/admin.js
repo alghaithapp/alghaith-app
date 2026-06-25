@@ -96,6 +96,41 @@ router.get('/admin/drivers', async (req, res) => {
   }
 });
 
+router.get('/admin/taxi/trips', async (req, res) => {
+  try {
+    const phone = requireOptionalAuthorizedPhone(req, res);
+    if (!phone) return;
+    const taxiRepo = require('../supabase_repo/taxi');
+    const trips = await taxiRepo.getAdminTaxiTrips(phone, {
+      status: parseQueryValue(req.query.status),
+      limit: Number(req.query.limit ?? 100),
+    });
+    return res.json(trips);
+  } catch (error) {
+    console.error('admin taxi trips error:', error);
+    const message = error?.message || 'Failed to load taxi trips.';
+    const status = message.includes('Admin access') ? 403 : 500;
+    return res.status(status).json({ message });
+  }
+});
+
+router.get('/admin/taxi/complaints', async (req, res) => {
+  try {
+    const phone = requireOptionalAuthorizedPhone(req, res);
+    if (!phone) return;
+    const taxiRepo = require('../supabase_repo/taxi');
+    const complaints = await taxiRepo.getAdminTaxiComplaints(phone, {
+      limit: Number(req.query.limit ?? 100),
+    });
+    return res.json(complaints);
+  } catch (error) {
+    console.error('admin taxi complaints error:', error);
+    const message = error?.message || 'Failed to load taxi complaints.';
+    const status = message.includes('Admin access') ? 403 : 500;
+    return res.status(status).json({ message });
+  }
+});
+
 router.delete('/admin/driver', async (req, res) => {
   try {
     const adminPhone = requireOptionalAuthorizedPhone(req, res);

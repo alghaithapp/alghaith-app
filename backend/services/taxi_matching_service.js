@@ -33,9 +33,9 @@ async function findNextAvailableDriver(requestId, pickupLat, pickupLng, taxiType
     );
 
     if (Array.isArray(drivers) && drivers.length > 0) {
-      const best = drivers[0]; // الأقرب
+      const best = drivers[0];
       return {
-        driverPhone: best.driverPhone,
+        driverPhone: best.phone || best.driverPhone,
         distanceKm: best.distanceKm,
       };
     }

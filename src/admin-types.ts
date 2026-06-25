@@ -67,6 +67,36 @@ export interface MerchantPreRegisterResponse {
   storeName: string;
 }
 
+export type AdminView =
+  | 'dashboard'
+  | 'accounts'
+  | 'merchants'
+  | 'couriers'
+  | 'drivers'
+  | 'taxi'
+  | 'homeCategories'
+  | 'appUpdate';
+
+export interface AdminTaxiTrip {
+  id: string;
+  requestNumber: string;
+  statusKey: string;
+  statusAr?: string;
+  customerPhone?: string;
+  driverPhone?: string;
+  driverName?: string;
+  pickupAddress: string;
+  dropoffAddress: string;
+  fare: number;
+  taxiType: string;
+  driverRating?: number;
+  adminReviewRequired?: boolean;
+  completedAt?: string | null;
+  acceptedAt?: string | null;
+  cancellationReason?: string | null;
+  ratingComment?: string | null;
+}
+
 export interface AdminReports {
   totalOrders: number;
   completedOrders: number;

@@ -154,11 +154,77 @@ async function notifyDriverRejected(driverPhone) {
     title: '❌ تم رفضك',
     body: 'عذراً، تم تعيين سائق آخر لهذا الطلب',
     data: {
+      audience: 'driver',
       eventKey: 'taxi:driver_rejected',
     },
   });
 
   await sendPushToPhone(driverPhone, payload);
+}
+
+async function notifyCancelRequested(driverPhone, customerPhone) {
+  if (!driverPhone) return;
+  const payload = buildPushPayload({
+    title: 'طلب إلغاء من الزبون',
+    body: 'يرجى الموافقة أو رفض طلب الإلغاء',
+    data: {
+      audience: 'driver',
+      eventKey: 'taxi:cancel_requested',
+    },
+  });
+  await sendPushToPhone(driverPhone, payload);
+}
+
+async function notifyCancellationApproved(customerPhone) {
+  if (!customerPhone) return;
+  const payload = buildPushPayload({
+    title: 'تم إلغاء الرحلة',
+    body: 'وافق السائق على إلغاء الرحلة',
+    data: { eventKey: 'taxi:cancel_approved' },
+  });
+  await sendPushToPhone(customerPhone, payload);
+}
+
+async function notifyCancellationRejected(customerPhone) {
+  if (!customerPhone) return;
+  const payload = buildPushPayload({
+    title: 'استمرار الرحلة',
+    body: 'رفض السائق طلب الإلغاء — الرحلة مستمرة',
+    data: { eventKey: 'taxi:cancel_rejected' },
+  });
+  await sendPushToPhone(customerPhone, payload);
+}
+
+async function notifyTripCancelled(customerPhone, driverPhone) {
+  const payload = buildPushPayload({
+    title: 'تم إلغاء الرحلة',
+    body: 'تم إلغاء طلب التكسي',
+    data: { eventKey: 'taxi:cancelled' },
+  });
+  const targets = [customerPhone, driverPhone].filter(Boolean);
+  for (const phone of targets) {
+    await sendPushToPhone(phone, payload);
+  }
+}
+
+async function notifyDriverApproaching(customerPhone, distanceMeters) {
+  if (!customerPhone) return;
+  const payload = buildPushPayload({
+    title: '🚗 السائق يقترب',
+    body: `السائق على بعد نحو ${distanceMeters} متر منك`,
+    data: { eventKey: 'taxi:driver_approaching' },
+  });
+  await sendPushToPhone(customerPhone, payload);
+}
+
+async function notifyDriverLate(customerPhone, minutesLate) {
+  if (!customerPhone) return;
+  const payload = buildPushPayload({
+    title: 'تأخر السائق',
+    body: `نعتذر عن التأخير — السائق متأخر نحو ${minutesLate} دقيقة`,
+    data: { eventKey: 'taxi:driver_late' },
+  });
+  await sendPushToPhone(customerPhone, payload);
 }
 
 module.exports = {
@@ -167,4 +233,10 @@ module.exports = {
   notifyDriverArrived,
   notifyTripCompleted,
   notifyDriverRejected,
+  notifyCancelRequested,
+  notifyCancellationApproved,
+  notifyCancellationRejected,
+  notifyTripCancelled,
+  notifyDriverApproaching,
+  notifyDriverLate,
 };

@@ -236,7 +236,6 @@ class PushNotificationService {
     }
     if (category == 'taxi') {
       await PushNotificationInbox.onTaxiStatusPush?.call();
-      final eventKey = message.data['eventKey']?.toString() ?? '';
       if (eventKey == 'taxi:pool_new') {
         await PushNotificationInbox.onTaxiIncomingPush?.call();
       }

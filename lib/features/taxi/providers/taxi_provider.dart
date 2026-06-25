@@ -108,6 +108,7 @@ class TaxiProvider extends ChangeNotifier {
     required double dropoffLng,
     required double distanceKm,
     required String taxiType,
+    List<TaxiWaypoint> waypoints = const [],
   }) async {
     _isLoading = true;
     _error = null;
@@ -123,6 +124,7 @@ class TaxiProvider extends ChangeNotifier {
         dropoffLng: dropoffLng,
         distanceKm: distanceKm,
         taxiType: taxiType,
+        waypoints: waypoints,
       );
       _currentRequest = request;
       _requests.insert(0, request);
@@ -228,7 +230,7 @@ class TaxiProvider extends ChangeNotifier {
 
   // ── إلغاء الطلب ──
 
-  Future<bool> cancelRequest(String requestId) async {
+  Future<bool> cancelRequest(String requestId, {String? reason}) async {
     final trimmedId = requestId.trim();
     if (trimmedId.isEmpty) {
       _error = 'معرّف الطلب غير صالح';
@@ -236,12 +238,21 @@ class TaxiProvider extends ChangeNotifier {
       return false;
     }
 
+    final current = _currentRequest;
+    if (current != null &&
+        current.id == trimmedId &&
+        current.hasAssignedDriver &&
+        !current.isPickedUp &&
+        !current.isCancelRequested) {
+      return requestTripCancellation(trimmedId, reason: reason);
+    }
+
     _isLoading = true;
     _error = null;
     notifyListeners();
 
     try {
-      final updated = await TaxiApiService.cancelRequest(trimmedId);
+      final updated = await TaxiApiService.cancelRequest(trimmedId, reason: reason);
       if (updated == null || updated.isCancelled) {
         _currentRequest = null;
       } else {
@@ -258,6 +269,54 @@ class TaxiProvider extends ChangeNotifier {
       _isLoading = false;
       notifyListeners();
     }
+  }
+
+  Future<bool> requestTripCancellation(String requestId, {String? reason}) async {
+    final trimmedId = requestId.trim();
+    if (trimmedId.isEmpty) {
+      _error = 'معرّف الطلب غير صالح';
+      notifyListeners();
+      return false;
+    }
+
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      final updated = await TaxiApiService.requestTripCancellation(
+        trimmedId,
+        reason: reason,
+      );
+      if (updated != null) {
+        _currentRequest = updated;
+      }
+      return true;
+    } catch (e) {
+      _error = e.toString().replaceFirst('ApiException: ', '');
+      return false;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> updateDriverTripLocation({
+    required String requestId,
+    required double lat,
+    required double lng,
+  }) async {
+    try {
+      final updated = await TaxiApiService.updateDriverTripLocation(
+        requestId: requestId,
+        lat: lat,
+        lng: lng,
+      );
+      if (updated != null && _currentRequest?.id == requestId) {
+        _currentRequest = updated;
+        notifyListeners();
+      }
+    } catch (_) {}
   }
 
   // ── تحميل الطلب النشط للزبون ──
@@ -409,14 +468,17 @@ class TaxiProvider extends ChangeNotifier {
 
   void startPolling({bool isDriver = false, String? phone}) {
     stopPolling();
-    _pollTimer = Timer.periodic(const Duration(seconds: 5), (_) async {
+    // Realtime هو المصدر الأساسي؛ الاستطلاع الاحتياطي كل 30 ثانية فقط.
+    _pollTimer = Timer.periodic(const Duration(seconds: 30), (_) async {
       if (isDriver) {
         await loadDriverActiveRequest();
       } else {
         await loadActiveRequest();
       }
     });
-    if (!isDriver) {
+    if (isDriver) {
+      loadDriverActiveRequest();
+    } else {
       loadActiveRequest();
     }
     _startRealtime(isDriver: isDriver, phone: phone);
@@ -461,7 +523,7 @@ class TaxiProvider extends ChangeNotifier {
     _incomingPollTaxiType = taxiType ?? 'economic';
     _incomingPoolTimer?.cancel();
     fetchIncomingRequests();
-    _incomingPoolTimer = Timer.periodic(const Duration(seconds: 5), (_) async {
+    _incomingPoolTimer = Timer.periodic(const Duration(seconds: 20), (_) async {
       await fetchIncomingRequests();
     });
     _startIncomingRealtime(phone: phone);
