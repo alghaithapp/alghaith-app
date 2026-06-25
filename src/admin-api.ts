@@ -46,8 +46,15 @@ async function getTauriInvoke() {
   if (tauriProbeDone) return tauriInvoke;
   tauriProbeDone = true;
   try {
+    const isTauriRuntime =
+      typeof window !== 'undefined' &&
+      Boolean((window as Window & { isTauri?: boolean }).isTauri);
+    if (!isTauriRuntime) {
+      tauriInvoke = null;
+      return null;
+    }
     const mod = await import('@tauri-apps/api/core');
-    if (mod && typeof mod.invoke === 'function') {
+    if (typeof mod?.invoke === 'function') {
       tauriInvoke = mod.invoke;
     }
   } catch {
