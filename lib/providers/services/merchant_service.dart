@@ -207,27 +207,27 @@ class MerchantService extends ChangeNotifier {
       _merchantStore?['profileImageUrl'] as String?;
 
   List<String> get merchantServiceIds {
+    final ids = <String>{};
     final serviceIds = _merchantStore?['serviceIds'];
     if (serviceIds is List) {
-      final parsed = serviceIds
-          .map((item) => item.toString())
-          .where((item) => item.isNotEmpty)
-          .toList();
-      if (parsed.isNotEmpty) return parsed;
+      for (final item in serviceIds) {
+        final value = item.toString().trim();
+        if (value.isNotEmpty) ids.add(value);
+      }
     }
     final serviceIdsSnake = _merchantStore?['service_ids'];
     if (serviceIdsSnake is List) {
-      final parsed = serviceIdsSnake
-          .map((item) => item.toString())
-          .where((item) => item.isNotEmpty)
-          .toList();
-      if (parsed.isNotEmpty) return parsed;
+      for (final item in serviceIdsSnake) {
+        final value = item.toString().trim();
+        if (value.isNotEmpty) ids.add(value);
+      }
     }
     final categoryId = merchantCategoryId;
-    if (categoryId.isNotEmpty) return [categoryId];
+    if (categoryId.isNotEmpty) ids.add(categoryId);
     final primary =
         (_merchantStore?['primary_service_id'] as String?)?.trim() ?? '';
-    if (primary.isNotEmpty) return [primary];
+    if (primary.isNotEmpty) ids.add(primary);
+    if (ids.isNotEmpty) return ids.toList();
     return const ['product'];
   }
 
@@ -239,7 +239,11 @@ class MerchantService extends ChangeNotifier {
         (_merchantStore?['active_service_id'] as String?)?.trim() ?? '';
     final preferred =
         activeCamel.isNotEmpty ? activeCamel : activeSnake;
-    if (preferred.isNotEmpty && ids.contains(preferred)) return preferred;
+    if (preferred.isNotEmpty) {
+      if (ids.contains(preferred)) return preferred;
+      // احترم الخدمة المحفوظة حتى لو قائمة service_ids قديمة.
+      return normalizeMerchantServiceId(preferred);
+    }
     if (preferred == 'restaurant' &&
         ids.isNotEmpty &&
         !ids.contains('restaurant')) {
@@ -493,8 +497,18 @@ class MerchantService extends ChangeNotifier {
 
   Future<void> setMerchantActiveService(String serviceId) async {
     if (_merchantStore == null) return;
-    if (!merchantServiceIds.contains(serviceId)) return;
-    _merchantStore!['activeServiceId'] = serviceId;
+    final normalized = normalizeMerchantServiceId(serviceId.trim());
+    if (normalized.isEmpty) return;
+
+    var ids = merchantServiceIds;
+    if (!ids.contains(normalized)) {
+      ids = <String>[...ids, normalized];
+      _merchantStore!['serviceIds'] = ids;
+      _merchantStore!['service_ids'] = ids;
+    }
+
+    _merchantStore!['activeServiceId'] = normalized;
+    _merchantStore!['active_service_id'] = normalized;
     notifyListeners();
     await _persistMerchantStoreAndState();
   }

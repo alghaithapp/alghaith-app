@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../providers/app_provider.dart';
+import '../../utils/merchant_service_labels.dart';
 import '../../utils/role_switch_notifications.dart';
 import '../../widgets/in_app_notification_banner.dart';
 import '../../widgets/safe_bottom_bar.dart';
@@ -31,14 +32,85 @@ class _MerchantShellState extends State<MerchantShell> with WidgetsBindingObserv
   bool _bannerShowing = false;
   // قائمة الإشعارات المنتظرة (تُعرض واحداً تلو الآخر)
   final List<_BannerData> _pendingBanners = [];
+  String? _lastActiveServiceId;
 
-  late final List<Widget> _screens = [
-    const MerchantDashboardScreen(),
-    MerchantOrdersScreen(onNavigateHome: () => setState(() => _currentIndex = 0)),
-    const MerchantProductsScreen(),
-    const MerchantEarningsScreen(),
-    const MerchantMoreScreen(),
-  ];
+  bool _contactOnlyFor(AppProvider provider) =>
+      !merchantServiceUsesOrderFlow(provider.merchantActiveServiceId);
+
+  bool _isTabEnabled(AppProvider provider, int index) {
+    if (!_contactOnlyFor(provider)) return true;
+    return index != 1 && index != 3;
+  }
+
+  int _mapPendingTab(AppProvider provider, int tab) {
+    if (!_contactOnlyFor(provider)) return tab;
+    if (tab == 1 || tab == 3) return 0;
+    return tab;
+  }
+
+  Widget _screenForIndex(AppProvider provider, int index) {
+    if (!_isTabEnabled(provider, index)) {
+      return const MerchantDashboardScreen();
+    }
+    switch (index) {
+      case 0:
+        return const MerchantDashboardScreen();
+      case 1:
+        return MerchantOrdersScreen(
+          onNavigateHome: () => setState(() => _currentIndex = 0),
+        );
+      case 2:
+        return const MerchantProductsScreen();
+      case 3:
+        return const MerchantEarningsScreen();
+      case 4:
+        return const MerchantMoreScreen();
+      default:
+        return const MerchantDashboardScreen();
+    }
+  }
+
+  static const _disabledNavColor = Color(0xFFBDBDBD);
+
+  NavigationDestination _ordersDestination(
+    AppProvider provider, {
+    required bool enabled,
+  }) {
+    final pending = provider.merchantPendingOrdersCount;
+    final icon = Icon(
+      Icons.receipt_long_outlined,
+      color: enabled ? null : _disabledNavColor,
+    );
+    final selectedIcon = Icon(
+      Icons.receipt_long_rounded,
+      color: enabled ? AppColors.accent : _disabledNavColor,
+    );
+    return NavigationDestination(
+      icon: enabled && pending > 0
+          ? Badge(label: Text('$pending'), child: icon)
+          : icon,
+      selectedIcon: enabled && pending > 0
+          ? Badge(label: Text('$pending'), child: selectedIcon)
+          : selectedIcon,
+      label: 'الطلبات',
+      enabled: enabled,
+    );
+  }
+
+  NavigationDestination _earningsDestination({required bool enabled}) {
+    return NavigationDestination(
+      icon: Icon(
+        Icons.payments_outlined,
+        color: enabled ? null : _disabledNavColor,
+      ),
+      selectedIcon: Icon(
+        Icons.payments_rounded,
+        color: enabled ? AppColors.accent : _disabledNavColor,
+      ),
+      label: 'الأرباح',
+      enabled: enabled,
+    );
+  }
 
   @override
   void initState() {
@@ -52,7 +124,10 @@ class _MerchantShellState extends State<MerchantShell> with WidgetsBindingObserv
       _lastOrderStatuses = {
         for (final o in provider.merchantIncomingOrders) o.id: o.statusKey,
       };
-      provider.refreshMerchantIncomingOrders();
+      _lastActiveServiceId = provider.merchantActiveServiceId;
+      if (!_contactOnlyFor(provider)) {
+        provider.refreshMerchantIncomingOrders();
+      }
       provider.syncMerchantCatalogToCloud().catchError((error) {
         debugPrint('MERCHANT_CLOUD_SYNC: $error');
       });
@@ -86,13 +161,25 @@ class _MerchantShellState extends State<MerchantShell> with WidgetsBindingObserv
   void _onAppProviderChanged() {
     if (!mounted) return;
     final provider = context.read<AppProvider>();
+    final activeId = provider.merchantActiveServiceId;
+    if (_lastActiveServiceId != activeId) {
+      _lastActiveServiceId = activeId;
+      if (_contactOnlyFor(provider) &&
+          (_currentIndex == 1 || _currentIndex == 3)) {
+        setState(() => _currentIndex = 0);
+      }
+    }
     final tab = provider.takePendingMerchantTab();
-    if (tab != null && tab != _currentIndex) {
-      setState(() => _currentIndex = tab);
+    if (tab != null) {
+      final mapped = _mapPendingTab(provider, tab);
+      final nextIndex = mapped.clamp(0, 4);
+      if (nextIndex != _currentIndex) {
+        setState(() => _currentIndex = nextIndex);
+      }
     }
     // فتح تفاصيل الطلب إذا كان هناك orderId معلّق من الإشعار
     final orderId = provider.takePendingOrderId('merchant');
-    if (orderId != null && orderId.isNotEmpty) {
+    if (orderId != null && orderId.isNotEmpty && !_contactOnlyFor(provider)) {
       Future.delayed(const Duration(milliseconds: 300), () {
         if (!mounted) return;
         final updatedProvider = context.read<AppProvider>();
@@ -112,6 +199,7 @@ class _MerchantShellState extends State<MerchantShell> with WidgetsBindingObserv
   Future<void> _pollForNewOrders() async {
     if (!mounted) return;
     final provider = context.read<AppProvider>();
+    if (_contactOnlyFor(provider)) return;
     await provider.refreshMerchantIncomingOrders();
     if (!mounted) return;
     provider.tickMerchantNotificationTimers();
@@ -232,51 +320,27 @@ class _MerchantShellState extends State<MerchantShell> with WidgetsBindingObserv
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<AppProvider>();
-    final labels = provider.merchantLabels;
+    final labels = provider.merchantActiveLabels;
+    final purchaseTabsEnabled = !_contactOnlyFor(provider);
+    var safeIndex = _currentIndex.clamp(0, 4);
+    if (!purchaseTabsEnabled && (safeIndex == 1 || safeIndex == 3)) {
+      safeIndex = 0;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        if (_currentIndex == 1 || _currentIndex == 3) {
+          setState(() => _currentIndex = 0);
+        }
+      });
+    }
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final destinations = [
-      const NavigationDestination(
-        icon: Icon(Icons.dashboard_outlined),
-        selectedIcon: Icon(Icons.dashboard_rounded, color: AppColors.accent),
-        label: 'الرئيسية',
-      ),
-      NavigationDestination(
-        icon: Badge(
-          isLabelVisible: provider.merchantPendingOrdersCount > 0,
-          label: Text('${provider.merchantPendingOrdersCount}'),
-          child: const Icon(Icons.receipt_long_outlined),
-        ),
-        selectedIcon: Badge(
-          isLabelVisible: provider.merchantPendingOrdersCount > 0,
-          label: Text('${provider.merchantPendingOrdersCount}'),
-          child: const Icon(Icons.receipt_long_rounded, color: AppColors.accent),
-        ),
-        label: 'الطلبات',
-      ),
-      NavigationDestination(
-        icon: const Icon(Icons.inventory_2_outlined),
-        selectedIcon:
-            const Icon(Icons.inventory_2_rounded, color: AppColors.accent),
-        label: labels.productsTitleAr,
-      ),
-      const NavigationDestination(
-        icon: Icon(Icons.payments_outlined),
-        selectedIcon: Icon(Icons.payments_rounded, color: AppColors.accent),
-        label: 'الأرباح',
-      ),
-      const NavigationDestination(
-        icon: Icon(Icons.more_horiz_outlined),
-        selectedIcon: Icon(Icons.more_horiz_rounded, color: AppColors.accent),
-        label: 'المزيد',
-      ),
-    ];
 
     return Scaffold(
+      key: ValueKey('merchant-shell-${provider.merchantActiveServiceId}'),
       backgroundColor:
           isDark ? const Color(0xFF101010) : const Color(0xFFF2F2F7),
       body: SafeArea(
         bottom: false,
-        child: _screens[_currentIndex],
+        child: _screenForIndex(provider, safeIndex),
       ),
       bottomNavigationBar: SafeBottomBar(
         color: isDark ? const Color(0xFF171717) : Colors.white,
@@ -289,8 +353,9 @@ class _MerchantShellState extends State<MerchantShell> with WidgetsBindingObserv
         ],
         topPadding: 0,
         child: NavigationBar(
-          selectedIndex: _currentIndex,
+          selectedIndex: safeIndex,
           onDestinationSelected: (value) {
+            if (!_isTabEnabled(provider, value)) return;
             if (value == 0) {
               provider.resetHome();
             }
@@ -299,7 +364,28 @@ class _MerchantShellState extends State<MerchantShell> with WidgetsBindingObserv
           backgroundColor: Colors.transparent,
           indicatorColor: const Color(0xFFFFE4D4),
           labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
-          destinations: destinations,
+          destinations: [
+            const NavigationDestination(
+              icon: Icon(Icons.dashboard_outlined),
+              selectedIcon:
+                  Icon(Icons.dashboard_rounded, color: AppColors.accent),
+              label: 'الرئيسية',
+            ),
+            _ordersDestination(provider, enabled: purchaseTabsEnabled),
+            NavigationDestination(
+              icon: const Icon(Icons.inventory_2_outlined),
+              selectedIcon: const Icon(Icons.inventory_2_rounded,
+                  color: AppColors.accent),
+              label: labels.productsTitleAr,
+            ),
+            _earningsDestination(enabled: purchaseTabsEnabled),
+            const NavigationDestination(
+              icon: Icon(Icons.more_horiz_outlined),
+              selectedIcon:
+                  Icon(Icons.more_horiz_rounded, color: AppColors.accent),
+              label: 'المزيد',
+            ),
+          ],
         ),
       ),
     );

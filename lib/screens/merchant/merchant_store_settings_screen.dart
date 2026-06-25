@@ -412,26 +412,6 @@ class _MerchantStoreSettingsScreenState
             hintText: 'اختياري — اتركه فارغاً لاستخدام نفس رقم الهاتف',
             keyboardType: TextInputType.phone,
           ),
-          const SizedBox(height: 8),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: const Color(0xFFE8F4FD),
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: const Color(0xFFBBDEFB)),
-            ),
-            child: const Text(
-              'التواصل مع الزبائن يتم داخل التطبيق فقط (مراسلة + اتصال). '
-              'رقم الهاتف وواتساب هنا للإدارة الداخلية ولا يظهران للزبائن.',
-              style: TextStyle(
-                fontFamily: 'Cairo',
-                fontSize: 13,
-                height: 1.5,
-                color: Color(0xFF1565C0),
-              ),
-            ),
-          ),
           const SizedBox(height: 12),
           _Field(
               label: 'العنوان',

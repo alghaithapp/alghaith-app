@@ -157,14 +157,27 @@ function formatThreadSummary(row, myPhone) {
 
 function mapChatDbError(error) {
   const message = String(error?.message || error || '').trim();
-  if (
-    message.includes('chat_messages') &&
-    (message.includes('does not exist') ||
-      message.includes('schema cache') ||
-      message.includes('Could not find'))
-  ) {
+  const code = String(error?.code || '').trim();
+
+  const tableMissing =
+    code === '42P01' ||
+    message.includes('Could not find the table') ||
+    (message.includes('relation') &&
+      message.includes('chat_messages') &&
+      message.includes('does not exist'));
+
+  if (tableMissing) {
     return 'جدول المحادثات غير منشأ في Supabase. نفّذ ملف supabase/chat_messages.sql ثم أعد المحاولة.';
   }
+
+  const schemaOutdated =
+    code === '42703' ||
+    (message.includes('chat_messages') && message.includes('does not exist'));
+
+  if (schemaOutdated) {
+    return 'جدول المحادثات يحتاج تحديثاً. نفّذ ملف supabase/chat_messages.sql ثم أعد المحاولة.';
+  }
+
   return message || 'Failed to save chat message.';
 }
 
@@ -278,6 +291,35 @@ async function getChatMessages(threadType, threadId, requestPhone) {
   return rows.map(formatMessage);
 }
 
+const INBOX_COLUMNS_BASE =
+  'id, thread_type, thread_id, sender_phone, receiver_phone, sender_name, content, message_type, created_at';
+
+function isMissingColumnError(error, column) {
+  const message = String(error?.message || '');
+  return String(error?.code || '') === '42703' && message.includes(column);
+}
+
+async function fetchInboxSide(supabase, phoneColumn, variants) {
+  const run = (select) =>
+    supabase
+      .from('chat_messages')
+      .select(select)
+      .in(phoneColumn, variants)
+      .order('created_at', { ascending: false })
+      .limit(80);
+
+  let result = await run(`${INBOX_COLUMNS_BASE}, read_at`);
+  if (result.error && isMissingColumnError(result.error, 'read_at')) {
+    result = await run(INBOX_COLUMNS_BASE);
+  }
+  if (result.error && isMissingColumnError(result.error, 'sender_name')) {
+    result = await run(
+      'id, thread_type, thread_id, sender_phone, receiver_phone, content, message_type, created_at'
+    );
+  }
+  return result;
+}
+
 async function getChatInbox(requestPhone) {
   const phone = await resolvePhoneKey(requestPhone);
   const variants = getPhoneVariants(phone);
@@ -286,18 +328,8 @@ async function getChatInbox(requestPhone) {
   const supabase = assertSupabaseAdmin();
 
   const [sentResult, receivedResult] = await Promise.all([
-    supabase
-      .from('chat_messages')
-      .select('id, thread_type, thread_id, sender_phone, receiver_phone, content, message_type, created_at, read_at')
-      .in('sender_phone', variants)
-      .order('created_at', { ascending: false })
-      .limit(80),
-    supabase
-      .from('chat_messages')
-      .select('id, thread_type, thread_id, sender_phone, receiver_phone, content, message_type, created_at, read_at')
-      .in('receiver_phone', variants)
-      .order('created_at', { ascending: false })
-      .limit(80),
+    fetchInboxSide(supabase, 'sender_phone', variants),
+    fetchInboxSide(supabase, 'receiver_phone', variants),
   ]);
 
   const error = sentResult.error || receivedResult.error;

@@ -1,4 +1,5 @@
 -- تفعيل Realtime لجدول المحادثات (تحديث فوري داخل شاشة المحادثة)
+-- ملاحظة: مضمّن أيضاً في supabase/chat_messages.sql
 -- شغّل في Supabase → SQL Editor
 
 ALTER PUBLICATION supabase_realtime ADD TABLE chat_messages;

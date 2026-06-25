@@ -8,7 +8,9 @@ import '../../models/app_models.dart';
 import '../../core/theme/app_theme.dart';
 import '../../providers/app_provider.dart';
 import '../../utils/extensions.dart';
+import '../../utils/merchant_service_labels.dart';
 import '../../widgets/internal_contact_buttons.dart';
+import 'widgets/shared_dashboard_widgets.dart';
 import 'package:flutter/cupertino.dart';
 import 'merchant_notifications_screen.dart';
 import 'order_details_screen.dart';
@@ -92,6 +94,13 @@ class _MerchantOrdersScreenState extends State<MerchantOrdersScreen> {
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<AppProvider>();
+    if (!merchantServiceUsesOrderFlow(provider.merchantActiveServiceId)) {
+      return const MerchantPurchaseFlowUnavailable(
+        title: 'الطلبات غير متاحة',
+        message:
+            'الطلبات مخصّصة للمطاعم والتسوق وبازار ومطاعم الغيث فقط.\nخدمة العقارات تعتمد على النشر والتواصل داخل التطبيق.',
+      );
+    }
     final orders = _ordersForTab(provider);
     final pendingCount = provider.merchantPendingOrdersCount;
     final approvalCount = provider.merchantIncomingOrders

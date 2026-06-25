@@ -7,6 +7,8 @@ import 'package:provider/provider.dart';
 import '../../models/app_models.dart';
 import '../../providers/app_provider.dart';
 import '../../utils/extensions.dart';
+import '../../utils/merchant_service_labels.dart';
+import 'widgets/shared_dashboard_widgets.dart';
 import 'merchant_orders_screen.dart';
 
 const _bg = Color(0xFFF2F2F7);
@@ -194,6 +196,13 @@ class _MerchantEarningsScreenState extends State<MerchantEarningsScreen>
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<AppProvider>();
+    if (!merchantServiceUsesOrderFlow(provider.merchantActiveServiceId)) {
+      return const MerchantPurchaseFlowUnavailable(
+        title: 'الأرباح غير متاحة',
+        message:
+            'الأرباح مخصّصة للمطاعم والتسوق وبازار ومطاعم الغيث فقط.\nخدمة العقارات تعتمد على النشر والتواصل داخل التطبيق.',
+      );
+    }
     final allOrders = provider.merchantIncomingOrders;
     final periodOrders = _ordersInPeriod(allOrders, provider, _selectedPeriodDays);
 

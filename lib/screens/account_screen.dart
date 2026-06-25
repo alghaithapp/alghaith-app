@@ -341,14 +341,19 @@ class _MerchantAccountView extends StatelessWidget {
                     onTap: () => Navigator.of(context).push(CupertinoPageRoute(
                         builder: (_) => const MerchantProductsScreen())),
                   ),
-                  _MerchantActionTile(
-                    icon: CupertinoIcons.list_bullet_below_rectangle,
-                    title: 'الطلبات',
-                    subtitle: 'التحكم بحالات الطلبات',
-                    color: Colors.green,
-                    onTap: () => Navigator.of(context).push(CupertinoPageRoute(
-                        builder: (_) => const MerchantOrdersScreen())),
-                  ),
+                  if (merchantServiceUsesOrderFlow(
+                      appProvider.merchantActiveServiceId))
+                    _MerchantActionTile(
+                      icon: CupertinoIcons.list_bullet_below_rectangle,
+                      title: 'الطلبات',
+                      subtitle: 'التحكم بحالات الطلبات',
+                      color: Colors.green,
+                      onTap: () => Navigator.of(context).push(
+                        CupertinoPageRoute(
+                          builder: (_) => const MerchantOrdersScreen(),
+                        ),
+                      ),
+                    ),
                   _MerchantActionTile(
                     icon: CupertinoIcons.pencil_circle,
                     title: 'تعديل بيانات ${labels.storeLabelAr}',

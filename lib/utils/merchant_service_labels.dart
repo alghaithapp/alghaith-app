@@ -135,6 +135,18 @@ String normalizeMerchantServiceId(String serviceId) {
   }
 }
 
+/// أنشطة تمر عبر سلة طلبات (مطاعم، تسوق، بازار ومطاعم الغيث فقط).
+bool merchantServiceUsesOrderFlow(String serviceId) {
+  switch (normalizeMerchantServiceId(serviceId)) {
+    case 'restaurant':
+    case 'product':
+    case 'bazar_ghaith':
+      return true;
+    default:
+      return false;
+  }
+}
+
 MerchantServiceLabels merchantServiceLabels(String categoryId) {
   switch (normalizeMerchantServiceId(categoryId)) {
     case 'restaurant':
@@ -238,9 +250,9 @@ MerchantServiceLabels merchantServiceLabels(String categoryId) {
         dashboardIntroEn: 'Manage products, orders and offers with ease.',
         productsTitleAr: 'المنتجات',
         productsTitleEn: 'Products',
-        addItemAr: 'إضافة إعلان',
-        addItemEn: 'Add Advertisement',
-        editItemAr: 'تعديل إعلان',
+        addItemAr: 'إضافة منتج',
+        addItemEn: 'Add Product',
+        editItemAr: 'تعديل منتج',
         editItemEn: 'Edit Product',
         itemSingularAr: 'منتج',
         itemSingularEn: 'Product',
@@ -449,8 +461,8 @@ MerchantServiceLabels merchantServiceLabels(String categoryId) {
         accountTitleEn: 'Real Estate Account',
         dashboardGreetingAr: 'هذا مكتبك العقاري على الغيث',
         dashboardGreetingEn: 'Your real estate office on Al-Ghaith',
-        dashboardIntroAr: 'أدر العقارات المعروضة والطلبات والاستفسارات بسهولة.',
-        dashboardIntroEn: 'Manage listings, leads, and inquiries easily.',
+        dashboardIntroAr: 'أدر العقارات المعروضة واستقبل استفسارات الزبائن عبر التطبيق.',
+        dashboardIntroEn: 'Manage your listings and receive customer inquiries in-app.',
         productsTitleAr: 'العقارات',
         productsTitleEn: 'Properties',
         addItemAr: 'إضافة عقار',
@@ -496,12 +508,12 @@ MerchantServiceLabels merchantServiceLabels(String categoryId) {
             'أدر خدماتك واستقبل طلبات العملاء عبر واتساب بدون عمولة مباشرة.',
         dashboardIntroEn:
             'Manage your services and receive customer requests without direct fees.',
-        productsTitleAr: 'الخدمات',
-        productsTitleEn: 'Services',
-        addItemAr: 'إضافة إعلان',
-        addItemEn: 'Add Advertisement',
-        editItemAr: 'تعديل إعلان',
-        editItemEn: 'Edit Service',
+        productsTitleAr: 'الملف المهني',
+        productsTitleEn: 'Professional Profile',
+        addItemAr: 'تعديل الملف',
+        addItemEn: 'Edit Profile',
+        editItemAr: 'تعديل الملف',
+        editItemEn: 'Edit Profile',
         itemSingularAr: 'خدمة',
         itemSingularEn: 'Service',
         itemPluralAr: 'خدمات',
@@ -541,10 +553,10 @@ MerchantServiceLabels merchantServiceLabels(String categoryId) {
         dashboardIntroEn: 'Manage your items and orders easily.',
         productsTitleAr: 'المنتجات',
         productsTitleEn: 'Products',
-        addItemAr: 'إضافة عنصر',
-        addItemEn: 'Add Item',
-        editItemAr: 'تعديل عنصر',
-        editItemEn: 'Edit Item',
+        addItemAr: 'إضافة منتج',
+        addItemEn: 'Add Product',
+        editItemAr: 'تعديل منتج',
+        editItemEn: 'Edit Product',
         itemSingularAr: 'عنصر',
         itemSingularEn: 'Item',
         itemPluralAr: 'عناصر',

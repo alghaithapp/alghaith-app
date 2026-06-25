@@ -14,6 +14,8 @@ import '../../utils/merchant_service_labels.dart';
 import '../../widgets/app_image.dart';
 import '../real_estate_form_screen.dart';
 import 'merchant_store_sections_screen.dart';
+import 'merchant_store_settings_screen.dart';
+import 'merchant_profile_screen.dart';
 import 'product_form_screen.dart';
 
 const _bg = Color(0xFFF2F2F7);
@@ -84,8 +86,18 @@ class _MerchantProductsScreenState extends State<MerchantProductsScreen> {
     }
   }
 
+  void _openProfessionalProfileEditor() {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const MerchantStoreSettingsScreen()),
+    );
+  }
+
   void _openAddForm(AppProvider provider, String serviceId) {
     if (!_ensureCanPublish(provider, serviceId)) return;
+    if (serviceId == 'professionals') {
+      _openProfessionalProfileEditor();
+      return;
+    }
     if (serviceId == 'real_estate') {
       Navigator.of(context).push(
         MaterialPageRoute(
@@ -105,6 +117,10 @@ class _MerchantProductsScreenState extends State<MerchantProductsScreen> {
   }
 
   void _openEditForm(AppProvider provider, ListItem item, String serviceId) {
+    if (serviceId == 'professionals') {
+      _openProfessionalProfileEditor();
+      return;
+    }
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => serviceId == 'real_estate'
@@ -198,6 +214,259 @@ class _MerchantProductsScreenState extends State<MerchantProductsScreen> {
     });
   }
 
+  String? _professionalCategoryName(String? categoryId) {
+    final id = categoryId?.trim();
+    if (id == null || id.isEmpty) return null;
+    for (final category in DummyData.professionalsSubCategories) {
+      if (category.id == id) return category.titleAr;
+    }
+    return null;
+  }
+
+  Widget _buildProfessionalProfileTab(
+    BuildContext context,
+    AppProvider provider,
+    MerchantServiceLabels labels,
+    List<String> serviceIds,
+  ) {
+    final storeName = provider.merchantStoreName.trim().isNotEmpty
+        ? provider.merchantStoreName.trim()
+        : 'اسم المهني';
+    final description = provider.merchantDescription.trim().isNotEmpty
+        ? provider.merchantDescription.trim()
+        : 'أضف وصفاً مختصراً عن خبرتك وخدماتك.';
+    final professionName =
+        _professionalCategoryName(provider.merchantProfessionalCategoryId) ??
+            'التخصص غير محدد';
+    final profileImage = provider.merchantProfileImageBase64 ??
+        provider.merchantProfileImageUrl ??
+        provider.merchantLogoImage;
+    final workSamples = provider.merchantWorkSampleImagesBase64
+        .where((sample) => sample.trim().isNotEmpty)
+        .toList();
+
+    return Directionality(
+      textDirection: TextDirection.rtl,
+      child: ColoredBox(
+        color: _bg,
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
+          children: [
+            _PageHeader(
+              title: labels.productsTitleAr,
+              subtitle: _pageSubtitle('professionals', labels),
+              searchActive: false,
+              onSearchTap: () {},
+            ),
+            if (serviceIds.length > 1) ...[
+              const SizedBox(height: 16),
+              _ServiceChipsRow(
+                serviceIds: serviceIds,
+                activeId: 'professionals',
+                onSelected: provider.setMerchantActiveService,
+              ),
+            ],
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(18),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(24),
+                boxShadow: _shadowSoft,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(18),
+                        child: SizedBox(
+                          width: 88,
+                          height: 88,
+                          child: AppImage(
+                            imageData: profileImage,
+                            fit: BoxFit.cover,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              storeName,
+                              style: const TextStyle(
+                                fontFamily: 'Cairo',
+                                fontSize: 20,
+                                fontWeight: FontWeight.w900,
+                                color: Color(0xFF1C1C1E),
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 5,
+                              ),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFE8EAF6),
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: Text(
+                                professionName,
+                                style: const TextStyle(
+                                  fontFamily: 'Cairo',
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w800,
+                                  color: Color(0xFF3949AB),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              description,
+                              maxLines: 4,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontFamily: 'Cairo',
+                                fontSize: 13,
+                                height: 1.5,
+                                color: Color(0xFF636366),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Icon(
+                        provider.isMerchantStoreOpen
+                            ? Icons.check_circle_rounded
+                            : Icons.pause_circle_rounded,
+                        size: 18,
+                        color: provider.isMerchantStoreOpen
+                            ? const Color(0xFF34C759)
+                            : const Color(0xFFFF9500),
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        provider.isMerchantStoreOpen ? 'متاح للزبائن' : 'غير متاح حالياً',
+                        style: const TextStyle(
+                          fontFamily: 'Cairo',
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'نماذج الأعمال',
+              style: TextStyle(
+                fontFamily: 'Cairo',
+                fontSize: 17,
+                fontWeight: FontWeight.w900,
+                color: Color(0xFF1C1C1E),
+              ),
+            ),
+            const SizedBox(height: 10),
+            if (workSamples.isEmpty)
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: _shadowSoft,
+                ),
+                child: const Text(
+                  'لم تُضف صوراً لنماذج أعمالك بعد. أضف صوراً من تعديل الملف.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontFamily: 'Cairo',
+                    fontSize: 13,
+                    height: 1.5,
+                    color: Color(0xFF8E8E93),
+                  ),
+                ),
+              )
+            else
+              GridView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: workSamples.length,
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 2,
+                  crossAxisSpacing: 10,
+                  mainAxisSpacing: 10,
+                  childAspectRatio: 1.05,
+                ),
+                itemBuilder: (context, index) {
+                  return ClipRRect(
+                    borderRadius: BorderRadius.circular(16),
+                    child: AppImage(
+                      imageData: workSamples[index],
+                      fit: BoxFit.cover,
+                    ),
+                  );
+                },
+              ),
+            const SizedBox(height: 20),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton(
+                onPressed: _openProfessionalProfileEditor,
+                style: AppButtonStyles.accentFilled(),
+                child: const Text(
+                  'تعديل الملف المهني',
+                  style: TextStyle(
+                    fontFamily: 'Cairo',
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 10),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton(
+                onPressed: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => const MerchantProfileScreen(),
+                    ),
+                  );
+                },
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                ),
+                child: const Text(
+                  'معاينة الملف كما يراه الزبون',
+                  style: TextStyle(
+                    fontFamily: 'Cairo',
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   void dispose() {
     _searchController.dispose();
@@ -232,8 +501,8 @@ class _MerchantProductsScreenState extends State<MerchantProductsScreen> {
         if (mounted) _refreshBazaarNoticeState();
       });
     }
-    final labels = provider.merchantActiveLabels;
     final serviceId = provider.merchantActiveServiceId;
+    final labels = merchantServiceLabels(serviceId);
     final serviceIds = provider.merchantServiceIds;
     final query = _searchController.text.trim().toLowerCase();
     final allItems = provider.merchantItems;
@@ -246,6 +515,15 @@ class _MerchantProductsScreenState extends State<MerchantProductsScreen> {
     final total = allItems.length;
     final available = allItems.where((e) => e.isAvailable).length;
     final unavailable = total - available;
+
+    if (serviceId == 'professionals') {
+      return _buildProfessionalProfileTab(
+        context,
+        provider,
+        labels,
+        serviceIds,
+      );
+    }
 
     return Directionality(
       textDirection: TextDirection.rtl,
@@ -318,7 +596,7 @@ class _MerchantProductsScreenState extends State<MerchantProductsScreen> {
               const SizedBox(height: 14),
             ],
             _ActionRow(
-              addLabel: 'إضافة جديد',
+              addLabel: labels.addItemAr,
               isSyncing: _isSyncingCatalog,
               onAdd: () => _openAddForm(provider, serviceId),
               onSync: () => _syncCatalogNow(provider),

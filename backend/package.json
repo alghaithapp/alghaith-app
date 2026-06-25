@@ -12,7 +12,8 @@
     "restore-primary-roles": "node scripts/restore_primary_roles.js",
     "egress-diagnostics": "node scripts/egress_diagnostics.js",
     "migrate-base64-images": "node scripts/migrate_base64_images_to_storage.js",
-    "migrate-supabase-to-r2": "node scripts/migrate_supabase_storage_to_r2.js"
+    "migrate-supabase-to-r2": "node scripts/migrate_supabase_storage_to_r2.js",
+    "apply-chat-schema": "node scripts/apply_chat_messages_sql.js"
   },
   "jest": {
     "testEnvironment": "node",

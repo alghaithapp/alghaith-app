@@ -47,6 +47,7 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
   String? _selectedSchoolSupplySubCategoryId;
   String? _selectedSectionId;
   String _selectedPaymentMethod = 'نقداً';
+  bool _isPublishing = false;
 
   @override
   void initState() {
@@ -157,7 +158,9 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
 
     final previewImage = _buildPreviewImage(serviceId);
 
-    return CupertinoPageScaffold(
+    return PopScope(
+      canPop: !_isPublishing,
+      child: CupertinoPageScaffold(
       backgroundColor: const Color(0xFFF5F6FA),
       navigationBar: CupertinoNavigationBar(
         backgroundColor: Colors.white.withValues(alpha: 0.92),
@@ -168,7 +171,38 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
               const TextStyle(fontWeight: FontWeight.w700, fontFamily: 'Cairo'),
         ),
       ),
-      child: SafeArea(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (_isPublishing) ...[
+            const LinearProgressIndicator(minHeight: 3),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 10, 16, 4),
+              child: Row(
+                children: [
+                  SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CupertinoActivityIndicator(radius: 9),
+                  ),
+                  const SizedBox(width: 10),
+                  Text(
+                    isEdit ? 'جارٍ حفظ التعديل...' : 'جارٍ النشر...',
+                    style: const TextStyle(
+                      fontFamily: 'Cairo',
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF555555),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+          Expanded(
+            child: AbsorbPointer(
+              absorbing: _isPublishing,
+              child: SafeArea(
         child: Form(
           key: _formKey,
           child: ListView(
@@ -653,9 +687,18 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                       child: CupertinoButton(
                         color: Colors.orange,
                         borderRadius: BorderRadius.circular(16),
-                        onPressed: () =>
-                            _saveItem(context, appProvider, serviceId),
-                        child: Text(
+                        onPressed: _isPublishing
+                            ? null
+                            : () => _saveItem(context, appProvider, serviceId),
+                        child: _isPublishing
+                            ? const SizedBox(
+                                width: 22,
+                                height: 22,
+                                child: CupertinoActivityIndicator(
+                                  color: Colors.white,
+                                ),
+                              )
+                            : Text(
                           isEdit
                               ? 'حفظ التعديل'
                               : labels.addItemAr,
@@ -671,8 +714,14 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
               ),
             ],
           ),
+            ),
+          ),
         ),
+            ),
+        ),
+        ],
       ),
+    ),
     );
   }
 
@@ -777,6 +826,7 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
     AppProvider provider,
     String serviceId,
   ) async {
+    if (_isPublishing) return;
     if (!(_formKey.currentState?.validate() ?? false)) {
       return;
     }
@@ -803,6 +853,9 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
       );
       return;
     }
+
+    setState(() => _isPublishing = true);
+    await Future<void>.delayed(Duration.zero);
 
     final isEdit = widget.item != null;
     final isCarService = serviceId == 'cars';
@@ -858,14 +911,14 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
 
     try {
       if (isEdit) {
-        provider.updateProduct(item);
+        await provider.updateProduct(item);
       } else {
         await provider.addProduct(item);
       }
       if (!context.mounted) return;
 
       if (!isEdit && serviceId == 'used') {
-        _showSuccessDialog(context, 'تم استلام طلب النشر. سيظهر الإعلان للزبائن بعد مراجعة الإدارة والموافقة عليه.');
+        await _showSuccessDialog(context, 'تم استلام طلب النشر. سيظهر الإعلان للزبائن بعد مراجعة الإدارة والموافقة عليه.');
       } else {
         Navigator.pop(context);
       }
@@ -897,6 +950,8 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
           content: Text(message),
         ),
       );
+    } finally {
+      if (mounted) setState(() => _isPublishing = false);
     }
   }
 }

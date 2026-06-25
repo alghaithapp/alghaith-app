@@ -6,10 +6,10 @@ import '../../providers/app_provider.dart';
 import '../../models/app_models.dart';
 import '../../models/app_notification.dart';
 import '../../utils/extensions.dart';
+import '../../utils/merchant_service_labels.dart';
 import 'merchant_notifications_screen.dart';
 import 'merchant_orders_screen.dart';
 import 'merchant_profile_screen.dart';
-import 'order_details_screen.dart';
 import 'widgets/shared_dashboard_widgets.dart';
 
 const _bg = Color(0xFFF2F2F7);
@@ -37,6 +37,8 @@ class MerchantDashboardScreen extends StatelessWidget {
     final ratingLabel = rating > 0 ? rating.toStringAsFixed(1) : '—';
     final todaySales = _todayCompletedSales(provider.merchantIncomingOrders);
     final uniqueCustomersCount = _uniqueCustomersCount(provider.merchantIncomingOrders);
+    final usesOrderFlow =
+        merchantServiceUsesOrderFlow(provider.merchantActiveServiceId);
 
     return ColoredBox(
       color: _bg,
@@ -58,6 +60,7 @@ class MerchantDashboardScreen extends StatelessWidget {
                 customersCount: uniqueCustomersCount,
                 ratingLabel: ratingLabel,
                 itemLabel: labels.itemPluralAr,
+                showOrderStats: usesOrderFlow,
               ),
             ),
           ),
@@ -74,6 +77,18 @@ class MerchantDashboardScreen extends StatelessWidget {
               ),
             ),
           ),
+          if (provider.merchantHasMultipleServices)
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                child: _ActiveServiceChips(
+                  serviceIds: provider.merchantServiceIds,
+                  activeId: provider.merchantActiveServiceId,
+                  onSelected: provider.setMerchantActiveService,
+                ),
+              ),
+            ),
+          if (usesOrderFlow) ...[
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
@@ -135,6 +150,84 @@ class MerchantDashboardScreen extends StatelessWidget {
               ),
             ),
           ),
+          ] else ...[
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                child: MerchantSectionHeader(
+                  title: 'إحصائيات ${labels.storeLabelAr}',
+                  icon: Icons.analytics_outlined,
+                ),
+              ),
+            ),
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: MerchantStatCard(
+                        label: 'إجمالي ${labels.itemPluralAr}',
+                        value: '${provider.merchantProductCount}',
+                        icon: Icons.home_work_rounded,
+                        color: Colors.green,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: MerchantStatCard(
+                        label: 'التقييم',
+                        value: ratingLabel,
+                        icon: Icons.star_rounded,
+                        color: _brand,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
+                child: Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.05),
+                        blurRadius: 14,
+                        offset: const Offset(0, 6),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(
+                        Icons.chat_bubble_outline_rounded,
+                        color: AppColors.primary.withValues(alpha: 0.85),
+                      ),
+                      const SizedBox(width: 12),
+                      const Expanded(
+                        child: Text(
+                          'بيع العقار يتم عبر تواصل الزبون معك داخل التطبيق — راجع «الرسائل داخل التطبيق» من المزيد.',
+                          style: TextStyle(
+                            fontFamily: 'Cairo',
+                            fontSize: 13,
+                            height: 1.5,
+                            color: Color(0xFF555555),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+          if (usesOrderFlow) ...[
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(16, 22, 16, 10),
@@ -160,6 +253,7 @@ class MerchantDashboardScreen extends StatelessWidget {
                     ),
             ),
           ),
+          ],
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(16, 22, 16, 0),
@@ -219,6 +313,7 @@ class _HeroCard extends StatelessWidget {
   final int customersCount;
   final String ratingLabel;
   final String itemLabel;
+  final bool showOrderStats;
 
   const _HeroCard({
     required this.storeName,
@@ -233,6 +328,7 @@ class _HeroCard extends StatelessWidget {
     required this.customersCount,
     required this.ratingLabel,
     required this.itemLabel,
+    this.showOrderStats = true,
   });
 
   @override
@@ -344,20 +440,30 @@ class _HeroCard extends StatelessWidget {
                           value: '$productsCount',
                         ),
                       ),
-                      const SizedBox(width: 6),
-                      Expanded(
-                        child: MerchantHeroMiniStat(
-                          label: 'الطلبات',
-                          value: '$ordersCount',
+                      if (showOrderStats) ...[
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: MerchantHeroMiniStat(
+                            label: 'الطلبات',
+                            value: '$ordersCount',
+                          ),
                         ),
-                      ),
-                      const SizedBox(width: 6),
-                      Expanded(
-                        child: MerchantHeroMiniStat(
-                          label: 'عميل',
-                          value: '$customersCount',
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: MerchantHeroMiniStat(
+                            label: 'عميل',
+                            value: '$customersCount',
+                          ),
                         ),
-                      ),
+                      ] else ...[
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: MerchantHeroMiniStat(
+                            label: 'التقييم',
+                            value: ratingLabel,
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ],
@@ -491,6 +597,50 @@ class _MiniChip extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _ActiveServiceChips extends StatelessWidget {
+  final List<String> serviceIds;
+  final String activeId;
+  final Future<void> Function(String) onSelected;
+
+  const _ActiveServiceChips({
+    required this.serviceIds,
+    required this.activeId,
+    required this.onSelected,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 40,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: serviceIds.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 8),
+        itemBuilder: (context, index) {
+          final serviceId = serviceIds[index];
+          final chipLabels = merchantServiceLabels(serviceId);
+          final selected = serviceId == activeId;
+          return ChoiceChip(
+            label: Text(
+              chipLabels.storeLabelAr,
+              style: const TextStyle(fontFamily: 'Cairo'),
+            ),
+            selected: selected,
+            onSelected: (_) => onSelected(serviceId),
+            selectedColor: _brand,
+            backgroundColor: Colors.white,
+            labelStyle: TextStyle(
+              color: selected ? Colors.white : const Color(0xFF1C1C1E),
+              fontFamily: 'Cairo',
+              fontWeight: FontWeight.w700,
+            ),
+          );
+        },
       ),
     );
   }

@@ -40,6 +40,7 @@ class _RealEstateFormScreenState extends State<RealEstateFormScreen> {
   final List<String?> _galleryImages = List<String?>.filled(_maxGalleryImages, null);
   String? _selectedSubCategoryId;
   String? _imageValidationError;
+  bool _isPublishing = false;
 
   @override
   void initState() {
@@ -160,7 +161,9 @@ class _RealEstateFormScreenState extends State<RealEstateFormScreen> {
       );
     }
 
-    return Scaffold(
+    return PopScope(
+      canPop: !_isPublishing,
+      child: Scaffold(
       backgroundColor: const Color(0xFFF4F5F9),
       appBar: AppBar(
         title: Text(
@@ -169,7 +172,36 @@ class _RealEstateFormScreenState extends State<RealEstateFormScreen> {
               const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w900),
         ),
       ),
-      body: Form(
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (_isPublishing) ...[
+            const LinearProgressIndicator(minHeight: 3),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 10, 16, 4),
+              child: Row(
+                children: [
+                  const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                  const SizedBox(width: 10),
+                  Text(
+                    widget.item != null ? 'جارٍ حفظ التعديل...' : 'جارٍ نشر العقار...',
+                    style: const TextStyle(
+                      fontFamily: 'Cairo',
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF555555),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+          Expanded(
+            child: Form(
         key: _formKey,
         child: ListView(
           padding: const EdgeInsets.all(16),
@@ -336,8 +368,19 @@ class _RealEstateFormScreenState extends State<RealEstateFormScreen> {
                 ),
                 padding: const EdgeInsets.symmetric(vertical: 15),
               ),
-              onPressed: () => _saveItem(context, provider, selectedSubCategory),
-              child: Text(
+              onPressed: _isPublishing
+                  ? null
+                  : () => _saveItem(context, provider, selectedSubCategory),
+              child: _isPublishing
+                  ? const SizedBox(
+                      width: 22,
+                      height: 22,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : Text(
                 isEdit ? 'حفظ التعديل' : 'نشر العقار',
                 style: const TextStyle(
                   fontFamily: 'Cairo',
@@ -348,6 +391,10 @@ class _RealEstateFormScreenState extends State<RealEstateFormScreen> {
           ],
         ),
       ),
+          ),
+        ],
+      ),
+    ),
     );
   }
 
@@ -371,6 +418,7 @@ class _RealEstateFormScreenState extends State<RealEstateFormScreen> {
     AppProvider provider,
     ServiceCategory selectedSubCategory,
   ) async {
+    if (_isPublishing) return;
     if (!(_formKey.currentState?.validate() ?? false)) return;
 
     final gallery = _uploadedGalleryImages;
@@ -423,13 +471,28 @@ class _RealEstateFormScreenState extends State<RealEstateFormScreen> {
       isAvailable: true,
     );
 
-    if (widget.item != null) {
-      provider.updateProduct(item);
-    } else {
-      await provider.addProduct(item);
+    setState(() => _isPublishing = true);
+    try {
+      if (widget.item != null) {
+        await provider.updateProduct(item);
+      } else {
+        await provider.addProduct(item);
+      }
+      if (!context.mounted) return;
+      Navigator.pop(context);
+    } catch (error) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'تعذر نشر العقار. حاول مرة أخرى.',
+            style: const TextStyle(fontFamily: 'Cairo'),
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _isPublishing = false);
     }
-    if (!context.mounted) return;
-    Navigator.pop(context);
   }
 
   Widget _buildField({

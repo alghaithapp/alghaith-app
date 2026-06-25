@@ -19,6 +19,11 @@ function Read-DotEnvValue {
 }
 
 if (-not $env:CLOUDFLARE_API_TOKEN) {
+    $envFile = Join-Path $Root "backend\.env"
+    $env:CLOUDFLARE_API_TOKEN = Read-DotEnvValue $envFile "CLOUDFLARE_API_TOKEN"
+}
+
+if (-not $env:CLOUDFLARE_API_TOKEN) {
     Write-Host "CLOUDFLARE_API_TOKEN is not set." -ForegroundColor Yellow
     Write-Host 'Set it: $env:CLOUDFLARE_API_TOKEN = "YOUR_TOKEN"' -ForegroundColor Gray
     exit 1
@@ -41,10 +46,10 @@ if ($missing.Count -gt 0) {
 Write-Host "Deploying worker: lively-wind-9d98 ..." -ForegroundColor Green
 
 Write-Host "Ensuring R2 bucket alghaith-images exists ..." -ForegroundColor DarkGray
-& npx.cmd --yes wrangler@latest r2 bucket create alghaith-images 2>$null
-if ($LASTEXITCODE -ne 0) {
-    Write-Host "  (bucket may already exist — continuing)" -ForegroundColor DarkGray
-}
+$prevEap = $ErrorActionPreference
+$ErrorActionPreference = "Continue"
+& npx.cmd --yes wrangler@latest r2 bucket create alghaith-images *> $null
+$ErrorActionPreference = $prevEap
 
 $secretsFile = Join-Path $env:TEMP "alghaith-worker-secrets.json"
 $secrets | ConvertTo-Json | Set-Content -Path $secretsFile -Encoding UTF8
@@ -74,4 +79,4 @@ Write-Host '  npx wrangler secret put R2_PUBLIC_BASE_URL' -ForegroundColor Gray
 Write-Host "  value: https://cdn.alghaithst.com" -ForegroundColor Gray
 Write-Host ""
 Write-Host "Then migrate existing Supabase image URLs:" -ForegroundColor Yellow
-Write-Host "  cd backend && npm run migrate-supabase-to-r2 -- --dry-run" -ForegroundColor Gray
+Write-Host "  cd backend; npm run migrate-supabase-to-r2 -- --dry-run" -ForegroundColor Gray
