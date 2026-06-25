@@ -41,12 +41,8 @@ workflows:
         # أضِف MAPBOX_PUBLIC_TOKEN (pk.eyJ...) في Codemagic (Secure) و/أو Railway.
         # بدونها يُحمّل المفتاح من GET /maps/public-token على الخادم عند تشغيل التطبيق.
 
-    triggering:
-      events:
-        - push
-      branch_patterns:
-        - pattern: main
-          include: true # بناء تلقائي عند كل push على main
+    # البناء يدوي فقط من Codemagic → Start new build → ios-release
+    # (لا يُشغَّل تلقائياً عند push على main)
 
     scripts:
       # يجب توليد ملفات iOS قبل use-profiles حتى يُعثر Codemagic على Scheme Runner
