@@ -1,4 +1,4 @@
-import React, { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
+import React, { FormEvent, Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react';
 import { Shield, LoaderCircle, BadgeCheck, Lock, Store, Search } from 'lucide-react';
 
 import {
@@ -49,16 +49,26 @@ import {
 
 import LoginView from './components/LoginView';
 import Sidebar from './components/Sidebar';
-import DashboardView from './components/views/DashboardView';
-import MerchantsView from './components/views/MerchantsView';
-import CouriersView from './components/views/CouriersView';
-import DriversView from './components/views/DriversView';
-import TaxiAdminView from './components/views/TaxiAdminView';
-import AccountsView from './components/views/AccountsView';
-import HomeCategoriesView from './components/views/HomeCategoriesView';
-import AppUpdateView from './components/views/AppUpdateView';
 import DeleteModal from './components/DeleteModal';
 import RejectModal from './components/RejectModal';
+
+const DashboardView = lazy(() => import('./components/views/DashboardView'));
+const MerchantsView = lazy(() => import('./components/views/MerchantsView'));
+const CouriersView = lazy(() => import('./components/views/CouriersView'));
+const DriversView = lazy(() => import('./components/views/DriversView'));
+const TaxiAdminView = lazy(() => import('./components/views/TaxiAdminView'));
+const AccountsView = lazy(() => import('./components/views/AccountsView'));
+const HomeCategoriesView = lazy(() => import('./components/views/HomeCategoriesView'));
+const AppUpdateView = lazy(() => import('./components/views/AppUpdateView'));
+
+function ViewLoadingFallback() {
+  return (
+    <div className="loading-state loading-state-inline">
+      <LoaderCircle className="spin" size={24} />
+      <span>جار تحميل القسم...</span>
+    </div>
+  );
+}
 
 type RejectAccountTarget = Pick<
   AdminAccountSummary,
@@ -260,20 +270,16 @@ export default function App() {
     setIsLoadingData(true);
     setBootError('');
     try {
-      const [nextReports, nextMerchants, nextCouriers] = await Promise.all([
+      const [nextReports, nextMerchants, nextCouriers, accountsResult] = await Promise.all([
         loadAdminReports(authToken),
         loadMerchants(authToken),
         loadCouriers(authToken),
+        loadAdminAccounts(authToken).catch(() => [] as AdminAccountSummary[]),
       ]);
       setReports(nextReports);
       setMerchants(nextMerchants);
       setCouriers(nextCouriers);
-      try {
-        const nextAccounts = await loadAdminAccounts(authToken);
-        setAccounts(nextAccounts);
-      } catch {
-        setAccounts([]);
-      }
+      setAccounts(accountsResult);
       const merchantPhone = preferredMerchantPhone || selectedMerchantPhone || nextMerchants[0]?.phone || '';
       if (merchantPhone) setSelectedMerchantPhone(merchantPhone);
     } catch (error) {
@@ -831,11 +837,13 @@ export default function App() {
           ) : null}
 
           {isLoadingData ? (
-            <div className="loading-state">
-              <LoaderCircle className="spin" size={28} />
-              <span>جار تحميل بيانات لوحة الإدارة...</span>
+            <div className="content-refresh-banner" role="status">
+              <LoaderCircle className="spin" size={16} />
+              <span>جار تحديث البيانات من الخادم...</span>
             </div>
-          ) : (
+          ) : null}
+
+          <Suspense fallback={<ViewLoadingFallback />}>
             <>
               {view === 'dashboard' ? (
                 <DashboardView
@@ -1016,7 +1024,7 @@ export default function App() {
                 />
               ) : null}
             </>
-          )}
+          </Suspense>
         </section>
       </div>
 

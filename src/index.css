@@ -1,5 +1,3 @@
-@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800;900&display=swap');
-
 /* ══════════════════════════════════════════════
    الغيث — لوحة الإدارة | Dark Mode Premium
    ══════════════════════════════════════════════ */
@@ -1324,6 +1322,25 @@ a { color: inherit; }
 }
 
 .loading-state.compact { min-height: 140px; padding: 24px; }
+
+.loading-state-inline {
+  min-height: 160px;
+  padding: 24px;
+}
+
+.content-refresh-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+  padding: 10px 14px;
+  border-radius: var(--radius-md);
+  background: rgba(0, 212, 170, 0.08);
+  border: 1px solid rgba(0, 212, 170, 0.2);
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  font-weight: 600;
+}
 
 .message {
   border-radius: var(--radius-md);

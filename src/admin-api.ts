@@ -40,19 +40,18 @@ export const PHONE_AUTH_BASE_URL = resolveApiBaseUrl(
 );
 
 let tauriInvoke: ((cmd: string, args?: Record<string, unknown>) => Promise<unknown>) | null = null;
+let tauriProbeDone = false;
 
 async function getTauriInvoke() {
-  if (tauriInvoke === undefined) {
-    try {
-      const mod = await import('@tauri-apps/api/core');
-      if (mod && typeof mod.invoke === 'function') {
-        tauriInvoke = mod.invoke;
-      } else {
-        tauriInvoke = null;
-      }
-    } catch {
-      tauriInvoke = null;
+  if (tauriProbeDone) return tauriInvoke;
+  tauriProbeDone = true;
+  try {
+    const mod = await import('@tauri-apps/api/core');
+    if (mod && typeof mod.invoke === 'function') {
+      tauriInvoke = mod.invoke;
     }
+  } catch {
+    tauriInvoke = null;
   }
   return tauriInvoke;
 }
