@@ -52,7 +52,7 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
           ),
       };
       provider.refreshCustomerOrders();
-      _orderRefreshTimer = Timer.periodic(const Duration(seconds: 10), (_) {
+      _orderRefreshTimer = Timer.periodic(const Duration(seconds: 45), (_) {
         _pollCustomerOrders();
       });
       RoleSwitchNotificationPresenter.showIfNeeded(context);

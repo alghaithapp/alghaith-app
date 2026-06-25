@@ -12,6 +12,7 @@ const {
   resolvePhoneKey,
   selectSingle,
   selectMany,
+  selectManyColumns,
   hasColumn,
   saveRow,
   deleteRow,
@@ -31,6 +32,7 @@ const {
   serializeMerchantProfileForClient,
   normalizeMerchantImageField,
   isRemoteImageUrl,
+  isBase64Image,
   pickRemoteImageUrl,
 } = require('../services/image_refs');
 
@@ -489,16 +491,7 @@ function mapStateItemToProductPayload(item = {}) {
       if (remote) return remote;
       return String(item.image ?? item.imageUrl ?? '').trim();
     })(),
-    image_base64: (() => {
-      const remote = pickRemoteImageUrl(
-        item.image,
-        item.imageUrl,
-        item.image_base64,
-        item.imageBase64
-      );
-      if (remote) return '';
-      return item.imageBase64 ?? item.image_base64 ?? '';
-    })(),
+    image_base64: '',
     is_favorite: Boolean(item.isFavorite ?? item.is_favorite ?? false),
     avg_price_label_ar: item.avgPriceLabelAr ?? item.avg_price_label_ar ?? '',
     avg_price_label_en: item.avgPriceLabelEn ?? item.avg_price_label_en ?? '',
@@ -678,9 +671,12 @@ async function saveMerchantProfile(phone, data = {}) {
   );
   if (profileRef.url) {
     if (isRemoteImageUrl(profileRef.url)) {
+      if (await hasColumn('merchant_profiles', 'profile_image_url')) {
+        basePayload.profile_image_url = profileRef.url;
+      }
       basePayload.profile_image_base64 = profileRef.url;
-    } else {
-      basePayload.profile_image_base64 = profileRef.base64;
+    } else if (!isBase64Image(profileRef.url)) {
+      basePayload.profile_image_base64 = profileRef.url;
     }
   }
   if (await hasColumn('merchant_profiles', 'work_sample_images_base64')) {
@@ -841,11 +837,13 @@ async function deleteMerchantProfile(phone) {
 
 async function getMerchantProducts(phone) {
   const variants = getPhoneVariants(phone);
-  return selectMany(
+  const rows = await selectMany(
     'merchant_products',
     [{ method: 'in', column: 'phone', value: variants }],
-    { column: 'created_at', ascending: false }
+    { column: 'created_at', ascending: false },
+    500
   );
+  return rows.map(serializeProductRowForClient);
 }
 
 async function saveMerchantProduct(phone, data = {}) {
@@ -975,9 +973,10 @@ async function saveMerchantProduct(phone, data = {}) {
   if (await hasColumn('merchant_products', 'gallery_images_base64')) {
     if (data.gallery_images_base64 !== undefined || data.galleryImagesBase64 !== undefined) {
       const raw = data.gallery_images_base64 ?? data.galleryImagesBase64;
-      payload.gallery_images_base64 = Array.isArray(raw)
+      const entries = Array.isArray(raw)
         ? raw.map((entry) => String(entry || '').trim()).filter(Boolean)
         : normalizeArray(raw);
+      payload.gallery_images_base64 = entries.filter((entry) => isRemoteImageUrl(entry));
     }
   }
   if (data.prep_minutes !== undefined && data.prep_minutes !== null) {
@@ -1183,7 +1182,13 @@ async function listServiceStores(
 }
 
 async function listOfferCatalogProducts() {
-  const stateRows = await selectMany('app_state');
+  const stateRows = await selectManyColumns(
+    'app_state',
+    'phone, state',
+    [],
+    { column: 'updated_at', ascending: false },
+    400
+  );
   const offersByPhone = new Map();
 
   for (const row of stateRows) {
@@ -1413,7 +1418,12 @@ async function listRestaurantStores(subCategoryId = '') {
 }
 
 async function listCatalogProducts(category = '', subCategoryId = '') {
-  const profiles = await selectMany('merchant_profiles');
+  const profiles = await selectMany(
+    'merchant_profiles',
+    [],
+    { column: 'updated_at', ascending: false },
+    1500
+  );
   const openProfiles = profiles.filter(
     (row) => row.is_open !== false && !isMerchantFrozen(row)
   );
@@ -1424,7 +1434,8 @@ async function listCatalogProducts(category = '', subCategoryId = '') {
   const products = await selectMany(
     'merchant_products',
     [],
-    { column: 'created_at', ascending: false }
+    { column: 'created_at', ascending: false },
+    2500
   );
 
   return products
@@ -1730,9 +1741,15 @@ async function createMerchantProfileIfMissing(phone, state, appUser, existingPho
 
 async function syncMissingMerchantProfilesFromAppState() {
   const [users, states, existingMerchants] = await Promise.all([
-    selectMany('app_users', [], { column: 'updated_at', ascending: false }),
-    selectMany('app_state', [], { column: 'updated_at', ascending: false }),
-    selectMany('merchant_profiles', [], { column: 'phone', ascending: true }),
+    selectMany('app_users', [], { column: 'updated_at', ascending: false }, 3000),
+    selectManyColumns(
+      'app_state',
+      'phone, state',
+      [],
+      { column: 'updated_at', ascending: false },
+      2500
+    ),
+    selectMany('merchant_profiles', [], { column: 'phone', ascending: true }, 2000),
   ]);
 
   const existingPhones = new Set();

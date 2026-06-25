@@ -523,7 +523,7 @@ class TaxiProvider extends ChangeNotifier {
     _incomingPollTaxiType = taxiType ?? 'economic';
     _incomingPoolTimer?.cancel();
     fetchIncomingRequests();
-    _incomingPoolTimer = Timer.periodic(const Duration(seconds: 20), (_) async {
+    _incomingPoolTimer = Timer.periodic(const Duration(seconds: 30), (_) async {
       await fetchIncomingRequests();
     });
     _startIncomingRealtime(phone: phone);

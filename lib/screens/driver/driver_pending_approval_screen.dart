@@ -35,7 +35,7 @@ class _DriverPendingApprovalScreenState
       }
       unawaited(_refresh(silent: true));
     });
-    _pollTimer = Timer.periodic(const Duration(seconds: 15), (_) {
+    _pollTimer = Timer.periodic(const Duration(seconds: 30), (_) {
       unawaited(_refresh(silent: true));
     });
   }

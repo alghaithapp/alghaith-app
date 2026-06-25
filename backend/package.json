@@ -9,7 +9,9 @@
     "test": "node --experimental-vm-modules node_modules/.bin/jest --forceExit --detectOpenHandles",
     "test:watch": "node --experimental-vm-modules node_modules/.bin/jest --watch --forceExit",
     "setup-admin": "node scripts/grant_admin_access.js",
-    "restore-primary-roles": "node scripts/restore_primary_roles.js"
+    "restore-primary-roles": "node scripts/restore_primary_roles.js",
+    "egress-diagnostics": "node scripts/egress_diagnostics.js",
+    "migrate-base64-images": "node scripts/migrate_base64_images_to_storage.js"
   },
   "jest": {
     "testEnvironment": "node",

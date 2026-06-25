@@ -5,6 +5,7 @@ const {
   resolvePhoneKey,
   normalizeArray,
   selectMany,
+  selectManyColumns,
   assertSupabaseAdmin,
   hasColumn,
   PLATFORM_ADMIN_PHONES,
@@ -85,7 +86,7 @@ async function getAdminReports(phone) {
     selectMany('merchant_profiles', [], { column: 'store_name', ascending: true }, 500),
     supabase.from('merchant_products').select('*', { count: 'exact', head: true }).then((r) => r.count || 0),
     supabase.from('app_users').select('*', { count: 'exact', head: true }).then((r) => r.count || 0),
-    supabase.from('app_state').select('phone, state').limit(2000).then((r) => r.data || []),
+    supabase.from('app_state').select('phone, state').limit(800).then((r) => r.data || []),
   ]);
 
   let completedOrders = 0, pendingOrders = 0, deliveringOrders = 0, cancelledOrders = 0;
@@ -326,8 +327,14 @@ async function getAllCouriers(adminPhone) {
   await assertAdminAccess(adminPhone);
 
   const [users, states] = await Promise.all([
-    selectMany('app_users', [], { column: 'updated_at', ascending: false }),
-    selectMany('app_state', [], { column: 'updated_at', ascending: false }),
+    selectMany('app_users', [], { column: 'updated_at', ascending: false }, 3000),
+    selectManyColumns(
+      'app_state',
+      'phone, state',
+      [],
+      { column: 'updated_at', ascending: false },
+      2500
+    ),
   ]);
 
   const stateByPhone = {};
@@ -376,8 +383,14 @@ async function getAllDrivers(adminPhone) {
   await assertAdminAccess(adminPhone);
 
   const [users, states] = await Promise.all([
-    selectMany('app_users', [], { column: 'updated_at', ascending: false }),
-    selectMany('app_state', [], { column: 'updated_at', ascending: false }),
+    selectMany('app_users', [], { column: 'updated_at', ascending: false }, 3000),
+    selectManyColumns(
+      'app_state',
+      'phone, state',
+      [],
+      { column: 'updated_at', ascending: false },
+      2500
+    ),
   ]);
 
   const stateByPhone = {};
@@ -1225,11 +1238,15 @@ async function getAllAdminAccounts(adminPhone) {
   await syncMissingMerchantProfilesFromAppState();
 
   const [users, states, merchants] = await Promise.all([
-    selectMany('app_users', [], { column: 'updated_at', ascending: false }),
-    selectMany('app_state', [], { column: 'updated_at', ascending: false }),
-    selectMany('merchant_profiles', []),
-    // ملاحظة: getAllAdminAccounts يحتاج كل الحسابات لعرض قائمة كاملة،
-    // لكن يمكن إضافة ترقيم الصفحات (pagination) مستقبلاً للتحسين أكثر
+    selectMany('app_users', [], { column: 'updated_at', ascending: false }, 3000),
+    selectManyColumns(
+      'app_state',
+      'phone, state',
+      [],
+      { column: 'updated_at', ascending: false },
+      2500
+    ),
+    selectMany('merchant_profiles', [], { column: 'updated_at', ascending: false }, 2000),
   ]);
 
   const merchantByPhone = {};

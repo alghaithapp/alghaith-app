@@ -9,6 +9,7 @@ const {
   assertSupabaseAdmin,
   PLATFORM_ADMIN_PHONES,
 } = require('./common');
+const { stripBase64Deep } = require('../services/image_refs');
 
 async function getAppUser(phone) {
   return selectSingleByPhone('app_users', phone);
@@ -42,12 +43,24 @@ async function saveAppUser(phone, data = {}) {
   assignIfDefined(payload, 'full_name', data.fullName ?? data.full_name);
   assignIfDefined(payload, 'role', data.role);
   assignIfDefined(payload, 'account_type', incomingType);
-  const avatarRef = data.avatar_base64 ?? data.avatarBase64;
-  assignIfDefined(payload, 'avatar_base64', avatarRef);
+  const avatarRef = pickRemoteImageUrl(
+    data.avatar_url,
+    data.avatarUrl,
+    data.avatar_base64,
+    data.avatarBase64
+  );
+  if (avatarRef) {
+    assignIfDefined(payload, 'avatar_base64', avatarRef);
+  }
+  const customerAvatar = pickRemoteImageUrl(
+    data.customer_avatar_base64,
+    data.customerAvatarBase64,
+    avatarRef
+  );
   assignIfDefined(
     payload,
     'customer_avatar_base64',
-    data.customer_avatar_base64 ?? data.customerAvatarBase64 ?? avatarRef
+    customerAvatar
   );
   return saveRow('app_users', payload, 'phone');
 }
@@ -96,18 +109,19 @@ async function getUserState(phone) {
 async function saveUserState(phone, state = {}) {
   const phoneKey = await resolvePhoneKey(phone);
   await ensureAppUser(phoneKey);
+  const sanitized = stripBase64Deep(state || {});
   // استخدام دالة merge_app_state للدمج الذري بدلاً من الاستبدال الكامل
   // هذا يمنع فقدان بيانات driverProfile, courierProfile, merchantStore, إلخ.
   try {
     const supabase = assertSupabaseAdmin();
     const { data, error } = await supabase.rpc('merge_app_state', {
       p_phone: phoneKey,
-      p_state: state,
+      p_state: sanitized,
     });
     if (error) {
       // fallback: اقرأ الحالة الحالية وادمجها يدوياً
       const current = await getUserState(phoneKey);
-      const merged = { ...(current || {}), ...state };
+      const merged = stripBase64Deep({ ...(current || {}), ...sanitized });
       const payload = { phone: phoneKey, state: merged, updated_at: nowIso() };
       return saveRow('app_state', payload, 'phone');
     }
@@ -116,11 +130,11 @@ async function saveUserState(phone, state = {}) {
     // fallback نهائي: اقرأ الحالة الحالية وادمجها يدوياً
     try {
       const current = await getUserState(phoneKey);
-      const merged = { ...(current || {}), ...state };
+      const merged = stripBase64Deep({ ...(current || {}), ...sanitized });
       const payload = { phone: phoneKey, state: merged, updated_at: nowIso() };
       return saveRow('app_state', payload, 'phone');
     } catch (_) {
-      const payload = { phone: phoneKey, state, updated_at: nowIso() };
+      const payload = { phone: phoneKey, state: sanitized, updated_at: nowIso() };
       return saveRow('app_state', payload, 'phone');
     }
   }

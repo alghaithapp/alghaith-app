@@ -237,6 +237,29 @@ async function selectMany(table, filters = [], orderBy = null, limit = null) {
   return Array.isArray(data) ? data : [];
 }
 
+async function selectManyColumns(
+  table,
+  columns,
+  filters = [],
+  orderBy = null,
+  limit = null
+) {
+  const supabase = assertSupabaseAdmin();
+  let query = supabase.from(table).select(columns);
+  for (const filter of filters) {
+    query = query[filter.method](filter.column, filter.value);
+  }
+  if (orderBy) {
+    query = query.order(orderBy.column, { ascending: orderBy.ascending });
+  }
+  if (limit !== null && Number.isInteger(limit) && limit > 0) {
+    query = query.limit(limit);
+  }
+  const { data, error } = await query;
+  if (error) throw new Error(error.message);
+  return Array.isArray(data) ? data : [];
+}
+
 async function hasColumn(table, column) {
   const cacheKey = `${table}.${column}`;
   if (schemaColumnCache.has(cacheKey)) {
@@ -376,6 +399,7 @@ module.exports = {
   resolvePhoneKey,
   selectSingle,
   selectMany,
+  selectManyColumns,
   hasColumn,
   saveRow,
   updateRow,

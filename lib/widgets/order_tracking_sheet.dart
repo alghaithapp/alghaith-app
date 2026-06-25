@@ -32,7 +32,7 @@ class _OrderTrackingSheetState extends State<OrderTrackingSheet> {
       if (!mounted) return;
       _syncLiveOrder();
     });
-    _timer = Timer.periodic(const Duration(seconds: 15), (_) async {
+    _timer = Timer.periodic(const Duration(seconds: 30), (_) async {
       await context.read<AppProvider>().refreshCustomerOrders();
       if (!mounted) return;
       _syncLiveOrder();

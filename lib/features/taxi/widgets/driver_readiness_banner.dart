@@ -29,7 +29,7 @@ class _DriverReadinessBannerState extends State<DriverReadinessBanner> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) => _refresh());
-    _refreshTimer = Timer.periodic(const Duration(seconds: 20), (_) => _refresh());
+    _refreshTimer = Timer.periodic(const Duration(seconds: 30), (_) => _refresh());
   }
 
   @override

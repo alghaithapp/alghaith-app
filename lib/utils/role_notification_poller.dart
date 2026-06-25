@@ -15,7 +15,7 @@ class RoleNotificationPoller extends StatefulWidget {
     required this.role,
     required this.onRefresh,
     required this.pollBanners,
-    this.interval = const Duration(seconds: 20),
+    this.interval = const Duration(seconds: 45),
   });
 
   final Widget child;

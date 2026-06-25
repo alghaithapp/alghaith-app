@@ -26,6 +26,46 @@ function pickRemoteImageUrl(...values) {
   return '';
 }
 
+const BASE64_FIELD_RE = /base64/i;
+
+/** يزيل حقول Base64 من أي كائن قبل إرساله للعميل أو حفظه. */
+function stripBase64Deep(value) {
+  if (value == null) return value;
+  if (Array.isArray(value)) {
+    return value.map(stripBase64Deep);
+  }
+  if (typeof value !== 'object') {
+    if (typeof value === 'string' && isBase64Image(value)) return '';
+    return value;
+  }
+
+  const out = {};
+  for (const [key, raw] of Object.entries(value)) {
+    if (BASE64_FIELD_RE.test(key)) {
+      if (typeof raw === 'string' && isRemoteImageUrl(raw)) {
+        if (key.includes('profile')) out.profile_image_url = raw;
+        else if (key.includes('cover')) out.cover_image_url = raw;
+        else if (key.includes('logo')) out.logo_image_url = raw;
+      } else if (Array.isArray(raw)) {
+        const urls = raw
+          .map((entry) => String(entry || '').trim())
+          .filter((entry) => isRemoteImageUrl(entry));
+        if (urls.length) out[key] = urls;
+      }
+      continue;
+    }
+
+    if (key === 'image' || key === 'imageUrl' || key === 'image_url') {
+      const remote = pickRemoteImageUrl(raw);
+      out[key] = remote || (isBase64Image(raw) ? '' : raw);
+      continue;
+    }
+
+    out[key] = stripBase64Deep(raw);
+  }
+  return out;
+}
+
 function normalizeProductImagePayload(data = {}) {
   const remote = pickRemoteImageUrl(
     data.image_url,
@@ -39,30 +79,36 @@ function normalizeProductImagePayload(data = {}) {
   }
 
   const asset = String(data.image ?? '').trim();
-  const base64 = String(data.image_base64 ?? data.imageBase64 ?? '').trim();
-  return {
-    image: asset,
-    image_base64: isBase64Image(base64) ? base64 : base64 || null,
-  };
+  if (asset && !isBase64Image(asset)) {
+    return { image: asset, image_base64: null };
+  }
+
+  return { image: '', image_base64: null };
 }
 
 function serializeProductRowForClient(row) {
   if (!row || typeof row !== 'object') return row;
-  const out = { ...row };
-  const remote = pickRemoteImageUrl(out.image_url, out.image, out.image_base64);
+  const out = stripBase64Deep({ ...row });
+  const remote = pickRemoteImageUrl(
+    out.image_url,
+    out.image,
+    out.image_base64,
+    out.imageBase64
+  );
   if (remote) {
     out.image = remote;
     out.image_url = remote;
-    out.image_base64 = '';
+  } else if (isBase64Image(out.image)) {
+    out.image = '';
   }
+  delete out.image_base64;
+  delete out.imageBase64;
 
   const gallery = out.gallery_images_base64 ?? out.galleryImagesBase64;
   if (Array.isArray(gallery)) {
-    const normalized = gallery
+    out.gallery_images_base64 = gallery
       .map((entry) => String(entry || '').trim())
-      .filter(Boolean)
-      .map((entry) => (isRemoteImageUrl(entry) ? entry : entry));
-    out.gallery_images_base64 = normalized.filter((entry) => isRemoteImageUrl(entry));
+      .filter((entry) => isRemoteImageUrl(entry));
   }
 
   return out;
@@ -72,22 +118,23 @@ function normalizeMerchantImageField(value) {
   const trimmed = String(value || '').trim();
   if (!trimmed) return { url: '', base64: null };
   if (isRemoteImageUrl(trimmed)) return { url: trimmed, base64: null };
-  return { url: trimmed, base64: trimmed };
+  if (isBase64Image(trimmed)) return { url: '', base64: null };
+  return { url: trimmed, base64: null };
 }
 
 function serializeMerchantProfileForClient(profile) {
   if (!profile || typeof profile !== 'object') return profile;
-  const out = { ...profile };
+  const out = stripBase64Deep({ ...profile });
 
-  const cover = pickRemoteImageUrl(out.cover_image_url, out.coverImageUrl, out.coverImageBase64);
-  if (cover) {
-    out.cover_image_url = cover;
-  }
+  const cover = pickRemoteImageUrl(
+    out.cover_image_url,
+    out.coverImageUrl,
+    out.coverImageBase64
+  );
+  if (cover) out.cover_image_url = cover;
 
   const logo = pickRemoteImageUrl(out.logo_image_url, out.logoImageUrl, out.logoImageBase64);
-  if (logo) {
-    out.logo_image_url = logo;
-  }
+  if (logo) out.logo_image_url = logo;
 
   const profileImage = pickRemoteImageUrl(
     out.profile_image_url,
@@ -97,23 +144,52 @@ function serializeMerchantProfileForClient(profile) {
   );
   if (profileImage) {
     out.profile_image_url = profileImage;
-    out.profile_image_base64 = '';
-  } else if (isBase64Image(out.profile_image_base64)) {
-    // keep legacy base64 until migrated
-  } else if (out.profile_image_base64 && isRemoteImageUrl(out.profile_image_base64)) {
-    out.profile_image_url = out.profile_image_base64;
-    out.profile_image_base64 = '';
+  }
+  delete out.profile_image_base64;
+  delete out.profileImageBase64;
+  delete out.coverImageBase64;
+  delete out.logoImageBase64;
+
+  if (Array.isArray(out.work_sample_images_base64)) {
+    out.work_sample_images_base64 = out.work_sample_images_base64.filter((entry) =>
+      isRemoteImageUrl(entry)
+    );
   }
 
   return out;
+}
+
+function serializeCustomerProfileForClient(profile) {
+  if (!profile || typeof profile !== 'object') return profile;
+  const out = stripBase64Deep({ ...profile });
+  const avatar = pickRemoteImageUrl(
+    out.avatar_url,
+    out.avatarUrl,
+    out.avatar_base64,
+    out.customer_avatar_base64
+  );
+  if (avatar) out.avatar_url = avatar;
+  delete out.avatar_base64;
+  delete out.customer_avatar_base64;
+  delete out.avatarBase64;
+  delete out.customerAvatarBase64;
+  return out;
+}
+
+function serializeUserStateForClient(state) {
+  if (!state || typeof state !== 'object') return state || {};
+  return stripBase64Deep(state);
 }
 
 module.exports = {
   isRemoteImageUrl,
   isBase64Image,
   pickRemoteImageUrl,
+  stripBase64Deep,
   normalizeProductImagePayload,
   serializeProductRowForClient,
   normalizeMerchantImageField,
   serializeMerchantProfileForClient,
+  serializeCustomerProfileForClient,
+  serializeUserStateForClient,
 };

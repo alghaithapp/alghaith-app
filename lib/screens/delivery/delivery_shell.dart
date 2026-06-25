@@ -59,7 +59,7 @@ class _DeliveryShellState extends State<DeliveryShell> {
 
     return RoleNotificationPoller(
       role: 'delivery',
-      interval: const Duration(seconds: 10),
+      interval: const Duration(seconds: 30),
       onRefresh: (provider) => provider.refreshCourierOrders(),
       pollBanners: (provider) => provider.pollCourierBanners(),
       child: Scaffold(

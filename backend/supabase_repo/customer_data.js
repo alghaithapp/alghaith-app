@@ -16,6 +16,7 @@ const {
   ensureAppUser,
   getAppUserId,
 } = require('./users');
+const { pickRemoteImageUrl } = require('../services/image_refs');
 
 async function getCustomerProfile(phone) {
   return selectSingleByPhone('customer_profiles', phone);
@@ -38,20 +39,19 @@ async function saveCustomerProfile(phone, data = {}) {
     'display_name',
     data.display_name ?? data.displayName ?? data.full_name
   );
-  assignIfDefined(
-    basePayload,
-    'avatar_base64',
-    data.avatar_base64 ?? data.avatarBase64
+  const avatarUrl = pickRemoteImageUrl(
+    data.avatar_url,
+    data.avatarUrl,
+    data.avatar_base64,
+    data.avatarBase64,
+    data.customer_avatar_base64,
+    data.customerAvatarBase64
   );
-  if (await hasColumn('customer_profiles', 'customer_avatar_base64')) {
-    assignIfDefined(
-      basePayload,
-      'customer_avatar_base64',
-      data.customer_avatar_base64 ??
-        data.customerAvatarBase64 ??
-        data.avatar_base64 ??
-        data.avatarBase64
-    );
+  if (avatarUrl) {
+    assignIfDefined(basePayload, 'avatar_base64', avatarUrl);
+    if (await hasColumn('customer_profiles', 'customer_avatar_base64')) {
+      assignIfDefined(basePayload, 'customer_avatar_base64', avatarUrl);
+    }
   }
   assignIfDefined(basePayload, 'address', data.address);
 

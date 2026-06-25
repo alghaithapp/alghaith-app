@@ -57,7 +57,7 @@ class _MerchantShellState extends State<MerchantShell> with WidgetsBindingObserv
         debugPrint('MERCHANT_CLOUD_SYNC: $error');
       });
       // استطلاع دوري كل 10 ثوانٍ (بدون Realtime — يوفر حصة Supabase)
-      _refreshTimer = Timer.periodic(const Duration(seconds: 10), (_) {
+      _refreshTimer = Timer.periodic(const Duration(seconds: 30), (_) {
         if (_isInBackground) return;
         _pollForNewOrders();
       });
@@ -71,7 +71,7 @@ class _MerchantShellState extends State<MerchantShell> with WidgetsBindingObserv
     if (_isInBackground) {
       _refreshTimer?.cancel();
     } else if (_refreshTimer == null || !_refreshTimer!.isActive) {
-      _refreshTimer = Timer.periodic(const Duration(seconds: 10), (_) => _pollForNewOrders());
+      _refreshTimer = Timer.periodic(const Duration(seconds: 30), (_) => _pollForNewOrders());
     }
   }
 

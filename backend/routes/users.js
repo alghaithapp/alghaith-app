@@ -24,6 +24,10 @@ const {
   parseQueryValue,
 } = require('./_middleware');
 const { getUserState, saveUserState } = require('../supabase_repo');
+const {
+  serializeUserStateForClient,
+  serializeCustomerProfileForClient,
+} = require('../services/image_refs');
 
 // ── App User ────────────────────────────────────────────────────────────
 
@@ -112,7 +116,7 @@ router.get('/customer-profile', async (req, res) => {
     const phone = requireAuthorizedPhone(req, res);
     if (!phone) return;
     const row = await getCustomerProfile(phone);
-    return res.json(row);
+    return res.json(serializeCustomerProfileForClient(row));
   } catch (error) {
     console.error('get customer-profile error:', error);
     return res.status(500).json({ message: error?.message || 'Failed to load customer profile.' });
@@ -124,7 +128,7 @@ router.put('/customer-profile', async (req, res) => {
     const phone = requireAuthorizedPhone(req, res);
     if (!phone) return;
     const row = await saveCustomerProfile(phone, req.body || {});
-    return res.json(row);
+    return res.json(serializeCustomerProfileForClient(row));
   } catch (error) {
     console.error('save customer-profile error:', error);
     return res.status(500).json({ message: error?.message || 'Failed to save customer profile.' });
@@ -248,7 +252,7 @@ router.get('/user-state', async (req, res) => {
   try {
     const phone = requireAuthorizedPhone(req, res);
     if (!phone) return;
-    const state = (await getUserState(phone)) || {};
+    const state = serializeUserStateForClient((await getUserState(phone)) || {});
     return res.json(state);
   } catch (error) {
     console.error('get user-state error:', error);
@@ -261,7 +265,8 @@ router.put('/user-state', async (req, res) => {
     const phone = requireAuthorizedPhone(req, res);
     if (!phone) return;
     const row = await saveUserState(phone, req.body?.state || {});
-    return res.json(row);
+    const state = row?.state ?? (await getUserState(phone)) ?? {};
+    return res.json(serializeUserStateForClient(state));
   } catch (error) {
     console.error('save user-state error:', error);
     return res.status(500).json({ message: error?.message || 'Failed to save user state.' });

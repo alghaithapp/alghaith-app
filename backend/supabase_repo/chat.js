@@ -273,7 +273,7 @@ async function getChatMessages(threadType, threadId, requestPhone) {
       { method: 'eq', column: 'thread_id', value: String(threadId).trim() },
     ],
     { column: 'created_at', ascending: true },
-    500
+    100
   );
   return rows.map(formatMessage);
 }
@@ -288,16 +288,16 @@ async function getChatInbox(requestPhone) {
   const [sentResult, receivedResult] = await Promise.all([
     supabase
       .from('chat_messages')
-      .select('*')
+      .select('id, thread_type, thread_id, sender_phone, receiver_phone, content, message_type, created_at, read_at')
       .in('sender_phone', variants)
       .order('created_at', { ascending: false })
-      .limit(300),
+      .limit(80),
     supabase
       .from('chat_messages')
-      .select('*')
+      .select('id, thread_type, thread_id, sender_phone, receiver_phone, content, message_type, created_at, read_at')
       .in('receiver_phone', variants)
       .order('created_at', { ascending: false })
-      .limit(300),
+      .limit(80),
   ]);
 
   const error = sentResult.error || receivedResult.error;

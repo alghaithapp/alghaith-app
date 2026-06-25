@@ -48,8 +48,8 @@ class _ChatScreenState extends State<ChatScreen>
   Timer? _pollTimer;
   String? _sessionPhone;
 
-  static const _fastPollInterval = Duration(seconds: 2);
-  static const _slowPollInterval = Duration(seconds: 8);
+  static const _fastPollInterval = Duration(seconds: 5);
+  static const _slowPollInterval = Duration(seconds: 30);
 
   @override
   void initState() {
