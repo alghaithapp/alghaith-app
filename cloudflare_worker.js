@@ -5,6 +5,66 @@
 const encoder = new TextEncoder();
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 
+function normalizePublicBase(env, requestUrl) {
+  const configured = String(env.R2_PUBLIC_BASE_URL || '').trim().replace(/\/+$/, '');
+  if (configured) return configured;
+  return new URL(requestUrl).origin;
+}
+
+function buildObjectPath(bucket, fileName) {
+  return `${bucket}/${fileName}`;
+}
+
+function buildPublicImageUrl(publicBase, objectPath, useMediaPrefix) {
+  const base = String(publicBase || '').replace(/\/+$/, '');
+  const path = String(objectPath || '').replace(/^\/+/, '');
+  return useMediaPrefix ? `${base}/media/${path}` : `${base}/${path}`;
+}
+
+async function uploadImageToR2(env, objectPath, body, contentType) {
+  if (!env.IMAGES_BUCKET) return false;
+  await env.IMAGES_BUCKET.put(objectPath, body, {
+    httpMetadata: {
+      contentType: contentType || 'image/jpeg',
+      cacheControl: 'public, max-age=31536000, immutable',
+    },
+  });
+  return true;
+}
+
+async function uploadImageToSupabase(env, objectPath, body, contentType) {
+  let supabaseUrl = env.SUPABASE_URL;
+  if (!supabaseUrl || !env.SUPABASE_SERVICE_ROLE_KEY) return null;
+  if (supabaseUrl.endsWith('/rest/v1/')) {
+    supabaseUrl = supabaseUrl.replace('/rest/v1/', '');
+  } else if (supabaseUrl.endsWith('/rest/v1')) {
+    supabaseUrl = supabaseUrl.replace('/rest/v1', '');
+  }
+  if (supabaseUrl.endsWith('/')) {
+    supabaseUrl = supabaseUrl.slice(0, -1);
+  }
+
+  const uploadUrl = `${supabaseUrl}/storage/v1/object/${objectPath}`;
+  const uploadResponse = await fetch(uploadUrl, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+      apikey: env.SUPABASE_SERVICE_ROLE_KEY,
+      'Content-Type': contentType || 'image/jpeg',
+      'x-upsert': 'true',
+      'cache-control': 'public, max-age=31536000, immutable',
+    },
+    body,
+  });
+
+  if (!uploadResponse.ok) {
+    const error = await uploadResponse.text();
+    throw new Error(`Supabase upload failed (${uploadResponse.status}): ${error}`);
+  }
+
+  return `${supabaseUrl}/storage/v1/object/public/${objectPath}`;
+}
+
 function json(data, status, corsHeaders) {
   return new Response(JSON.stringify(data), {
     status,
@@ -401,6 +461,33 @@ export default {
         );
       }
 
+      if (url.pathname.startsWith('/media/') && request.method === 'GET') {
+        if (!env.IMAGES_BUCKET) {
+          return new Response('Not Found', { status: 404, headers: corsHeaders });
+        }
+
+        const key = decodeURIComponent(url.pathname.slice('/media/'.length));
+        if (!key || key.includes('..')) {
+          return new Response('Bad Request', { status: 400, headers: corsHeaders });
+        }
+
+        const object = await env.IMAGES_BUCKET.get(key);
+        if (!object) {
+          return new Response('Not Found', { status: 404, headers: corsHeaders });
+        }
+
+        const headers = new Headers(corsHeaders);
+        headers.set(
+          'Content-Type',
+          object.httpMetadata?.contentType || 'application/octet-stream'
+        );
+        headers.set(
+          'Cache-Control',
+          object.httpMetadata?.cacheControl || 'public, max-age=31536000, immutable'
+        );
+        return new Response(object.body, { headers });
+      }
+
       if (url.pathname === '/upload' && request.method === 'POST') {
         if (!env.SESSION_SECRET) {
           return json(
@@ -453,60 +540,82 @@ export default {
           return json({ success: false, message: 'File is too large.' }, 413, corsHeaders);
         }
 
-        let supabaseUrl = env.SUPABASE_URL;
-        if (supabaseUrl.endsWith('/rest/v1/')) {
-          supabaseUrl = supabaseUrl.replace('/rest/v1/', '');
-        } else if (supabaseUrl.endsWith('/rest/v1')) {
-          supabaseUrl = supabaseUrl.replace('/rest/v1', '');
-        }
-        if (supabaseUrl.endsWith('/')) {
-          supabaseUrl = supabaseUrl.slice(0, -1);
+        const safeName = String(file.name || 'image.jpg')
+          .replace(/[^a-zA-Z0-9._-]/g, '_');
+        const fileName = `${Date.now()}_${safeName}`;
+        const objectPath = buildObjectPath(bucket, fileName);
+        const fileContentType = file.type || 'image/jpeg';
+        const fileBody = await file.arrayBuffer();
+        const hasCustomPublicBase = Boolean(String(env.R2_PUBLIC_BASE_URL || '').trim());
+
+        if (env.IMAGES_BUCKET) {
+          try {
+            const uploaded = await uploadImageToR2(
+              env,
+              objectPath,
+              fileBody,
+              fileContentType
+            );
+            if (uploaded) {
+              const publicBase = normalizePublicBase(env, request.url);
+              const publicUrl = buildPublicImageUrl(
+                publicBase,
+                objectPath,
+                !hasCustomPublicBase
+              );
+              return json(
+                {
+                  success: true,
+                  url: publicUrl,
+                  bucket,
+                  path: fileName,
+                  storage: 'r2',
+                },
+                200,
+                corsHeaders
+              );
+            }
+          } catch (error) {
+            console.error('R2 upload failed, falling back to Supabase:', error);
+          }
         }
 
-        const supabaseKey = env.SUPABASE_SERVICE_ROLE_KEY;
-
-        if (!supabaseUrl || !supabaseKey) {
+        try {
+          const publicUrl = await uploadImageToSupabase(
+            env,
+            objectPath,
+            fileBody,
+            fileContentType
+          );
+          if (!publicUrl) {
+            return json(
+              { success: false, message: 'Image storage is not configured.' },
+              500,
+              corsHeaders
+            );
+          }
           return json(
-            { success: false, message: 'Supabase not configured in Worker' },
+            {
+              success: true,
+              url: publicUrl,
+              bucket,
+              path: fileName,
+              storage: 'supabase',
+            },
+            200,
+            corsHeaders
+          );
+        } catch (error) {
+          return json(
+            {
+              success: false,
+              message: 'Upload failed',
+              error: error?.message || String(error),
+            },
             500,
             corsHeaders
           );
         }
-
-        const safeName = String(file.name || 'image.jpg')
-          .replace(/[^a-zA-Z0-9._-]/g, '_');
-        const fileName = `${Date.now()}_${safeName}`;
-        const objectPath = `${bucket}/${fileName}`;
-        const uploadUrl = `${supabaseUrl}/storage/v1/object/${objectPath}`;
-        const fileContentType = file.type || 'image/jpeg';
-
-        const uploadResponse = await fetch(uploadUrl, {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${supabaseKey}`,
-            apikey: supabaseKey,
-            'Content-Type': fileContentType,
-            'x-upsert': 'true',
-            'cache-control': '3600',
-          },
-          body: await file.arrayBuffer(),
-        });
-
-        if (!uploadResponse.ok) {
-          const error = await uploadResponse.text();
-          return json(
-            { success: false, message: 'Upload failed', error },
-            uploadResponse.status,
-            corsHeaders
-          );
-        }
-
-        const publicUrl = `${supabaseUrl}/storage/v1/object/public/${objectPath}`;
-        return json(
-          { success: true, url: publicUrl, bucket, path: fileName },
-          200,
-          corsHeaders
-        );
       }
 
       return new Response('Al-Ghaith API Active', {

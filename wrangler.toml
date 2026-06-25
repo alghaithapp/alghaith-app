@@ -5,3 +5,7 @@ compatibility_date = "2026-05-31"
 [[kv_namespaces]]
 binding = "AUTH_KV"
 id = "66faee95770a43829610c7c0e40d281f"
+
+[[r2_buckets]]
+binding = "IMAGES_BUCKET"
+bucket_name = "alghaith-images"

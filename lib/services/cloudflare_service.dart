@@ -12,7 +12,7 @@ class CloudflareService {
 
   static const Duration _uploadTimeout = Duration(seconds: 45);
 
-  /// رفع صورة إلى التخزين عبر Worker (Supabase Storage خلفياً).
+  /// رفع صورة إلى Cloudflare R2 عبر Worker (مع fallback لـ Supabase Storage).
   static Future<String?> uploadFile(File file, {String bucket = 'uploads'}) async {
     try {
       final baseUrl = PhoneAuthApi().baseUrl.trim();
