@@ -12,9 +12,11 @@ import '../../features/taxi/screens/driver/driver_home_screen.dart';
 import '../../features/taxi/screens/driver/driver_request_screen.dart';
 import '../../features/taxi/screens/driver/driver_trip_screen.dart';
 import '../../features/taxi/screens/driver/driver_earnings_screen.dart';
+import '../../features/taxi/widgets/driver_readiness_banner.dart';
 import '../../providers/app_provider.dart';
 import '../../utils/driver_profile_fields.dart';
 import '../../services/supabase_service.dart';
+import '../../core/notifications/push_notification_inbox.dart';
 import '../../utils/role_notification_poller.dart';
 import '../../utils/role_switch_notifications.dart';
 import '../../widgets/safe_bottom_bar.dart';
@@ -48,6 +50,11 @@ class _DriverShellState extends State<DriverShell> with RealtimeSubscriptionMixi
       final provider = context.read<AppProvider>();
       final phone = provider.authPhone;
       if (phone != null && phone.isNotEmpty) {
+        PushNotificationInbox.onTaxiIncomingPush = () async {
+          if (!context.mounted) return;
+          final taxi = context.read<TaxiProvider>();
+          await taxi.fetchIncomingRequests();
+        };
         // تحديث موقع السائق وتشغيل polling الطلبات
         _initDriverLocation(provider, phone);
         _startDriverLocationUpdates(provider);
@@ -70,44 +77,25 @@ class _DriverShellState extends State<DriverShell> with RealtimeSubscriptionMixi
   Future<void> _initDriverLocation(AppProvider provider, String phone) async {
     if (!context.mounted) return;
     final taxi = context.read<TaxiProvider>();
+
+    await bootstrapDriverReadiness(
+      appProvider: provider,
+      taxiProvider: taxi,
+      phone: phone,
+    );
+    if (!context.mounted) return;
+
     final profile = Map<String, dynamic>.from(provider.driverProfile ?? {});
     final lat = (profile['latitude'] ?? profile['lat']) as num?;
     final lng = (profile['longitude'] ?? profile['lng']) as num?;
     final taxiType = DriverProfileFields.taxiTypeOrDefault(profile);
 
-    // ابدأ استقبال الطلبات فوراً — لا تنتظر GPS
-    await taxi.setOnline(true);
     taxi.startIncomingPolling(
       phone: phone,
       lat: lat?.toDouble(),
       lng: lng?.toDouble(),
       taxiType: taxiType,
     );
-
-    try {
-      LocationPermission permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
-      }
-      if (permission == LocationPermission.deniedForever) return;
-
-      final pos = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
-      ).timeout(const Duration(seconds: 8));
-
-      profile['latitude'] = pos.latitude;
-      profile['longitude'] = pos.longitude;
-      profile['lat'] = pos.latitude;
-      profile['lng'] = pos.longitude;
-      await provider.setDriverProfile(profile);
-
-      if (context.mounted) {
-        taxi.updateIncomingPollLocation(lat: pos.latitude, lng: pos.longitude);
-        await taxi.fetchIncomingRequests();
-      }
-    } catch (_) {
-      // الموقع اختياري — الطلبات تصل بدونه أيضاً
-    }
   }
 
   void _startDriverLocationUpdates(AppProvider provider) {
@@ -145,6 +133,7 @@ class _DriverShellState extends State<DriverShell> with RealtimeSubscriptionMixi
 
   @override
   void dispose() {
+    PushNotificationInbox.onTaxiIncomingPush = null;
     _locationTimer?.cancel();
     context.read<TaxiProvider>().stopPolling();
     disposeRealtime();
@@ -165,7 +154,12 @@ class _DriverShellState extends State<DriverShell> with RealtimeSubscriptionMixi
             isDark ? const Color(0xFF111111) : const Color(0xFFF2F2F7),
         body: SafeArea(
           bottom: false,
-          child: _screens[_currentIndex],
+          child: Column(
+            children: [
+              const DriverReadinessBanner(),
+              Expanded(child: _screens[_currentIndex]),
+            ],
+          ),
         ),
         bottomNavigationBar: SafeBottomBar(
           color: isDark

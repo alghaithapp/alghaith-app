@@ -4,7 +4,7 @@
  * دوال إرسال الإشعارات الخاصة بخدمة التكسي.
  */
 
-const { sendPushToPhone, getDeviceTokensForPhone } = require('../push_notifications');
+const { sendPushToPhone } = require('../push_events');
 const { getActiveDriverPhonesByTaxiType } = require('../supabase_repo/taxi');
 
 /**
@@ -35,25 +35,52 @@ async function notifyNewTaxiRequest(requestMeta, nearbyDrivers = []) {
     title: '🚕 طلب تكسي جديد',
     body: `من: ${requestMeta.pickupAddress || 'غير محدد'} → إلى: ${requestMeta.dropoffAddress || 'غير محدد'}`,
     data: {
+      audience: 'driver',
       eventKey: 'taxi:pool_new',
+      orderId: requestId,
       requestId,
       pickupAddress: String(requestMeta.pickupAddress || '').trim(),
       dropoffAddress: String(requestMeta.dropoffAddress || '').trim(),
       fare: String(requestMeta.fare || '0'),
       distanceKm: String(requestMeta.distanceKm || '0'),
+      taxiType: String(requestMeta.taxiType || 'economic').trim(),
     },
   });
 
-  // إرسال لأول 5 سائقين فقط
+  const driverPayload = {
+    ...payload,
+    data: {
+      ...payload.data,
+      audience: 'driver',
+    },
+  };
+
+  const seenPhones = new Set();
   const targetDrivers = Array.isArray(nearbyDrivers) ? nearbyDrivers.slice(0, 5) : [];
 
   for (const driver of targetDrivers) {
     const phone = String(driver?.driverPhone || driver?.phone || '').trim();
-    if (!phone) continue;
+    if (!phone || seenPhones.has(phone)) continue;
+    seenPhones.add(phone);
     try {
-      await sendPushToPhone(phone, payload);
+      await sendPushToPhone(phone, driverPayload);
     } catch (error) {
       console.error(`taxi push notifyNewTaxiRequest error for ${phone}:`, error?.message || error);
+    }
+  }
+
+  if (seenPhones.size > 0) return;
+
+  const taxiType = String(requestMeta.taxiType || 'economic').trim();
+  const fallbackPhones = await getActiveDriverPhonesByTaxiType(taxiType);
+  for (const phone of fallbackPhones.slice(0, 5)) {
+    const normalized = String(phone || '').trim();
+    if (!normalized || seenPhones.has(normalized)) continue;
+    seenPhones.add(normalized);
+    try {
+      await sendPushToPhone(normalized, driverPayload);
+    } catch (error) {
+      console.error(`taxi push notifyNewTaxiRequest fallback error for ${normalized}:`, error?.message || error);
     }
   }
 }

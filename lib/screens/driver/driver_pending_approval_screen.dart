@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 
 import '../../core/notifications/push_notification_service.dart';
 import '../../providers/app_provider.dart';
+import '../../features/taxi/utils/driver_readiness.dart';
 import '../../utils/driver_profile_fields.dart';
 import '../../utils/helpers.dart';
 import '../shared/operator_setup_screen.dart';
@@ -30,8 +31,7 @@ class _DriverPendingApprovalScreenState
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final phone = context.read<AppProvider>().authPhone;
       if (phone != null && phone.isNotEmpty) {
-        unawaited(PushNotificationService.instance.bindToUser(phone)
-            .catchError((e) => debugPrint('bindToUser error: $e')));
+        unawaited(_ensurePushReady(phone));
       }
       unawaited(_refresh(silent: true));
     });
@@ -51,6 +51,16 @@ class _DriverPendingApprovalScreenState
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       unawaited(_refresh(silent: true));
+    }
+  }
+
+  Future<void> _ensurePushReady(String phone) async {
+    try {
+      await PushNotificationService.instance.initialize();
+      await DriverReadiness.requestNotifications();
+      await PushNotificationService.instance.ensureUserBinding(phone);
+    } catch (e) {
+      debugPrint('driver pending push setup error: $e');
     }
   }
 
@@ -179,6 +189,71 @@ class _DriverPendingApprovalScreenState
                   fontSize: 14,
                   height: 1.65,
                   color: Colors.grey,
+                ),
+              ),
+              const SizedBox(height: 20),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: Colors.orange.shade200),
+                ),
+                child: Column(
+                  children: [
+                    const Icon(Icons.notifications_active_outlined,
+                        color: Colors.deepOrange, size: 32),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'فعّل الإشعارات الآن',
+                      style: TextStyle(
+                        fontFamily: 'Cairo',
+                        fontWeight: FontWeight.w800,
+                        fontSize: 16,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    const Text(
+                      'حتى تصلك رسالة فور موافقة الإدارة على حسابك.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontFamily: 'Cairo',
+                        fontSize: 13,
+                        height: 1.5,
+                        color: Colors.grey,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    FilledButton(
+                      onPressed: () async {
+                        final phone = provider.authPhone;
+                        if (phone == null || phone.isEmpty) return;
+                        await DriverReadiness.requestNotifications();
+                        await PushNotificationService.instance
+                            .ensureUserBinding(phone);
+                        if (!context.mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text(
+                              'تم تجهيز الإشعارات',
+                              style: TextStyle(fontFamily: 'Cairo'),
+                            ),
+                          ),
+                        );
+                      },
+                      style: FilledButton.styleFrom(
+                        backgroundColor: Colors.deepOrange,
+                      ),
+                      child: const Text(
+                        'تفعيل الإشعارات',
+                        style: TextStyle(
+                          fontFamily: 'Cairo',
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],

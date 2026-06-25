@@ -13,6 +13,7 @@ class PushNotificationInbox {
 
   static Future<void> Function()? onCourierStatusPush;
   static Future<void> Function()? onTaxiStatusPush;
+  static Future<void> Function()? onTaxiIncomingPush;
 
   static const int summaryNotificationId = 900001;
   static const String unreadCountKey = 'push_unread_count';

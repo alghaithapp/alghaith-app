@@ -245,15 +245,26 @@ async function createTaxiRequest(customerPhone, data = {}) {
   // إرسال إشعارات
   try {
     const { notifyNewTaxiRequest } = require('../push/taxi_push_events');
-    // البحث عن سائقين قريبين لإشعارهم
-    const nearbyDrivers = await getNearbyDrivers(
+    let nearbyDrivers = await getNearbyDrivers(
       requestPayload.pickupLat,
       requestPayload.pickupLng,
       taxiType,
       [],
       10
     );
-    await notifyNewTaxiRequest(saved, nearbyDrivers);
+    if (!nearbyDrivers.length) {
+      nearbyDrivers = await getNearbyDrivers(
+        requestPayload.pickupLat,
+        requestPayload.pickupLng,
+        taxiType,
+        [],
+        25
+      );
+    }
+    await notifyNewTaxiRequest(
+      { ...saved, taxiType },
+      nearbyDrivers
+    );
   } catch (e) {
     console.error('taxi create push error:', e?.message || e);
   }
@@ -704,6 +715,7 @@ async function getDriverIncomingRequests(driverPhone, lat, lng, taxiType, radius
 
 async function getActiveDriverPhonesByTaxiType(taxiType = 'economic') {
   const supabase = assertSupabaseAdmin();
+  const requestedType = normalizeTaxiType(taxiType);
 
   const { data: appUsers, error } = await supabase
     .from('app_users')
@@ -729,6 +741,9 @@ async function getActiveDriverPhonesByTaxiType(taxiType = 'economic') {
 
     const services = profile.services || {};
     if (services.taxi === false) continue;
+
+    const driverType = normalizeTaxiType(profile.taxiType);
+    if (driverType !== requestedType) continue;
 
     result.push(phone);
   }

@@ -110,6 +110,64 @@ class PushNotificationService {
     }
   }
 
+  bool get hasToken =>
+      _currentToken != null && _currentToken!.trim().isNotEmpty;
+
+  bool get isFirebaseConfigured => DefaultFirebaseOptions.isConfigured;
+
+  Future<bool> areNotificationsAuthorized() async {
+    if (kIsWeb || !DefaultFirebaseOptions.isConfigured) return false;
+    if (!_initialized) {
+      await initialize();
+    }
+    if (!_initialized) return false;
+
+    final settings = await FirebaseMessaging.instance.getNotificationSettings();
+    final status = settings.authorizationStatus;
+    return status == AuthorizationStatus.authorized ||
+        status == AuthorizationStatus.provisional;
+  }
+
+  Future<bool> requestNotificationsPermission() async {
+    if (kIsWeb || !DefaultFirebaseOptions.isConfigured) return false;
+    if (!_initialized) {
+      await initialize();
+    }
+    if (!_initialized) return false;
+
+    final settings = await FirebaseMessaging.instance.requestPermission(
+      alert: true,
+      badge: true,
+      sound: true,
+      provisional: false,
+    );
+    return settings.authorizationStatus == AuthorizationStatus.authorized ||
+        settings.authorizationStatus == AuthorizationStatus.provisional;
+  }
+
+  /// ربط توكن FCM بالمستخدم مع إعادة المحاولة.
+  Future<bool> ensureUserBinding(String phone) async {
+    if (kIsWeb || !DefaultFirebaseOptions.isConfigured) return false;
+    if (!_initialized) {
+      await initialize();
+    }
+    if (!_initialized) return false;
+
+    final normalized = phone.trim();
+    if (normalized.isEmpty) return false;
+
+    for (var attempt = 0; attempt < 3; attempt++) {
+      await bindToUser(normalized);
+      final token = _currentToken ?? await FirebaseMessaging.instance.getToken();
+      if (token != null && token.trim().isNotEmpty) {
+        _currentToken = token;
+        return true;
+      }
+      await Future<void>.delayed(Duration(milliseconds: 400 * (attempt + 1)));
+    }
+    return false;
+  }
+
   Future<void> bindToUser(String phone) async {
     if (!_initialized) return;
     final normalized = phone.trim();
@@ -178,6 +236,10 @@ class PushNotificationService {
     }
     if (category == 'taxi') {
       await PushNotificationInbox.onTaxiStatusPush?.call();
+      final eventKey = message.data['eventKey']?.toString() ?? '';
+      if (eventKey == 'taxi:pool_new') {
+        await PushNotificationInbox.onTaxiIncomingPush?.call();
+      }
     }
 
     // للدور driver: إشعار طلب تكسي جديد — اعرض نافذة قبول/رفض

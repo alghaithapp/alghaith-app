@@ -92,6 +92,10 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
   }
 
   Widget _buildAppBar(BuildContext context, AppProvider provider, String driverName) {
+    final isOnline = context.watch<TaxiProvider>().isOnline;
+    final onlineColor = isOnline ? AppColors.success : Colors.grey;
+    final onlineLabel = isOnline ? 'متصل' : 'غير متصل';
+
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 10),
       decoration: BoxDecoration(
@@ -132,12 +136,12 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
             ),
           ),
 
-          // مؤشر الاتصال (دائماً متصل للسائق المعتمد)
+          // مؤشر الاتصال — يعتمد على جاهزية استقبال الطلبات
           Container(
             padding:
                 const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
             decoration: BoxDecoration(
-              color: AppColors.success.withValues(alpha: 0.12),
+              color: onlineColor.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(20),
             ),
             child: Row(
@@ -146,19 +150,19 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
                 Container(
                   width: 8,
                   height: 8,
-                  decoration: const BoxDecoration(
-                    color: AppColors.success,
+                  decoration: BoxDecoration(
+                    color: onlineColor,
                     shape: BoxShape.circle,
                   ),
                 ),
                 const SizedBox(width: 6),
-                const Text(
-                  'متصل',
+                Text(
+                  onlineLabel,
                   style: TextStyle(
                     fontFamily: 'Cairo',
                     fontSize: 12,
                     fontWeight: FontWeight.w700,
-                    color: AppColors.success,
+                    color: onlineColor,
                   ),
                 ),
               ],
