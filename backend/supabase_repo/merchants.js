@@ -30,7 +30,6 @@ const {
   serializeProductRowForClient,
   serializeMerchantProfileForClient,
   normalizeMerchantImageField,
-  serializeMerchantProfileForClient,
   isRemoteImageUrl,
   pickRemoteImageUrl,
 } = require('../services/image_refs');
