@@ -1166,16 +1166,46 @@ async function listServiceStores(
 
 async function listOfferCatalogProducts() {
   const supabase = assertSupabaseAdmin();
+  const usesPhone = await hasColumn('merchant_offers', 'phone');
+  const usesMerchantUserId = await hasColumn('merchant_offers', 'merchant_user_id');
+  const selectColumns = usesPhone
+    ? 'phone, title_ar, discount_percent, product_names_ar, is_active'
+    : 'merchant_user_id, title_ar, discount_percent, product_names_ar, is_active';
+
   const { data: offerRows, error } = await supabase
     .from('merchant_offers')
-    .select('phone, title_ar, discount_percent, product_names_ar, is_active')
+    .select(selectColumns)
     .eq('is_active', true)
     .limit(500);
+
+  const phoneByUserId = new Map();
+  if (!usesPhone && usesMerchantUserId && Array.isArray(offerRows) && offerRows.length) {
+    const userIds = [
+      ...new Set(
+        offerRows
+          .map((row) => String(row.merchant_user_id || '').trim())
+          .filter(Boolean)
+      ),
+    ];
+    if (userIds.length) {
+      const { data: users } = await supabase
+        .from('app_users')
+        .select('id, phone')
+        .in('id', userIds);
+      for (const user of users || []) {
+        if (user?.id && user?.phone) {
+          phoneByUserId.set(String(user.id), String(user.phone).trim());
+        }
+      }
+    }
+  }
 
   const offersByPhone = new Map();
   if (!error && Array.isArray(offerRows)) {
     for (const row of offerRows) {
-      const phone = String(row.phone || '').trim();
+      const phone = String(
+        row.phone || phoneByUserId.get(String(row.merchant_user_id || '').trim()) || ''
+      ).trim();
       if (!phone) continue;
       const list = offersByPhone.get(phone) || [];
       list.push({

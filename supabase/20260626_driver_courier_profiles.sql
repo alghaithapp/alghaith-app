@@ -27,6 +27,30 @@ CREATE TABLE IF NOT EXISTS public.courier_profiles (
   updated_at timestamptz NOT NULL DEFAULT now()
 );
 
+-- Tables may already exist from an older partial schema — add missing columns.
+ALTER TABLE IF EXISTS public.driver_profiles
+  ADD COLUMN IF NOT EXISTS display_name text,
+  ADD COLUMN IF NOT EXISTS driver_type text NOT NULL DEFAULT 'taxi',
+  ADD COLUMN IF NOT EXISTS approval_status text NOT NULL DEFAULT 'pending',
+  ADD COLUMN IF NOT EXISTS is_approved boolean NOT NULL DEFAULT false,
+  ADD COLUMN IF NOT EXISTS available boolean NOT NULL DEFAULT true,
+  ADD COLUMN IF NOT EXISTS is_suspended boolean NOT NULL DEFAULT false,
+  ADD COLUMN IF NOT EXISTS latitude double precision,
+  ADD COLUMN IF NOT EXISTS longitude double precision,
+  ADD COLUMN IF NOT EXISTS profile_payload jsonb NOT NULL DEFAULT '{}'::jsonb,
+  ADD COLUMN IF NOT EXISTS created_at timestamptz NOT NULL DEFAULT now(),
+  ADD COLUMN IF NOT EXISTS updated_at timestamptz NOT NULL DEFAULT now();
+
+ALTER TABLE IF EXISTS public.courier_profiles
+  ADD COLUMN IF NOT EXISTS display_name text,
+  ADD COLUMN IF NOT EXISTS approval_status text NOT NULL DEFAULT 'pending',
+  ADD COLUMN IF NOT EXISTS is_approved boolean NOT NULL DEFAULT false,
+  ADD COLUMN IF NOT EXISTS available boolean NOT NULL DEFAULT true,
+  ADD COLUMN IF NOT EXISTS is_suspended boolean NOT NULL DEFAULT false,
+  ADD COLUMN IF NOT EXISTS profile_payload jsonb NOT NULL DEFAULT '{}'::jsonb,
+  ADD COLUMN IF NOT EXISTS created_at timestamptz NOT NULL DEFAULT now(),
+  ADD COLUMN IF NOT EXISTS updated_at timestamptz NOT NULL DEFAULT now();
+
 CREATE INDEX IF NOT EXISTS idx_driver_profiles_approval
   ON public.driver_profiles (approval_status, is_approved);
 CREATE INDEX IF NOT EXISTS idx_courier_profiles_approval

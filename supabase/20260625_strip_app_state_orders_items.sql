@@ -1,4 +1,5 @@
 -- Phase 1: orders/items must live in customer_orders + merchant_products, not app_state.
+-- Prerequisite (production): run 20260624_migration_prerequisites.sql if merchant atomic_* exists.
 
 CREATE OR REPLACE FUNCTION merge_app_state(p_phone TEXT, p_state JSONB)
 RETURNS JSONB

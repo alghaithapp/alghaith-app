@@ -6,6 +6,7 @@ const {
   nowIso,
   normalizeArray,
   assertSupabaseAdmin,
+  hasColumn,
 } = require('./common');
 const { ensureAppUser } = require('./users');
 
@@ -23,28 +24,69 @@ function rowToOfferMap(row) {
   };
 }
 
-function offerToRow(phoneKey, offer = {}) {
+async function buildOfferRow(phoneKey, offer = {}) {
   const id = String(offer.id || '').trim();
   if (!id) throw new Error('Offer id is required.');
-  return {
+
+  const appUser = await ensureAppUser(phoneKey);
+  const merchantProfile = await selectSingleByPhone('merchant_profiles', phoneKey);
+
+  const row = {
     id,
-    phone: phoneKey,
     title_ar: String(offer.titleAr ?? offer.title_ar ?? '').trim(),
     title_en: String(offer.titleEn ?? offer.title_en ?? '').trim(),
-    discount_percent: Number.parseInt(offer.discountPercent ?? offer.discount_percent, 10) || 0,
-    start_date: String(offer.startDate ?? offer.start_date ?? '').trim(),
-    end_date: String(offer.endDate ?? offer.end_date ?? '').trim(),
+    discount_percent:
+      Number.parseInt(offer.discountPercent ?? offer.discount_percent, 10) || 0,
+    start_date: String(offer.startDate ?? offer.start_date ?? '').trim() || null,
+    end_date: String(offer.endDate ?? offer.end_date ?? '').trim() || null,
     product_names_ar: normalizeArray(offer.productNamesAr ?? offer.product_names_ar),
     is_active: offer.isActive !== false && offer.is_active !== false,
     updated_at: nowIso(),
   };
+
+  if (await hasColumn('merchant_offers', 'phone')) {
+    row.phone = phoneKey;
+  }
+  if (await hasColumn('merchant_offers', 'merchant_user_id')) {
+    if (!appUser?.id) {
+      throw new Error('App user id is required for merchant offers.');
+    }
+    row.merchant_user_id = appUser.id;
+  }
+  if (await hasColumn('merchant_offers', 'merchant_service_id')) {
+    row.merchant_service_id =
+      merchantProfile?.id || merchantProfile?.user_id || appUser?.id || null;
+  }
+  if (await hasColumn('merchant_offers', 'service_id')) {
+    row.service_id =
+      String(
+        offer.serviceId ??
+          offer.service_id ??
+          merchantProfile?.primary_service_id ??
+          'restaurant'
+      ).trim() || 'restaurant';
+  }
+
+  return row;
 }
 
 async function getMerchantOffers(phone) {
   const phoneKey = await resolvePhoneKey(phone);
+  const filters = [];
+
+  if (await hasColumn('merchant_offers', 'phone')) {
+    filters.push({ method: 'eq', column: 'phone', value: phoneKey });
+  } else if (await hasColumn('merchant_offers', 'merchant_user_id')) {
+    const appUser = await selectSingleByPhone('app_users', phoneKey);
+    if (!appUser?.id) return [];
+    filters.push({ method: 'eq', column: 'merchant_user_id', value: appUser.id });
+  } else {
+    return [];
+  }
+
   const rows = await selectMany(
     'merchant_offers',
-    [{ method: 'eq', column: 'phone', value: phoneKey }],
+    filters,
     { column: 'updated_at', ascending: false },
     100
   );
@@ -53,8 +95,7 @@ async function getMerchantOffers(phone) {
 
 async function saveMerchantOffer(phone, offer = {}) {
   const phoneKey = await resolvePhoneKey(phone);
-  await ensureAppUser(phoneKey);
-  const row = offerToRow(phoneKey, offer);
+  const row = await buildOfferRow(phoneKey, offer);
   await saveRow('merchant_offers', row, 'id');
   return rowToOfferMap(row);
 }
@@ -64,11 +105,17 @@ async function deleteMerchantOffer(phone, offerId) {
   const id = String(offerId || '').trim();
   if (!id) throw new Error('Offer id is required.');
   const supabase = assertSupabaseAdmin();
-  const { error } = await supabase
-    .from('merchant_offers')
-    .delete()
-    .eq('id', id)
-    .eq('phone', phoneKey);
+
+  let query = supabase.from('merchant_offers').delete().eq('id', id);
+  if (await hasColumn('merchant_offers', 'phone')) {
+    query = query.eq('phone', phoneKey);
+  } else if (await hasColumn('merchant_offers', 'merchant_user_id')) {
+    const appUser = await selectSingleByPhone('app_users', phoneKey);
+    if (!appUser?.id) throw new Error('Offer not found.');
+    query = query.eq('merchant_user_id', appUser.id);
+  }
+
+  const { error } = await query;
   if (error) throw new Error(error.message);
 }
 
@@ -125,4 +172,5 @@ module.exports = {
   getMerchantReviewsForMerchant,
   replyMerchantReview,
   rowToOfferMap,
+  buildOfferRow,
 };
