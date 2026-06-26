@@ -21,6 +21,8 @@ const {
   updateAccountRole,
   getAppUpdatePolicy,
   saveAdminAppUpdatePolicy,
+  getMaintenancePolicy,
+  saveAdminMaintenancePolicy,
   getHomeCategoriesConfig,
   saveAdminHomeCategoriesConfig,
   getUserState,
@@ -544,6 +546,42 @@ router.put('/admin/app-update-policy', async (req, res) => {
   } catch (error) {
     console.error('admin app update policy save error:', error);
     const message = error?.message || 'Failed to save app update policy.';
+    const status = message.includes('Admin access') ? 403 : 500;
+    return res.status(status).json({ message });
+  }
+});
+
+// ── Maintenance mode (admin) ────────────────────────────────────────────
+
+router.get('/admin/maintenance', async (req, res) => {
+  try {
+    const phone = requireOptionalAuthorizedPhone(req, res);
+    if (!phone) return;
+    const policy = await getMaintenancePolicy();
+    return res.json(policy);
+  } catch (error) {
+    console.error('admin maintenance read error:', error);
+    const message = error?.message || 'Failed to load maintenance policy.';
+    const status = message.includes('Admin access') ? 403 : 500;
+    return res.status(status).json({ message });
+  }
+});
+
+router.put('/admin/maintenance', async (req, res) => {
+  try {
+    const phone = requireOptionalAuthorizedPhone(req, res);
+    if (!phone) return;
+    const policy = await saveAdminMaintenancePolicy(phone, {
+      enabled: req.body?.enabled,
+      messageAr: req.body?.messageAr ?? req.body?.message_ar,
+      messageEn: req.body?.messageEn ?? req.body?.message_en,
+      allowAdminBypass:
+        req.body?.allowAdminBypass ?? req.body?.allow_admin_bypass,
+    });
+    return res.json({ success: true, policy });
+  } catch (error) {
+    console.error('admin maintenance save error:', error);
+    const message = error?.message || 'Failed to save maintenance policy.';
     const status = message.includes('Admin access') ? 403 : 500;
     return res.status(status).json({ message });
   }

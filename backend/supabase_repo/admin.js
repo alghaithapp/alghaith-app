@@ -6,6 +6,8 @@ const {
   normalizeArray,
   selectMany,
   selectManyColumns,
+  selectSingleByPhone,
+  saveRow,
   assertSupabaseAdmin,
   hasColumn,
   PLATFORM_ADMIN_PHONES,
@@ -1739,14 +1741,20 @@ const DEFAULT_APP_UPDATE_POLICY = Object.freeze({
 });
 
 async function getPlatformSettingsState() {
-  const state = (await getUserState(PLATFORM_SETTINGS_PHONE)) || {};
-  return normalizeObject(state);
+  const row = await selectSingleByPhone('app_state', PLATFORM_SETTINGS_PHONE);
+  return normalizeObject(row?.state);
 }
 
 async function savePlatformSettingsState(patch = {}) {
+  const phoneKey = await resolvePhoneKey(PLATFORM_SETTINGS_PHONE);
+  await ensureAppUser(phoneKey);
   const current = await getPlatformSettingsState();
   const next = { ...current, ...normalizeObject(patch) };
-  await saveUserState(PLATFORM_SETTINGS_PHONE, next);
+  await saveRow(
+    'app_state',
+    { phone: phoneKey, state: next, updated_at: nowIso() },
+    'phone',
+  );
   return next;
 }
 
@@ -1893,6 +1901,68 @@ async function saveAdminAppUpdatePolicy(phone, patch = {}) {
   return { ...policy, updatedAt };
 }
 
+const DEFAULT_MAINTENANCE_POLICY = Object.freeze({
+  enabled: false,
+  messageAr:
+    'المنصة قيد الصيانة حالياً. نعمل على تحسين الخدمة ونعود قريباً. شكراً لصبركم.',
+  messageEn: 'The platform is under maintenance. We will be back soon.',
+  allowAdminBypass: true,
+});
+
+function normalizeMaintenancePolicy(raw = {}) {
+  const source = normalizeObject(raw);
+  return {
+    enabled: source.enabled === true || source.enabled === 'true' || source.enabled === 1,
+    messageAr: String(
+      source.messageAr ?? source.message_ar ?? DEFAULT_MAINTENANCE_POLICY.messageAr,
+    ).trim() || DEFAULT_MAINTENANCE_POLICY.messageAr,
+    messageEn: String(
+      source.messageEn ?? source.message_en ?? DEFAULT_MAINTENANCE_POLICY.messageEn,
+    ).trim() || DEFAULT_MAINTENANCE_POLICY.messageEn,
+    allowAdminBypass:
+      source.allowAdminBypass !== false &&
+      source.allow_admin_bypass !== false &&
+      source.allowAdminBypass !== 'false' &&
+      source.allow_admin_bypass !== 'false',
+  };
+}
+
+async function getMaintenancePolicy() {
+  const state = await getPlatformSettingsState();
+  const stored = normalizeObject(
+    state.maintenancePolicy || state.maintenance_policy || {},
+  );
+  const { updatedAt, updated_at: updatedAtSnake, ...policyFields } = stored;
+  const policy = normalizeMaintenancePolicy({
+    ...DEFAULT_MAINTENANCE_POLICY,
+    ...policyFields,
+  });
+  return {
+    ...policy,
+    updatedAt:
+      updatedAt ||
+      updatedAtSnake ||
+      state.maintenancePolicyUpdatedAt ||
+      null,
+  };
+}
+
+async function saveAdminMaintenancePolicy(phone, patch = {}) {
+  await assertAdminAccess(phone);
+  const current = await getMaintenancePolicy();
+  const { updatedAt: _ignored, ...currentPolicy } = current;
+  const policy = normalizeMaintenancePolicy({ ...currentPolicy, ...patch });
+  const updatedAt = nowIso();
+  await savePlatformSettingsState({
+    maintenancePolicy: {
+      ...policy,
+      updatedAt,
+    },
+    maintenancePolicyUpdatedAt: updatedAt,
+  });
+  return { ...policy, updatedAt };
+}
+
 module.exports = {
   getAdminReports,
   getAllMerchants,
@@ -1926,4 +1996,6 @@ module.exports = {
   saveAdminHomeCategoriesConfig,
   getAppUpdatePolicy,
   saveAdminAppUpdatePolicy,
+  getMaintenancePolicy,
+  saveAdminMaintenancePolicy,
 };

@@ -3,6 +3,7 @@ const router = express.Router();
 const {
   getAppUpdatePolicy,
   getHomeCategoriesConfig,
+  getMaintenancePolicy,
 } = require('../supabase_repo');
 
 router.get('/update-policy', async (_req, res) => {
@@ -17,6 +18,18 @@ router.get('/update-policy', async (_req, res) => {
     console.error('app update policy error:', error);
     return res.status(500).json({
       message: error?.message || 'Failed to load app update policy.',
+    });
+  }
+});
+
+router.get('/maintenance', async (_req, res) => {
+  try {
+    const policy = await getMaintenancePolicy();
+    return res.json(policy);
+  } catch (error) {
+    console.error('app maintenance policy error:', error);
+    return res.status(500).json({
+      message: error?.message || 'Failed to load maintenance policy.',
     });
   }
 });

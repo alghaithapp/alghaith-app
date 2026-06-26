@@ -8,11 +8,13 @@ import {
   loadAdminTaxiComplaints,
   loadAdminTaxiTrips,
   loadAppUpdatePolicy,
+  loadMaintenancePolicy,
   loadCouriers,
   loadHomeCategoriesConfig,
   loadMerchantDetails,
   loadMerchants,
   saveAppUpdatePolicy,
+  saveMaintenancePolicy,
   saveHomeCategoriesConfig,
   rejectCourierApplication,
   rejectDriverApplication,
@@ -36,6 +38,7 @@ import type {
   AdminTaxiTrip,
   AdminView,
   AppUpdatePolicy,
+  MaintenancePolicy,
   CourierSummary,
   HomeCategoriesConfig,
   MerchantPreRegisterPayload,
@@ -60,6 +63,7 @@ const TaxiAdminView = lazy(() => import('./components/views/TaxiAdminView'));
 const AccountsView = lazy(() => import('./components/views/AccountsView'));
 const HomeCategoriesView = lazy(() => import('./components/views/HomeCategoriesView'));
 const AppUpdateView = lazy(() => import('./components/views/AppUpdateView'));
+const MaintenanceView = lazy(() => import('./components/views/MaintenanceView'));
 
 function ViewLoadingFallback() {
   return (
@@ -132,6 +136,13 @@ const VIEW_META: Record<
     title: 'التحكم بأقسام التطبيق',
     subtitle:
       'فعّل أو أطفئ كل قسم على أندرويد وآيفون بشكل منفصل. التغيير يظهر فوراً للمستخدمين.',
+    showSearch: false,
+  },
+  maintenance: {
+    eyebrow: 'وضع الصيانة',
+    title: 'صيانة المنصة',
+    subtitle:
+      'فعّل وضع الصيانة لإظهار شاشة للمستخدمين أثناء أعمال قاعدة البيانات. الإيقاف فوري دون تحديث التطبيق.',
     showSearch: false,
   },
 };
@@ -249,6 +260,15 @@ export default function App() {
     iosStoreUrl: 'https://apps.apple.com/app/id6776741811',
   });
   const [isSavingAppUpdate, setIsSavingAppUpdate] = useState(false);
+  const [maintenancePolicy, setMaintenancePolicy] = useState<MaintenancePolicy | null>(null);
+  const [maintenanceDraft, setMaintenanceDraft] = useState({
+    enabled: false,
+    messageAr:
+      'المنصة قيد الصيانة حالياً. نعمل على تحسين الخدمة ونعود قريباً. شكراً لصبركم.',
+    messageEn: 'The platform is under maintenance. We will be back soon.',
+    allowAdminBypass: true,
+  });
+  const [isSavingMaintenance, setIsSavingMaintenance] = useState(false);
   const [homeCategoriesConfig, setHomeCategoriesConfig] = useState<HomeCategoriesConfig | null>(null);
   const [homeCategorySavingKey, setHomeCategorySavingKey] = useState('');
   const [isLoadingHomeCategories, setIsLoadingHomeCategories] = useState(false);
@@ -313,6 +333,24 @@ export default function App() {
       })
       .catch((error) => {
         setActionError(error instanceof Error ? error.message : 'تعذر تحميل إعدادات التحديث الإجباري.');
+      });
+  }, [token, view]);
+
+  useEffect(() => {
+    if (!token || view !== 'maintenance') return;
+    setActionError('');
+    loadMaintenancePolicy(token)
+      .then((policy) => {
+        setMaintenancePolicy(policy);
+        setMaintenanceDraft({
+          enabled: policy.enabled,
+          messageAr: policy.messageAr,
+          messageEn: policy.messageEn,
+          allowAdminBypass: policy.allowAdminBypass,
+        });
+      })
+      .catch((error) => {
+        setActionError(error instanceof Error ? error.message : 'تعذر تحميل إعدادات الصيانة.');
       });
   }, [token, view]);
 
@@ -738,6 +776,41 @@ export default function App() {
     } finally { setIsSavingAppUpdate(false); }
   }
 
+  async function handleSaveMaintenancePolicy() {
+    if (!token) return;
+    if (!maintenanceDraft.messageAr.trim()) {
+      setActionError('اكتب رسالة تظهر للمستخدم أثناء الصيانة.');
+      return;
+    }
+    setIsSavingMaintenance(true);
+    setActionError('');
+    setSuccessMessage('');
+    try {
+      const result = await saveMaintenancePolicy(token, {
+        enabled: maintenanceDraft.enabled,
+        messageAr: maintenanceDraft.messageAr.trim(),
+        messageEn: maintenanceDraft.messageEn.trim(),
+        allowAdminBypass: maintenanceDraft.allowAdminBypass,
+      });
+      setMaintenancePolicy(result.policy);
+      setMaintenanceDraft({
+        enabled: result.policy.enabled,
+        messageAr: result.policy.messageAr,
+        messageEn: result.policy.messageEn,
+        allowAdminBypass: result.policy.allowAdminBypass,
+      });
+      setSuccessMessage(
+        result.policy.enabled
+          ? 'تم تفعيل وضع الصيانة. المستخدمون سيرون شاشة الصيانة فوراً.'
+          : 'تم إيقاف وضع الصيانة. التطبيق يعمل بشكل طبيعي.',
+      );
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : 'تعذر حفظ إعدادات الصيانة.');
+    } finally {
+      setIsSavingMaintenance(false);
+    }
+  }
+
   async function handleHomeCategoryPlatformToggle(categoryId: string, platform: 'android' | 'ios', enabled: boolean) {
     if (!token) return;
     const savingKey = `${categoryId}:${platform}`;
@@ -1021,6 +1094,17 @@ export default function App() {
                   formatDate={formatDate}
                   onDraftChange={(partial) => setAppUpdateDraft((prev) => ({ ...prev, ...partial }))}
                   onSave={handleSaveAppUpdatePolicy}
+                />
+              ) : null}
+
+              {view === 'maintenance' ? (
+                <MaintenanceView
+                  policy={maintenancePolicy}
+                  draft={maintenanceDraft}
+                  isSaving={isSavingMaintenance}
+                  formatDate={formatDate}
+                  onDraftChange={(partial) => setMaintenanceDraft((prev) => ({ ...prev, ...partial }))}
+                  onSave={handleSaveMaintenancePolicy}
                 />
               ) : null}
             </>

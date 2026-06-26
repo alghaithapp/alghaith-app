@@ -11,6 +11,7 @@ import {
   Car,
   UserCheck,
   ChevronRight,
+  Wrench,
 } from 'lucide-react';
 import type {
   AdminView,
@@ -178,6 +179,13 @@ export default function Sidebar({
               iconClass="nav-icon-settings"
               icon={<Smartphone size={16} />}
               label="تحديث التطبيق"
+            />
+            <NavButton
+              isActive={view === 'maintenance'}
+              onClick={() => onSwitchView('maintenance')}
+              iconClass="nav-icon-settings"
+              icon={<Wrench size={16} />}
+              label="وضع الصيانة"
             />
           </nav>
         </div>

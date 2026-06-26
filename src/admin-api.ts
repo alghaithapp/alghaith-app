@@ -4,6 +4,7 @@ import type {
   AdminSession,
   AdminTaxiTrip,
   AppUpdatePolicy,
+  MaintenancePolicy,
   CourierSummary,
   HomeCategoriesConfig,
   HomeCategoryPlatformOverride,
@@ -282,6 +283,16 @@ export async function loadAppUpdatePolicy(token: string): Promise<AppUpdatePolic
 
 export async function saveAppUpdatePolicy(token: string, policy: Record<string, unknown>) {
   return request<{ success: boolean; policy: AppUpdatePolicy }>(DATABASE_API_BASE_URL, '/db/admin/app-update-policy', {
+    method: 'PUT', token, body: JSON.stringify(policy),
+  });
+}
+
+export async function loadMaintenancePolicy(token: string): Promise<MaintenancePolicy> {
+  return request<MaintenancePolicy>(DATABASE_API_BASE_URL, '/db/admin/maintenance', { token });
+}
+
+export async function saveMaintenancePolicy(token: string, policy: Record<string, unknown>) {
+  return request<{ success: boolean; policy: MaintenancePolicy }>(DATABASE_API_BASE_URL, '/db/admin/maintenance', {
     method: 'PUT', token, body: JSON.stringify(policy),
   });
 }

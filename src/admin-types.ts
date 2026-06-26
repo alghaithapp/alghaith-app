@@ -14,6 +14,14 @@ export interface AppUpdatePolicy {
   updatedAt: string | null;
 }
 
+export interface MaintenancePolicy {
+  enabled: boolean;
+  messageAr: string;
+  messageEn: string;
+  allowAdminBypass: boolean;
+  updatedAt: string | null;
+}
+
 export interface HomeCategoryPlatformOverride {
   default?: boolean;
   android?: boolean;
@@ -75,7 +83,8 @@ export type AdminView =
   | 'drivers'
   | 'taxi'
   | 'homeCategories'
-  | 'appUpdate';
+  | 'appUpdate'
+  | 'maintenance';
 
 export interface AdminTaxiTrip {
   id: string;
