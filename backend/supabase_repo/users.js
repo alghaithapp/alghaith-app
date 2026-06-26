@@ -9,7 +9,8 @@ const {
   assertSupabaseAdmin,
   PLATFORM_ADMIN_PHONES,
 } = require('./common');
-const { stripBase64Deep } = require('../services/image_refs');
+const { stripBase64Deep, pickRemoteImageUrl } = require('../services/image_refs');
+const { stripForbiddenAppStateKeys, sanitizeAppState } = require('../services/app_state_policy');
 
 async function getAppUser(phone) {
   return selectSingleByPhone('app_users', phone);
@@ -103,13 +104,14 @@ async function deleteAppUser(phone) {
 
 async function getUserState(phone) {
   const row = await selectSingleByPhone('app_state', phone);
-  return row ? row.state || null : null;
+  if (!row?.state) return null;
+  return sanitizeAppState(row.state);
 }
 
 async function saveUserState(phone, state = {}) {
   const phoneKey = await resolvePhoneKey(phone);
   await ensureAppUser(phoneKey);
-  const sanitized = stripBase64Deep(state || {});
+  const sanitized = sanitizeAppState(stripBase64Deep(state || {}));
   // استخدام دالة merge_app_state للدمج الذري بدلاً من الاستبدال الكامل
   // هذا يمنع فقدان بيانات driverProfile, courierProfile, merchantStore, إلخ.
   try {
@@ -176,6 +178,20 @@ async function assertAdminAccess(phone) {
   }
 
   const state = await getUserState(normalized);
+  if (state?.adminRole || state?.admin_role) {
+    return normalized;
+  }
+
+  const supabase = assertSupabaseAdmin();
+  const { data: adminRow } = await supabase
+    .from('admin_roles')
+    .select('phone, role')
+    .eq('phone', normalized)
+    .maybeSingle();
+  if (adminRow?.role) {
+    return normalized;
+  }
+
   if (state?.adminAccess === true) {
     return normalized;
   }

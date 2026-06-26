@@ -7,7 +7,7 @@ import '../core/realtime/realtime_service.dart';
 import '../data/repositories/database_repository.dart';
 import '../models/app_models.dart';
 import '../models/home_category_platform_override.dart';
-import '../features/taxi/models/taxi_request.dart';
+import '../modules/taxi/models/taxi_request.dart';
 
 /// واجهة توافقية — كل عمليات قاعدة البيانات تمر عبر Railway backend.
 class SupabaseService {
@@ -246,6 +246,40 @@ class SupabaseService {
     Map<String, dynamic> profile,
   ) =>
       _db.saveMerchantProfile(phone, profile);
+
+  static Future<void> saveDriverProfile(
+    String phone,
+    Map<String, dynamic> profile,
+  ) =>
+      _db.saveDriverProfile(phone, profile);
+
+  static Future<void> saveCourierProfile(
+    String phone,
+    Map<String, dynamic> profile,
+  ) =>
+      _db.saveCourierProfile(phone, profile);
+
+  static Future<List<Map<String, dynamic>>> loadMerchantOffers(String phone) =>
+      _db.loadMerchantOffers(phone);
+
+  static Future<void> saveMerchantOffer(
+    String phone,
+    Map<String, dynamic> offer,
+  ) =>
+      _db.saveMerchantOffer(phone, offer);
+
+  static Future<void> deleteMerchantOffer(String phone, String offerId) =>
+      _db.deleteMerchantOffer(phone, offerId);
+
+  static Future<List<Map<String, dynamic>>> loadMerchantReviews(String phone) =>
+      _db.loadMerchantReviews(phone);
+
+  static Future<Map<String, dynamic>> replyMerchantReview(
+    String phone,
+    String reviewId,
+    String reply,
+  ) =>
+      _db.replyMerchantReview(phone, reviewId, reply);
 
   static Future<void> saveMerchantProduct(
     String phone,

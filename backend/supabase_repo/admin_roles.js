@@ -3,9 +3,8 @@ const {
   getPhoneVariants,
   resolvePhoneKey,
   nowIso,
-  hasColumn,
 } = require('./common');
-const { getAppUser, getUserState, saveUserState } = require('./users');
+const { getAppUser } = require('./users');
 
 const ADMIN_ROLES = Object.freeze({
   SUPER_ADMIN: 'super_admin',
@@ -33,11 +32,29 @@ function hasMinRole(userRole, requiredRole) {
   return roleLevel(userRole) >= roleLevel(requiredRole);
 }
 
+async function readAdminRoleRow(phoneKey) {
+  const supabase = assertSupabaseAdmin();
+  const { data, error } = await supabase
+    .from('admin_roles')
+    .select('phone, role, updated_at')
+    .eq('phone', phoneKey)
+    .maybeSingle();
+  if (error && !/does not exist/i.test(error.message || '')) {
+    throw new Error(error.message);
+  }
+  return data || null;
+}
+
 async function getAdminRole(phone) {
   const phoneKey = await resolvePhoneKey(phone);
-  const state = await getUserState(phoneKey);
-  if (!state || typeof state !== 'object') return null;
-  return String(state.adminRole || state.admin_role || '').trim() || null;
+  const row = await readAdminRoleRow(phoneKey);
+  if (row?.role) return String(row.role).trim();
+
+  const user = await getAppUser(phoneKey);
+  if (String(user?.role ?? '').trim() === 'admin') {
+    return 'admin';
+  }
+  return null;
 }
 
 async function setAdminRole(adminPhone, targetPhone, newRole) {
@@ -50,23 +67,32 @@ async function setAdminRole(adminPhone, targetPhone, newRole) {
   }
 
   const normalizedRole = String(newRole || '').trim();
-  if (normalizedRole && !ADMIN_ROLES[Object.keys(ADMIN_ROLES).find(k => ADMIN_ROLES[k] === normalizedRole)]) {
+  if (
+    normalizedRole &&
+    !ADMIN_ROLES[Object.keys(ADMIN_ROLES).find((k) => ADMIN_ROLES[k] === normalizedRole)]
+  ) {
     throw new Error(`Invalid role: ${normalizedRole}`);
   }
 
   const targetKey = await resolvePhoneKey(targetPhone);
-  const existingState = (await getUserState(targetKey)) || {};
-  await saveUserState(targetKey, {
-    ...existingState,
-    adminRole: normalizedRole || null,
-    admin_role: normalizedRole || null,
-    adminAccess: normalizedRole ? true : existingState.adminAccess,
-  });
+  const supabase = assertSupabaseAdmin();
+
+  if (normalizedRole) {
+    await supabase.from('admin_roles').upsert({
+      phone: targetKey,
+      role: normalizedRole,
+      updated_at: nowIso(),
+    });
+  } else {
+    await supabase.from('admin_roles').delete().eq('phone', targetKey);
+  }
 
   const user = await getAppUser(targetKey);
   if (user && normalizedRole && String(user.role || '').trim() !== 'admin') {
-    const supabase = assertSupabaseAdmin();
-    await supabase.from('app_users').update({ role: 'admin', updated_at: nowIso() }).eq('phone', targetKey);
+    await supabase
+      .from('app_users')
+      .update({ role: 'admin', updated_at: nowIso() })
+      .eq('phone', targetKey);
   }
 
   return { success: true, phone: targetKey, role: normalizedRole || null };
@@ -79,32 +105,34 @@ async function listAdminAccounts(adminPhone) {
   }
 
   const supabase = assertSupabaseAdmin();
-  const [users, states] = await Promise.all([
+  const [users, adminRows] = await Promise.all([
     supabase.from('app_users').select().order('updated_at', { ascending: false }),
-    supabase.from('app_state').select(),
+    supabase.from('admin_roles').select(),
   ]);
 
   if (users.error) throw new Error(users.error.message);
-  if (states.error) throw new Error(states.error.message);
+  if (adminRows.error && !/does not exist/i.test(adminRows.error.message || '')) {
+    throw new Error(adminRows.error.message);
+  }
 
-  const stateByPhone = {};
-  for (const row of states.data || []) {
-    stateByPhone[row.phone] = row.state || {};
+  const roleByPhone = {};
+  for (const row of adminRows.data || []) {
+    roleByPhone[row.phone] = row;
   }
 
   const admins = [];
   for (const user of users.data || []) {
     const phone = String(user.phone || '').trim();
     if (!phone) continue;
-    const state = stateByPhone[phone] || {};
-    const role = String(state.adminRole || state.admin_role || '').trim();
-    if (role || state.adminAccess === true || String(user.role || '').trim() === 'admin') {
+    const roleRow = roleByPhone[phone];
+    const role = String(roleRow?.role || '').trim();
+    if (role || String(user.role || '').trim() === 'admin') {
       admins.push({
         phone,
         fullName: String(user.full_name || '').trim(),
-        role: role || (state.adminAccess === true ? 'admin' : 'unknown'),
-        adminAccess: state.adminAccess === true,
-        updatedAt: user.updated_at || null,
+        role: role || 'admin',
+        adminAccess: true,
+        updatedAt: roleRow?.updated_at || user.updated_at || null,
       });
     }
   }

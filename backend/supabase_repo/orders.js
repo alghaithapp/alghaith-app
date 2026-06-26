@@ -574,24 +574,6 @@ async function saveMerchantReview({
         .eq('phone', mPhone);
     }
 
-    const merchantState = await getUserState(mPhone);
-    if (merchantState) {
-      const reviews = Array.isArray(merchantState.merchantReviews) ? merchantState.merchantReviews : [];
-      const updatedReviews = [
-        {
-          id: orderId,
-          customerName,
-          stars: Number(stars),
-          comment: comment || '',
-          date: new Date().toLocaleDateString('ar-EG'),
-        },
-        ...reviews.filter(r => r.id !== orderId)
-      ].slice(0, 50);
-
-      merchantState.merchantReviews = updatedReviews;
-      await saveUserState(mPhone, merchantState);
-    }
-
     return review;
   } catch (error) {
     console.error('saveMerchantReview error:', error);

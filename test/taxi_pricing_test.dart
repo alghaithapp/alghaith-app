@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:alghaith_app/features/taxi/utils/taxi_fare_calculator.dart';
-import 'package:alghaith_app/features/taxi/models/taxi_request.dart';
+import 'package:alghaith_app/modules/taxi/utils/taxi_fare_calculator.dart';
+import 'package:alghaith_app/modules/taxi/models/taxi_request.dart';
 
 void main() {
   group('TaxiFareCalculator', () {

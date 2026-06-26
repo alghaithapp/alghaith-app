@@ -193,6 +193,8 @@ class RemoteAccountBundle {
     this.appUser,
     this.customerProfile,
     this.merchantProfile,
+    this.driverProfile,
+    this.courierProfile,
     this.userState,
     this.addresses = const [],
     this.favoriteIds = const [],
@@ -203,6 +205,8 @@ class RemoteAccountBundle {
   final Map<String, dynamic>? appUser;
   final Map<String, dynamic>? customerProfile;
   final Map<String, dynamic>? merchantProfile;
+  final Map<String, dynamic>? driverProfile;
+  final Map<String, dynamic>? courierProfile;
   final Map<String, dynamic>? userState;
   final List<String> addresses;
   final List<String> favoriteIds;

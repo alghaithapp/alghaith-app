@@ -17,6 +17,9 @@ const taxi = require('./taxi');
 const admin_roles = require('./admin_roles');
 const chat = require('./chat');
 const call_logs = require('./call_logs');
+const operator_profiles = require('./operator_profiles');
+const merchant_offers = require('./merchant_offers');
+const media_assets = require('./media_assets');
 
 module.exports = {
   // Common / Config
@@ -55,4 +58,15 @@ module.exports = {
   // Voice call logs
   ...call_logs,
 
+  // Driver / courier profiles
+  ...operator_profiles,
+
+  // Merchant offers / reviews API
+  ...merchant_offers,
+
+  // Media assets
+  ...media_assets,
+
+  // Notification outbox
+  ...require('./notification_outbox'),
 };

@@ -7,8 +7,7 @@ const rateLimitLib = require('express-rate-limit');
 const rateLimit = rateLimitLib.default || rateLimitLib;
 const { version: backendVersion } = require('./package.json');
 const { isPushConfigured } = require('./push_notifications');
-const { startPushScheduler } = require('./push_scheduler');
-const { startTaxiScheduler } = require('./services/taxi_scheduler');
+const { mountDomainRoutes, startDomainWorkers } = require('./domains/registry');
 const { validatePromoCode } = require('./promo_codes');
 const logger = require('./lib/logger');
 const { errorHandler, notFoundHandler } = require('./lib/error_handler');
@@ -463,19 +462,9 @@ app.use('/db', (req, res, next) => {
   }
 });
 
-// ── Route mounts ────────────────────────────────────────────────────────
+// ── Route mounts (domain registry) ─────────────────────────────────────
 
-app.use('/auth', require('./routes/auth'));
-app.use('/maps', require('./routes/maps'));
-app.use('/app', require('./routes/app'));
-app.use('/db', require('./routes/users'));
-app.use('/db', require('./routes/merchants'));
-app.use('/db', require('./routes/marketplace'));
-app.use('/db', require('./routes/delivery'));
-app.use('/db', require('./routes/admin'));
-app.use('/db/chat', require('./routes/chat'));
-app.use('/db/agora', require('./routes/agora'));
-app.use('/db/taxi', require('./routes/taxi'));
+mountDomainRoutes(app);
 
 // ── Promo code validation (kept inline) ────────────────────────────────
 
@@ -501,9 +490,8 @@ app.use(errorHandler);
 
 app.listen(port, () => {
   logger.info(`Backend listening on port ${port} (v${backendVersion})`);
+  startDomainWorkers();
   if (isPushConfigured()) {
-    startPushScheduler();
     logger.info('Push scheduler started');
   }
-  startTaxiScheduler();
 });

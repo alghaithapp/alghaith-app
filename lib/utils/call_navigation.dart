@@ -7,13 +7,13 @@ import 'package:permission_handler/permission_handler.dart';
 
 import '../core/theme/app_colors.dart';
 import '../screens/incoming_call_screen.dart';
-import '../services/agora_voice_service.dart';
 import '../services/incoming_call_ringtone.dart';
 import '../services/voice_call_service.dart';
+import '../services/zego_voice_service.dart';
 import '../utils/guest_gate.dart';
 import '../utils/merchant_profile_fields.dart';
 
-/// فتح مكالمة صوتية داخلية عبر Agora.
+/// فتح مكالمة صوتية داخلية عبر ZEGOCLOUD.
 class CallNavigation {
   CallNavigation._();
 
@@ -273,7 +273,7 @@ class VoiceCallScreen extends StatefulWidget {
 }
 
 class _VoiceCallScreenState extends State<VoiceCallScreen> {
-  final AgoraVoiceService _voice = AgoraVoiceService.instance;
+  final ZegoVoiceService _voice = ZegoVoiceService.instance;
   bool _muted = false;
   bool _speaker = true;
   String _statusText = 'جاري الاتصال...';
@@ -331,11 +331,11 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
     try {
       final config = await VoiceCallService.fetchConfig();
       if (!mounted || _disposing) return;
-      if (!config.enabled || config.appId.isEmpty) {
+      if (!config.enabled || config.appId <= 0) {
         throw StateError('خدمة الاتصال الداخلي غير مفعّلة حالياً.');
       }
 
-      final AgoraCallSession session;
+      final VoiceCallSession session;
       if (widget.isIncoming) {
         session = await VoiceCallService.fetchToken(
           threadType: widget.threadType,
@@ -359,14 +359,16 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
       if (!mounted || _disposing) return;
       _channelName = session.channelName;
 
-      // إيقاف الرنين قبل تفعيل Agora لتجنب تعارض جلسة الصوت على أندرويد.
+      // إيقاف الرنين قبل تفعيل ZEGO لتجنب تعارض جلسة الصوت على أندرويد.
       await IncomingCallRingtone.instance.stop();
+      await Future<void>.delayed(const Duration(milliseconds: 200));
 
       await _voice.joinVoiceCall(
-        appId: session.appId.isNotEmpty ? session.appId : config.appId,
+        appId: session.appId > 0 ? session.appId : config.appId,
         token: session.token,
-        channelName: session.channelName,
-        uid: session.uid,
+        roomId: session.roomId,
+        userId: session.userId,
+        streamId: session.streamId,
       );
       if (!mounted || _disposing) return;
       await _voice.setSpeakerphone(_speaker);
@@ -419,37 +421,37 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
     } catch (_) {}
   }
 
-  void _onCallStateChanged(AgoraCallState state) {
+  void _onCallStateChanged(ZegoCallState state) {
     if (!mounted || _disposing) return;
     switch (state) {
-      case AgoraCallState.ringing:
-        // لا نشغّل رنين audioplayers أثناء جلسة Agora — يسبب تعارض صوت/خروج التطبيق.
+      case ZegoCallState.ringing:
+        // لا نشغّل رنين audioplayers أثناء جلسة ZEGO — يسبب تعارض صوت/خروج التطبيق.
         break;
-      case AgoraCallState.connected:
-      case AgoraCallState.ended:
-      case AgoraCallState.failed:
-      case AgoraCallState.idle:
+      case ZegoCallState.connected:
+      case ZegoCallState.ended:
+      case ZegoCallState.failed:
+      case ZegoCallState.idle:
         unawaited(IncomingCallRingtone.instance.stop());
         break;
-      case AgoraCallState.connecting:
+      case ZegoCallState.connecting:
         break;
     }
     if (!mounted || _disposing) return;
     setState(() {
       switch (state) {
-        case AgoraCallState.connecting:
+        case ZegoCallState.connecting:
           _statusText = 'جاري الاتصال...';
-        case AgoraCallState.ringing:
+        case ZegoCallState.ringing:
           _statusText = widget.isIncoming ? 'متصل' : 'يرن...';
-        case AgoraCallState.connected:
+        case ZegoCallState.connected:
           _wasConnected = true;
           _connectedAt ??= DateTime.now();
           _statusText = 'متصل';
-        case AgoraCallState.ended:
+        case ZegoCallState.ended:
           _statusText = 'انتهت المكالمة';
-        case AgoraCallState.failed:
+        case ZegoCallState.failed:
           _statusText = 'فشل الاتصال';
-        case AgoraCallState.idle:
+        case ZegoCallState.idle:
           break;
       }
     });

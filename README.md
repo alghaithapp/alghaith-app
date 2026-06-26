@@ -71,6 +71,17 @@ Current version: **1.2.73+108** (see `pubspec.yaml`)
 
 - Shorebird (`shorebird.yaml`) — Flutter code push
 - Codemagic (`codemagic.yaml`) — CI/CD build pipeline
-- Vercel (`website/vercel.json`, root `vercel.json`) — website + API deploys
-- Railway (`backend/railway.toml`) — backend deployment
+- Vercel (`website/vercel.json`, root `vercel.json`) — website + admin dashboard
+- Railway (`backend/railway.toml`) — Node.js API (`https://alghaith-app-production.up.railway.app`)
 - Cloudflare Worker (`cloudflare_worker.js`, `wrangler.toml`) — edge script
+
+### Railway (backend API)
+
+Link once, then deploy from repo root:
+
+```powershell
+.\scripts\link-backend-railway.ps1
+.\scripts\deploy-backend-railway.ps1
+```
+
+See `AGENTS.md` → **Railway backend deployment** for project details (only `striking-fulfillment` is production; do not deploy from repo root).

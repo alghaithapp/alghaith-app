@@ -5,9 +5,9 @@ import 'package:mocktail/mocktail.dart';
 import 'package:provider/provider.dart';
 
 import 'package:alghaith_app/providers/app_provider.dart';
-import 'package:alghaith_app/features/taxi/models/taxi_request.dart';
-import 'package:alghaith_app/features/taxi/screens/driver/driver_home_screen.dart';
-import 'package:alghaith_app/features/taxi/widgets/taxi_map_widget.dart';
+import 'package:alghaith_app/modules/taxi/models/taxi_request.dart';
+import 'package:alghaith_app/modules/taxi/screens/driver/driver_home_screen.dart';
+import 'package:alghaith_app/modules/taxi/widgets/taxi_map_widget.dart';
 
 import '../mocks/app_provider.dart';
 

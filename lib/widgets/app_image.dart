@@ -24,7 +24,12 @@ class AppImage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final imageWidget = _buildImage(ImageStorageService.normalizeImageRef(imageData));
+    final normalized = ImageStorageService.normalizeImageRef(imageData);
+    final displayUrl = ImageStorageService.pickVariantUrl(
+      normalized,
+      preferredWidth: (width ?? 256).round(),
+    );
+    final imageWidget = _buildImage(displayUrl);
 
     if (borderRadius != null) {
       return ClipRRect(

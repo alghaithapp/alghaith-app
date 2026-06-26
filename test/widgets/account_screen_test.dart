@@ -5,7 +5,7 @@ import 'package:mocktail/mocktail.dart';
 
 import 'package:alghaith_app/providers/app_provider.dart';
 import 'package:alghaith_app/screens/account_screen.dart';
-import 'package:alghaith_app/screens/guest_account_view.dart';
+import 'package:alghaith_app/modules/auth/screens/guest_account_view.dart';
 import 'package:alghaith_app/screens/customer_account_view.dart';
 import 'package:alghaith_app/utils/merchant_service_labels.dart';
 import '../mocks/app_provider.dart';

@@ -2,7 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:alghaith_app/core/network/api_client.dart';
-import 'package:alghaith_app/core/storage/local_session_store.dart';
+import 'package:alghaith_app/modules/auth/storage/local_session_store.dart';
 
 void main() {
   group('ApiClient session token', () {

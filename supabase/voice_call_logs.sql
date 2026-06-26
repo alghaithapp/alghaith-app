@@ -1,4 +1,4 @@
--- سجل المكالمات الصوتية الداخلية (Agora)
+-- سجل المكالمات الصوتية الداخلية (ZEGOCLOUD)
 CREATE TABLE IF NOT EXISTS voice_call_logs (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   thread_type text NOT NULL CHECK (thread_type IN ('order', 'taxi', 'store', 'support')),

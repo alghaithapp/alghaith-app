@@ -100,6 +100,15 @@ class InternalContactButtons extends StatelessWidget {
     )) {
       return;
     }
+    if (threadType == 'taxi') {
+      await ChatNavigation.openTaxiChat(
+        context,
+        requestId: threadId,
+        otherPartyName: otherPartyName,
+        receiverPhone: receiverPhone,
+      );
+      return;
+    }
     await ChatNavigation.open(
       context,
       threadType: threadType,

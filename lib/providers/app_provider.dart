@@ -5,11 +5,12 @@ import 'package:flutter/material.dart';
 import '../core/catalog/marketplace_catalog.dart';
 import '../core/catalog/marketplace_stats.dart';
 import '../core/checkout/cart_promo.dart';
+import '../core/storage/app_state_policy.dart';
 import '../core/storage/catalog_cache.dart';
 import '../core/storage/home_categories_cache.dart';
-import '../core/notifications/notification_hub.dart';
-import '../core/notifications/push_notification_inbox.dart';
-import '../core/notifications/push_notification_service.dart';
+import '../modules/notifications/services/notification_hub.dart';
+import '../modules/notifications/services/push_notification_inbox.dart';
+import '../modules/notifications/services/push_notification_service.dart';
 import '../data/repositories/account_repository.dart';
 import '../models/app_models.dart';
 import '../models/app_notification.dart';
@@ -22,14 +23,19 @@ import '../services/image_storage_service.dart';
 import '../utils/merchant_service_labels.dart';
 import '../models/merchant_product_section.dart';
 import '../core/orders/order_adjustment.dart';
-import '../features/taxi/models/taxi_request.dart';
-import '../screens/admin/models/admin_role.dart';
-import 'services/auth_service.dart';
-import 'services/customer_service.dart';
-import 'services/merchant_service.dart';
-import 'services/driver_service.dart';
-import 'services/delivery_service.dart';
-import 'services/admin_service.dart';
+import '../modules/taxi/models/taxi_request.dart';
+import '../modules/admin/screens/models/admin_role.dart';
+import '../modules/auth/services/auth_service.dart';
+import 'app_navigation_state.dart';
+import 'app_ui_preferences.dart';
+import 'app_notification_inbox_state.dart';
+import 'app_cart_state.dart';
+import 'app_customer_orders_state.dart';
+import '../modules/marketplace/services/customer_service.dart';
+import '../modules/merchant/services/merchant_service.dart';
+import '../modules/driver/services/driver_service.dart';
+import '../modules/courier/services/delivery_service.dart';
+import '../modules/admin/services/admin_service.dart';
 
 class AppProvider extends ChangeNotifier {
   static const Duration _pendingApprovalTimeout = Duration(minutes: 20);
@@ -42,25 +48,16 @@ class AppProvider extends ChangeNotifier {
   final delivery = DeliveryService();
   final admin = AdminService();
 
-  // ── Local state (UI / theme / navigation) ────────────────────────
-  String _lang = 'ar';
-  bool _darkMode = false;
-  bool _inAppAlertsEnabled = true;
-
-  int? _pendingMainTab;
-  int? _pendingMerchantTab;
-  int? _pendingDeliveryTab;
-  int? _pendingDriverTab;
-
-  String? _pendingOrderIdCustomer;
-  String? _pendingOrderIdMerchant;
-  String? _pendingOrderIdDelivery;
-  String? _pendingOrderIdDriver;
+  final AppNavigationState _navigation = AppNavigationState();
+  final AppUiPreferences _ui = AppUiPreferences();
+  final AppNotificationInboxState _notificationInbox = AppNotificationInboxState();
+  final AppCartState _cartState = AppCartState();
+  final AppCustomerOrdersState _ordersState = AppCustomerOrdersState();
 
   late final NotificationHub _notificationHub =
       NotificationHub(_emitNotification);
-  final List<AppNotificationItem> _notifications = [];
-  String? _pendingUnreadPromptRole;
+
+  // ── Local state (UI / theme / navigation) ────────────────────────
 
   // Admin role state (not in any service yet)
   AdminRole? _adminRole;
@@ -98,12 +95,14 @@ class AppProvider extends ChangeNotifier {
       final phone = auth.authPhone;
       if (phone == null) return;
       final orders = await SupabaseService.loadCustomerOrders(phone);
-      _orders = orders;
-      _lastOrdersFetch = DateTime.now();
+      _ordersState.orders = orders;
+      _ordersState.lastFetch = DateTime.now();
       notifyListeners();
     });
-    auth.setOnRefreshMerchantIncomingOrders(
-        () => merchant.refreshMerchantIncomingOrders());
+    auth.setOnRefreshMerchantIncomingOrders(() async {
+      await merchant.refreshMerchantIncomingOrders();
+      await merchant.hydrateMerchantEngagementFromCloud();
+    });
     auth.setOnRefreshCourierOrders(() => refreshCourierOrders());
     auth.setOnRefreshTaxiRequests(() => refreshTaxiRequests());
     auth.setOnAdminReportsRefresh(() => admin.refreshAdminReports());
@@ -115,12 +114,14 @@ class AppProvider extends ChangeNotifier {
       merchant.applyMerchantStoreSnapshot(snapshot);
       auth.updateMerchantStore(merchant.merchantStore);
     });
+    auth.setOnCollectUiState(() => _ui.toRemoteState());
     auth.setOnCollectLocalBackupData(() => {
       'merchantStore': merchant.merchantStore,
       'driverProfile': driver.driverProfile,
       'courierProfile': delivery.courierProfile,
+      // items/orders/offers: local backup only — never persisted to app_state.
       'items': _itemsDelegate(),
-      'orders': _orders,
+      'orders': _ordersState.orders,
       'merchantOffers': merchant.merchantOffers,
     });
     auth.setOnApplyMerchantStore((store) {
@@ -132,9 +133,11 @@ class AppProvider extends ChangeNotifier {
     auth.setOnApplyLocalBackupItems(
       (items) => merchant.loadInitialData(items, persist: false),
     );
-    auth.setOnApplyLocalBackupOrders((orders) { _orders = orders; notifyListeners(); });
-    auth.setOnApplyLocalBackupOffers((offers) { /* merchant offers callback */ });
-    auth.setOnApplyRemoteOrders((orders) { _orders = orders; _lastOrdersFetch = DateTime.now(); notifyListeners(); });
+    auth.setOnApplyLocalBackupOrders((orders) { _ordersState.orders = orders; notifyListeners(); });
+    auth.setOnApplyLocalBackupOffers(
+      (offers) => merchant.loadOffersFromLocalBackup(offers),
+    );
+    auth.setOnApplyRemoteOrders((orders) { _ordersState.orders = orders; _ordersState.lastFetch = DateTime.now(); notifyListeners(); });
     auth.setOnApplyRemoteAddresses((addresses) { /* restore addresses later */ });
     auth.setOnApplyRemoteProducts((products) {
       merchant.loadInitialData(
@@ -144,10 +147,10 @@ class AppProvider extends ChangeNotifier {
     });
 
     auth.setOnApplyRemoteState((state) {
-      _darkMode = state['darkMode'] as bool? ?? _darkMode;
-      _inAppAlertsEnabled = state['inAppAlertsEnabled'] as bool? ??
-          state['notificationsEnabled'] as bool? ??
-          _inAppAlertsEnabled;
+      _ui.applyRemoteState(state);
+      if (_ui.skippedCustomerSetup) {
+        customer.applySkippedSetupFromRemote();
+      }
       merchant.updateAuthPhone(auth.authPhone);
       merchant.updateCustomerPhone(customer.customerPhone);
       merchant.updateUserRole(auth.userRole);
@@ -156,28 +159,9 @@ class AppProvider extends ChangeNotifier {
       driver.updateUserRole(auth.userRole);
       delivery.updateAuthPhone(auth.authPhone);
       delivery.updateUserRole(auth.userRole);
-      driver.loadProfileFromRemoteState(state);
-      delivery.loadProfileFromRemoteState(state);
-      if (state['adminAccess'] == true && auth.hasAdminAccess) {
-        _adminRole ??= AdminRole.superAdmin;
-      }
-      // مزامنة بيانات الملف الشخصي المستعادة من user-state إلى CustomerService
-      customer.applyRestoredProfile(
-        name: state['customerName'] as String?,
-        phone: state['customerPhone'] as String?,
-        address: state['customerAddress'] as String?,
-        latitude: (state['customerLatitude'] as num?)?.toDouble(),
-        longitude: (state['customerLongitude'] as num?)?.toDouble(),
-        avatarBase64: (state['customerAvatarBase64'] ?? state['customerAvatarUrl']) as String?,
-      );
-      final remoteMerchantStore = state['merchantStore'];
-      if (remoteMerchantStore is Map &&
-          remoteMerchantStore.isNotEmpty &&
-          !merchant.hasCompletedMerchantProfile) {
-        merchant.applyMerchantStoreSnapshot(
-          Map<String, dynamic>.from(remoteMerchantStore),
-        );
-        auth.updateMerchantStore(merchant.merchantStore);
+      final remoteDriverType = _ui.driverType;
+      if (remoteDriverType != null && remoteDriverType.isNotEmpty) {
+        driver.setDriverType(remoteDriverType);
       }
     });
 
@@ -380,7 +364,7 @@ class AppProvider extends ChangeNotifier {
     NotificationPriority priority = NotificationPriority.normal,
     String? eventKey,
   }) {
-    return addNotification(
+    final id = _notificationInbox.add(
       title,
       body,
       audience: audience,
@@ -389,10 +373,12 @@ class AppProvider extends ChangeNotifier {
       priority: priority,
       eventKey: eventKey,
     );
+    notifyListeners();
+    return id;
   }
 
   // ── AUTH ─────────────────────────────────────────────────────────
-  String get lang => _lang;
+  String get lang => _ui.lang;
   bool get hasSelectedLanguage => true;
   String? get userRole => auth.userRole;
   String? get accountType => auth.accountType;
@@ -453,16 +439,8 @@ class AppProvider extends ChangeNotifier {
   void resetAll() {
     auth.resetAll();
     _adminRole = null;
-    _notifications.clear();
-    _pendingUnreadPromptRole = null;
-    _pendingMainTab = null;
-    _pendingMerchantTab = null;
-    _pendingDeliveryTab = null;
-    _pendingDriverTab = null;
-    _pendingOrderIdCustomer = null;
-    _pendingOrderIdMerchant = null;
-    _pendingOrderIdDelivery = null;
-    _pendingOrderIdDriver = null;
+    _notificationInbox.reset();
+    _navigation.reset();
     _isHydrating = false;
     _isReady = true;
     notifyListeners();
@@ -482,7 +460,7 @@ class AppProvider extends ChangeNotifier {
   }
 
   void setLanguage(String l) {
-    _lang = l;
+    _ui.setLanguage(l);
   }
 
   Future<void> refreshAccountFromCloud() async {
@@ -526,13 +504,7 @@ class AppProvider extends ChangeNotifier {
   }
 
   // ── CUSTOMER ─────────────────────────────────────────────────────
-  // Local customer state (some state lives in CustomerService, some stays here)
-  List<ListItem> _catalogItems = [];
-  List<ListItem> _items = [];
-  List<ActiveOrder> _orders = [];
   Map<String, dynamic>? _appUserRecord;
-  DateTime? _lastOrdersFetch;
-  List<String> _addresses = [];
 
   String? get customerAvatarBase64 => customer.customerAvatarBase64;
   String? get customerAvatarUrl => customer.customerAvatarUrl;
@@ -545,41 +517,38 @@ class AppProvider extends ChangeNotifier {
   double? get customerLatitude => customer.customerLatitude;
   double? get customerLongitude => customer.customerLongitude;
   bool get isCustomer => customer.isCustomer;
-  bool get skippedCustomerSetup => customer.skippedCustomerSetup;
+  bool get skippedCustomerSetup =>
+      _ui.skippedCustomerSetup || customer.skippedCustomerSetup;
 
-  void skipCustomerSetup() => customer.skipCustomerSetup();
+  void skipCustomerSetup() {
+    customer.skipCustomerSetup();
+    _ui.skippedCustomerSetup = true;
+    unawaited(_persistUiState());
+  }
 
-  List<ListItem> get items => isCustomer ? _catalogItems : _items;
-  MarketplaceStatsSnapshot? get marketplaceStats => _marketplaceStats;
-  bool get marketplaceStatsLoading => _marketplaceStatsLoading;
-  List<CartItem> get cart => _cart;
-  List<ActiveOrder> get orders => _orders;
-  int get customerActiveOrdersCount => _orders
-      .where((order) =>
-          order.statusKey != 'completed' &&
-          order.statusKey != 'rejected' &&
-          order.statusKey != 'cancelled')
-      .length;
-  List<String> get addresses => List<String>.unmodifiable(_addresses);
-
-  MarketplaceStatsSnapshot? _marketplaceStats;
-  bool _marketplaceStatsLoading = false;
-  List<CartItem> _cart = [];
+  List<ListItem> get items =>
+      isCustomer ? customer.catalogItems : merchant.merchantItems;
+  MarketplaceStatsSnapshot? get marketplaceStats => customer.marketplaceStats;
+  bool get marketplaceStatsLoading => customer.marketplaceStatsLoading;
+  List<CartItem> get cart => _cartState.cart;
+  List<ActiveOrder> get orders => _ordersState.orders;
+  int get customerActiveOrdersCount => _ordersState.activeCount;
+  List<String> get addresses =>
+      List<String>.unmodifiable(_ordersState.addresses);
 
   bool isFavoriteId(String id) => customer.isFavoriteId(id);
-  String get selectedCategory => _selectedCategory;
-  String? get activeSubCategory => _activeSubCategory;
+  String get selectedCategory => _cartState.selectedCategory;
+  String? get activeSubCategory => _cartState.activeSubCategory;
   void setCategory(String category) {
-    _selectedCategory = category;
+    _cartState.selectedCategory = category;
     if (category != 'all') {
-      _activeSubCategory = null;
+      _cartState.activeSubCategory = null;
     }
     notifyListeners();
   }
 
   void resetHome() {
-    _selectedCategory = 'all';
-    _activeSubCategory = null;
+    _cartState.resetHome();
     notifyListeners();
   }
 
@@ -598,95 +567,21 @@ class AppProvider extends ChangeNotifier {
       customer.listItemFromStoreProduct(product, profile);
 
   // ── Cart ─────────────────────────────────────────────────────────
-  int get cartTotal {
-    final c = _cart;
-    return c.fold(0, (sum, item) => sum + (item.price * item.count));
-  }
+  int get cartTotal => _cartState.total;
 
-  CartPromoDefinition? get appliedCartPromo => _appliedCartPromo;
-  int get cartPromoDiscountIqd =>
-      _appliedCartPromo?.discountForSubtotal(cartTotal) ?? 0;
-  int get cartPayableTotal => cartTotal - cartPromoDiscountIqd;
+  CartPromoDefinition? get appliedCartPromo => _cartState.appliedPromo;
+  int get cartPromoDiscountIqd => _cartState.promoDiscountIqd;
+  int get cartPayableTotal => _cartState.payableTotal;
 
-  int get cartCount {
-    final c = _cart;
-    return c.fold(0, (sum, item) => sum + item.count);
-  }
+  int get cartCount => _cartState.count;
 
-  bool get cartHasMultipleMerchants {
-    final merchants = _cart
-        .map((item) => _trimmedOrNull(item.merchantPhone))
-        .whereType<String>()
-        .toSet();
-    return merchants.length > 1;
-  }
-
-  CartPromoDefinition? _appliedCartPromo;
-  final Set<String> _customerTimerEmitted = {};
-  int _lastCartActivityMs = 0;
-  String _selectedCategory = 'all';
-  String? _activeSubCategory;
-
-  void _touchCartActivity() {
-    _lastCartActivityMs = DateTime.now().millisecondsSinceEpoch;
-    _customerTimerEmitted.remove('cart_abandoned');
-  }
+  bool get cartHasMultipleMerchants => _cartState.hasMultipleMerchants;
 
   bool addToCart(ListItem item, {bool fromStoreListing = false}) {
-    if (!fromStoreListing &&
-        !MarketplaceCatalog.usesShoppingCart(item.category)) {
+    if (!_cartState.canAddItem(item, fromStoreListing: fromStoreListing)) {
       return false;
     }
-    if (item.merchantIsFrozen == true) return false;
-
-    final merchantPhone = _trimmedOrNull(item.merchantPhone);
-    if (_cart.isNotEmpty && merchantPhone != null) {
-      final firstItem = _cart.first;
-      final existingMerchant = _trimmedOrNull(firstItem.merchantPhone);
-      final isNewItemOrderable =
-          item.category == 'bazar_ghaith' ||
-          item.category == 'restaurant' ||
-          item.category == 'product';
-      final isCartOrderable =
-          firstItem.category == 'bazar_ghaith' ||
-          firstItem.originalCategory == 'bazar_ghaith' ||
-          firstItem.category == 'restaurant' ||
-          firstItem.originalCategory == 'restaurant' ||
-          firstItem.category == 'product' ||
-          firstItem.originalCategory == 'product';
-      if (!(isNewItemOrderable && isCartOrderable)) {
-        if (existingMerchant != null && existingMerchant != merchantPhone) {
-          return false;
-        }
-      }
-    }
-
-    final index = _cart.indexWhere((i) => i.id == item.id);
-    if (index != -1) {
-      _cart[index].count++;
-    } else {
-      _cart.add(CartItem(
-        id: item.id,
-        nameAr: item.nameAr,
-        nameEn: item.nameEn,
-        price: item.price,
-        count: 1,
-        image: item.imageBase64 ?? item.image,
-        category: item.category,
-        originalCategory: item.originalCategory ?? item.category,
-        descriptionAr: item.descriptionAr,
-        descriptionEn: item.descriptionEn,
-        merchantPhone: item.merchantPhone,
-        merchantStoreName: item.merchantStoreName,
-        merchantLatitude: item.merchantLatitude,
-        merchantLongitude: item.merchantLongitude,
-        merchantOpenTime: item.merchantOpenTime,
-        merchantCloseTime: item.merchantCloseTime,
-        merchantIsOpen: item.merchantIsOpen,
-        merchantIsFrozen: item.merchantIsFrozen,
-      ));
-    }
-    _touchCartActivity();
+    _cartState.addItem(item);
     notifyListeners();
     return true;
   }
@@ -700,46 +595,23 @@ class AppProvider extends ChangeNotifier {
   }
 
   void incrementCartItem(String id) {
-    final c = _cart;
-    final index = c.indexWhere((i) => i.id == id);
-    if (index != -1) {
-      c[index].count++;
-      _touchCartActivity();
-      notifyListeners();
-    }
+    _cartState.incrementItem(id);
+    notifyListeners();
   }
 
   void decrementCartItem(String id) {
-    final c = _cart;
-    final index = c.indexWhere((i) => i.id == id);
-    if (index != -1) {
-      if (c[index].count > 1) {
-        c[index].count--;
-      } else {
-        c.removeAt(index);
-      }
-      notifyListeners();
-    }
+    _cartState.decrementItem(id);
+    notifyListeners();
   }
 
   void removeFromCart(String id) {
-    final c = _cart;
-    c.removeWhere((i) => i.id == id);
-    if (c.isEmpty) {
-      _appliedCartPromo = null;
-    } else {
-      _touchCartActivity();
-    }
+    _cartState.removeItem(id);
     notifyListeners();
   }
 
   void clearCart() {
-    final c = _cart;
-    if (c.isEmpty) return;
-    c.clear();
-    _appliedCartPromo = null;
-    _lastCartActivityMs = 0;
-    _customerTimerEmitted.remove('cart_abandoned');
+    if (_cartState.cart.isEmpty) return;
+    _cartState.clear();
     notifyListeners();
   }
 
@@ -747,7 +619,7 @@ class AppProvider extends ChangeNotifier {
     final merchantPhone = _trimmedOrNull(order.merchantPhone);
     if (merchantPhone == null || order.lineItems.isEmpty) return false;
     if (_hasActiveOrderForMerchant(merchantPhone)) return false;
-    final c = _cart;
+    final c = _cartState.cart;
     if (c.isNotEmpty) {
       final existingMerchant = _trimmedOrNull(c.first.merchantPhone);
       if (existingMerchant != null && existingMerchant != merchantPhone) {
@@ -777,7 +649,7 @@ class AppProvider extends ChangeNotifier {
   }
 
   bool _hasActiveOrderForMerchant(String merchantPhone) {
-    return _orders.any((order) {
+    return _ordersState.orders.any((order) {
       final sameMerchant =
           _trimmedOrNull(order.merchantPhone) == _trimmedOrNull(merchantPhone);
       if (!sameMerchant) return false;
@@ -821,7 +693,7 @@ class AppProvider extends ChangeNotifier {
         );
       }
       final promo = CartPromoDefinition.fromMap(row);
-      _appliedCartPromo = promo;
+      _cartState.appliedPromo = promo;
       final discount = promo.discountForSubtotal(cartTotal);
       _notificationHub.onPromoApplied(promo.code, discount);
       notifyListeners();
@@ -841,17 +713,15 @@ class AppProvider extends ChangeNotifier {
   }
 
   void clearCartPromo() {
-    if (_appliedCartPromo == null) return;
-    _appliedCartPromo = null;
+    if (_cartState.appliedPromo == null) return;
+    _cartState.clearPromo();
     notifyListeners();
   }
 
   // ── Address ──────────────────────────────────────────────────────
   Future<void> addAddress(String address) async {
     final value = address.trim();
-    if (value.isEmpty) return;
-    if (_addresses.contains(value)) return;
-    _addresses.insert(0, value);
+    if (!_ordersState.addAddress(value)) return;
     notifyListeners();
     if (auth.authPhone != null && auth.authPhone!.isNotEmpty) {
       try {
@@ -863,8 +733,8 @@ class AppProvider extends ChangeNotifier {
   }
 
   Future<void> removeAddress(int index) async {
-    if (index < 0 || index >= _addresses.length) return;
-    final removed = _addresses.removeAt(index);
+    final removed = _ordersState.removeAddressAt(index);
+    if (removed == null) return;
     notifyListeners();
     if (auth.authPhone != null && auth.authPhone!.isNotEmpty) {
       try {
@@ -908,14 +778,14 @@ class AppProvider extends ChangeNotifier {
     final phone = _trimmedOrNull(auth.authPhone);
     if (phone == null || !SupabaseService.isConfigured) return;
     if (!force &&
-        _lastOrdersFetch != null &&
-        DateTime.now().difference(_lastOrdersFetch!) <
+        _ordersState.lastFetch != null &&
+        DateTime.now().difference(_ordersState.lastFetch!) <
             const Duration(minutes: 2)) {
       return;
     }
     try {
-      _orders = await SupabaseService.loadCustomerOrders(phone);
-      _lastOrdersFetch = DateTime.now();
+      _ordersState.orders = await SupabaseService.loadCustomerOrders(phone);
+      _ordersState.lastFetch = DateTime.now();
       notifyListeners();
     } catch (error) {
       debugPrint('CUSTOMER_ORDERS_LOAD_ERROR: $error');
@@ -923,7 +793,7 @@ class AppProvider extends ChangeNotifier {
   }
 
   bool requestCustomerOrderCancellation(String orderId) {
-    final orders = _orders;
+    final orders = _ordersState.orders;
     final index = orders.indexWhere((o) => o.id == orderId);
     if (index == -1) return false;
     final order = orders[index];
@@ -958,7 +828,7 @@ class AppProvider extends ChangeNotifier {
     String? noteAr,
     String? noteEn,
   }) {
-    final orders = _orders;
+    final orders = _ordersState.orders;
     final index = orders.indexWhere((o) => o.id == orderId);
     if (index == -1) return;
     final order = orders[index];
@@ -1065,9 +935,9 @@ class AppProvider extends ChangeNotifier {
     String orderId, {
     required bool approve,
   }) async {
-    final index = _orders.indexWhere((item) => item.id == orderId);
+    final index = _ordersState.orders.indexWhere((item) => item.id == orderId);
     if (index == -1) return false;
-    final order = _orders[index];
+    final order = _ordersState.orders[index];
     if (order.statusKey != 'adjustment_pending') return false;
 
     if (approve) {
@@ -1085,7 +955,7 @@ class AppProvider extends ChangeNotifier {
         noteAr: 'وافق الزبون على الطلب المعدّل.',
         noteEn: 'Customer approved adjusted order.',
       );
-      _orders[index] = updated;
+      _ordersState.orders[index] = updated;
       _notificationHub.onOrderAdjustmentAccepted(updated);
       notifyListeners();
       try {
@@ -1104,7 +974,7 @@ class AppProvider extends ChangeNotifier {
       noteAr: 'رفض الزبون الطلب المعدّل.',
       noteEn: 'Customer rejected adjusted order.',
     );
-    _orders[index] = updated;
+    _ordersState.orders[index] = updated;
     _notificationHub.onOrderAdjustmentRejected(updated);
     notifyListeners();
     try {
@@ -1121,9 +991,9 @@ class AppProvider extends ChangeNotifier {
     required int stars,
     String? comment,
   }) async {
-    final index = _orders.indexWhere((o) => o.id == orderId);
+    final index = _ordersState.orders.indexWhere((o) => o.id == orderId);
     if (index == -1) return;
-    final order = _orders[index];
+    final order = _ordersState.orders[index];
     final merchantPhone = _trimmedOrNull(order.merchantPhone);
     if (merchantPhone == null) return;
 
@@ -1190,7 +1060,7 @@ class AppProvider extends ChangeNotifier {
       isRated: true,
     );
 
-    _orders[index] = updated;
+    _ordersState.orders[index] = updated;
     await _persistCustomerOrder(updated);
     notifyListeners();
   }
@@ -1200,7 +1070,7 @@ class AppProvider extends ChangeNotifier {
     Map<String, int>? merchantDeliveryFees,
     String? orderNotes,
   }) async {
-    if (_cart.isEmpty) return 0;
+    if (_cartState.cart.isEmpty) return 0;
 
     final phone = _trimmedOrNull(auth.authPhone);
     if (phone == null) {
@@ -1209,12 +1079,12 @@ class AppProvider extends ChangeNotifier {
       );
     }
 
-    if (_appliedCartPromo != null && cartPromoDiscountIqd <= 0) {
+    if (_cartState.appliedPromo != null && cartPromoDiscountIqd <= 0) {
       throw StateError('كود الخصم لم يعد ينطبق على السلة الحالية.');
     }
 
     final grouped = <String, List<CartItem>>{};
-    for (final item in _cart) {
+    for (final item in _cartState.cart) {
       final key = _trimmedOrNull(item.merchantPhone) ?? 'unknown';
       grouped.putIfAbsent(key, () => []).add(item);
     }
@@ -1288,14 +1158,8 @@ class AppProvider extends ChangeNotifier {
     }
 
     if (createdOrders.isNotEmpty) {
-      final existingIds = {for (final o in _orders) o.id};
-      for (final order in createdOrders.reversed) {
-        if (!existingIds.contains(order.id)) {
-          _orders.insert(0, order);
-        }
-      }
-      _cart.clear();
-      _appliedCartPromo = null;
+      _ordersState.prependOrders(createdOrders.reversed);
+      _cartState.clear();
       _notificationHub.onCheckoutSuccess(createdOrders);
       notifyListeners();
     }
@@ -1361,27 +1225,27 @@ class AppProvider extends ChangeNotifier {
   void tickCustomerNotificationTimers() {
     final now = DateTime.now();
     final nowMs = now.millisecondsSinceEpoch;
-    final c = _cart;
+    final c = _cartState.cart;
 
-    if (c.isNotEmpty && _lastCartActivityMs > 0) {
+    if (c.isNotEmpty && _cartState.lastActivityMs > 0) {
       const abandoned = Duration(minutes: 30);
-      if (nowMs - _lastCartActivityMs >= abandoned.inMilliseconds &&
-          !_customerTimerEmitted.contains('cart_abandoned')) {
-        _customerTimerEmitted.add('cart_abandoned');
+      if (nowMs - _cartState.lastActivityMs >= abandoned.inMilliseconds &&
+          !_cartState.timerEmitted.contains('cart_abandoned')) {
+        _cartState.timerEmitted.add('cart_abandoned');
         _notificationHub.onAbandonedCart(cartCount);
       }
     }
 
-    for (final order in _orders) {
+    for (final order in _ordersState.orders) {
       final id = order.id;
       if (order.statusKey == 'delivering' ||
           order.deliveryStatusKey == 'on_way') {
-        if (!_customerTimerEmitted.contains('delay:$id')) {
+        if (!_cartState.timerEmitted.contains('delay:$id')) {
           final eta = order.estimatedArrivalAt;
           if (eta != null && eta.isNotEmpty) {
             final parsed = DateTime.tryParse(eta);
             if (parsed != null && now.isAfter(parsed)) {
-              _customerTimerEmitted.add('delay:$id');
+              _cartState.timerEmitted.add('delay:$id');
               _notificationHub.onDeliveryDelay(order);
             }
           }
@@ -1392,8 +1256,8 @@ class AppProvider extends ChangeNotifier {
               order.deliveryStatusKey == 'on_way' ||
               order.deliveryStatusKey == 'picked_up')) {
         final key = 'cod:$id';
-        if (!_customerTimerEmitted.contains(key)) {
-          _customerTimerEmitted.add(key);
+        if (!_cartState.timerEmitted.contains(key)) {
+          _cartState.timerEmitted.add(key);
           _notificationHub.onCustomerCodReminder(order);
         }
       }
@@ -1409,7 +1273,7 @@ class AppProvider extends ChangeNotifier {
       final days = end.difference(now).inDays;
       if (days <= 2) {
         final key = 'offer:${offer.id}';
-        if (_customerTimerEmitted.add(key)) {
+        if (_cartState.timerEmitted.add(key)) {
           _notificationHub.onOfferExpiringSoon(offer.titleAr, days);
         }
       }
@@ -1639,7 +1503,7 @@ class AppProvider extends ChangeNotifier {
     String? noteEn,
   }) {
     final isMerchant = userRole == 'merchant' || userRole == 'admin';
-    final list = isMerchant ? merchant.merchantIncomingOrders : _orders;
+    final list = isMerchant ? merchant.merchantIncomingOrders : _ordersState.orders;
     final index = list.indexWhere((o) => o.id == orderId);
     if (index == -1) return;
     final order = list[index];
@@ -1736,7 +1600,7 @@ class AppProvider extends ChangeNotifier {
         );
       }
     } else {
-      _orders[index] = updated;
+      _ordersState.orders[index] = updated;
       unawaited(_persistCustomerOrder(updated));
     }
     notifyListeners();
@@ -2308,23 +2172,38 @@ class AppProvider extends ChangeNotifier {
   }
 
   // ── THEME / UI ───────────────────────────────────────────────────
-  ThemeMode get themeMode => _darkMode ? ThemeMode.dark : ThemeMode.light;
-  bool get darkMode => _darkMode;
-  bool get inAppAlertsEnabled => _inAppAlertsEnabled;
+  ThemeMode get themeMode => _ui.themeMode;
+  bool get darkMode => _ui.darkMode;
+  bool get inAppAlertsEnabled => _ui.inAppAlertsEnabled;
 
   Future<void> setDarkMode(bool enabled) async {
-    _darkMode = enabled;
+    _ui.darkMode = enabled;
     notifyListeners();
+    await _persistUiState();
   }
 
-  Future<void> toggleDarkMode() => setDarkMode(!_darkMode);
+  Future<void> toggleDarkMode() => setDarkMode(!_ui.darkMode);
 
   Future<void> setInAppAlertsEnabled(bool enabled) async {
-    _inAppAlertsEnabled = enabled;
+    _ui.inAppAlertsEnabled = enabled;
     if (!enabled) {
-      _pendingUnreadPromptRole = null;
+      _notificationInbox.clearUnreadPrompt();
     }
     notifyListeners();
+    await _persistUiState();
+  }
+
+  Future<void> _persistUiState() async {
+    final phone = auth.authPhone?.trim();
+    if (phone == null || phone.isEmpty) return;
+    try {
+      await SupabaseService.saveUserState(
+        phone,
+        AppStatePolicy.stripForRemotePersist(_ui.toRemoteState()),
+      );
+    } catch (error) {
+      debugPrint('PERSIST_UI_STATE_ERROR: $error');
+    }
   }
 
   void arePendingApprovals(bool value) {
@@ -2335,30 +2214,21 @@ class AppProvider extends ChangeNotifier {
   List<AppNotificationItem> get notifications {
     final audience = auth.userRole;
     if (audience == null) return const [];
-    return List<AppNotificationItem>.unmodifiable(
-      _notifications.where((n) => n.audience == audience),
-    );
+    return _notificationInbox.forAudience(audience);
   }
 
   int get unreadNotificationCount {
     final audience = auth.userRole;
     if (audience == null) return 0;
-    return _notifications
-        .where((n) => n.audience == audience && !n.read)
-        .length;
+    return _notificationInbox.unreadCountFor(audience);
   }
 
   List<AppNotificationItem> unreadNotificationsForRole(String role) {
-    return _notifications
-        .where((n) => n.audience == role && !n.read)
-        .toList()
-      ..sort((a, b) => b.createdAtMs.compareTo(a.createdAtMs));
+    return _notificationInbox.unreadForRole(role);
   }
 
   String? takePendingUnreadPromptRole() {
-    final role = _pendingUnreadPromptRole;
-    _pendingUnreadPromptRole = null;
-    return role;
+    return _notificationInbox.takePendingUnreadPromptRole();
   }
 
   String addNotification(
@@ -2370,169 +2240,58 @@ class AppProvider extends ChangeNotifier {
     NotificationPriority priority = NotificationPriority.normal,
     String? eventKey,
   }) {
-    if (eventKey != null) {
-      final byKey = _notifications.indexWhere(
-        (n) => n.eventKey == eventKey && n.audience == audience,
-      );
-      if (byKey >= 0) return _notifications[byKey].id;
-    }
-    final existing = _notifications.indexWhere(
-      (n) =>
-          n.audience == audience &&
-          n.title == title &&
-          n.body == body &&
-          (orderNumber == null || n.orderNumber == orderNumber),
-    );
-    if (existing >= 0) return _notifications[existing].id;
-
-    final item = AppNotificationItem(
-      id: _generateUuid(),
-      title: title,
-      body: body,
+    final id = _notificationInbox.add(
+      title,
+      body,
       audience: audience,
-      read: false,
-      createdAtMs: DateTime.now().millisecondsSinceEpoch,
       orderNumber: orderNumber,
       category: category,
       priority: priority,
       eventKey: eventKey,
     );
-    _notifications.insert(0, item);
-    if (_notifications.length > 200) {
-      _notifications.removeRange(200, _notifications.length);
-    }
     notifyListeners();
-    return item.id;
+    return id;
   }
 
   void markNotificationRead(String id) {
-    final index = _notifications.indexWhere((n) => n.id == id);
-    if (index < 0 || _notifications[index].read) return;
-    _notifications[index] = _notifications[index].copyWith(read: true);
+    if (!_notificationInbox.markRead(id)) return;
     notifyListeners();
   }
 
   void markNotificationsReadForOrder(String orderNumber, String audience) {
-    var changed = false;
-    for (var i = 0; i < _notifications.length; i++) {
-      final n = _notifications[i];
-      if (n.audience == audience && !n.read && n.orderNumber == orderNumber) {
-        _notifications[i] = n.copyWith(read: true);
-        changed = true;
-      }
-    }
-    if (!changed) return;
+    if (!_notificationInbox.markReadForOrder(orderNumber, audience)) return;
     notifyListeners();
   }
 
   void markNotificationReadByTitleBody(
       String title, String body, String audience) {
-    final index = _notifications.indexWhere(
-      (n) =>
-          n.audience == audience &&
-          !n.read &&
-          n.title == title &&
-          n.body == body,
-    );
-    if (index < 0) return;
-    markNotificationRead(_notifications[index].id);
+    if (!_notificationInbox.markReadByTitleBody(title, body, audience)) return;
+    notifyListeners();
   }
 
   // ── TABS & NAVIGATION ────────────────────────────────────────────
   void requestMainShellTab(int index) {
-    if (index < 0) return;
-    _pendingMainTab = index;
+    _navigation.requestMainShellTab(index);
     notifyListeners();
   }
 
-  int? takePendingMainTab() {
-    final tab = _pendingMainTab;
-    _pendingMainTab = null;
-    return tab;
-  }
+  int? takePendingMainTab() => _navigation.takePendingMainTab();
 
-  int? takePendingMerchantTab() {
-    final tab = _pendingMerchantTab;
-    _pendingMerchantTab = null;
-    return tab;
-  }
+  int? takePendingMerchantTab() => _navigation.takePendingMerchantTab();
 
-  int? takePendingDeliveryTab() {
-    final tab = _pendingDeliveryTab;
-    _pendingDeliveryTab = null;
-    return tab;
-  }
+  int? takePendingDeliveryTab() => _navigation.takePendingDeliveryTab();
 
-  int? takePendingDriverTab() {
-    final tab = _pendingDriverTab;
-    _pendingDriverTab = null;
-    return tab;
-  }
+  int? takePendingDriverTab() => _navigation.takePendingDriverTab();
 
   void setPendingOrderId(String role, String? orderId) {
-    switch (role) {
-      case 'customer':
-        _pendingOrderIdCustomer = orderId;
-        break;
-      case 'merchant':
-        _pendingOrderIdMerchant = orderId;
-        break;
-      case 'delivery':
-        _pendingOrderIdDelivery = orderId;
-        break;
-      case 'driver':
-        _pendingOrderIdDriver = orderId;
-        break;
-    }
+    _navigation.setPendingOrderId(role, orderId);
   }
 
-  String? takePendingOrderId(String role) {
-    switch (role) {
-      case 'customer':
-        {
-          final id = _pendingOrderIdCustomer;
-          _pendingOrderIdCustomer = null;
-          return id;
-        }
-      case 'merchant':
-        {
-          final id = _pendingOrderIdMerchant;
-          _pendingOrderIdMerchant = null;
-          return id;
-        }
-      case 'delivery':
-        {
-          final id = _pendingOrderIdDelivery;
-          _pendingOrderIdDelivery = null;
-          return id;
-        }
-      case 'driver':
-        {
-          final id = _pendingOrderIdDriver;
-          _pendingOrderIdDriver = null;
-          return id;
-        }
-      default:
-        return null;
-    }
-  }
+  String? takePendingOrderId(String role) =>
+      _navigation.takePendingOrderId(role);
 
   void requestTabForRole(String role, int index) {
-    if (index < 0) return;
-    switch (role) {
-      case 'customer':
-        _pendingMainTab = index;
-        break;
-      case 'merchant':
-        _pendingMerchantTab = index;
-        break;
-      case 'delivery':
-        _pendingDeliveryTab = index;
-        break;
-      case 'driver':
-        _pendingDriverTab = index;
-        break;
-    }
+    _navigation.requestTabForRole(role, index);
     notifyListeners();
   }
 

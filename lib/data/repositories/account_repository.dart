@@ -1,5 +1,5 @@
 import '../../core/config/app_config.dart';
-import '../../core/storage/local_session_store.dart';
+import '../../modules/auth/storage/local_session_store.dart';
 import '../models/account_snapshot.dart';
 import 'database_repository.dart';
 

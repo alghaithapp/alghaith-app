@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 
+import '../data/repositories/database_repository.dart';
 import '../utils/image_compressor.dart';
 import 'cloudflare_service.dart';
 
@@ -32,10 +33,13 @@ class ImageStorageService {
         payload.length > 80;
   }
 
-  /// رفع: ضغط الصورة أولاً ثم الرفع إلى Cloudflare Worker.
+  /// رفع: ضغط الصورة أولاً ثم الرفع عبر الـ backend (variants) أو Cloudflare.
   static Future<String?> uploadImageFile(
     File file, {
     String bucket = 'uploads',
+    String role = 'gallery',
+    String ownerType = 'user',
+    String? ownerId,
   }) async {
     File fileToUpload = file;
     try {
@@ -46,6 +50,23 @@ class ImageStorageService {
       );
     } catch (e) {
       debugPrint('IMAGE_STORAGE_COMPRESS_ERROR: $e');
+    }
+
+    try {
+      final bytes = await fileToUpload.readAsBytes();
+      if (bytes.isNotEmpty) {
+        final backendUrl = await DatabaseRepository.instance.uploadMediaImage(
+          imageBase64: base64Encode(bytes),
+          ownerType: ownerType,
+          ownerId: ownerId,
+          role: role,
+        );
+        if (backendUrl != null && backendUrl.trim().isNotEmpty) {
+          return backendUrl.trim();
+        }
+      }
+    } catch (e) {
+      debugPrint('IMAGE_STORAGE_BACKEND_ERROR: $e');
     }
 
     final cloudUrl = await CloudflareService.uploadFile(fileToUpload, bucket: bucket);
@@ -166,6 +187,31 @@ class ImageStorageService {
     final trimmed = value?.trim();
     if (trimmed == null || trimmed.isEmpty) return null;
     if (isRemoteUrl(trimmed)) return trimmed;
+    return trimmed;
+  }
+
+  /// يختار نسخة أصغر من صورة R2 المرفوعة عبر `/db/media/upload` عند العرض.
+  static String? pickVariantUrl(
+    String? url, {
+    int preferredWidth = 256,
+  }) {
+    final trimmed = url?.trim();
+    if (trimmed == null || trimmed.isEmpty) return null;
+    if (!isRemoteUrl(trimmed)) return trimmed;
+    if (!trimmed.contains('/media/')) return trimmed;
+
+    final variant = preferredWidth <= 128
+        ? 'thumbnail'
+        : preferredWidth <= 256
+            ? '256'
+            : '512';
+    for (final candidate in [variant, '256', 'thumbnail', '512', 'original']) {
+      final swapped = trimmed.replaceFirst(
+        RegExp(r'/(original|512|256|thumbnail)\.webp(\?.*)?$'),
+        '/$candidate.webp',
+      );
+      if (swapped != trimmed) return swapped;
+    }
     return trimmed;
   }
 

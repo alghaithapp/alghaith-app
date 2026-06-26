@@ -179,15 +179,8 @@ function mapMerchantApprovalFields(profile) {
   };
 }
 
-async function syncMerchantApprovalToState(phoneKey, patch = {}) {
-  const state = (await getUserState(phoneKey)) || {};
-  const merchantStore =
-    state.merchantStore && typeof state.merchantStore === 'object'
-      ? { ...state.merchantStore }
-      : {};
-  const nextStore = { ...merchantStore, ...patch };
-  await saveUserState(phoneKey, { ...state, merchantStore: nextStore });
-  return nextStore;
+async function syncMerchantApprovalToState(_phoneKey, _patch = {}) {
+  // Legacy: approval fields live in merchant_profiles only.
 }
 
 async function updateMerchantApprovalRecord(phoneKey, patch = {}) {
@@ -1008,18 +1001,8 @@ async function deleteMerchantProduct(id, phone) {
   }
 }
 
-async function removeMerchantProductFromUserState(phoneKey, productId) {
-  const state = (await getUserState(phoneKey)) || {};
-  const items = Array.isArray(state.items) ? state.items : [];
-  const targetId = String(productId || '').trim();
-  if (!targetId || items.length === 0) return;
-
-  const filtered = items.filter(
-    (item) => String(item?.id || '').trim() !== targetId
-  );
-  if (filtered.length === items.length) return;
-
-  await saveUserState(phoneKey, { items: filtered });
+async function removeMerchantProductFromUserState(_phoneKey, _productId) {
+  // Legacy: products live in merchant_products only (app_state.items no longer used).
 }
 
 function enrichProfessionalProfileRow(row) {
@@ -1182,24 +1165,27 @@ async function listServiceStores(
 }
 
 async function listOfferCatalogProducts() {
-  const stateRows = await selectManyColumns(
-    'app_state',
-    'phone, state',
-    [],
-    { column: 'updated_at', ascending: false },
-    400
-  );
-  const offersByPhone = new Map();
+  const supabase = assertSupabaseAdmin();
+  const { data: offerRows, error } = await supabase
+    .from('merchant_offers')
+    .select('phone, title_ar, discount_percent, product_names_ar, is_active')
+    .eq('is_active', true)
+    .limit(500);
 
-  for (const row of stateRows) {
-    const state = row.state && typeof row.state === 'object' ? row.state : {};
-    const offers = Array.isArray(state.merchantOffers) ? state.merchantOffers : [];
-    const activeOffers = offers.filter(
-      (offer) => offer && offer.isActive !== false
-    );
-    if (!activeOffers.length) continue;
-    const phone = String(row.phone || '').trim();
-    if (phone) offersByPhone.set(phone, activeOffers);
+  const offersByPhone = new Map();
+  if (!error && Array.isArray(offerRows)) {
+    for (const row of offerRows) {
+      const phone = String(row.phone || '').trim();
+      if (!phone) continue;
+      const list = offersByPhone.get(phone) || [];
+      list.push({
+        titleAr: row.title_ar || '',
+        discountPercent: Number(row.discount_percent || 0),
+        productNamesAr: normalizeArray(row.product_names_ar),
+        isActive: row.is_active !== false,
+      });
+      offersByPhone.set(phone, list);
+    }
   }
 
   if (offersByPhone.size === 0) {

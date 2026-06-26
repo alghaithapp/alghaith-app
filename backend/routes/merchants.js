@@ -11,6 +11,11 @@ const {
   saveMerchantReview,
   getMerchantIncomingOrders,
   updateIncomingOrderStatus,
+  getMerchantOffers,
+  saveMerchantOffer,
+  deleteMerchantOffer,
+  getMerchantReviewsForMerchant,
+  replyMerchantReview,
 } = require('../supabase_repo');
 const {
   requireAuthorizedPhone,
@@ -113,7 +118,77 @@ router.get('/professionals', async (req, res) => {
   }
 });
 
-// ── Merchant Review ─────────────────────────────────────────────────────
+// ── Merchant Offers ─────────────────────────────────────────────────────
+
+router.get('/merchant-offers', async (req, res) => {
+  try {
+    const phone = requireAuthorizedPhone(req, res);
+    if (!phone) return;
+    const rows = await getMerchantOffers(phone);
+    return res.json(rows);
+  } catch (error) {
+    console.error('get merchant-offers error:', error);
+    return res.status(500).json({ message: error?.message || 'Failed to load merchant offers.' });
+  }
+});
+
+router.put('/merchant-offer', async (req, res) => {
+  try {
+    const phone = requireAuthorizedPhone(req, res);
+    if (!phone) return;
+    const row = await saveMerchantOffer(phone, req.body || {});
+    return res.json(row);
+  } catch (error) {
+    console.error('save merchant-offer error:', error);
+    return res.status(500).json({ message: error?.message || 'Failed to save merchant offer.' });
+  }
+});
+
+router.delete('/merchant-offer', async (req, res) => {
+  try {
+    const phone = requireAuthorizedPhone(req, res);
+    if (!phone) return;
+    const offerId = String(req.body?.id || req.query?.id || '').trim();
+    if (!offerId) {
+      return res.status(400).json({ message: 'Offer id is required.' });
+    }
+    await deleteMerchantOffer(phone, offerId);
+    return res.json({ success: true });
+  } catch (error) {
+    console.error('delete merchant-offer error:', error);
+    return res.status(500).json({ message: error?.message || 'Failed to delete merchant offer.' });
+  }
+});
+
+router.get('/merchant-reviews', async (req, res) => {
+  try {
+    const phone = requireAuthorizedPhone(req, res);
+    if (!phone) return;
+    const rows = await getMerchantReviewsForMerchant(phone);
+    return res.json(rows);
+  } catch (error) {
+    console.error('get merchant-reviews error:', error);
+    return res.status(500).json({ message: error?.message || 'Failed to load merchant reviews.' });
+  }
+});
+
+router.put('/merchant-review/reply', async (req, res) => {
+  try {
+    const phone = requireAuthorizedPhone(req, res);
+    if (!phone) return;
+    const reviewId = String(req.body?.reviewId || req.body?.id || '').trim();
+    if (!reviewId) {
+      return res.status(400).json({ message: 'Review id is required.' });
+    }
+    const row = await replyMerchantReview(phone, reviewId, req.body?.reply || '');
+    return res.json(row);
+  } catch (error) {
+    console.error('reply merchant-review error:', error);
+    return res.status(500).json({ message: error?.message || 'Failed to reply to review.' });
+  }
+});
+
+// ── Merchant Review (customer submit) ───────────────────────────────────
 
 router.post('/merchant-review', async (req, res) => {
   try {

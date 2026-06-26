@@ -1,3 +1,8 @@
+# Production API on Railway project "striking-fulfillment".
+# Deploy: .\scripts\deploy-backend-railway.ps1 (from repo root)
+# Link once: .\scripts\link-backend-railway.ps1
+# Do NOT run `railway up` from the repo root — that targets a separate unused project.
+
 [build]
 builder = "nixpacks"
 

@@ -25,6 +25,12 @@ const {
 } = require('./_middleware');
 const { getUserState, saveUserState } = require('../supabase_repo');
 const {
+  getDriverProfile,
+  saveDriverProfile,
+  getCourierProfile,
+  saveCourierProfile,
+} = require('../supabase_repo');
+const {
   serializeUserStateForClient,
   serializeCustomerProfileForClient,
 } = require('../services/image_refs');
@@ -270,6 +276,56 @@ router.put('/user-state', async (req, res) => {
   } catch (error) {
     console.error('save user-state error:', error);
     return res.status(500).json({ message: error?.message || 'Failed to save user state.' });
+  }
+});
+
+// ── Driver / Courier profiles ───────────────────────────────────────────
+
+router.get('/driver-profile', async (req, res) => {
+  try {
+    const phone = requireAuthorizedPhone(req, res);
+    if (!phone) return;
+    const profile = await getDriverProfile(phone);
+    return res.json(profile);
+  } catch (error) {
+    console.error('get driver-profile error:', error);
+    return res.status(500).json({ message: error?.message || 'Failed to load driver profile.' });
+  }
+});
+
+router.put('/driver-profile', async (req, res) => {
+  try {
+    const phone = requireAuthorizedPhone(req, res);
+    if (!phone) return;
+    const profile = await saveDriverProfile(phone, req.body || {});
+    return res.json(profile);
+  } catch (error) {
+    console.error('save driver-profile error:', error);
+    return res.status(500).json({ message: error?.message || 'Failed to save driver profile.' });
+  }
+});
+
+router.get('/courier-profile', async (req, res) => {
+  try {
+    const phone = requireAuthorizedPhone(req, res);
+    if (!phone) return;
+    const profile = await getCourierProfile(phone);
+    return res.json(profile);
+  } catch (error) {
+    console.error('get courier-profile error:', error);
+    return res.status(500).json({ message: error?.message || 'Failed to load courier profile.' });
+  }
+});
+
+router.put('/courier-profile', async (req, res) => {
+  try {
+    const phone = requireAuthorizedPhone(req, res);
+    if (!phone) return;
+    const profile = await saveCourierProfile(phone, req.body || {});
+    return res.json(profile);
+  } catch (error) {
+    console.error('save courier-profile error:', error);
+    return res.status(500).json({ message: error?.message || 'Failed to save courier profile.' });
   }
 });
 

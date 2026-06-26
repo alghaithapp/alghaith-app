@@ -4,8 +4,8 @@ import 'package:mocktail/mocktail.dart';
 import 'package:provider/provider.dart';
 
 import 'package:alghaith_app/providers/app_provider.dart';
-import 'package:alghaith_app/screens/merchant/merchant_dashboard_screen.dart';
-import 'package:alghaith_app/screens/merchant/widgets/shared_dashboard_widgets.dart';
+import 'package:alghaith_app/modules/merchant/screens/merchant_dashboard_screen.dart';
+import 'package:alghaith_app/modules/merchant/screens/widgets/shared_dashboard_widgets.dart';
 import 'package:alghaith_app/utils/merchant_service_labels.dart';
 import 'package:alghaith_app/models/app_notification.dart';
 import 'package:alghaith_app/models/app_models.dart';

@@ -154,12 +154,21 @@ Expected response includes `"pushConfigured": true`.
 
 ### 9.3 Redeploy
 
-```bash
-cd backend
-railway up
+From the repo root (recommended):
+
+```powershell
+.\scripts\deploy-backend-railway.ps1
 ```
 
-Or trigger a redeploy from the Railway Dashboard → Deployments → **Redeploy**.
+First time on a machine, link `backend/` once:
+
+```powershell
+.\scripts\link-backend-railway.ps1
+```
+
+Or trigger a redeploy from the Railway Dashboard → project **striking-fulfillment** → Deployments → **Redeploy**.
+
+Do **not** run `railway up` from the repo root — that targets a separate unused Railway project.
 
 ### 9.4 Local testing with .env
 

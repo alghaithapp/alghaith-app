@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../providers/app_provider.dart';
-import '../screens/merchant/merchant_notifications_screen.dart';
-import '../screens/notifications_screen.dart';
+import '../modules/merchant/screens/merchant_notifications_screen.dart';
+import '../modules/common/screens/notifications_screen.dart';
 import '../widgets/in_app_notification_banner.dart';
 
 class RoleSwitchNotificationPresenter {

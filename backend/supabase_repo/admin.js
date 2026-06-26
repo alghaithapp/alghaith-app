@@ -68,8 +68,13 @@ const {
   deleteUserState,
 } = require('./users');
 const {
-  deleteAllDeviceTokens,
-} = require('./push_notifications');
+  getDriverProfile,
+  saveDriverProfile,
+  getCourierProfile,
+  saveCourierProfile,
+  rowToDriverProfileMap,
+  rowToCourierProfileMap,
+} = require('./operator_profiles');
 
 async function getAdminReports(phone) {
   await assertAdminAccess(phone);
@@ -81,12 +86,13 @@ async function getAdminReports(phone) {
 
   const supabase = assertSupabaseAdmin();
 
-  const [orders, merchants, totalProducts, totalUsers, states] = await Promise.all([
+  const [orders, merchants, totalProducts, totalUsers, driverRows, courierRows] = await Promise.all([
     selectMany('customer_orders', [], { column: 'updated_at', ascending: false }, 100),
     selectMany('merchant_profiles', [], { column: 'store_name', ascending: true }, 500),
     supabase.from('merchant_products').select('*', { count: 'exact', head: true }).then((r) => r.count || 0),
     supabase.from('app_users').select('*', { count: 'exact', head: true }).then((r) => r.count || 0),
-    supabase.from('app_state').select('phone, state').limit(800).then((r) => r.data || []),
+    supabase.from('driver_profiles').select('phone, display_name', { count: 'exact' }).then((r) => r.data || []),
+    supabase.from('courier_profiles').select('phone, display_name', { count: 'exact' }).then((r) => r.data || []),
   ]);
 
   let completedOrders = 0, pendingOrders = 0, deliveringOrders = 0, cancelledOrders = 0;
@@ -120,11 +126,13 @@ async function getAdminReports(phone) {
   const recentAvgOrderValue = recentCount > 0 ? Math.round(recentRevenue / recentCount) : avgOrderValue;
   const revenueGrowth = avgOrderValue > 0 ? Math.round(((recentAvgOrderValue - avgOrderValue) / avgOrderValue) * 100) : 0;
 
-  let courierCount = 0, driverCount = 0;
-  for (const row of states) {
-    const s = normalizeObject(row.state);
-    if (s.courierProfile && typeof s.courierProfile === 'object' && String(s.courierProfile.name || '').trim()) courierCount++;
-    if (s.driverProfile && typeof s.driverProfile === 'object' && String(s.driverProfile.name || '').trim()) driverCount++;
+  let courierCount = 0;
+  let driverCount = 0;
+  for (const row of courierRows) {
+    if (String(row.display_name || '').trim()) courierCount += 1;
+  }
+  for (const row of driverRows) {
+    if (String(row.display_name || '').trim()) driverCount += 1;
   }
 
   const pendingMerchants = merchants.filter((m) => {
@@ -575,8 +583,7 @@ async function toggleCourierApprovalStatus(adminPhone, courierPhone, isApproved)
     });
     if (!error) {
       const user = await getAppUser(phoneKey);
-      const refreshedState = (await getUserState(phoneKey)) || {};
-      const profile = readCourierProfileFromState(refreshedState);
+      const profile = (await getCourierProfile(phoneKey)) || {};
       const mapped = mapCourierForAdmin(phoneKey, user, profile);
 
       if (Boolean(isApproved)) {
@@ -594,8 +601,7 @@ async function toggleCourierApprovalStatus(adminPhone, courierPhone, isApproved)
     // fallback
   }
 
-  const state = (await getUserState(phoneKey)) || {};
-  const profile = readCourierProfileFromState(state);
+  const profile = await getCourierProfile(phoneKey);
   if (!profile || !isCourierProfileComplete(profile)) {
     throw new Error('Courier profile not found.');
   }
@@ -610,10 +616,7 @@ async function toggleCourierApprovalStatus(adminPhone, courierPhone, isApproved)
     delete nextProfile.rejectionMessageAr;
     delete nextProfile.rejectedAt;
   }
-  await saveUserState(phoneKey, {
-    ...state,
-    courierProfile: nextProfile,
-  });
+  await saveCourierProfile(phoneKey, nextProfile);
 
   const user = await getAppUser(phoneKey);
   const mapped = mapCourierForAdmin(phoneKey, user, nextProfile);
@@ -674,8 +677,7 @@ async function rejectCourierApplication(
     });
     if (!error) {
       const user = await getAppUser(phoneKey);
-      const refreshedState = (await getUserState(phoneKey)) || {};
-      const profile = readCourierProfileFromState(refreshedState);
+      const profile = (await getCourierProfile(phoneKey)) || {};
       const mapped = mapCourierForAdmin(phoneKey, user, profile);
 
       try {
@@ -691,8 +693,7 @@ async function rejectCourierApplication(
     // fallback
   }
 
-  const state = (await getUserState(phoneKey)) || {};
-  const profile = readCourierProfileFromState(state);
+  const profile = await getCourierProfile(phoneKey);
   if (!profile || !isCourierProfileComplete(profile)) {
     throw new Error('Courier profile not found.');
   }
@@ -705,10 +706,7 @@ async function rejectCourierApplication(
     rejectionMessageAr: message,
     rejectedAt: nowIso(),
   };
-  await saveUserState(phoneKey, {
-    ...state,
-    courierProfile: nextProfile,
-  });
+  await saveCourierProfile(phoneKey, nextProfile);
 
   const user = await getAppUser(phoneKey);
   const mapped = mapCourierForAdmin(phoneKey, user, nextProfile);
@@ -942,7 +940,13 @@ async function toggleDriverApprovalStatus(adminPhone, driverPhone, isApproved) {
     if (!error) {
       const user = await getAppUser(phoneKey);
       const refreshedState = (await getUserState(phoneKey)) || {};
-      const mapped = mapAdminAccountSummary(user, refreshedState, null);
+      const operatorProfiles = await loadOperatorProfiles(phoneKey);
+      const mapped = mapAdminAccountSummary(
+        user,
+        refreshedState,
+        null,
+        operatorProfiles
+      );
 
       if (Boolean(isApproved)) {
         try {
@@ -959,8 +963,7 @@ async function toggleDriverApprovalStatus(adminPhone, driverPhone, isApproved) {
     // fallback
   }
 
-  const state = (await getUserState(phoneKey)) || {};
-  const profile = readDriverProfileFromState(state);
+  const profile = await getDriverProfile(phoneKey);
   if (!profile || !isDriverProfileComplete(profile)) {
     throw new Error('Driver profile not found.');
   }
@@ -975,14 +978,13 @@ async function toggleDriverApprovalStatus(adminPhone, driverPhone, isApproved) {
     delete nextProfile.rejectionMessageAr;
     delete nextProfile.rejectedAt;
   }
-  await saveUserState(phoneKey, {
-    ...state,
-    driverProfile: nextProfile,
-  });
+  await saveDriverProfile(phoneKey, nextProfile);
 
   const user = await getAppUser(phoneKey);
   const refreshedState = (await getUserState(phoneKey)) || {};
-  const mapped = mapAdminAccountSummary(user, refreshedState, null);
+  const mapped = mapAdminAccountSummary(user, refreshedState, null, {
+    driverProfile: nextProfile,
+  });
 
   if (Boolean(isApproved)) {
     try {
@@ -1023,7 +1025,13 @@ async function rejectDriverApplication(
     if (!error) {
       const user = await getAppUser(phoneKey);
       const refreshedState = (await getUserState(phoneKey)) || {};
-      const mapped = mapAdminAccountSummary(user, refreshedState, null);
+      const operatorProfiles = await loadOperatorProfiles(phoneKey);
+      const mapped = mapAdminAccountSummary(
+        user,
+        refreshedState,
+        null,
+        operatorProfiles
+      );
 
       try {
         const { onDriverRejected } = require('./push_events');
@@ -1038,8 +1046,7 @@ async function rejectDriverApplication(
     // fallback
   }
 
-  const state = (await getUserState(phoneKey)) || {};
-  const profile = readDriverProfileFromState(state);
+  const profile = await getDriverProfile(phoneKey);
   if (!profile || !isDriverProfileComplete(profile)) {
     throw new Error('Driver profile not found.');
   }
@@ -1052,14 +1059,13 @@ async function rejectDriverApplication(
     rejectionMessageAr: message,
     rejectedAt: nowIso(),
   };
-  await saveUserState(phoneKey, {
-    ...state,
-    driverProfile: nextProfile,
-  });
+  await saveDriverProfile(phoneKey, nextProfile);
 
   const user = await getAppUser(phoneKey);
   const refreshedState = (await getUserState(phoneKey)) || {};
-  const mapped = mapAdminAccountSummary(user, refreshedState, null);
+  const mapped = mapAdminAccountSummary(user, refreshedState, null, {
+    driverProfile: nextProfile,
+  });
 
   try {
     const { onDriverRejected } = require('./push_events');
@@ -1071,7 +1077,23 @@ async function rejectDriverApplication(
   return { success: true, driver: mapped };
 }
 
-function classifyAdminAccountKind(user, state, merchantProfile) {
+async function loadOperatorProfiles(phoneKey) {
+  const [driverProfile, courierProfile] = await Promise.all([
+    getDriverProfile(phoneKey),
+    getCourierProfile(phoneKey),
+  ]);
+  return { driverProfile, courierProfile };
+}
+
+function resolveDriverProfile(state, operatorProfiles = {}) {
+  return operatorProfiles.driverProfile ?? readDriverProfileFromState(state);
+}
+
+function resolveCourierProfile(state, operatorProfiles = {}) {
+  return operatorProfiles.courierProfile ?? readCourierProfileFromState(state);
+}
+
+function classifyAdminAccountKind(user, state, merchantProfile, operatorProfiles = {}) {
   const role = String(user?.role ?? '').trim();
   const accountType = String(user?.account_type ?? '').trim();
 
@@ -1090,7 +1112,7 @@ function classifyAdminAccountKind(user, state, merchantProfile) {
     return 'merchant';
   }
 
-  const driverProfile = readDriverProfileFromState(state);
+  const driverProfile = resolveDriverProfile(state, operatorProfiles);
   if (
     role === 'driver' ||
     accountType === 'driver' ||
@@ -1099,7 +1121,7 @@ function classifyAdminAccountKind(user, state, merchantProfile) {
     return 'driver';
   }
 
-  const courierProfile = readCourierProfileFromState(state);
+  const courierProfile = resolveCourierProfile(state, operatorProfiles);
   if (
     role === 'delivery' ||
     accountType === 'delivery' ||
@@ -1111,12 +1133,16 @@ function classifyAdminAccountKind(user, state, merchantProfile) {
   return 'customer';
 }
 
-function accountDisplayName(user, state, merchantProfile, kind) {
+function accountDisplayName(user, state, merchantProfile, kind, operatorProfiles = {}) {
   const fullName = String(user?.full_name ?? '').trim();
   const merchantName = String(merchantProfile?.store_name ?? '').trim();
   const merchantStoreName = String(state?.merchantStore?.name ?? '').trim();
-  const courierName = String(readCourierProfileFromState(state)?.name ?? '').trim();
-  const driverName = String(readDriverProfileFromState(state)?.name ?? '').trim();
+  const courierName = String(
+    resolveCourierProfile(state, operatorProfiles)?.name ?? ''
+  ).trim();
+  const driverName = String(
+    resolveDriverProfile(state, operatorProfiles)?.name ?? ''
+  ).trim();
   const professionalName = String(
     normalizeObject(merchantProfile?.professional_info)?.name ?? ''
   ).trim();
@@ -1136,31 +1162,44 @@ function accountDisplayName(user, state, merchantProfile, kind) {
   return fullName || 'زبون';
 }
 
-function resolveAccountSuspended(state, merchantProfile) {
+function resolveAccountSuspended(state, merchantProfile, operatorProfiles = {}) {
   if (state?.accountSuspended === true) return true;
   if (isMerchantFrozen(merchantProfile)) return true;
-  const courierProfile = readCourierProfileFromState(state);
-  if (courierProfile?.isSuspended === true) return true;
-  const driverProfile = readDriverProfileFromState(state);
-  if (driverProfile?.isSuspended === true) return true;
+  if (resolveCourierProfile(state, operatorProfiles)?.isSuspended === true) {
+    return true;
+  }
+  if (resolveDriverProfile(state, operatorProfiles)?.isSuspended === true) {
+    return true;
+  }
   return false;
 }
 
-function mapAdminAccountSummary(user, state, merchantProfile) {
+function mapAdminAccountSummary(user, state, merchantProfile, operatorProfiles = {}) {
   const phone = String(user?.phone ?? '').trim();
-  const kind = classifyAdminAccountKind(user, state, merchantProfile);
-  const courierProfile = readCourierProfileFromState(state);
-  const driverProfile = readDriverProfileFromState(state);
+  const kind = classifyAdminAccountKind(
+    user,
+    state,
+    merchantProfile,
+    operatorProfiles
+  );
+  const courierProfile = resolveCourierProfile(state, operatorProfiles);
+  const driverProfile = resolveDriverProfile(state, operatorProfiles);
   const approval = resolveAccountApproval(state, merchantProfile, kind);
 
   return {
     phone,
-    displayName: accountDisplayName(user, state, merchantProfile, kind),
+    displayName: accountDisplayName(
+      user,
+      state,
+      merchantProfile,
+      kind,
+      operatorProfiles
+    ),
     fullName: String(user?.full_name ?? '').trim(),
     role: String(user?.role ?? '').trim(),
     accountType: String(user?.account_type ?? '').trim(),
     kind,
-    isSuspended: resolveAccountSuspended(state, merchantProfile),
+    isSuspended: resolveAccountSuspended(state, merchantProfile, operatorProfiles),
     merchantStoreName: String(merchantProfile?.store_name ?? '').trim(),
     primaryServiceId: String(merchantProfile?.primary_service_id ?? '').trim(),
     courierApproved: isCourierApproved(courierProfile),
@@ -1237,7 +1276,7 @@ async function getAllAdminAccounts(adminPhone) {
   await assertAdminAccess(adminPhone);
   await syncMissingMerchantProfilesFromAppState();
 
-  const [users, states, merchants] = await Promise.all([
+  const [users, states, merchants, drivers, couriers] = await Promise.all([
     selectMany('app_users', [], { column: 'updated_at', ascending: false }, 3000),
     selectManyColumns(
       'app_state',
@@ -1247,6 +1286,8 @@ async function getAllAdminAccounts(adminPhone) {
       2500
     ),
     selectMany('merchant_profiles', [], { column: 'updated_at', ascending: false }, 2000),
+    selectMany('driver_profiles', [], { column: 'updated_at', ascending: false }, 2000),
+    selectMany('courier_profiles', [], { column: 'updated_at', ascending: false }, 2000),
   ]);
 
   const merchantByPhone = {};
@@ -1258,19 +1299,47 @@ async function getAllAdminAccounts(adminPhone) {
     }
   }
 
+  const driverByPhone = {};
+  for (const row of drivers) {
+    const phone = String(row.phone || '').trim();
+    if (!phone) continue;
+    for (const variant of getPhoneVariants(phone)) {
+      driverByPhone[variant] = row;
+    }
+  }
+
+  const courierByPhone = {};
+  for (const row of couriers) {
+    const phone = String(row.phone || '').trim();
+    if (!phone) continue;
+    for (const variant of getPhoneVariants(phone)) {
+      courierByPhone[variant] = row;
+    }
+  }
+
   const accounts = users
     .map((user) => {
       const phone = String(user.phone || '').trim();
       if (!phone) return null;
       const state = resolveStateForAdminAccount(states, phone);
       let merchantProfile = null;
+      let driverRow = null;
+      let courierRow = null;
       for (const variant of getPhoneVariants(phone)) {
-        if (merchantByPhone[variant]) {
+        if (!merchantProfile && merchantByPhone[variant]) {
           merchantProfile = merchantByPhone[variant];
-          break;
+        }
+        if (!driverRow && driverByPhone[variant]) {
+          driverRow = driverByPhone[variant];
+        }
+        if (!courierRow && courierByPhone[variant]) {
+          courierRow = courierByPhone[variant];
         }
       }
-      return mapAdminAccountSummary(user, state, merchantProfile);
+      return mapAdminAccountSummary(user, state, merchantProfile, {
+        driverProfile: driverRow ? rowToDriverProfileMap(driverRow) : null,
+        courierProfile: courierRow ? rowToCourierProfileMap(courierRow) : null,
+      });
     })
     .filter(Boolean);
 
@@ -1402,11 +1471,21 @@ async function adminSuspendAccount(adminPhone, targetPhone, isSuspended) {
     if (!error) {
       const refreshedState = (await getUserState(phoneKey)) || {};
       const refreshedMerchant = await getMerchantProfile(phoneKey);
+      const operatorProfiles = await loadOperatorProfiles(phoneKey);
       return {
         success: true,
         phone: phoneKey,
-        isSuspended: resolveAccountSuspended(refreshedState, refreshedMerchant),
-        account: mapAdminAccountSummary(existing, refreshedState, refreshedMerchant),
+        isSuspended: resolveAccountSuspended(
+          refreshedState,
+          refreshedMerchant,
+          operatorProfiles
+        ),
+        account: mapAdminAccountSummary(
+          existing,
+          refreshedState,
+          refreshedMerchant,
+          operatorProfiles
+        ),
       };
     }
   } catch (_) {
@@ -1415,8 +1494,8 @@ async function adminSuspendAccount(adminPhone, targetPhone, isSuspended) {
 
   const state = (await getUserState(phoneKey)) || {};
   const merchantProfile = await getMerchantProfile(phoneKey);
-  const courierProfile = readCourierProfileFromState(state);
-  const driverProfile = readDriverProfileFromState(state);
+  const courierProfile = await getCourierProfile(phoneKey);
+  const driverProfile = await getDriverProfile(phoneKey);
 
   const nextState = {
     ...state,
@@ -1425,19 +1504,19 @@ async function adminSuspendAccount(adminPhone, targetPhone, isSuspended) {
   };
 
   if (courierProfile) {
-    nextState.courierProfile = {
+    await saveCourierProfile(phoneKey, {
       ...courierProfile,
       isSuspended: Boolean(isSuspended),
       available: !isSuspended,
-    };
+    });
   }
 
   if (driverProfile) {
-    nextState.driverProfile = {
+    await saveDriverProfile(phoneKey, {
       ...driverProfile,
       isSuspended: Boolean(isSuspended),
       available: !isSuspended,
-    };
+    });
   }
 
   await saveUserState(phoneKey, nextState);
@@ -1453,11 +1532,21 @@ async function adminSuspendAccount(adminPhone, targetPhone, isSuspended) {
 
   const refreshedState = (await getUserState(phoneKey)) || nextState;
   const refreshedMerchant = await getMerchantProfile(phoneKey);
+  const operatorProfiles = await loadOperatorProfiles(phoneKey);
   return {
     success: true,
     phone: phoneKey,
-    isSuspended: resolveAccountSuspended(refreshedState, refreshedMerchant),
-    account: mapAdminAccountSummary(existing, refreshedState, refreshedMerchant),
+    isSuspended: resolveAccountSuspended(
+      refreshedState,
+      refreshedMerchant,
+      operatorProfiles
+    ),
+    account: mapAdminAccountSummary(
+      existing,
+      refreshedState,
+      refreshedMerchant,
+      operatorProfiles
+    ),
   };
 }
 
@@ -1637,6 +1726,173 @@ async function preRegisterMerchantAccount(adminPhone, payload = {}) {
   };
 }
 
+const DEFAULT_APP_UPDATE_POLICY = Object.freeze({
+  minBuildNumber: 1,
+  minVersionName: '1.0.0',
+  latestBuildNumber: 0,
+  latestVersionName: '',
+  messageAr:
+    'يجب تحديث التطبيق للمتابعة. الرجاء التحديث من المتجر للاستمرار في استخدام الغيث.',
+  androidStoreUrl:
+    'https://play.google.com/store/apps/details?id=com.alghaith.app',
+  iosStoreUrl: 'https://apps.apple.com/app/id6776741811',
+});
+
+async function getPlatformSettingsState() {
+  const state = (await getUserState(PLATFORM_SETTINGS_PHONE)) || {};
+  return normalizeObject(state);
+}
+
+async function savePlatformSettingsState(patch = {}) {
+  const current = await getPlatformSettingsState();
+  const next = { ...current, ...normalizeObject(patch) };
+  await saveUserState(PLATFORM_SETTINGS_PHONE, next);
+  return next;
+}
+
+function readOptionalBool(value) {
+  if (value === true) return true;
+  if (value === false) return false;
+  return null;
+}
+
+function normalizeHomeCategoryOverrides(raw) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+  const out = {};
+  for (const [categoryId, value] of Object.entries(raw)) {
+    const id = String(categoryId || '').trim();
+    if (!id) continue;
+
+    if (typeof value === 'boolean') {
+      out[id] = { default: value };
+      continue;
+    }
+    if (!value || typeof value !== 'object' || Array.isArray(value)) continue;
+
+    const entry = {};
+    for (const key of ['default', 'android', 'ios', 'web']) {
+      const parsed = readOptionalBool(value[key]);
+      if (parsed != null) entry[key] = parsed;
+    }
+    if (Object.keys(entry).length > 0) out[id] = entry;
+  }
+  return out;
+}
+
+function normalizeAppUpdatePolicy(raw = {}) {
+  const source = normalizeObject(raw);
+  const minBuildNumber = Number(
+    source.minBuildNumber ?? source.min_build_number ?? DEFAULT_APP_UPDATE_POLICY.minBuildNumber,
+  );
+  const latestBuildNumber = Number(
+    source.latestBuildNumber ??
+      source.latest_build_number ??
+      DEFAULT_APP_UPDATE_POLICY.latestBuildNumber,
+  );
+
+  return {
+    minBuildNumber:
+      Number.isFinite(minBuildNumber) && minBuildNumber >= 1
+        ? Math.trunc(minBuildNumber)
+        : DEFAULT_APP_UPDATE_POLICY.minBuildNumber,
+    minVersionName:
+      String(
+        source.minVersionName ??
+          source.min_version_name ??
+          DEFAULT_APP_UPDATE_POLICY.minVersionName,
+      ).trim() || DEFAULT_APP_UPDATE_POLICY.minVersionName,
+    latestBuildNumber:
+      Number.isFinite(latestBuildNumber) && latestBuildNumber >= 0
+        ? Math.trunc(latestBuildNumber)
+        : DEFAULT_APP_UPDATE_POLICY.latestBuildNumber,
+    latestVersionName: String(
+      source.latestVersionName ??
+        source.latest_version_name ??
+        DEFAULT_APP_UPDATE_POLICY.latestVersionName,
+    ).trim(),
+    messageAr:
+      String(
+        source.messageAr ?? source.message_ar ?? DEFAULT_APP_UPDATE_POLICY.messageAr,
+      ).trim() || DEFAULT_APP_UPDATE_POLICY.messageAr,
+    androidStoreUrl:
+      String(
+        source.androidStoreUrl ??
+          source.android_store_url ??
+          DEFAULT_APP_UPDATE_POLICY.androidStoreUrl,
+      ).trim() || DEFAULT_APP_UPDATE_POLICY.androidStoreUrl,
+    iosStoreUrl:
+      String(
+        source.iosStoreUrl ??
+          source.ios_store_url ??
+          DEFAULT_APP_UPDATE_POLICY.iosStoreUrl,
+      ).trim() || DEFAULT_APP_UPDATE_POLICY.iosStoreUrl,
+  };
+}
+
+async function getHomeCategoriesConfig() {
+  const state = await getPlatformSettingsState();
+  const stored = normalizeObject(
+    state.homeCategories || state.home_category_overrides || {},
+  );
+  const overrides = normalizeHomeCategoryOverrides(stored.overrides || stored);
+  const updatedAt =
+    stored.updatedAt ||
+    stored.updated_at ||
+    state.homeCategoriesUpdatedAt ||
+    null;
+  return { overrides, updatedAt };
+}
+
+async function saveAdminHomeCategoriesConfig(phone, overrides) {
+  await assertAdminAccess(phone);
+  const normalized = normalizeHomeCategoryOverrides(overrides);
+  const updatedAt = nowIso();
+  await savePlatformSettingsState({
+    homeCategories: {
+      overrides: normalized,
+      updatedAt,
+    },
+    homeCategoriesUpdatedAt: updatedAt,
+  });
+  return { overrides: normalized, updatedAt };
+}
+
+async function getAppUpdatePolicy() {
+  const state = await getPlatformSettingsState();
+  const stored = normalizeObject(
+    state.appUpdatePolicy || state.app_update_policy || {},
+  );
+  const { updatedAt, updated_at: updatedAtSnake, ...policyFields } = stored;
+  const policy = normalizeAppUpdatePolicy({
+    ...DEFAULT_APP_UPDATE_POLICY,
+    ...policyFields,
+  });
+  return {
+    ...policy,
+    updatedAt:
+      updatedAt ||
+      updatedAtSnake ||
+      state.appUpdatePolicyUpdatedAt ||
+      null,
+  };
+}
+
+async function saveAdminAppUpdatePolicy(phone, patch = {}) {
+  await assertAdminAccess(phone);
+  const current = await getAppUpdatePolicy();
+  const { updatedAt: _ignored, ...currentPolicy } = current;
+  const policy = normalizeAppUpdatePolicy({ ...currentPolicy, ...patch });
+  const updatedAt = nowIso();
+  await savePlatformSettingsState({
+    appUpdatePolicy: {
+      ...policy,
+      updatedAt,
+    },
+    appUpdatePolicyUpdatedAt: updatedAt,
+  });
+  return { ...policy, updatedAt };
+}
+
 module.exports = {
   getAdminReports,
   getAllMerchants,
@@ -1666,4 +1922,8 @@ module.exports = {
   isPlatformAdminPhone,
   ensurePlatformAdminAccess,
   preRegisterMerchantAccount,
+  getHomeCategoriesConfig,
+  saveAdminHomeCategoriesConfig,
+  getAppUpdatePolicy,
+  saveAdminAppUpdatePolicy,
 };

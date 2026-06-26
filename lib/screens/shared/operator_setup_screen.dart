@@ -5,8 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
-import '../../features/taxi/models/taxi_request.dart';
-import '../../features/taxi/widgets/taxi_type_image.dart';
+import '../../modules/taxi/models/taxi_request.dart';
+import '../../modules/taxi/widgets/taxi_type_image.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/utils/phone_utils.dart';
 import '../../core/utils/western_digits_input_formatter.dart';
@@ -15,7 +15,7 @@ import '../../utils/courier_profile_fields.dart';
 import '../../utils/driver_profile_fields.dart';
 import '../../utils/helpers.dart';
 import '../../widgets/app_image.dart';
-import '../../widgets/merchant/merchant_image_upload_slot.dart';
+import '../../modules/merchant/widgets/merchant_image_upload_slot.dart';
 
 class OperatorSetupScreen extends StatefulWidget {
   final String role;

@@ -4,7 +4,7 @@ import 'package:mocktail/mocktail.dart';
 import 'package:provider/provider.dart';
 
 import 'package:alghaith_app/providers/app_provider.dart';
-import 'package:alghaith_app/screens/admin/widgets/admin_sidebar.dart';
+import 'package:alghaith_app/modules/admin/screens/widgets/admin_sidebar.dart';
 
 import '../mocks/app_provider.dart';
 

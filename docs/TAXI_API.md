@@ -170,4 +170,4 @@ Ride requests are stored in the `taxi_requests` table in Supabase. Each row stor
 
 ## Flutter Client
 
-The taxi feature lives in `lib/features/taxi/` with screens for customer (request, waiting, live tracking, history) and driver (home, requests, trip, earnings).
+The taxi feature lives in `lib/modules/taxi/` with screens for customer (request, waiting, live tracking, history) and driver (home, requests, trip, earnings).

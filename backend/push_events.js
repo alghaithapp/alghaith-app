@@ -5,7 +5,7 @@ const {
   getActiveDriverPhones,
   recordPushInboxDelivered,
 } = require('./supabase_repo');
-const { sendPushToTokens } = require('./push_notifications');
+const { enqueuePushNotification } = require('./services/notification_queue');
 
 function displayOrderNumber(meta) {
   const raw = String(meta?.payload?.orderNumber ?? meta?.row?.order_number ?? '').trim();
@@ -104,12 +104,22 @@ async function sendPushToPhone(phone, payload, options = {}) {
   const showSystemBanner =
     options.showSystemBanner === true ||
     String(payload?.data?.category ?? '').trim() === 'account';
-  const result = await sendPushToTokens(tokens, { ...payload, showSystemBanner });
-  if (result.invalidTokens?.length) {
+  const result = await enqueuePushNotification({
+    tokens,
+    title: payload?.title,
+    body: payload?.body,
+    data: payload?.data || {},
+    targetPhone: normalizedPhone,
+    audienceRole: String(payload?.data?.audience ?? 'customer').trim(),
+    eventKey: String(payload?.data?.eventKey ?? '').trim(),
+    showSystemBanner,
+    skipInboxTracking: !shouldTrackPushInbox(payload, options),
+  });
+  if (result?.invalidTokens?.length) {
     await removeDeviceTokens(result.invalidTokens);
   }
 
-  if (result.sent > 0 && shouldTrackPushInbox(payload, options)) {
+  if (result?.sent > 0 && shouldTrackPushInbox(payload, options)) {
     try {
       await recordPushInboxDelivered(normalizedPhone);
     } catch (error) {

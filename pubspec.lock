@@ -9,14 +9,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.3.59"
-  agora_rtc_engine:
-    dependency: "direct main"
-    description:
-      name: agora_rtc_engine
-      sha256: d9a88129b8fdc36ec5246331f36486b198dd7eb41ee68bfb54b289be8d60c6df
-      url: "https://pub.dev"
-    source: hosted
-    version: "6.5.4"
   animate_do:
     dependency: "direct main"
     description:
@@ -632,6 +624,22 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.2.0"
+  hive_ce:
+    dependency: "direct main"
+    description:
+      name: hive_ce
+      sha256: "8e9980e68643afb1e765d3af32b47996552a64e190d03faf622cea07c1294418"
+      url: "https://pub.dev"
+    source: hosted
+    version: "2.19.3"
+  hive_ce_flutter:
+    dependency: "direct main"
+    description:
+      name: hive_ce_flutter
+      sha256: "2677e95a333ff15af43ccd06af7eb7abbf1a4f154ea071997f3de4346cae913a"
+      url: "https://pub.dev"
+    source: hosted
+    version: "2.3.4"
   hooks:
     dependency: transitive
     description:
@@ -744,14 +752,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "0.19.0"
-  iris_method_channel:
+  isolate_channel:
     dependency: transitive
     description:
-      name: iris_method_channel
-      sha256: "114bbe541369add8dd0727858e7df5764f375e3fb88374ad487301733fddb57f"
+      name: isolate_channel
+      sha256: a9d3d620695bc984244dafae00b95e4319d6974b2d77f4b9e1eb4f2efe099094
       url: "https://pub.dev"
     source: hosted
-    version: "2.2.5"
+    version: "0.6.1"
   jni:
     dependency: transitive
     description:
@@ -1493,6 +1501,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.1.0"
+  zego_express_engine:
+    dependency: "direct main"
+    description:
+      name: zego_express_engine
+      sha256: "2e9ae338f0d934f38c2d94655dcf2392881cf3eb6041bdb1dcbae769c1662ea4"
+      url: "https://pub.dev"
+    source: hosted
+    version: "3.24.1"
 sdks:
   dart: ">=3.12.0 <4.0.0"
   flutter: ">=3.44.0"

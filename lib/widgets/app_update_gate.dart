@@ -5,7 +5,7 @@ import 'package:provider/provider.dart';
 
 import '../models/app_update_policy.dart';
 import '../providers/app_provider.dart';
-import '../screens/force_update_screen.dart';
+import '../modules/common/screens/force_update_screen.dart';
 import '../services/app_update_service.dart';
 import 'startup_splash_screen.dart';
 

@@ -5,8 +5,8 @@ import 'package:mocktail/mocktail.dart';
 
 import 'package:alghaith_app/models/app_models.dart';
 import 'package:alghaith_app/providers/app_provider.dart';
-import 'package:alghaith_app/screens/delivery/delivery_active_screen.dart';
-import 'package:alghaith_app/screens/delivery/delivery_shared_widgets.dart';
+import 'package:alghaith_app/modules/courier/screens/delivery_active_screen.dart';
+import 'package:alghaith_app/modules/courier/screens/delivery_shared_widgets.dart';
 import '../mocks/app_provider.dart';
 
 void main() {

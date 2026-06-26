@@ -1,10 +1,11 @@
 import 'package:flutter/foundation.dart';
 
 import '../../core/network/api_client.dart';
+import '../../core/storage/app_state_policy.dart';
 import '../../core/utils/phone_utils.dart';
 import '../../models/app_models.dart';
 import '../../models/home_category_platform_override.dart';
-import '../../features/taxi/models/taxi_request.dart';
+import '../../modules/taxi/models/taxi_request.dart';
 import '../models/account_snapshot.dart';
 
 
@@ -355,6 +356,8 @@ class DatabaseRepository {
     final addresses = await safe(_loadCustomerAddresses(normalized), <String>[]);
     final favoriteIds = await safe(_loadCustomerFavoriteIds(normalized), <String>[]);
     final merchantProfile = await safe(loadMerchantProfile(normalized), null);
+    final driverProfile = await safe(_loadDriverProfile(normalized), null);
+    final courierProfile = await safe(_loadCourierProfile(normalized), null);
     final userState = await safe(loadUserState(normalized), null);
     final orders = await safe(_loadCustomerOrders(normalized), <ActiveOrder>[]);
     final products = await safe(loadMerchantProducts(normalized), <Map<String, dynamic>>[]);
@@ -365,9 +368,53 @@ class DatabaseRepository {
       addresses: addresses,
       favoriteIds: favoriteIds,
       merchantProfile: merchantProfile,
+      driverProfile: driverProfile,
+      courierProfile: courierProfile,
       userState: userState,
       orders: orders,
       products: products,
+    );
+  }
+
+  Future<Map<String, dynamic>?> _loadDriverProfile(String phone) async {
+    final result = await ApiClient.instance.get(
+      '/db/driver-profile',
+      queryParameters: {'phone': phone},
+    );
+    return result is Map ? Map<String, dynamic>.from(result) : null;
+  }
+
+  Future<Map<String, dynamic>?> _loadCourierProfile(String phone) async {
+    final result = await ApiClient.instance.get(
+      '/db/courier-profile',
+      queryParameters: {'phone': phone},
+    );
+    return result is Map ? Map<String, dynamic>.from(result) : null;
+  }
+
+  Future<void> saveDriverProfile(
+    String phone,
+    Map<String, dynamic> profile,
+  ) async {
+    await ApiClient.instance.put(
+      '/db/driver-profile',
+      body: {
+        'phone': _phone(phone),
+        ...profile,
+      },
+    );
+  }
+
+  Future<void> saveCourierProfile(
+    String phone,
+    Map<String, dynamic> profile,
+  ) async {
+    await ApiClient.instance.put(
+      '/db/courier-profile',
+      body: {
+        'phone': _phone(phone),
+        ...profile,
+      },
     );
   }
 
@@ -406,8 +453,10 @@ class DatabaseRepository {
   Future<Map<String, HomeCategoryPlatformOverride>> loadHomeCategoriesConfig() async {
     final result = await ApiClient.instance.get('/app/home-categories');
     if (result is! Map) return const {};
+    final raw = result['overrides'] ?? result;
+    if (raw is! Map) return const {};
     final out = <String, HomeCategoryPlatformOverride>{};
-    result.forEach((key, value) {
+    raw.forEach((key, value) {
       final override = HomeCategoryPlatformOverride.fromDynamic(value);
       if (override != null) {
         out[key.toString()] = override;
@@ -429,8 +478,10 @@ class DatabaseRepository {
       },
     );
     if (result is! Map) return const {};
+    final raw = result['overrides'] ?? result;
+    if (raw is! Map) return const {};
     final out = <String, HomeCategoryPlatformOverride>{};
-    result.forEach((key, value) {
+    raw.forEach((key, value) {
       final override = HomeCategoryPlatformOverride.fromDynamic(value);
       if (override != null) {
         out[key.toString()] = override;
@@ -519,12 +570,73 @@ class DatabaseRepository {
     );
   }
 
+  Future<void> replyMerchantReview(
+    String phone,
+    String reviewId,
+    String reply,
+  ) async {
+    final result = await ApiClient.instance.put(
+      '/db/merchant-review/reply',
+      body: {
+        'phone': _phone(phone),
+        'reviewId': reviewId,
+        'reply': reply,
+      },
+    );
+    return Map<String, dynamic>.from(result as Map);
+  }
+
+  Future<List<Map<String, dynamic>>> loadMerchantOffers(String phone) async {
+    final result = await ApiClient.instance.get(
+      '/db/merchant-offers',
+      queryParameters: {'phone': _phone(phone)},
+    );
+    if (result is! List) return const [];
+    return result
+        .map((e) => Map<String, dynamic>.from(e as Map))
+        .toList();
+  }
+
+  Future<void> saveMerchantOffer(
+    String phone,
+    Map<String, dynamic> offer,
+  ) async {
+    await ApiClient.instance.put(
+      '/db/merchant-offer',
+      body: {
+        'phone': _phone(phone),
+        ...offer,
+      },
+    );
+  }
+
+  Future<void> deleteMerchantOffer(String phone, String offerId) async {
+    await ApiClient.instance.delete(
+      '/db/merchant-offer',
+      queryParameters: {
+        'phone': _phone(phone),
+        'id': offerId,
+      },
+    );
+  }
+
+  Future<List<Map<String, dynamic>>> loadMerchantReviews(String phone) async {
+    final result = await ApiClient.instance.get(
+      '/db/merchant-reviews',
+      queryParameters: {'phone': _phone(phone)},
+    );
+    if (result is! List) return const [];
+    return result
+        .map((e) => Map<String, dynamic>.from(e as Map))
+        .toList();
+  }
+
   Future<void> saveUserState(String phone, Map<String, dynamic> state) async {
     await ApiClient.instance.put(
       '/db/user-state',
       body: {
         'phone': _phone(phone),
-        'state': state,
+        'state': AppStatePolicy.stripForRemotePersist(state),
       },
     );
   }
@@ -895,5 +1007,35 @@ class DatabaseRepository {
         'statusKey': statusKey,
       },
     );
+  }
+
+  Future<String?> uploadMediaImage({
+    required String imageBase64,
+    String ownerType = 'user',
+    String? ownerId,
+    String role = 'gallery',
+  }) async {
+    final result = await ApiClient.instance.post(
+      '/db/media/upload',
+      body: {
+        'imageBase64': imageBase64,
+        'ownerType': ownerType,
+        if (ownerId != null && ownerId.trim().isNotEmpty) 'ownerId': ownerId.trim(),
+        'role': role,
+      },
+    );
+    if (result is! Map) return null;
+    final map = Map<String, dynamic>.from(result);
+    final direct = map['url']?.toString().trim();
+    if (direct != null && direct.isNotEmpty) return direct;
+    final urls = map['urls'];
+    if (urls is Map) {
+      final variants = Map<String, dynamic>.from(urls);
+      for (final key in ['256', 'thumbnail', '512', 'original']) {
+        final candidate = variants[key]?.toString().trim();
+        if (candidate != null && candidate.isNotEmpty) return candidate;
+      }
+    }
+    return null;
   }
 }

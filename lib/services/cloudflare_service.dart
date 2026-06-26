@@ -5,7 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 import '../core/network/api_client.dart';
-import 'phone_auth_api.dart';
+import '../modules/auth/services/phone_auth_api.dart';
 
 class CloudflareService {
   const CloudflareService._();
