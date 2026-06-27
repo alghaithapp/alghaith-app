@@ -1,7 +1,6 @@
 # Smaller Railway CLI uploads — API only needs backend/ (service root).
 android/
 ios/
-lib/
 test/
 web/
 website/
