@@ -11,6 +11,7 @@ import 'core/theme/app_colors.dart';
 import 'core/theme/app_theme.dart';
 import 'core/ui/app_system_ui.dart';
 import 'modules/notifications/services/push_notification_service.dart';
+import 'services/feature_config.dart';
 import 'modules/notifications/services/push_notification_inbox.dart';
 import 'modules/taxi/providers/taxi_provider.dart';
 import 'providers/app_provider.dart';
@@ -83,6 +84,7 @@ Future<void> _bootstrapAsync() async {
     await CatalogCache.init();
     await SupabaseService.initialize();
     await PushNotificationService.instance.initialize();
+    await FeatureConfig().load();
     await configureAppSystemUi();
     try {
       await initializeDateFormatting('ar', null);

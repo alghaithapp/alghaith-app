@@ -127,6 +127,9 @@ app.get('/health', (_, res) => {
   });
 });
 
+// ── Feature flags ──────────────────────────────────────────────────
+app.use('/app', require('./routes/features'));
+
 // ── Emergency / debug routes (disabled unless ENABLE_EMERGENCY_ROUTES=true + key) ──
 app.use(require('./routes/emergency'));
 

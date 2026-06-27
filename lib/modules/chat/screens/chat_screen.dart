@@ -18,6 +18,7 @@ import '../../../widgets/call_history_sheet.dart';
 import '../../../services/image_storage_service.dart';
 import '../../../services/incoming_call_coordinator.dart';
 import '../../../services/voice_call_service.dart';
+import '../../../services/feature_config.dart';
 import '../services/chat_service.dart';
 import '../services/chat_thread_refresh.dart';
 import '../services/socket_service.dart';
@@ -83,19 +84,19 @@ class _ChatScreenState extends State<ChatScreen>
     );
     _subscribeToRealtime();
 
-    final room = '${widget.threadType}:${widget.threadId}';
-    _socketService.connect(room);
-    _socketSub = _socketService.onMessage.listen((ChatMessage msg) {
-      if (!mounted) return;
-      if (_messages.any((m) => m.id == msg.id)) return;
-      setState(() {
-        _messages = [..._messages, msg];
+    if (FeatureConfig().chatV2) {
+      final room = '${widget.threadType}:${widget.threadId}';
+      _socketService.connect(room);
+      _socketSub = _socketService.onMessage.listen((ChatMessage msg) {
+        if (!mounted) return;
+        if (_messages.any((m) => m.id == msg.id)) return;
+        setState(() {
+          _messages = [..._messages, msg];
+        });
+        _scrollToBottom();
+        _markThreadRead();
       });
-      _scrollToBottom();
-      _markThreadRead();
-    });
-
-    _scrollController.addListener(_onScroll);
+    }
     _loadInitialMessages();
     _restartPolling(fast: true);
     _startIncomingCallPolling();
@@ -149,17 +150,19 @@ class _ChatScreenState extends State<ChatScreen>
     _isSending = false;
     _textController.clear();
     _subscribeToRealtime();
-    final room = '${widget.threadType}:${widget.threadId}';
-    _socketService.connect(room);
-    _socketSub = _socketService.onMessage.listen((msg) {
-      if (!mounted) return;
-      if (_messages.any((m) => m.id == msg.id)) return;
-      setState(() {
-        _messages = [..._messages, msg];
+    if (FeatureConfig().chatV2) {
+      final room = '${widget.threadType}:${widget.threadId}';
+      _socketService.connect(room);
+      _socketSub = _socketService.onMessage.listen((msg) {
+        if (!mounted) return;
+        if (_messages.any((m) => m.id == msg.id)) return;
+        setState(() {
+          _messages = [..._messages, msg];
+        });
+        _scrollToBottom();
+        _markThreadRead();
       });
-      _scrollToBottom();
-      _markThreadRead();
-    });
+    }
     _loadInitialMessages();
     _restartPolling(fast: true);
     _startIncomingCallPolling();
