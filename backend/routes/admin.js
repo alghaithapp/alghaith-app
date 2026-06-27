@@ -30,6 +30,7 @@ const {
   deleteUserState,
   ensurePlatformAdminAccess,
   preRegisterMerchantAccount,
+  preRegisterDriverAccount,
 } = require('../supabase_repo');
 const logger = require('../lib/logger');
 const {
@@ -298,6 +299,27 @@ router.post('/admin/merchant-pre-register', async (req, res) => {
   } catch (error) {
     console.error('merchant pre-register error:', error);
     const message = error?.message || 'Failed to pre-register merchant.';
+    const status = message.includes('Admin access')
+      ? 403
+      : message.includes('بالفعل') ||
+          message.includes('لا يمكن') ||
+          message.includes('مطلوب') ||
+          message.includes('غير صالح')
+        ? 400
+        : 500;
+    return res.status(status).json({ message });
+  }
+});
+
+router.post('/admin/driver-pre-register', async (req, res) => {
+  try {
+    const phone = requireOptionalAuthorizedPhone(req, res);
+    if (!phone) return;
+    const result = await preRegisterDriverAccount(phone, req.body || {});
+    return res.json(result);
+  } catch (error) {
+    console.error('driver pre-register error:', error);
+    const message = error?.message || 'Failed to pre-register driver.';
     const status = message.includes('Admin access')
       ? 403
       : message.includes('بالفعل') ||

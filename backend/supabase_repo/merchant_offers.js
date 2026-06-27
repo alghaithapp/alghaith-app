@@ -119,15 +119,21 @@ async function deleteMerchantOffer(phone, offerId) {
   if (error) throw new Error(error.message);
 }
 
-async function getMerchantReviewsForMerchant(phone) {
-  const phoneKey = await resolvePhoneKey(phone);
-  const rows = await selectMany(
-    'merchant_reviews',
-    [{ method: 'eq', column: 'merchant_phone', value: phoneKey }],
-    { column: 'created_at', ascending: false },
-    100
-  );
-  return (rows || []).map((row) => ({
+async function getMerchantReviewOwnerFilter(phoneKey) {
+  if (await hasColumn('merchant_reviews', 'merchant_phone')) {
+    return { column: 'merchant_phone', value: phoneKey };
+  }
+  if (await hasColumn('merchant_reviews', 'merchant_user_id')) {
+    const appUser = await selectSingleByPhone('app_users', phoneKey);
+    if (!appUser?.id) return null;
+    return { column: 'merchant_user_id', value: appUser.id };
+  }
+  return null;
+}
+
+function formatMerchantReviewRow(row) {
+  if (!row) return null;
+  return {
     id: String(row.order_id || row.id || '').trim(),
     customerName: String(row.customer_name || row.customer_phone || '').trim(),
     stars: Number(row.stars || 0),
@@ -136,33 +142,82 @@ async function getMerchantReviewsForMerchant(phone) {
       ? new Date(row.created_at).toLocaleDateString('ar-EG')
       : '',
     reply: String(row.reply || '').trim() || null,
-  }));
+  };
+}
+
+async function getMerchantReviewsForMerchant(phone) {
+  const phoneKey = await resolvePhoneKey(phone);
+  const ownerFilter = await getMerchantReviewOwnerFilter(phoneKey);
+  if (!ownerFilter) return [];
+
+  const rows = await selectMany(
+    'merchant_reviews',
+    [{ method: 'eq', column: ownerFilter.column, value: ownerFilter.value }],
+    { column: 'created_at', ascending: false },
+    100
+  );
+  return (rows || []).map(formatMerchantReviewRow).filter(Boolean);
 }
 
 async function replyMerchantReview(phone, reviewId, reply) {
   const phoneKey = await resolvePhoneKey(phone);
+  const ownerFilter = await getMerchantReviewOwnerFilter(phoneKey);
+  if (!ownerFilter) throw new Error('Reviews schema is not configured.');
+
   const id = String(reviewId || '').trim();
   if (!id) throw new Error('Review id is required.');
   const supabase = assertSupabaseAdmin();
   const { data, error } = await supabase
     .from('merchant_reviews')
     .update({ reply: String(reply || '').trim(), updated_at: nowIso() })
-    .eq('merchant_phone', phoneKey)
+    .eq(ownerFilter.column, ownerFilter.value)
     .or(`order_id.eq.${id},id.eq.${id}`)
     .select()
     .maybeSingle();
   if (error) throw new Error(error.message);
   if (!data) throw new Error('Review not found.');
-  return {
-    id: String(data.order_id || data.id || '').trim(),
-    customerName: String(data.customer_name || data.customer_phone || '').trim(),
-    stars: Number(data.stars || 0),
-    comment: String(data.comment || '').trim(),
-    date: data.created_at
-      ? new Date(data.created_at).toLocaleDateString('ar-EG')
-      : '',
-    reply: String(data.reply || '').trim() || null,
+  return formatMerchantReviewRow(data);
+}
+
+async function buildMerchantReviewUpsertPayload({
+  merchantPhone,
+  customerPhone,
+  customerName,
+  orderId,
+  stars,
+  comment,
+}) {
+  const mPhone = await resolvePhoneKey(merchantPhone);
+  const cPhone = await resolvePhoneKey(customerPhone);
+  const payload = {
+    order_id: orderId,
+    stars: Number(stars),
+    comment: comment || '',
+    updated_at: nowIso(),
   };
+
+  if (await hasColumn('merchant_reviews', 'merchant_phone')) {
+    payload.merchant_phone = mPhone;
+  } else if (await hasColumn('merchant_reviews', 'merchant_user_id')) {
+    const merchantUser = await selectSingleByPhone('app_users', mPhone);
+    if (!merchantUser?.id) throw new Error('Merchant user not found.');
+    payload.merchant_user_id = merchantUser.id;
+  } else {
+    throw new Error('merchant_reviews merchant column is missing.');
+  }
+
+  if (await hasColumn('merchant_reviews', 'customer_phone')) {
+    payload.customer_phone = cPhone;
+  } else if (await hasColumn('merchant_reviews', 'customer_user_id')) {
+    const customerUser = await selectSingleByPhone('app_users', cPhone);
+    if (customerUser?.id) payload.customer_user_id = customerUser.id;
+  }
+
+  if (await hasColumn('merchant_reviews', 'customer_name')) {
+    payload.customer_name = customerName;
+  }
+
+  return { payload, merchantPhone: mPhone };
 }
 
 module.exports = {
@@ -171,6 +226,8 @@ module.exports = {
   deleteMerchantOffer,
   getMerchantReviewsForMerchant,
   replyMerchantReview,
+  buildMerchantReviewUpsertPayload,
+  getMerchantReviewOwnerFilter,
   rowToOfferMap,
   buildOfferRow,
 };

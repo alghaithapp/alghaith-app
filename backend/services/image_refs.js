@@ -111,6 +111,18 @@ function serializeProductRowForClient(row) {
       .filter((entry) => isRemoteImageUrl(entry));
   }
 
+  if (out.price !== undefined && out.price !== null) {
+    out.price = Number.parseInt(String(out.price).replace(/,/g, ''), 10) || 0;
+  }
+  if (out.discounted_price !== undefined && out.discounted_price !== null) {
+    out.discounted_price =
+      Number.parseInt(String(out.discounted_price).replace(/,/g, ''), 10) || 0;
+  }
+  if (out.original_price !== undefined && out.original_price !== null) {
+    out.original_price =
+      Number.parseInt(String(out.original_price).replace(/,/g, ''), 10) || 0;
+  }
+
   return out;
 }
 

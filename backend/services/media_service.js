@@ -2,7 +2,8 @@ const { v4: uuidv4 } = require('uuid');
 const { generateImageVariants } = require('./image_variants');
 const { uploadBufferToR2, isR2Configured } = require('./r2_storage');
 const { upsertMediaVariant, listMediaAssets, groupAssetsByRole } = require('../supabase_repo/media_assets');
-const { resolvePhoneKey, ensureAppUser } = require('../supabase_repo/users');
+const { resolvePhoneKey } = require('../supabase_repo/common');
+const { ensureAppUser } = require('../supabase_repo/users');
 
 function decodeBase64Image(input) {
   const raw = String(input || '').trim();

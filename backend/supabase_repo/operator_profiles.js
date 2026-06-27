@@ -5,8 +5,9 @@ const {
   nowIso,
   normalizeObject,
   assertSupabaseAdmin,
+  hasColumn,
 } = require('./common');
-const { ensureAppUser } = require('./users');
+const { ensureAppUser, getAppUserId } = require('./users');
 const { stripBase64Deep } = require('../services/image_refs');
 
 async function readLegacyAppStateProfile(phoneKey, key) {
@@ -68,6 +69,15 @@ function rowToCourierProfileMap(row) {
   });
 }
 
+async function attachUserIdIfRequired(table, phoneKey, row) {
+  if (!(await hasColumn(table, 'user_id'))) return row;
+  const userId = await getAppUserId(phoneKey);
+  if (!userId) {
+    throw new Error('تعذر ربط الملف بحساب المستخدم. تأكد من تسجيل الحساب أولاً.');
+  }
+  return { ...row, user_id: userId };
+}
+
 function buildDriverRow(phoneKey, merged) {
   const approvalStatus = resolveApprovalStatus(merged);
   const isApproved = approvalStatus === 'approved';
@@ -123,7 +133,11 @@ async function saveDriverProfile(phone, patch = {}) {
   await ensureAppUser(phoneKey);
   const existing = (await getDriverProfile(phoneKey)) || {};
   const merged = stripBase64Deep({ ...existing, ...normalizeObject(patch) });
-  const row = buildDriverRow(phoneKey, merged);
+  const row = await attachUserIdIfRequired(
+    'driver_profiles',
+    phoneKey,
+    buildDriverRow(phoneKey, merged),
+  );
   await saveRow('driver_profiles', row, 'phone');
   return rowToDriverProfileMap(row);
 }
@@ -149,7 +163,11 @@ async function saveCourierProfile(phone, patch = {}) {
   await ensureAppUser(phoneKey);
   const existing = (await getCourierProfile(phoneKey)) || {};
   const merged = stripBase64Deep({ ...existing, ...normalizeObject(patch) });
-  const row = buildCourierRow(phoneKey, merged);
+  const row = await attachUserIdIfRequired(
+    'courier_profiles',
+    phoneKey,
+    buildCourierRow(phoneKey, merged),
+  );
   await saveRow('courier_profiles', row, 'phone');
   return rowToCourierProfileMap(row);
 }

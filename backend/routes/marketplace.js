@@ -12,12 +12,17 @@ const {
 const {
   parseQueryValue,
 } = require('./_middleware');
+const { remember, DEFAULT_TTLS, setCacheHeader } = require('../lib/response_cache');
 
 router.get('/shopping-stores', async (req, res) => {
   try {
     const subCategoryId = String(parseQueryValue(req.query.subCategoryId) || '').trim();
-    const rows = await listShoppingStores(subCategoryId);
-    return res.json(rows);
+    const cacheKey = `marketplace:shopping-stores:${subCategoryId}`;
+    const cached = await remember(cacheKey, DEFAULT_TTLS.storeLists, () =>
+      listShoppingStores(subCategoryId)
+    );
+    setCacheHeader(res, cached.cacheHit, cached.cacheSource);
+    return res.json(cached.value);
   } catch (error) {
     console.error('list shopping-stores error:', error);
     return res.status(500).json({ message: error?.message || 'Failed to load shopping stores.' });
@@ -27,8 +32,12 @@ router.get('/shopping-stores', async (req, res) => {
 router.get('/restaurant-stores', async (req, res) => {
   try {
     const subCategoryId = String(parseQueryValue(req.query.subCategoryId) || '').trim();
-    const rows = await listRestaurantStores(subCategoryId);
-    return res.json(rows);
+    const cacheKey = `marketplace:restaurant-stores:${subCategoryId}`;
+    const cached = await remember(cacheKey, DEFAULT_TTLS.storeLists, () =>
+      listRestaurantStores(subCategoryId)
+    );
+    setCacheHeader(res, cached.cacheHit, cached.cacheSource);
+    return res.json(cached.value);
   } catch (error) {
     console.error('list restaurant-stores error:', error);
     return res.status(500).json({ message: error?.message || 'Failed to load restaurant stores.' });
@@ -63,8 +72,12 @@ router.get('/catalog-products', async (req, res) => {
   try {
     const category = String(parseQueryValue(req.query.category) || '').trim();
     const subCategoryId = String(parseQueryValue(req.query.subCategoryId) || '').trim();
-    const rows = await listCatalogProducts(category, subCategoryId);
-    return res.json(rows);
+    const cacheKey = `marketplace:catalog-products:${category}:${subCategoryId}`;
+    const cached = await remember(cacheKey, DEFAULT_TTLS.catalog, () =>
+      listCatalogProducts(category, subCategoryId)
+    );
+    setCacheHeader(res, cached.cacheHit, cached.cacheSource);
+    return res.json(cached.value);
   } catch (error) {
     console.error('list catalog error:', error);
     return res.status(500).json({ message: error?.message || 'Failed to load catalog.' });
@@ -73,8 +86,13 @@ router.get('/catalog-products', async (req, res) => {
 
 router.get('/offer-catalog-products', async (req, res) => {
   try {
-    const rows = await listOfferCatalogProducts();
-    return res.json(rows);
+    const cached = await remember(
+      'marketplace:offer-catalog-products',
+      DEFAULT_TTLS.catalog,
+      listOfferCatalogProducts
+    );
+    setCacheHeader(res, cached.cacheHit, cached.cacheSource);
+    return res.json(cached.value);
   } catch (error) {
     console.error('list offers-catalog error:', error);
     return res.status(500).json({ message: error?.message || 'Failed to load offers catalog.' });
@@ -83,8 +101,13 @@ router.get('/offer-catalog-products', async (req, res) => {
 
 router.get('/marketplace-stats', async (req, res) => {
   try {
-    const rows = await getMarketplaceStats();
-    return res.json(rows);
+    const cached = await remember(
+      'marketplace:stats',
+      DEFAULT_TTLS.marketplaceStats,
+      getMarketplaceStats
+    );
+    setCacheHeader(res, cached.cacheHit, cached.cacheSource);
+    return res.json(cached.value);
   } catch (error) {
     console.error('marketplace-stats error:', error);
     return res.status(500).json({ message: error?.message || 'Failed to load marketplace stats.' });

@@ -1186,7 +1186,13 @@ function mapAdminAccountSummary(user, state, merchantProfile, operatorProfiles =
   );
   const courierProfile = resolveCourierProfile(state, operatorProfiles);
   const driverProfile = resolveDriverProfile(state, operatorProfiles);
-  const approval = resolveAccountApproval(state, merchantProfile, kind);
+  const approval = resolveAccountApproval(state, merchantProfile, kind, operatorProfiles);
+  const hasDriverCredential = Boolean(
+    driverProfile &&
+      (isDriverProfileComplete(driverProfile) ||
+        String(driverProfile.name ?? '').trim() ||
+        driverProfile.adminPreRegistered === true)
+  );
 
   return {
     phone,
@@ -1209,15 +1215,19 @@ function mapAdminAccountSummary(user, state, merchantProfile, operatorProfiles =
     approvalStatus: approval.approvalStatus,
     isApproved: approval.isApproved,
     rejectionMessageAr: approval.rejectionMessageAr,
+    driverIsApproved: isDriverApproved(driverProfile),
+    driverApprovalStatus: driverApprovalStatus(driverProfile),
     updatedAt: user?.updated_at ?? merchantProfile?.updated_at ?? null,
     createdAt: user?.created_at ?? merchantProfile?.created_at ?? null,
     hasMerchantProfile: Boolean(merchantProfile),
     hasCourierProfile: isCourierProfileComplete(courierProfile),
     hasDriverProfile: isDriverProfileComplete(driverProfile),
+    hasDriverCredential,
+    driverProfileComplete: isDriverProfileComplete(driverProfile),
   };
 }
 
-function resolveAccountApproval(state, merchantProfile, kind) {
+function resolveAccountApproval(state, merchantProfile, kind, operatorProfiles = {}) {
   if (kind === 'customer' || kind === 'admin') {
     return {
       needsApproval: false,
@@ -1236,7 +1246,7 @@ function resolveAccountApproval(state, merchantProfile, kind) {
     };
   }
   if (kind === 'courier') {
-    const profile = readCourierProfileFromState(state);
+    const profile = resolveCourierProfile(state, operatorProfiles);
     return {
       needsApproval: true,
       approvalStatus: courierApprovalStatus(profile),
@@ -1245,7 +1255,7 @@ function resolveAccountApproval(state, merchantProfile, kind) {
     };
   }
   if (kind === 'driver') {
-    const profile = readDriverProfileFromState(state);
+    const profile = resolveDriverProfile(state, operatorProfiles);
     return {
       needsApproval: true,
       approvalStatus: driverApprovalStatus(profile),
@@ -1644,16 +1654,8 @@ async function preRegisterMerchantAccount(adminPhone, payload = {}) {
       : serviceIds[0];
 
   const existingUser = await getAppUser(phoneKey);
-  if (existingUser) {
-    const accountType = String(existingUser.account_type ?? '').trim();
-    if (accountType === 'delivery' || accountType === 'driver') {
-      throw new Error(
-        'هذا الرقم مرتبط بحساب مندوب أو سائق ولا يمكن تحويله لتاجر.'
-      );
-    }
-    if (String(existingUser.role ?? '').trim() === 'admin') {
-      throw new Error('لا يمكن تسجيل رقم المشرف كتاجر.');
-    }
+  if (existingUser && String(existingUser.role ?? '').trim() === 'admin') {
+    throw new Error('لا يمكن تسجيل رقم المشرف كتاجر.');
   }
 
   const placeholderStoreName =
@@ -1671,11 +1673,23 @@ async function preRegisterMerchantAccount(adminPhone, payload = {}) {
     }
   }
 
-  await saveAppUser(phoneKey, {
-    role: 'merchant',
-    account_type: 'marketplace',
-    full_name: fullName || undefined,
-  });
+  if (!existingUser) {
+    await saveAppUser(phoneKey, {
+      role: 'merchant',
+      account_type: 'marketplace',
+      full_name: fullName || undefined,
+    });
+  } else {
+    const patch = {};
+    const existingName = String(existingUser.full_name ?? '').trim();
+    if (fullName && !existingName) patch.full_name = fullName;
+    if (!String(existingUser.account_type ?? '').trim()) {
+      patch.account_type = 'marketplace';
+    }
+    if (Object.keys(patch).length > 0) {
+      await saveAppUser(phoneKey, patch);
+    }
+  }
 
   await saveMerchantProfile(phoneKey, {
     store_name: placeholderStoreName,
@@ -1702,14 +1716,17 @@ async function preRegisterMerchantAccount(adminPhone, payload = {}) {
     store_name: placeholderStoreName,
   };
 
+  const merchantState = (await getUserState(phoneKey)) || {};
   await saveUserState(phoneKey, {
-    userRole: 'merchant',
-    user_role: 'merchant',
+    ...merchantState,
+    userRole: merchantState.userRole || merchantState.user_role || 'merchant',
+    user_role: merchantState.user_role || merchantState.userRole || 'merchant',
     merchantProfileComplete: false,
     merchantStore: merchantStoreStub,
     adminPreRegisteredMerchant: true,
     adminPreRegisteredAt: nowIso(),
     adminPreRegisteredBy: adminPhone,
+    multiRoleAccount: true,
   });
 
   const refreshed = await getMerchantProfile(phoneKey);
@@ -1725,6 +1742,84 @@ async function preRegisterMerchantAccount(adminPhone, payload = {}) {
     approvalStatus: 'pending',
     merchantProfileComplete: false,
     storeName: String(refreshed?.store_name ?? '').trim(),
+  };
+}
+
+async function preRegisterDriverAccount(adminPhone, payload = {}) {
+  await assertAdminAccess(adminPhone);
+
+  const rawPhone = String(payload.driverPhone ?? payload.phone ?? '').trim();
+  if (!rawPhone) {
+    throw new Error('رقم الهاتف مطلوب.');
+  }
+
+  const fullName = String(payload.fullName ?? payload.full_name ?? '').trim();
+  if (!fullName) {
+    throw new Error('اسم السائق مطلوب.');
+  }
+
+  const note = String(payload.note ?? payload.notes ?? '').trim();
+  const phoneKey = await resolvePhoneKey(rawPhone);
+
+  const existingUser = await getAppUser(phoneKey);
+  if (existingUser && String(existingUser.role ?? '').trim() === 'admin') {
+    throw new Error('لا يمكن تسجيل رقم المشرف كسائق.');
+  }
+
+  const existingState = (await getUserState(phoneKey)) || {};
+  const existingDriver = await getDriverProfile(phoneKey);
+  if (
+    existingDriver &&
+    isDriverProfileComplete(existingDriver) &&
+    !existingState.adminPreRegisteredDriver
+  ) {
+    throw new Error('يوجد ملف سائق مكتمل لهذا الرقم بالفعل.');
+  }
+
+  if (!existingUser) {
+    await saveAppUser(phoneKey, {
+      role: 'customer',
+      account_type: 'marketplace',
+      full_name: fullName,
+    });
+  } else {
+    const existingName = String(existingUser.full_name ?? '').trim();
+    if (!existingName && fullName) {
+      await saveAppUser(phoneKey, { full_name: fullName });
+    }
+  }
+
+  const savedProfile = await saveDriverProfile(phoneKey, {
+    name: fullName,
+    phone: phoneKey,
+    type: 'taxi',
+    services: { taxi: true, delivery: false },
+    isApproved: true,
+    approvalStatus: 'approved',
+    available: false,
+    adminPreRegistered: true,
+    adminNote: note || undefined,
+  });
+
+  await saveUserState(phoneKey, {
+    ...existingState,
+    driverProfile: savedProfile,
+    driverProfileComplete: false,
+    adminPreRegisteredDriver: true,
+    adminPreRegisteredAt: nowIso(),
+    adminPreRegisteredBy: adminPhone,
+    multiRoleAccount: true,
+  });
+
+  const user = await getAppUser(phoneKey);
+
+  return {
+    success: true,
+    phone: phoneKey,
+    fullName: String(user?.full_name ?? fullName).trim(),
+    isApproved: true,
+    approvalStatus: 'approved',
+    driverProfileComplete: false,
   };
 }
 
@@ -1992,6 +2087,7 @@ module.exports = {
   isPlatformAdminPhone,
   ensurePlatformAdminAccess,
   preRegisterMerchantAccount,
+  preRegisterDriverAccount,
   getHomeCategoriesConfig,
   saveAdminHomeCategoriesConfig,
   getAppUpdatePolicy,

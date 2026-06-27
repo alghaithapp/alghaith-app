@@ -3,7 +3,8 @@
  * Run once after applying supabase/20260626_driver_courier_profiles.sql
  */
 const { assertSupabaseAdmin } = require('../supabase_repo/common');
-const { resolvePhoneKey, ensureAppUser } = require('../supabase_repo/users');
+const { resolvePhoneKey } = require('../supabase_repo/common');
+const { ensureAppUser } = require('../supabase_repo/users');
 const {
   saveMerchantProfile,
   merchantProfilePayloadFromAppState,

@@ -1,0 +1,22 @@
+# Smaller Railway CLI uploads — API only needs backend/ (service root).
+android/
+ios/
+lib/
+test/
+web/
+website/
+src/
+build/
+.dart_tool/
+.kotlin/
+.codemagic/
+.supabase/
+docs/
+scripts/
+.refact/
+*.apk
+*.aab
+*.ipa
+*.keystore
+*.iml
+.git/

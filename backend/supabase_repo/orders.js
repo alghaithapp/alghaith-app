@@ -22,6 +22,10 @@ const {
   isMerchantFrozen,
   isMerchantApproved,
 } = require('./merchants');
+const {
+  buildMerchantReviewUpsertPayload,
+  getMerchantReviewOwnerFilter,
+} = require('./merchant_offers');
 
 async function listAllCustomerOrders() {
   return selectMany('customer_orders', [], { column: 'updated_at', ascending: false });
@@ -539,39 +543,41 @@ async function saveMerchantReview({
   comment,
 }) {
   const supabase = assertSupabaseAdmin();
-  const mPhone = await resolvePhoneKey(merchantPhone);
-  const cPhone = await resolvePhoneKey(customerPhone);
 
   try {
+    const { payload, merchantPhone: mPhone } = await buildMerchantReviewUpsertPayload({
+      merchantPhone,
+      customerPhone,
+      customerName,
+      orderId,
+      stars,
+      comment,
+    });
+
     const { data: review, error } = await supabase
       .from('merchant_reviews')
-      .upsert({
-        order_id: orderId,
-        merchant_phone: mPhone,
-        customer_phone: cPhone,
-        customer_name: customerName,
-        stars: Number(stars),
-        comment: comment || '',
-        updated_at: nowIso(),
-      }, { onConflict: 'order_id' })
+      .upsert(payload, { onConflict: 'order_id' })
       .select()
       .maybeSingle();
 
     if (error) throw error;
 
-    const { data: allReviews, error: fetchError } = await supabase
-      .from('merchant_reviews')
-      .select('stars')
-      .eq('merchant_phone', mPhone);
+    const ownerFilter = await getMerchantReviewOwnerFilter(mPhone);
+    if (ownerFilter) {
+      const { data: allReviews, error: fetchError } = await supabase
+        .from('merchant_reviews')
+        .select('stars')
+        .eq(ownerFilter.column, ownerFilter.value);
 
-    if (!fetchError && allReviews.length > 0) {
-      const totalStars = allReviews.reduce((sum, r) => sum + (Number(r.stars) || 0), 0);
-      const avgRating = (totalStars / allReviews.length).toFixed(1);
+      if (!fetchError && allReviews.length > 0) {
+        const totalStars = allReviews.reduce((sum, r) => sum + (Number(r.stars) || 0), 0);
+        const avgRating = (totalStars / allReviews.length).toFixed(1);
 
-      await supabase
-        .from('merchant_profiles')
-        .update({ rating: parseFloat(avgRating) })
-        .eq('phone', mPhone);
+        await supabase
+          .from('merchant_profiles')
+          .update({ rating: parseFloat(avgRating) })
+          .eq('phone', mPhone);
+      }
     }
 
     return review;

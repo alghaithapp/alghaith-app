@@ -177,11 +177,6 @@ async function assertAdminAccess(phone) {
     return normalized;
   }
 
-  const state = await getUserState(normalized);
-  if (state?.adminRole || state?.admin_role) {
-    return normalized;
-  }
-
   const supabase = assertSupabaseAdmin();
   const { data: adminRow } = await supabase
     .from('admin_roles')
@@ -189,14 +184,6 @@ async function assertAdminAccess(phone) {
     .eq('phone', normalized)
     .maybeSingle();
   if (adminRow?.role) {
-    return normalized;
-  }
-
-  if (state?.adminAccess === true) {
-    return normalized;
-  }
-  const role = String(state?.userRole ?? state?.user_role ?? '').trim();
-  if (role === 'admin') {
     return normalized;
   }
 

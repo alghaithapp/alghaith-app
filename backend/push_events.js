@@ -5,7 +5,9 @@ const {
   getActiveDriverPhones,
   recordPushInboxDelivered,
 } = require('./supabase_repo');
+const { resolvePhoneKey } = require('./supabase_repo/common');
 const { enqueuePushNotification } = require('./services/notification_queue');
+const { sendPushToTokensDirect } = require('./services/notification_delivery');
 
 function displayOrderNumber(meta) {
   const raw = String(meta?.payload?.orderNumber ?? meta?.row?.order_number ?? '').trim();
@@ -88,28 +90,50 @@ function shouldTrackPushInbox(payload, options = {}) {
 }
 
 async function sendPushToPhone(phone, payload, options = {}) {
-  const normalizedPhone = String(phone || '').trim();
-  if (!normalizedPhone) return;
+  let phoneKey = String(phone || '').trim();
+  if (!phoneKey) return { sent: 0, failed: 0, invalidTokens: [], reason: 'no_phone' };
 
-  const rows = await getDeviceTokensForPhone(normalizedPhone);
+  try {
+    phoneKey = await resolvePhoneKey(phoneKey);
+  } catch (_) {
+    // keep trimmed input when phone is not in DB yet
+  }
+
+  const rows = await getDeviceTokensForPhone(phoneKey);
   const tokens = rows.map((row) => row.token).filter(Boolean);
   if (!tokens.length) {
     const eventKey = String(payload?.data?.eventKey ?? '').trim();
     console.warn(
-      `push: no device tokens for phone=${normalizedPhone}${eventKey ? ` event=${eventKey}` : ''}`
+      `push: no device tokens for phone=${phoneKey}${eventKey ? ` event=${eventKey}` : ''}`
     );
-    return;
+    return { sent: 0, failed: 0, invalidTokens: [], reason: 'no_tokens' };
   }
 
   const showSystemBanner =
     options.showSystemBanner === true ||
-    String(payload?.data?.category ?? '').trim() === 'account';
+    String(payload?.data?.category ?? '').trim() === 'account' ||
+    String(payload?.data?.category ?? '').trim() === 'call';
+
+  if (options.immediate === true) {
+    const result = await sendPushToTokensDirect(tokens, {
+      title: payload?.title,
+      body: payload?.body,
+      data: payload?.data || {},
+      showSystemBanner,
+      dataOnly: options.dataOnly === true,
+    });
+    if (result.invalidTokens?.length) {
+      await removeDeviceTokens(result.invalidTokens);
+    }
+    return { ...result, phoneKey, immediate: true };
+  }
+
   const result = await enqueuePushNotification({
     tokens,
     title: payload?.title,
     body: payload?.body,
     data: payload?.data || {},
-    targetPhone: normalizedPhone,
+    targetPhone: phoneKey,
     audienceRole: String(payload?.data?.audience ?? 'customer').trim(),
     eventKey: String(payload?.data?.eventKey ?? '').trim(),
     showSystemBanner,
@@ -121,11 +145,13 @@ async function sendPushToPhone(phone, payload, options = {}) {
 
   if (result?.sent > 0 && shouldTrackPushInbox(payload, options)) {
     try {
-      await recordPushInboxDelivered(normalizedPhone);
+      await recordPushInboxDelivered(phoneKey);
     } catch (error) {
       console.error('push inbox track error:', error?.message || error);
     }
   }
+
+  return { ...result, phoneKey };
 }
 
 async function notifyPhones(phones, payload) {
@@ -672,7 +698,18 @@ async function onMerchantFrozen(merchantPhone, isFrozen) {
 }
 
 async function notifyChatMessage(receiverPhone, customerMessage) {
-  const message = String(customerMessage?.content || customerMessage?.text || '').trim().substring(0, 100);
+  const messageType = String(
+    customerMessage?.messageType || customerMessage?.message_type || 'text',
+  ).trim();
+  const rawContent = String(customerMessage?.content || customerMessage?.text || '').trim();
+  let body = rawContent.substring(0, 100);
+  if (messageType === 'sticker') {
+    body = 'أرسل ملصقاً';
+  } else if (messageType === 'call') {
+    body = 'مكالمة صوتية';
+  } else if (messageType === 'image') {
+    body = 'أرسل صورة';
+  }
   const customerName = String(customerMessage?.senderName || customerMessage?.customerName || customerMessage?.sender_name || 'مستخدم').trim();
   const threadType = String(customerMessage?.threadType || customerMessage?.thread_type || 'order').trim();
   const threadId = String(customerMessage?.threadId || customerMessage?.thread_id || customerMessage?.orderId || '').trim();
@@ -681,7 +718,7 @@ async function notifyChatMessage(receiverPhone, customerMessage) {
     receiverPhone,
     {
       title: `رسالة جديدة من ${customerName}`,
-      body: message || 'وصلتك رسالة جديدة داخل التطبيق',
+      body: body || 'وصلتك رسالة جديدة داخل التطبيق',
       data: {
         eventKey: 'chat:new',
         threadType,
@@ -704,27 +741,52 @@ async function notifyIncomingCall(receiverPhone, callInfo) {
   const threadId = String(callInfo?.threadId || '').trim();
   const channelName = String(callInfo?.channelName || '').trim();
   const callerPhone = String(callInfo?.callerPhone || '').trim();
+  const callLogId = String(callInfo?.callLogId || '').trim();
 
-  // data-only: يضمن تشغيل background handler وإظهار إشعار المكالمة
-  // بقناة مخصصة + fullScreenIntent بدلاً من إشعار FCM العام.
-  await sendPushToPhone(
-    receiverPhone,
-    {
-      title: `مكالمة واردة من ${callerName}`,
-      body: 'اضغط للرد على المكالمة داخل التطبيق',
-      data: {
-        eventKey: 'call:incoming',
-        threadType,
-        threadId,
-        channelName,
-        callerName,
-        callerPhone,
-        orderId: threadType === 'order' ? threadId : '',
-        category: 'call',
-      },
+  const payload = {
+    title: `مكالمة واردة من ${callerName}`,
+    body: 'اضغط للرد على المكالمة داخل التطبيق',
+    data: {
+      eventKey: 'call:incoming',
+      threadType,
+      threadId,
+      channelName,
+      callerName,
+      callerPhone,
+      callLogId,
+      orderId: threadType === 'order' ? threadId : '',
+      category: 'call',
     },
-    { showSystemBanner: false }
-  );
+  };
+
+  // رسالة بيانات فقط — تصل للتطبيق المفتوح عبر onMessage دون الاعتماد على شريط النظام.
+  let result = await sendPushToPhone(receiverPhone, payload, {
+    immediate: true,
+    skipInboxTracking: true,
+    dataOnly: true,
+  });
+
+  if ((result?.sent || 0) === 0) {
+    result = await sendPushToPhone(receiverPhone, payload, {
+      immediate: true,
+      skipInboxTracking: true,
+    });
+  } else {
+    await sendPushToPhone(receiverPhone, payload, {
+      immediate: true,
+      skipInboxTracking: true,
+    }).catch(() => {});
+  }
+
+  if ((result?.sent || 0) === 0 && result?.reason !== 'no_tokens' && result?.reason !== 'no_phone') {
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    result = await sendPushToPhone(receiverPhone, payload, {
+      immediate: true,
+      skipInboxTracking: true,
+    });
+  }
+
+  return result;
 }
 
 module.exports = {

@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+const { trimRouteNearDestination } = require('../lib/route_destination_trim');
 
 // ── Config ──────────────────────────────────────────────────────────────
 const mapboxAccessToken = String(process.env.MAPBOX_ACCESS_TOKEN || '').trim();
@@ -80,6 +81,7 @@ async function computeDrivingRoute(origin, destination) {
     language: 'ar',
     access_token: mapboxAccessToken,
     continue_straight: 'false',
+    approaches: 'unrestricted;curb',
   });
   const response = await fetch(
     `https://api.mapbox.com/directions/v5/mapbox/driving/${coordinates}?${params.toString()}`
@@ -105,10 +107,18 @@ async function computeDrivingRoute(origin, destination) {
     longitude: Number(entry[0]),
   }));
 
+  const rawDistance = Number(route.distance) || 0;
+  const rawDuration = Math.round(Number(route.duration) || 0);
+  const trimmed = trimRouteNearDestination(points, destination, {
+    distanceMeters: rawDistance,
+    durationSeconds: rawDuration,
+  });
+
   return {
-    points,
-    distanceMeters: Number(route.distance) || 0,
-    durationSeconds: Math.round(Number(route.duration) || 0),
+    points: trimmed.points,
+    distanceMeters: trimmed.distanceMeters,
+    durationSeconds: trimmed.durationSeconds ?? rawDuration,
+    trimmedNearDestination: trimmed.trimmed,
   };
 }
 
@@ -241,12 +251,18 @@ router.post('/route-distance', async (req, res) => {
     const route =
       routeProfile === 'delivery'
         ? await computeDeliveryDistanceMeters(origin, destination)
-        : await computeRoadDistanceMeters(origin, destination, routeProfile);
+        : routeProfile === 'driving'
+          ? await computeDrivingRoute(origin, destination)
+          : await computeRoadDistanceMeters(origin, destination, routeProfile);
     return res.json({
       distanceMeters: route.distanceMeters,
       distanceKm: route.distanceMeters / 1000,
-      duration: route.duration,
-      routeProfile: route.profile,
+      duration:
+        routeProfile === 'driving'
+          ? String(route.durationSeconds ?? '')
+          : route.duration,
+      routeProfile: routeProfile === 'driving' ? 'driving' : route.profile,
+      trimmedNearDestination: Boolean(route.trimmedNearDestination),
     });
   } catch (error) {
     console.error('route-distance error:', error);
@@ -300,6 +316,7 @@ router.post('/driving-route', async (req, res) => {
       distanceMeters: route.distanceMeters,
       distanceKm: route.distanceMeters / 1000,
       durationSeconds: route.durationSeconds,
+      trimmedNearDestination: Boolean(route.trimmedNearDestination),
     });
   } catch (error) {
     console.error('driving-route error:', error);

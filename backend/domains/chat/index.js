@@ -5,4 +5,7 @@ module.exports = {
   repository: {
     chat: require('../../supabase_repo/chat'),
   },
+  startWorkers() {
+    require('../../services/chat_scheduler').startChatScheduler();
+  },
 };
