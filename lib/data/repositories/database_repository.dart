@@ -570,7 +570,7 @@ class DatabaseRepository {
     );
   }
 
-  Future<void> replyMerchantReview(
+  Future<Map<String, dynamic>> replyMerchantReview(
     String phone,
     String reviewId,
     String reply,

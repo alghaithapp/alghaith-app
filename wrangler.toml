@@ -6,6 +6,10 @@ compatibility_date = "2026-05-31"
 binding = "AUTH_KV"
 id = "66faee95770a43829610c7c0e40d281f"
 
+[vars]
+RAILWAY_API_ORIGIN = "https://alghaith-app-production.up.railway.app"
+EDGE_CACHE_TTL_SECONDS = "120"
+
 [[r2_buckets]]
 binding = "IMAGES_BUCKET"
 bucket_name = "alghaith-images"

@@ -30,6 +30,7 @@ import 'utils/driver_profile_fields.dart';
 import 'services/supabase_service.dart';
 import 'utils/call_navigation.dart';
 import 'modules/chat/utils/chat_navigation.dart';
+import 'services/incoming_call_coordinator.dart';
 import 'widgets/splash_screen.dart';
 import 'widgets/main_shell.dart';
 import 'modules/notifications/widgets/push_notification_lifecycle_scope.dart';
@@ -229,10 +230,7 @@ class _AlGhaithAppState extends State<AlGhaithApp> {
   }
 
   void _handleIncomingCallPush(Map<String, dynamic> data) {
-    final nav = _navigatorKey.currentState;
-    if (nav == null || !nav.mounted) return;
-    final context = nav.context;
-    unawaited(CallNavigation.handlePushData(context, data));
+    IncomingCallCoordinator.present(data);
   }
 
   void _handleChatPush(Map<String, dynamic> data) {
@@ -284,7 +282,7 @@ class _AlGhaithAppState extends State<AlGhaithApp> {
         }
         return const ExitConfirmScope(child: MerchantShell());
       } else if (appProvider.userRole == 'driver') {
-        if (!appProvider.hasDriverProfile) {
+        if (!appProvider.isDriverProfileComplete) {
           return const ExitConfirmScope(child: OperatorSetupScreen(role: 'driver'));
         }
         if (appProvider.isDriverApproved) {

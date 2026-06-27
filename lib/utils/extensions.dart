@@ -11,12 +11,22 @@ extension NumberFormatting on int {
 int parseProductPrice(Map<String, dynamic> row) {
   int read(dynamic value) {
     if (value is num) return value.toInt();
-    return int.tryParse(value?.toString().trim() ?? '') ?? 0;
+    final normalized = value?.toString().replaceAll(',', '').trim() ?? '';
+    if (normalized.isEmpty) return 0;
+    return int.tryParse(normalized) ?? 0;
   }
 
-  final price = read(row['price']);
-  if (price > 0) return price;
-  final discounted = read(row['discounted_price']);
-  if (discounted > 0) return discounted;
-  return read(row['original_price']);
+  for (final key in [
+    'price',
+    'discounted_price',
+    'discountedPrice',
+    'original_price',
+    'originalPrice',
+    'sale_price',
+    'salePrice',
+  ]) {
+    final parsed = read(row[key]);
+    if (parsed > 0) return parsed;
+  }
+  return 0;
 }

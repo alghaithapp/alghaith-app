@@ -439,9 +439,13 @@ class ShopProductCard extends StatelessWidget {
                       Row(
                         children: [
                           Text(
-                            '${price.toPrice()} د.ع',
-                            style: const TextStyle(
-                              color: Color(0xFFF5A01D),
+                            price > 0
+                                ? '${price.toPrice()} د.ع'
+                                : 'السعر غير متوفر',
+                            style: TextStyle(
+                              color: price > 0
+                                  ? const Color(0xFFF5A01D)
+                                  : const Color(0xFF999999),
                               fontWeight: FontWeight.w900,
                               fontFamily: 'Cairo',
                             ),

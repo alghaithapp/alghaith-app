@@ -19,6 +19,7 @@ import {
   rejectCourierApplication,
   rejectDriverApplication,
   preRegisterMerchant,
+  preRegisterDriver,
   rejectMerchantApplication,
   sendCode,
   suspendAdminAccount,
@@ -42,6 +43,7 @@ import type {
   CourierSummary,
   HomeCategoriesConfig,
   MerchantPreRegisterPayload,
+  DriverPreRegisterPayload,
   MerchantDetails,
   MerchantSummary,
 } from './admin-types';
@@ -49,6 +51,7 @@ import {
   MERCHANT_REJECTION_REASONS,
   COURIER_REJECTION_REASONS,
 } from './admin-types';
+import { driverApprovalFor } from './admin-account-utils';
 
 import LoginView from './components/LoginView';
 import Sidebar from './components/Sidebar';
@@ -472,7 +475,10 @@ export default function App() {
   const frozenMerchants = useMemo(() => merchants.filter((m) => m.isFrozen).length, [merchants]);
 
   // Driver accounts derived from main accounts list
-  const driverAccounts = useMemo(() => accounts.filter((a) => a.kind === 'driver'), [accounts]);
+  const driverAccounts = useMemo(
+    () => accounts.filter((a) => a.kind === 'driver' || a.hasDriverCredential === true),
+    [accounts],
+  );
 
   const filteredDrivers = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -483,7 +489,11 @@ export default function App() {
   }, [driverAccounts, search]);
 
   const pendingDriverQueue = useMemo(
-    () => driverAccounts.filter((d) => !d.isApproved && d.approvalStatus === 'pending'),
+    () =>
+      driverAccounts.filter((d) => {
+        const a = driverApprovalFor(d);
+        return !a.isApproved && a.approvalStatus === 'pending';
+      }),
     [driverAccounts],
   );
 
@@ -577,6 +587,25 @@ export default function App() {
       setSelectedMerchantPhone(result.phone);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'تعذر تسجيل التاجر.';
+      setActionError(message);
+      throw error;
+    }
+  }
+
+  async function handlePreRegisterDriver(payload: DriverPreRegisterPayload) {
+    if (!token) return;
+    setActionError('');
+    setSuccessMessage('');
+    try {
+      const result = await preRegisterDriver(token, payload);
+      setSuccessMessage(
+        `تم تسجيل السائق ${result.fullName || result.phone}. عند تسجيل الدخول يكمل بياناته مباشرة دون انتظار الموافقة.`,
+      );
+      await refreshCoreData(token, result.phone);
+      setView('drivers');
+      setSearch(result.phone);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'تعذر تسجيل السائق.';
       setActionError(message);
       throw error;
     }
@@ -717,7 +746,7 @@ export default function App() {
   // Toggle driver approval on/off (for DriversView activate/deactivate button)
   async function handleToggleDriverApproval(account: AdminAccountSummary) {
     if (!token) return;
-    const nextApproved = !account.isApproved;
+    const nextApproved = !driverApprovalFor(account).isApproved;
     setActiveActionKey(`approve-account:${account.phone}`);
     setActionError('');
     setSuccessMessage('');
@@ -1021,6 +1050,7 @@ export default function App() {
                       onOpenReject={(target) => openRejectConfirm(target)}
                       onSuspend={handleSuspendAccount}
                       onOpenDelete={openDeleteConfirm}
+                      onPreRegisterDriver={handlePreRegisterDriver}
                     />
                   </div>
                 </section>

@@ -106,7 +106,19 @@ class ApiClient {
 
     if (response.statusCode >= 200 && response.statusCode < 300) {
       if (response.body.isEmpty) return null;
-      return jsonDecode(response.body);
+      try {
+        return jsonDecode(response.body);
+      } catch (_) {
+        final preview = response.body.trim();
+        if (preview.length > 80) {
+          throw ApiException('استجابة غير متوقعة من الخادم.');
+        }
+        throw ApiException(
+          preview.isNotEmpty
+              ? 'استجابة غير متوقعة من الخادم: $preview'
+              : 'استجابة غير متوقعة من الخادم.',
+        );
+      }
     }
 
     var message = 'Server error (${response.statusCode})';

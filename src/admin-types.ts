@@ -75,6 +75,21 @@ export interface MerchantPreRegisterResponse {
   storeName: string;
 }
 
+export interface DriverPreRegisterPayload {
+  driverPhone: string;
+  fullName: string;
+  note?: string;
+}
+
+export interface DriverPreRegisterResponse {
+  success: boolean;
+  phone: string;
+  fullName: string;
+  isApproved: boolean;
+  approvalStatus: string;
+  driverProfileComplete: boolean;
+}
+
 export type AdminView =
   | 'dashboard'
   | 'accounts'
@@ -268,6 +283,10 @@ export interface AdminAccountSummary {
   hasMerchantProfile: boolean;
   hasCourierProfile: boolean;
   hasDriverProfile: boolean;
+  hasDriverCredential?: boolean;
+  driverProfileComplete?: boolean;
+  driverIsApproved?: boolean;
+  driverApprovalStatus?: string | null;
   documents?: {
     profileImage?: string;
     vehicleImage?: string;

@@ -33,7 +33,7 @@ class DriverAccountScreen extends StatelessWidget {
           ),
           leading: const Icon(Icons.chat_bubble_outline, color: AppColors.primary),
           title: const Text(
-            'الرسائل داخل التطبيق',
+            'المحادثات',
             style: TextStyle(
               fontFamily: 'Cairo',
               fontWeight: FontWeight.w800,

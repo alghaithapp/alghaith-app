@@ -9,7 +9,8 @@ class AppConfig {
 
   static const String databaseBackendBaseUrl = String.fromEnvironment(
     'DATABASE_BACKEND_BASE_URL',
-    defaultValue: 'https://alghaith-app-production.up.railway.app',
+    defaultValue:
+        'https://lively-wind-9d98.alghaithapp.workers.dev/railway',
   );
 
   static const String phoneAuthBaseUrl = String.fromEnvironment(

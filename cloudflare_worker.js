@@ -216,7 +216,7 @@ function buildCorsHeaders(request, env) {
 
   return {
     'Access-Control-Allow-Origin': allowOrigin,
-    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+    'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, PATCH, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type, Authorization',
   };
 }
@@ -248,6 +248,197 @@ async function parseJsonSafely(response) {
   }
 }
 
+const DEFAULT_RAILWAY_ORIGIN = 'https://alghaith-app-production.up.railway.app';
+
+const EDGE_CACHEABLE_PATHS = new Set([
+  '/db/shopping-stores',
+  '/db/restaurant-stores',
+  '/db/catalog-products',
+  '/db/offer-catalog-products',
+  '/db/marketplace-stats',
+  '/app/home-categories',
+  '/app/update-policy',
+  '/app/maintenance',
+  '/app/edge-manifest',
+  '/health',
+]);
+
+const SNAPSHOT_BY_PATH = {
+  '/app/home-categories': 'snapshots/v1/home-categories.json',
+  '/db/shopping-stores': 'snapshots/v1/shopping-stores.json',
+  '/db/restaurant-stores': 'snapshots/v1/restaurant-stores.json',
+  '/db/catalog-products': 'snapshots/v1/catalog-products.json',
+  '/db/offer-catalog-products': 'snapshots/v1/offer-catalog-products.json',
+  '/db/marketplace-stats': 'snapshots/v1/marketplace-stats.json',
+};
+
+function getRailwayOrigin(env) {
+  return String(env.RAILWAY_API_ORIGIN || DEFAULT_RAILWAY_ORIGIN).trim().replace(/\/+$/, '');
+}
+
+function getEdgeCacheTtlSeconds(env, upstreamPath) {
+  const configured = Number.parseInt(String(env.EDGE_CACHE_TTL_SECONDS || ''), 10);
+  if (Number.isFinite(configured) && configured > 0) return configured;
+  if (upstreamPath.startsWith('/app/maintenance')) return 60;
+  if (upstreamPath.startsWith('/app/')) return 300;
+  if (upstreamPath === '/health') return 30;
+  return 120;
+}
+
+function matchesDefaultSnapshotQuery(upstreamPath, searchParams) {
+  if (!SNAPSHOT_BY_PATH[upstreamPath]) return false;
+  if (upstreamPath === '/app/home-categories' || upstreamPath === '/db/offer-catalog-products') {
+    return !searchParams.toString();
+  }
+  if (upstreamPath === '/db/shopping-stores' || upstreamPath === '/db/restaurant-stores') {
+    return !String(searchParams.get('subCategoryId') || '').trim();
+  }
+  if (upstreamPath === '/db/catalog-products') {
+    const category = String(searchParams.get('category') || '').trim();
+    const subCategoryId = String(searchParams.get('subCategoryId') || '').trim();
+    return !category && !subCategoryId;
+  }
+  if (upstreamPath === '/db/marketplace-stats') {
+    return !searchParams.toString();
+  }
+  return false;
+}
+
+function mergeCorsHeaders(responseHeaders, corsHeaders, extra = {}) {
+  const headers = new Headers(responseHeaders);
+  for (const [key, value] of Object.entries(corsHeaders)) {
+    headers.set(key, value);
+  }
+  for (const [key, value] of Object.entries(extra)) {
+    headers.set(key, value);
+  }
+  return headers;
+}
+
+async function serveR2Object(env, objectKey, corsHeaders, cacheControl) {
+  if (!env.IMAGES_BUCKET) {
+    return new Response('Not Found', { status: 404, headers: corsHeaders });
+  }
+  const object = await env.IMAGES_BUCKET.get(objectKey);
+  if (!object) {
+    return new Response('Not Found', { status: 404, headers: corsHeaders });
+  }
+  const headers = mergeCorsHeaders(
+    {
+      'Content-Type': object.httpMetadata?.contentType || 'application/json; charset=utf-8',
+      'Cache-Control': cacheControl || object.httpMetadata?.cacheControl || 'public, max-age=120',
+    },
+    corsHeaders,
+    { 'X-Edge-Source': 'r2-snapshot' }
+  );
+  return new Response(object.body, { headers });
+}
+
+async function tryServeDefaultSnapshot(request, env, corsHeaders, upstreamPath, search) {
+  if (request.method !== 'GET') return null;
+  const snapshotKey = SNAPSHOT_BY_PATH[upstreamPath];
+  if (!snapshotKey) return null;
+  const params = new URLSearchParams(search.startsWith('?') ? search.slice(1) : search);
+  if (!matchesDefaultSnapshotQuery(upstreamPath, params)) return null;
+  return serveR2Object(env, snapshotKey, corsHeaders, 'public, max-age=120, s-maxage=300');
+}
+
+async function fetchRailwayUpstream(request, env, upstreamPath, search) {
+  const targetUrl = `${getRailwayOrigin(env)}${upstreamPath}${search || ''}`;
+  const headers = new Headers();
+  const passHeaders = [
+    'authorization',
+    'content-type',
+    'accept',
+    'accept-language',
+    'x-request-id',
+  ];
+  for (const name of passHeaders) {
+    const value = request.headers.get(name);
+    if (value) headers.set(name, value);
+  }
+
+  const init = {
+    method: request.method,
+    headers,
+    redirect: 'follow',
+  };
+  if (request.method !== 'GET' && request.method !== 'HEAD') {
+    init.body = request.body;
+  }
+
+  return fetch(targetUrl, init);
+}
+
+async function handleRailwayProxy(request, env, corsHeaders, upstreamPath, search) {
+  const snapshotResponse = await tryServeDefaultSnapshot(
+    request,
+    env,
+    corsHeaders,
+    upstreamPath,
+    search
+  );
+  if (snapshotResponse) return snapshotResponse;
+
+  const hasAuth = Boolean(String(request.headers.get('Authorization') || '').trim());
+  const cacheable =
+    request.method === 'GET' &&
+    !hasAuth &&
+    EDGE_CACHEABLE_PATHS.has(upstreamPath);
+
+  const cache = caches.default;
+  const cacheUrl = new URL(request.url);
+  cacheUrl.pathname = `/__edge_cache__${upstreamPath}`;
+  cacheUrl.search = search || '';
+  const cacheKey = new Request(cacheUrl.toString(), { method: 'GET' });
+
+  if (cacheable) {
+    const cached = await cache.match(cacheKey);
+    if (cached) {
+      return new Response(cached.body, {
+        status: cached.status,
+        headers: mergeCorsHeaders(cached.headers, corsHeaders, { 'X-Edge-Cache': 'HIT' }),
+      });
+    }
+  }
+
+  const upstream = await fetchRailwayUpstream(request, env, upstreamPath, search);
+  const upstreamHeaders = mergeCorsHeaders(upstream.headers, corsHeaders, {
+    'X-Edge-Cache': cacheable ? 'MISS' : 'BYPASS',
+  });
+
+  if (!cacheable || !upstream.ok) {
+    return new Response(upstream.body, {
+      status: upstream.status,
+      headers: upstreamHeaders,
+    });
+  }
+
+  const ttl = getEdgeCacheTtlSeconds(env, upstreamPath);
+  const body = await upstream.arrayBuffer();
+  const responseToCache = new Response(body, {
+    status: upstream.status,
+    headers: {
+      'Content-Type': upstream.headers.get('Content-Type') || 'application/json',
+      'Cache-Control': `public, max-age=${ttl}`,
+    },
+  });
+  await cache.put(cacheKey, responseToCache.clone());
+
+  return new Response(body, {
+    status: upstream.status,
+    headers: mergeCorsHeaders(responseToCache.headers, corsHeaders, { 'X-Edge-Cache': 'MISS' }),
+  });
+}
+
+async function handleSnapshotRequest(request, env, corsHeaders, url) {
+  const key = decodeURIComponent(url.pathname.slice(1));
+  if (!key.startsWith('snapshots/') || key.includes('..')) {
+    return new Response('Bad Request', { status: 400, headers: corsHeaders });
+  }
+  return serveR2Object(env, key, corsHeaders);
+}
+
 export default {
   async fetch(request, env) {
     const corsHeaders = buildCorsHeaders(request, env);
@@ -260,6 +451,25 @@ export default {
     const clientIp = request.headers.get('CF-Connecting-IP') || 'unknown';
 
     try {
+      if (url.pathname.startsWith('/snapshots/') && request.method === 'GET') {
+        return handleSnapshotRequest(request, env, corsHeaders, url);
+      }
+
+      if (url.pathname === '/railway' || url.pathname.startsWith('/railway/')) {
+        const upstreamPath = url.pathname === '/railway'
+          ? '/'
+          : url.pathname.slice('/railway'.length);
+        return handleRailwayProxy(request, env, corsHeaders, upstreamPath, url.search);
+      }
+
+      const railwayBackedPrefixes = ['/db/', '/app/', '/maps/', '/voice/'];
+      if (
+        url.pathname === '/health' ||
+        railwayBackedPrefixes.some((prefix) => url.pathname.startsWith(prefix))
+      ) {
+        return handleRailwayProxy(request, env, corsHeaders, url.pathname, url.search);
+      }
+
       if (url.pathname === '/auth/send-code' && request.method === 'POST') {
         const { phone, channel } = await request.json();
         const normalizedPhone = normalizePhone(phone);

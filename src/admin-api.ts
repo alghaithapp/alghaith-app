@@ -6,6 +6,8 @@ import type {
   AppUpdatePolicy,
   MaintenancePolicy,
   CourierSummary,
+  DriverPreRegisterPayload,
+  DriverPreRegisterResponse,
   HomeCategoriesConfig,
   HomeCategoryPlatformOverride,
   MerchantDetails,
@@ -269,6 +271,21 @@ export async function preRegisterMerchant(
   return request<MerchantPreRegisterResponse>(
     DATABASE_API_BASE_URL,
     '/db/admin/merchant-pre-register',
+    {
+      method: 'POST',
+      token,
+      body: JSON.stringify(payload),
+    },
+  );
+}
+
+export async function preRegisterDriver(
+  token: string,
+  payload: DriverPreRegisterPayload,
+) {
+  return request<DriverPreRegisterResponse>(
+    DATABASE_API_BASE_URL,
+    '/db/admin/driver-pre-register',
     {
       method: 'POST',
       token,

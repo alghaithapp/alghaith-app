@@ -71,6 +71,10 @@ Write-Host ""
 Write-Host "Done. Worker URL:" -ForegroundColor Green
 Write-Host "  https://lively-wind-9d98.alghaithapp.workers.dev" -ForegroundColor Cyan
 Write-Host ""
+Write-Host "Edge API proxy (cached public GETs):" -ForegroundColor Green
+Write-Host "  https://lively-wind-9d98.alghaithapp.workers.dev/railway/app/home-categories" -ForegroundColor Cyan
+Write-Host "  https://lively-wind-9d98.alghaithapp.workers.dev/snapshots/v1/home-categories.json" -ForegroundColor Cyan
+Write-Host ""
 Write-Host "Image URLs (default):" -ForegroundColor Green
 Write-Host "  https://lively-wind-9d98.alghaithapp.workers.dev/media/uploads/..." -ForegroundColor Cyan
 Write-Host ""

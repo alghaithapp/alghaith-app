@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../models/app_models.dart';
 import '../../../services/image_storage_service.dart';
+import '../../../utils/extensions.dart';
 import '../../../utils/merchant_profile_fields.dart';
 import '../../../utils/extensions.dart';
 import '../../../utils/chat_navigation.dart';
@@ -14,6 +15,25 @@ import 'shopping_store_menu_screen.dart';
 // ── Store Kind Enum ────────────────────────────────────────
 
 enum MerchantStoreKind { shopping, restaurant }
+
+List<Map<String, dynamic>> latestStoreProducts(
+  List<Map<String, dynamic>> products, {
+  int limit = 5,
+}) {
+  if (products.isEmpty || limit <= 0) return const [];
+  final sorted = List<Map<String, dynamic>>.from(products);
+  sorted.sort((a, b) => _productSortTime(b).compareTo(_productSortTime(a)));
+  if (sorted.length <= limit) return sorted;
+  return sorted.sublist(0, limit);
+}
+
+DateTime _productSortTime(Map<String, dynamic> product) {
+  for (final key in ['created_at', 'createdAt', 'updated_at', 'updatedAt']) {
+    final parsed = DateTime.tryParse(product[key]?.toString() ?? '');
+    if (parsed != null) return parsed;
+  }
+  return DateTime.fromMillisecondsSinceEpoch(0);
+}
 
 // ── Back Button ────────────────────────────────────────────
 
@@ -78,6 +98,7 @@ class ShopRestaurantCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final profile = Map<String, dynamic>.from(data['profile'] as Map);
     final products = (data['products'] as List).cast<Map<String, dynamic>>();
+    final previewProducts = latestStoreProducts(products);
     final isOpenNow = MerchantProfileFields.isAcceptingCustomerCalls(profile);
 
     final primaryOrange = const Color(0xFFF5A01D);
@@ -272,7 +293,7 @@ class ShopRestaurantCard extends StatelessWidget {
           ),
 
           // 2. Product Gallery
-          if (products.isNotEmpty) ...[
+          if (previewProducts.isNotEmpty) ...[
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
               child: Row(
@@ -291,9 +312,10 @@ class ShopRestaurantCard extends StatelessWidget {
               child: ListView.builder(
                 scrollDirection: Axis.horizontal,
                 padding: const EdgeInsets.symmetric(horizontal: 16),
-                itemCount: products.length,
+                itemCount: previewProducts.length,
                 itemBuilder: (context, idx) {
-                  final price = (products[idx]['price'] as num?)?.toInt() ?? 0;
+                  final product = previewProducts[idx];
+                  final price = parseProductPrice(product);
                   return Container(
                     width: 90,
                     margin: const EdgeInsets.only(left: 10),
@@ -308,31 +330,41 @@ class ShopRestaurantCard extends StatelessWidget {
                             borderRadius: BorderRadius.circular(15),
                             child: AppImage(
                               imageData: ImageStorageService.resolveDisplayImage(
-                                imageBase64: products[idx]['image_base64']?.toString(),
-                                image: products[idx]['image']?.toString(),
-                                imageUrl: products[idx]['image_url']?.toString(),
+                                imageBase64:
+                                    previewProducts[idx]['image_base64']?.toString(),
+                                image: previewProducts[idx]['image']?.toString(),
+                                imageUrl:
+                                    previewProducts[idx]['image_url']?.toString(),
                               ),
                               fit: BoxFit.cover,
                             ),
                           ),
                         ),
-                        Positioned(
-                          bottom: 0,
-                          left: 0,
-                          right: 0,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(vertical: 4),
-                            decoration: BoxDecoration(
-                              color: Colors.black.withValues(alpha: 0.4),
-                              borderRadius: const BorderRadius.vertical(bottom: Radius.circular(15)),
-                            ),
-                            child: Text(
-                              '${price.toPrice()} د.ع',
-                              textAlign: TextAlign.center,
-                              style: const TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold),
+                        if (price > 0)
+                          Positioned(
+                            bottom: 0,
+                            left: 0,
+                            right: 0,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(vertical: 5),
+                              decoration: BoxDecoration(
+                                color: Colors.black.withValues(alpha: 0.55),
+                                borderRadius: const BorderRadius.vertical(
+                                  bottom: Radius.circular(15),
+                                ),
+                              ),
+                              child: Text(
+                                '${price.toPrice()} د.ع',
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w800,
+                                  fontFamily: 'Cairo',
+                                ),
+                              ),
                             ),
                           ),
-                        ),
                       ],
                     ),
                   );

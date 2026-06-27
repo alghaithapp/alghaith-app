@@ -91,7 +91,9 @@ class _OperatorSetupScreenState extends State<OperatorSetupScreen> {
         text: DriverProfileFields.name(profile),
       );
       _phoneController = TextEditingController(
-        text: DriverProfileFields.phone(profile),
+        text: DriverProfileFields.phone(profile).isNotEmpty
+            ? DriverProfileFields.phone(profile)
+            : (provider.authPhone ?? '').trim(),
       );
       _homeAddressController = TextEditingController(
         text: DriverProfileFields.homeAddress(profile),

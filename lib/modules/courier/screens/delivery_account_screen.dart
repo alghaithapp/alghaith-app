@@ -206,7 +206,7 @@ class DeliveryAccountScreen extends StatelessWidget {
                   DeliveryNavigationCard(
                     icon: Icons.chat_bubble_outline_rounded,
                     iconColor: AppColors.primary,
-                    title: 'الرسائل داخل التطبيق',
+                    title: 'المحادثات',
                     subtitle: 'محادثاتك مع الزبائن والطلبات',
                     onTap: () {
                       Navigator.of(context).push(

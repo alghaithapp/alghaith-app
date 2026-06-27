@@ -69,7 +69,6 @@ Current version: **1.2.73+108** (see `pubspec.yaml`)
 
 ## Environment & secrets
 
-- Shorebird (`shorebird.yaml`) — Flutter code push
 - Codemagic (`codemagic.yaml`) — CI/CD build pipeline
 - Vercel (`website/vercel.json`, root `vercel.json`) — website + admin dashboard
 - Railway (`backend/railway.toml`) — Node.js API (`https://alghaith-app-production.up.railway.app`)

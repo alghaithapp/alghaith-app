@@ -350,7 +350,7 @@ class _SettingsListCard extends StatelessWidget {
       _SettingsItemData(
         icon: CupertinoIcons.chat_bubble_2_fill,
         color: const Color(0xFF1E88E5),
-        title: 'الرسائل داخل التطبيق',
+        title: 'المحادثات',
         onTap: () => Navigator.of(context, rootNavigator: true).push(
           CupertinoPageRoute(builder: (_) => const ChatInboxScreen()),
         ),

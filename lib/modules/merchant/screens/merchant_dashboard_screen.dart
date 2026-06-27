@@ -212,7 +212,7 @@ class MerchantDashboardScreen extends StatelessWidget {
                       const SizedBox(width: 12),
                       const Expanded(
                         child: Text(
-                          'بيع العقار يتم عبر تواصل الزبون معك داخل التطبيق — راجع «الرسائل داخل التطبيق» من المزيد.',
+                          'بيع العقار يتم عبر تواصل الزبون معك داخل التطبيق — راجع «المحادثات» من المزيد.',
                           style: TextStyle(
                             fontFamily: 'Cairo',
                             fontSize: 13,

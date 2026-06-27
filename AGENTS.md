@@ -69,7 +69,6 @@ npm run dev
 
 ## Environment & secrets
 
-- Shorebird (`shorebird.yaml`) — Flutter code push
 - Codemagic (`codemagic.yaml`) — CI/CD build pipeline
 - Vercel (`website/vercel.json`, root `vercel.json`) — website + admin dashboard (`/admin`)
 - Railway (`backend/railway.toml`) — **Node.js API only** (see below)

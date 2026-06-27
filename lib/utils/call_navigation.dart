@@ -9,6 +9,7 @@ import '../core/theme/app_colors.dart';
 import '../screens/incoming_call_screen.dart';
 import '../services/incoming_call_ringtone.dart';
 import '../services/voice_call_service.dart';
+import '../modules/chat/services/chat_thread_refresh.dart';
 import '../services/zego_voice_service.dart';
 import '../utils/guest_gate.dart';
 import '../utils/merchant_profile_fields.dart';
@@ -115,6 +116,7 @@ class CallNavigation {
     final callerName = data['callerName']?.toString().trim();
     final channelName = data['channelName']?.toString().trim();
     final callerPhone = data['callerPhone']?.toString().trim();
+    final callLogId = data['callLogId']?.toString().trim();
 
     _incomingCallVisible = true;
     bool accepted = false;
@@ -130,6 +132,7 @@ class CallNavigation {
             threadId: threadId,
             channelName: channelName,
             callerPhone: callerPhone,
+            callLogId: callLogId?.isNotEmpty == true ? callLogId : null,
           ),
           transitionsBuilder: (_, animation, __, child) {
             return FadeTransition(opacity: animation, child: child);
@@ -284,19 +287,30 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
   DateTime? _connectedAt;
   bool _logFinalized = false;
   bool _wasConnected = false;
+  bool _remoteAnswered = false;
+  bool _rejectHandled = false;
   bool _disposing = false;
   Future<void>? _startCallFuture;
+  Timer? _uiTimer;
+  Timer? _statusPollTimer;
 
   @override
   void initState() {
     super.initState();
     _startedAt = DateTime.now();
     _voice.onStateChanged = _onCallStateChanged;
+    _voice.onRemoteUserJoined = (_) => _markRemoteAnswered();
     _voice.onRemoteUserLeft = () {
       if (!mounted || _disposing) return;
       if (!_wasConnected) return;
       _endCall(popRoute: true);
     };
+    _uiTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted) setState(() {});
+    });
+    if (!widget.isIncoming) {
+      _startCallStatusPolling();
+    }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _startCallFuture = _startCall();
     });
@@ -305,7 +319,10 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
   @override
   void dispose() {
     _disposing = true;
+    _uiTimer?.cancel();
+    _statusPollTimer?.cancel();
     _voice.onStateChanged = null;
+    _voice.onRemoteUserJoined = null;
     _voice.onRemoteUserLeft = null;
     unawaited(_disposeCallSafely());
     super.dispose();
@@ -354,6 +371,7 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
           callerName: widget.callerName,
         );
         _callLogId = session.callLogId;
+        _startCallStatusPolling();
       }
 
       if (!mounted || _disposing) return;
@@ -394,6 +412,83 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
     return raw.length > 120 ? 'تعذّر بدء المكالمة. حاول مجدداً.' : raw;
   }
 
+  void _startCallStatusPolling() {
+    _statusPollTimer?.cancel();
+    _statusPollTimer = Timer.periodic(const Duration(seconds: 1), (_) async {
+      final logId = _callLogId;
+      if (logId == null || _remoteAnswered || _disposing) return;
+      try {
+        final status = await VoiceCallService.fetchCallStatus(callLogId: logId);
+        final value = status?['status']?.toString() ?? '';
+        if (value == 'connected') {
+          _markRemoteAnswered();
+        } else if (_isCalleeRejectedStatus(value)) {
+          _handleCalleeRejected(value);
+        }
+      } catch (_) {}
+    });
+  }
+
+  bool _isCalleeRejectedStatus(String status) {
+    return status == 'missed' || status == 'no_answer' || status == 'failed';
+  }
+
+  void _handleCalleeRejected(String status) {
+    if (_disposing || _remoteAnswered || _logFinalized || _rejectHandled) return;
+    _rejectHandled = true;
+    _statusPollTimer?.cancel();
+    if (!mounted) return;
+    setState(() {
+      _statusText = status == 'missed' ? 'تم رفض المكالمة' : 'لم يتم الرد';
+    });
+    unawaited(
+      Future<void>.delayed(const Duration(milliseconds: 500), () async {
+        if (!mounted || _disposing) return;
+        await _endCall(
+          popRoute: true,
+          statusOverride: status == 'missed' ? 'missed' : 'no_answer',
+        );
+      }),
+    );
+  }
+
+  void _markRemoteAnswered() {
+    if (_remoteAnswered) return;
+    _remoteAnswered = true;
+    _wasConnected = true;
+    _connectedAt ??= DateTime.now();
+    _statusPollTimer?.cancel();
+    if (!mounted || _disposing) return;
+    setState(() => _statusText = 'متصل');
+  }
+
+  String _formatClock(int totalSeconds) {
+    final safe = totalSeconds < 0 ? 0 : totalSeconds;
+    final minutes = safe ~/ 60;
+    final seconds = safe % 60;
+    return '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
+  }
+
+  String get _elapsedClock {
+    if (!_remoteAnswered || _connectedAt == null) {
+      return '00:00';
+    }
+    return _formatClock(DateTime.now().difference(_connectedAt!).inSeconds);
+  }
+
+  String get _phaseLabel {
+    if (_errorText != null) return _errorText!;
+    if (_remoteAnswered) {
+      return 'متصل';
+    }
+    if (!widget.isIncoming &&
+        (_voice.state == ZegoCallState.ringing ||
+            _voice.state == ZegoCallState.connecting)) {
+      return 'يرن...';
+    }
+    return _statusText;
+  }
+
   Future<void> _finalizeCallLog({required String status}) async {
     if (_logFinalized) return;
     _logFinalized = true;
@@ -402,8 +497,11 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
     final duration = _connectedAt != null
         ? DateTime.now().difference(_connectedAt!).inSeconds
         : 0;
-    final normalizedStatus =
-        duration > 0 || status == 'ended' ? 'ended' : status;
+    final normalizedStatus = duration > 0
+        ? 'ended'
+        : (!_remoteAnswered && !widget.isIncoming && status == 'ended')
+            ? 'no_answer'
+            : status;
 
     try {
       await VoiceCallService.completeCall(
@@ -417,6 +515,10 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
         status: normalizedStatus,
         durationSeconds: duration,
         channelName: _channelName,
+      );
+      ChatThreadRefreshHub.instance.notifyIfActive(
+        threadType: widget.threadType,
+        threadId: widget.threadId,
       );
     } catch (_) {}
   }
@@ -442,11 +544,14 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
         case ZegoCallState.connecting:
           _statusText = 'جاري الاتصال...';
         case ZegoCallState.ringing:
-          _statusText = widget.isIncoming ? 'متصل' : 'يرن...';
+          _statusText = widget.isIncoming ? 'جاري الاتصال...' : 'يرن...';
         case ZegoCallState.connected:
-          _wasConnected = true;
-          _connectedAt ??= DateTime.now();
-          _statusText = 'متصل';
+          if (!_remoteAnswered) {
+            _markRemoteAnswered();
+          } else {
+            _statusText = 'متصل';
+          }
+          break;
         case ZegoCallState.ended:
           _statusText = 'انتهت المكالمة';
         case ZegoCallState.failed:
@@ -471,8 +576,8 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
     setState(() => _speaker = next);
   }
 
-  Future<void> _endCall({bool popRoute = false}) async {
-    await _finalizeCallLog(status: 'ended');
+  Future<void> _endCall({bool popRoute = false, String? statusOverride}) async {
+    await _finalizeCallLog(status: statusOverride ?? 'ended');
     await _voice.leave();
     if (!mounted) return;
     if (popRoute) {
@@ -521,15 +626,44 @@ class _VoiceCallScreenState extends State<VoiceCallScreen> {
                     color: Colors.white,
                   ),
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 16),
                 Text(
-                  _errorText ?? _statusText,
+                  _elapsedClock,
+                  style: TextStyle(
+                    fontFamily: 'Cairo',
+                    fontSize: 42,
+                    fontWeight: FontWeight.w600,
+                    color: _remoteAnswered ? const Color(0xFF4ADE80) : Colors.white,
+                    letterSpacing: 2,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  _phaseLabel,
                   style: TextStyle(
                     fontFamily: 'Cairo',
                     fontSize: 16,
-                    color: _errorText != null ? Colors.redAccent : Colors.white70,
+                    color: _errorText != null
+                        ? Colors.redAccent
+                        : _remoteAnswered
+                            ? const Color(0xFF86EFAC)
+                            : Colors.white70,
                   ),
                 ),
+                if (!_remoteAnswered &&
+                    !widget.isIncoming &&
+                    _voice.state == ZegoCallState.ringing)
+                  const Padding(
+                    padding: EdgeInsets.only(top: 8),
+                    child: Text(
+                      'في انتظار الرد...',
+                      style: TextStyle(
+                        fontFamily: 'Cairo',
+                        fontSize: 13,
+                        color: Colors.white54,
+                      ),
+                    ),
+                  ),
                 const Spacer(),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceEvenly,

@@ -152,7 +152,7 @@ class MerchantMoreScreen extends StatelessWidget {
         ),
         _MoreTile(
           cardColor: cardColor,
-          title: 'الرسائل داخل التطبيق',
+          title: 'المحادثات',
           subtitle: 'كل محادثاتك مع الزبائن والطلبات',
           icon: Icons.chat_bubble_outline,
           onTap: () => Navigator.of(context).push(

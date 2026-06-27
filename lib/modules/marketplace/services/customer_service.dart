@@ -511,6 +511,8 @@ class CustomerService extends ChangeNotifier {
     await SupabaseService.saveCustomerOrder(phone, order);
   }
 
+  Future<void> _persistLocalBackup() async {}
+
   // ── Utility methods ─────────────────────────────────────────────
   String? _trimmedOrNull(String? value) {
     final trimmed = value?.trim();

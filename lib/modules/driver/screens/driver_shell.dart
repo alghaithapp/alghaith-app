@@ -12,6 +12,7 @@ import '../../taxi/screens/driver/driver_home_screen.dart';
 import '../../taxi/screens/driver/driver_request_screen.dart';
 import '../../taxi/screens/driver/driver_trip_screen.dart';
 import '../../taxi/screens/driver/driver_earnings_screen.dart';
+import '../../taxi/utils/driver_readiness.dart';
 import '../../taxi/widgets/driver_readiness_banner.dart';
 import '../../../providers/app_provider.dart';
 import '../../../utils/driver_profile_fields.dart';
@@ -147,6 +148,16 @@ class _DriverShellState extends State<DriverShell> with RealtimeSubscriptionMixi
           lat: pos.latitude,
           lng: pos.longitude,
         );
+
+        final phone = provider.authPhone;
+        if (phone != null && phone.isNotEmpty && !taxi.isOnline) {
+          await DriverReadiness.syncDriverOnlineFromReadiness(
+            appProvider: provider,
+            taxiProvider: taxi,
+            phone: phone,
+            captureLocationIfMissing: false,
+          );
+        }
       } catch (_) {}
     });
   }

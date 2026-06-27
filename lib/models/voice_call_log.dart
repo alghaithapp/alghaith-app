@@ -49,6 +49,7 @@ class VoiceCallLog {
   String statusLabelAr(bool isOutgoing) {
     switch (status) {
       case 'connected':
+        return isOutgoing ? 'تم الرد' : 'متصل';
       case 'ended':
         return isOutgoing ? 'مكالمة صادرة' : 'مكالمة واردة';
       case 'missed':

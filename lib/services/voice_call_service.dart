@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart';
+
 import '../core/network/api_client.dart';
 import '../models/voice_call_log.dart';
 
@@ -65,6 +67,15 @@ class VoiceCallSession {
 
 class VoiceCallService {
   static const _basePath = '/db/voice';
+
+  static Future<List<Map<String, dynamic>>> fetchPendingCalls() async {
+    final data = await ApiClient.instance.get('$_basePath/pending');
+    if (data is! List) return const [];
+    return data
+        .whereType<Map>()
+        .map((item) => Map<String, dynamic>.from(item))
+        .toList();
+  }
 
   static Future<VoiceCallConfig> fetchConfig() async {
     final data = await ApiClient.instance.get('$_basePath/config');
@@ -136,7 +147,42 @@ class VoiceCallService {
     if (data is! Map) {
       throw StateError('تعذّر بدء المكالمة.');
     }
-    return VoiceCallSession.fromMap(Map<String, dynamic>.from(data));
+    final map = Map<String, dynamic>.from(data);
+    final pushDelivered = map['pushDelivered'] == true;
+    if (!pushDelivered) {
+      final reason = map['pushReason']?.toString() ?? '';
+      debugPrint('VoiceCallService.startCall push not delivered: $reason');
+    }
+    return VoiceCallSession.fromMap(map);
+  }
+
+  static Future<Map<String, dynamic>?> fetchCallStatus({
+    required String callLogId,
+  }) async {
+    final data = await ApiClient.instance.get(
+      '$_basePath/call/status',
+      queryParameters: {'callLogId': callLogId.trim()},
+    );
+    if (data is! Map) return null;
+    return Map<String, dynamic>.from(data);
+  }
+
+  static Future<void> rejectCall({
+    String? callLogId,
+    required String threadType,
+    required String threadId,
+    String? channelName,
+  }) async {
+    await ApiClient.instance.post(
+      '$_basePath/call/reject',
+      body: {
+        if (callLogId != null && callLogId.trim().isNotEmpty) 'callLogId': callLogId.trim(),
+        'threadType': threadType,
+        'threadId': threadId,
+        if (channelName != null && channelName.trim().isNotEmpty)
+          'channelName': channelName.trim(),
+      },
+    );
   }
 
   static Future<void> completeCall({

@@ -15,6 +15,7 @@ class IncomingCallScreen extends StatefulWidget {
   final String threadId;
   final String? channelName;
   final String? callerPhone;
+  final String? callLogId;
 
   const IncomingCallScreen({
     super.key,
@@ -23,6 +24,7 @@ class IncomingCallScreen extends StatefulWidget {
     required this.threadId,
     this.channelName,
     this.callerPhone,
+    this.callLogId,
   });
 
   @override
@@ -75,16 +77,26 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
 
   Future<void> _logMissedCall() async {
     try {
-      await VoiceCallService.completeCall(
+      await VoiceCallService.rejectCall(
+        callLogId: widget.callLogId,
         threadType: widget.threadType,
         threadId: widget.threadId,
-        otherPartyPhone: widget.callerPhone,
-        direction: 'incoming',
-        status: 'missed',
-        durationSeconds: 0,
         channelName: widget.channelName,
       );
-    } catch (_) {}
+    } catch (_) {
+      try {
+        await VoiceCallService.completeCall(
+          callLogId: widget.callLogId,
+          threadType: widget.threadType,
+          threadId: widget.threadId,
+          otherPartyPhone: widget.callerPhone,
+          direction: 'incoming',
+          status: 'missed',
+          durationSeconds: 0,
+          channelName: widget.channelName,
+        );
+      } catch (_) {}
+    }
   }
 
   @override

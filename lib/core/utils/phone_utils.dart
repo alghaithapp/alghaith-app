@@ -51,4 +51,12 @@ class PhoneUtils {
     final normalized = normalize(phone);
     return RegExp(r'^\+9647\d{9}$').hasMatch(normalized);
   }
+
+  static bool overlap(String left, String right) {
+    final leftVariants = variants(left).toSet();
+    for (final candidate in variants(right)) {
+      if (leftVariants.contains(candidate)) return true;
+    }
+    return false;
+  }
 }

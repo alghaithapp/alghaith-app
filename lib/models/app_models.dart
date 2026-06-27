@@ -1,3 +1,5 @@
+import '../utils/extensions.dart';
+
 class ServiceCategory {
   final String id;
   final String titleAr;
@@ -279,7 +281,7 @@ class ListItem {
           (map['descriptionAr'] ?? map['description_ar'])?.toString() ?? '',
       descriptionEn:
           (map['descriptionEn'] ?? map['description_en'])?.toString() ?? '',
-      price: (map['price'] as num?)?.toInt() ?? 0,
+      price: parseProductPrice(map),
       rating: (map['rating'] as num?)?.toDouble(),
       category: (map['category'] ?? map['service_id'])?.toString() ?? '',
       subCategory: (map['subCategory'] ?? map['sub_category'])?.toString(),

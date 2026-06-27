@@ -83,6 +83,31 @@ class ZegoVoiceService {
     final generation = _joinGeneration;
     _setState(ZegoCallState.connecting);
 
+    void onRoomUserUpdate(
+      String roomID,
+      ZegoUpdateType updateType,
+      List<ZegoUser> userList,
+    ) {
+      if (!_isJoinActive(generation, roomId)) return;
+      if (roomID != roomId) return;
+
+      if (updateType == ZegoUpdateType.Add) {
+        for (final user in userList) {
+          if (user.userID == userId) continue;
+          debugPrint('Zego: remote user joined ${user.userID}');
+          _setState(ZegoCallState.connected);
+          onRemoteUserJoined?.call(user.userID);
+        }
+      } else if (updateType == ZegoUpdateType.Delete) {
+        for (final user in userList) {
+          if (user.userID == userId) continue;
+          debugPrint('Zego: remote user left ${user.userID}');
+          onRemoteUserLeft?.call();
+          _setState(ZegoCallState.ended);
+        }
+      }
+    }
+
     void onStreamUpdate(
       String roomID,
       ZegoUpdateType updateType,
@@ -139,6 +164,7 @@ class ZegoVoiceService {
 
       ZegoExpressEngine.onRoomStreamUpdate = onStreamUpdate;
       ZegoExpressEngine.onRoomStateUpdate = onRoomStateUpdate;
+      ZegoExpressEngine.onRoomUserUpdate = onRoomUserUpdate;
 
       final roomConfig = ZegoRoomConfig.defaultConfig();
       roomConfig.token = token;
@@ -218,6 +244,7 @@ class ZegoVoiceService {
 
     ZegoExpressEngine.onRoomStreamUpdate = null;
     ZegoExpressEngine.onRoomStateUpdate = null;
+    ZegoExpressEngine.onRoomUserUpdate = null;
 
     try {
       if (activeStreamId != null && activeStreamId.isNotEmpty) {

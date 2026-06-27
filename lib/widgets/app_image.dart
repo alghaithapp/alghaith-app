@@ -22,32 +22,60 @@ class AppImage extends StatelessWidget {
     this.borderRadius,
   });
 
+  int _preferredWidthForVariant() {
+    final w = width;
+    if (w == null || !w.isFinite || w <= 0) return 256;
+    return w.round().clamp(64, 1024);
+  }
+
+  double? _finiteDimension(double? value) {
+    if (value == null || !value.isFinite) return null;
+    return value;
+  }
+
+  double _errorIconSize() {
+    final w = _finiteDimension(width);
+    final h = _finiteDimension(height);
+    if (w == null || h == null) return 32;
+    return (w < h ? w : h) * 0.55;
+  }
+
   @override
   Widget build(BuildContext context) {
     final normalized = ImageStorageService.normalizeImageRef(imageData);
     final displayUrl = ImageStorageService.pickVariantUrl(
       normalized,
-      preferredWidth: (width ?? 256).round(),
+      preferredWidth: _preferredWidthForVariant(),
     );
-    final imageWidget = _buildImage(displayUrl);
+    final layoutWidth = _finiteDimension(width);
+    final layoutHeight = _finiteDimension(height);
+    final imageWidget = _buildImage(displayUrl, layoutWidth, layoutHeight);
 
     if (borderRadius != null) {
       return ClipRRect(
         borderRadius: borderRadius!,
-        child: SizedBox(width: width, height: height, child: imageWidget),
+        child: SizedBox(
+          width: layoutWidth,
+          height: layoutHeight,
+          child: imageWidget,
+        ),
       );
     }
 
-    return SizedBox(width: width, height: height, child: imageWidget);
+    return SizedBox(
+      width: layoutWidth,
+      height: layoutHeight,
+      child: imageWidget,
+    );
   }
 
-  Widget _buildImage(String? normalizedData) {
+  Widget _buildImage(String? normalizedData, double? layoutWidth, double? layoutHeight) {
     if (normalizedData == null || normalizedData.isEmpty) {
-      return _buildPlaceholder();
+      return _buildPlaceholder(layoutWidth, layoutHeight);
     }
 
     if (ImageStorageService.isRemoteUrl(normalizedData)) {
-      return _buildNetworkImage(normalizedData);
+      return _buildNetworkImage(normalizedData, layoutWidth, layoutHeight);
     }
 
     var base64String = normalizedData;
@@ -62,87 +90,92 @@ class AppImage extends StatelessWidget {
       try {
         return Image.memory(
           base64Decode(base64String),
-          width: width,
-          height: height,
+          width: layoutWidth,
+          height: layoutHeight,
           fit: fit,
           gaplessPlayback: true,
-          errorBuilder: (context, error, stackTrace) => _buildError(),
+          errorBuilder: (context, error, stackTrace) =>
+              _buildError(layoutWidth, layoutHeight),
         );
       } catch (e) {
         debugPrint('AppImage Base64 Error: $e');
-        return _buildError();
+        return _buildError(layoutWidth, layoutHeight);
       }
     }
 
     if (normalizedData.startsWith('assets/')) {
       return Image.asset(
         normalizedData,
-        width: width,
-        height: height,
+        width: layoutWidth,
+        height: layoutHeight,
         fit: fit,
-        errorBuilder: (context, error, stackTrace) => _buildError(),
+        errorBuilder: (context, error, stackTrace) =>
+            _buildError(layoutWidth, layoutHeight),
       );
     }
 
-    return _buildPlaceholder();
+    return _buildPlaceholder(layoutWidth, layoutHeight);
   }
 
-  Widget _buildNetworkImage(String url) {
+  Widget _buildNetworkImage(
+    String url,
+    double? layoutWidth,
+    double? layoutHeight,
+  ) {
     return CachedNetworkImage(
       imageUrl: url,
       cacheKey: url,
-      width: width,
-      height: height,
+      width: layoutWidth,
+      height: layoutHeight,
       fit: fit,
       fadeInDuration: const Duration(milliseconds: 120),
       fadeOutDuration: const Duration(milliseconds: 80),
-      placeholder: (context, _) => _buildLoading(),
+      placeholder: (context, _) => _buildLoading(layoutWidth, layoutHeight),
       errorWidget: (context, _, error) {
         debugPrint('AppImage network error for $url: $error');
         return Image.network(
           url,
-          width: width,
-          height: height,
+          width: layoutWidth,
+          height: layoutHeight,
           fit: fit,
-          errorBuilder: (context, _, __) => _buildError(),
+          errorBuilder: (context, _, __) =>
+              _buildError(layoutWidth, layoutHeight),
           loadingBuilder: (context, child, loadingProgress) {
             if (loadingProgress == null) return child;
-            return _buildLoading();
+            return _buildLoading(layoutWidth, layoutHeight);
           },
         );
       },
     );
   }
 
-  Widget _buildPlaceholder() {
+  Widget _buildPlaceholder(double? layoutWidth, double? layoutHeight) {
     return Container(
-      width: width,
-      height: height,
+      width: layoutWidth,
+      height: layoutHeight,
       color: Colors.grey[200],
       child: const Icon(CupertinoIcons.person_fill, color: Colors.grey),
     );
   }
 
-  Widget _buildLoading() {
+  Widget _buildLoading(double? layoutWidth, double? layoutHeight) {
     return Container(
-      width: width,
-      height: height,
+      width: layoutWidth,
+      height: layoutHeight,
       color: Colors.grey[100],
       child: const Center(child: CupertinoActivityIndicator()),
     );
   }
 
-  Widget _buildError() {
+  Widget _buildError(double? layoutWidth, double? layoutHeight) {
     return Container(
-      width: width,
-      height: height,
+      width: layoutWidth,
+      height: layoutHeight,
       color: Colors.orange.shade50,
       child: Icon(
         CupertinoIcons.person_crop_circle,
         color: Colors.orange.shade300,
-        size: (width != null && height != null)
-            ? (width! < height! ? width! * 0.55 : height! * 0.55)
-            : 32,
+        size: _errorIconSize(),
       ),
     );
   }

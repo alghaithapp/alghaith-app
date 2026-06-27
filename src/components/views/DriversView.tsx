@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
 import { Car, BadgeCheck, XCircle, UserX, Trash2, LoaderCircle, Images } from 'lucide-react';
-import type { AdminAccountSummary } from '../../admin-types';
+import type { AdminAccountSummary, DriverPreRegisterPayload } from '../../admin-types';
+import { driverApprovalFor } from '../../admin-account-utils';
 import DocumentsModal from '../DocumentsModal';
+import PreRegisterDriverModal from '../PreRegisterDriverModal';
 
 interface DriversViewProps {
   drivers: AdminAccountSummary[];
@@ -14,6 +16,7 @@ interface DriversViewProps {
   onOpenReject: (target: { phone: string; displayName: string; kind: string }) => void;
   onSuspend: (account: AdminAccountSummary) => Promise<void>;
   onOpenDelete: (account: AdminAccountSummary) => void;
+  onPreRegisterDriver: (payload: DriverPreRegisterPayload) => Promise<void>;
 }
 
 function formatDate(value: string | null | undefined) {
@@ -36,15 +39,24 @@ export default function DriversView({
   onOpenReject,
   onSuspend,
   onOpenDelete,
+  onPreRegisterDriver,
 }: DriversViewProps) {
+  const [showPreRegister, setShowPreRegister] = useState(false);
+  const [isPreRegisterBusy, setIsPreRegisterBusy] = useState(false);
   const [selectedDocumentsTarget, setSelectedDocumentsTarget] = useState<{
     displayName: string;
     documents: Record<string, string>;
   } | null>(null);
 
-  const pendingList   = filteredDrivers.filter((d) => !d.isApproved && d.approvalStatus === 'pending');
-  const approvedList  = filteredDrivers.filter((d) => d.isApproved);
-  const rejectedList  = filteredDrivers.filter((d) => !d.isApproved && d.approvalStatus === 'rejected');
+  const pendingList   = filteredDrivers.filter((d) => {
+    const a = driverApprovalFor(d);
+    return !a.isApproved && a.approvalStatus === 'pending';
+  });
+  const approvedList  = filteredDrivers.filter((d) => driverApprovalFor(d).isApproved);
+  const rejectedList  = filteredDrivers.filter((d) => {
+    const a = driverApprovalFor(d);
+    return !a.isApproved && a.approvalStatus === 'rejected';
+  });
 
   const grouped = [
     ...pendingList.map((d)  => ({ d, group: 'pending'  as const })),
@@ -54,16 +66,71 @@ export default function DriversView({
 
   if (filteredDrivers.length === 0) {
     return (
-      <div className="empty-state">
-        <Car size={32} />
-        <p>لا يوجد سائقو تكسي مطابقون للبحث الحالي.</p>
-      </div>
+      <>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
+          <button
+            type="button"
+            className="primary-button"
+            onClick={() => setShowPreRegister(true)}
+          >
+            + تسجيل سائق برقم
+          </button>
+        </div>
+        <PreRegisterDriverModal
+          open={showPreRegister}
+          isBusy={isPreRegisterBusy}
+          onClose={() => {
+            if (!isPreRegisterBusy) setShowPreRegister(false);
+          }}
+          onSubmit={async (payload) => {
+            setIsPreRegisterBusy(true);
+            try {
+              await onPreRegisterDriver(payload);
+              setShowPreRegister(false);
+            } finally {
+              setIsPreRegisterBusy(false);
+            }
+          }}
+        />
+        <div className="empty-state">
+          <Car size={32} />
+          <p>لا يوجد سائقو تكسي مطابقون للبحث الحالي.</p>
+        </div>
+      </>
     );
   }
 
   let lastGroup = '';
 
   return (
+  <>
+    <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
+      <button
+        type="button"
+        className="primary-button"
+        onClick={() => setShowPreRegister(true)}
+      >
+        + تسجيل سائق برقم
+      </button>
+    </div>
+
+    <PreRegisterDriverModal
+      open={showPreRegister}
+      isBusy={isPreRegisterBusy}
+      onClose={() => {
+        if (!isPreRegisterBusy) setShowPreRegister(false);
+      }}
+      onSubmit={async (payload) => {
+        setIsPreRegisterBusy(true);
+        try {
+          await onPreRegisterDriver(payload);
+          setShowPreRegister(false);
+        } finally {
+          setIsPreRegisterBusy(false);
+        }
+      }}
+    />
+
     <div className="merchant-list">
       {grouped.map(({ d, group }) => {
         const showGroup = group !== lastGroup;
@@ -72,8 +139,9 @@ export default function DriversView({
         const rejectLoading   = activeActionKey === `reject-account:${d.phone}`;
         const suspendLoading  = activeActionKey === `suspend-account:${d.phone}`;
         const deleteLoading   = activeActionKey === `delete-account:${d.phone}`;
-        const isRejected = d.approvalStatus === 'rejected';
-        const isPending  = !d.isApproved && !isRejected;
+        const approval = driverApprovalFor(d);
+        const isRejected = approval.approvalStatus === 'rejected';
+        const isPending  = !approval.isApproved && !isRejected;
 
         return (
           <React.Fragment key={d.phone}>
@@ -104,7 +172,7 @@ export default function DriversView({
                     <div className="merchant-title-row">
                       <h4>{d.displayName || d.fullName || 'سائق بدون اسم'}</h4>
                       {/* Approval status */}
-                      {d.isApproved ? (
+                      {approval.isApproved ? (
                         <span className="status-badge success">مفعّل</span>
                       ) : isRejected ? (
                         <span className="status-badge danger">مرفوض</span>
@@ -126,6 +194,11 @@ export default function DriversView({
                     <p className="merchant-description">
                       تاريخ التسجيل: {formatDate(d.createdAt)}
                     </p>
+                    {approval.isApproved && d.driverProfileComplete === false ? (
+                      <p className="merchant-description" style={{ color: 'var(--color-driver)' }}>
+                        مُسجَّل مسبقاً — بانتظار إكمال بيانات السائق في التطبيق
+                      </p>
+                    ) : null}
                     {isRejected && d.rejectionMessageAr ? (
                       <p className="courier-rejection-note">
                         سبب الرفض: {d.rejectionMessageAr}
@@ -153,7 +226,7 @@ export default function DriversView({
 
                 {/* Approve / deactivate */}
                 <button
-                  className={d.isApproved ? 'soft-button danger' : 'soft-button success'}
+                  className={approval.isApproved ? 'soft-button danger' : 'soft-button success'}
                   disabled={approvalLoading || rejectLoading || suspendLoading}
                   onClick={() => onApproveAccount(d).catch(() => undefined)}
                 >
@@ -162,7 +235,7 @@ export default function DriversView({
                   ) : (
                     <BadgeCheck size={15} />
                   )}
-                  <span>{d.isApproved ? 'إلغاء التفعيل' : 'موافقة وتفعيل'}</span>
+                  <span>{approval.isApproved ? 'إلغاء التفعيل' : 'موافقة وتفعيل'}</span>
                 </button>
 
                 {/* Reject */}
@@ -228,5 +301,6 @@ export default function DriversView({
         />
       )}
     </div>
+  </>
   );
 }
