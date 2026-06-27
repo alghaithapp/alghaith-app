@@ -1,14 +1,13 @@
 import 'dart:async';
 import 'package:socket_io_client/socket_io_client.dart' as io;
 import '../../../models/chat_message.dart';
+import '../../../core/config/app_config.dart';
 
 /// خدمة الاتصال بخادم Socket.io للرسائل الفورية
 class SocketService {
   static final SocketService _instance = SocketService._();
   factory SocketService() => _instance;
   SocketService._();
-
-  static const String _serverUrl = 'http://155.117.43.250:10035';
 
   io.Socket? _socket;
   bool _isConnected = false;
@@ -18,7 +17,8 @@ class SocketService {
   Stream<ChatMessage> get onMessage => _messageController.stream;
   bool get isConnected => _isConnected;
 
-  /// الاتصال بالخادم والانضمام لغرفة محادثة
+  String get _serverUrl => AppConfig.vpsSocketUrl;
+
   void connect(String room) {
     if (_socket != null) {
       _socket!.disconnect();
@@ -48,18 +48,11 @@ class SocketService {
       } catch (_) {}
     });
 
-    _socket!.onDisconnect((_) {
-      _isConnected = false;
-    });
-
-    _socket!.onError((error) {
-      _isConnected = false;
-    });
-
+    _socket!.onDisconnect((_) => _isConnected = false);
+    _socket!.onError((_) => _isConnected = false);
     _socket!.connect();
   }
 
-  /// مغادرة الغرفة وقطع الاتصال
   void disconnect() {
     if (_socket != null) {
       _socket!.disconnect();

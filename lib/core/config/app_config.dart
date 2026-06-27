@@ -18,6 +18,12 @@ class AppConfig {
     defaultValue: 'https://lively-wind-9d98.alghaithapp.workers.dev',
   );
 
+  /// رابط خادم Socket.io على VPS (WebSocket للدردشة الفورية)
+  static const String vpsSocketUrl = String.fromEnvironment(
+    'VPS_SOCKET_URL',
+    defaultValue: 'http://155.117.43.250:10035',
+  );
+
   static const String mapboxPublicToken = String.fromEnvironment(
     'MAPBOX_PUBLIC_TOKEN',
     defaultValue: 'YOUR_MAPBOX_PUBLIC_TOKEN',
