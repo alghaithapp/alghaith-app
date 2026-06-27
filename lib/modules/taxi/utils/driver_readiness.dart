@@ -1,8 +1,11 @@
+import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 import '../../../core/notifications/push_notification_service.dart';
+import '../../../providers/app_provider.dart';
 import '../../../utils/driver_profile_fields.dart';
+import '../providers/taxi_provider.dart';
 
 enum DriverReadinessIssue {
   notificationsDenied,
@@ -82,6 +85,92 @@ abstract final class DriverReadiness {
       taxiTypeOk: DriverProfileFields.taxiType(profile).isNotEmpty,
       taxiServiceOk: _taxiServiceEnabled(profile),
     );
+  }
+
+  /// تقييم الجاهزية مع محاولات إصلاح شائعة (توكن الإشعارات + الموقع).
+  static Future<DriverReadinessStatus> evaluateReadiness({
+    required AppProvider appProvider,
+    required String phone,
+    bool captureLocationIfMissing = true,
+    bool retryPushToken = true,
+  }) async {
+    final notificationsOk = await checkNotificationsAuthorized();
+    final push = PushNotificationService.instance;
+
+    var pushTokenOk = push.hasToken;
+    if (!pushTokenOk && phone.isNotEmpty) {
+      pushTokenOk = await push.ensureUserBinding(phone);
+    }
+    if (!pushTokenOk && retryPushToken && phone.isNotEmpty) {
+      await Future<void>.delayed(const Duration(milliseconds: 1200));
+      pushTokenOk = push.hasToken || await push.ensureUserBinding(phone);
+    }
+
+    final permission = await Geolocator.checkPermission();
+    final locationPermissionOk = permission == LocationPermission.always ||
+        permission == LocationPermission.whileInUse;
+
+    var profile = Map<String, dynamic>.from(appProvider.driverProfile ?? {});
+    if (captureLocationIfMissing &&
+        locationPermissionOk &&
+        !_hasSavedLocation(profile)) {
+      final pos = await captureCurrentPosition();
+      if (pos != null) {
+        profile['latitude'] = pos.latitude;
+        profile['longitude'] = pos.longitude;
+        profile['lat'] = pos.latitude;
+        profile['lng'] = pos.longitude;
+        await appProvider.setDriverProfile(profile);
+      }
+    }
+
+    return fromProfile(
+      profile: appProvider.driverProfile ?? profile,
+      notificationsOk: notificationsOk,
+      pushTokenOk: pushTokenOk,
+      locationPermissionOk: locationPermissionOk,
+    );
+  }
+
+  /// مصدر واحد لمزامنة «متصل / غير متصل» مع الخادم حسب الجاهزية الفعلية.
+  static Future<DriverReadinessStatus> syncDriverOnlineFromReadiness({
+    required AppProvider appProvider,
+    required TaxiProvider taxiProvider,
+    required String phone,
+    bool captureLocationIfMissing = true,
+  }) async {
+    final status = await evaluateReadiness(
+      appProvider: appProvider,
+      phone: phone,
+      captureLocationIfMissing: captureLocationIfMissing,
+    );
+    taxiProvider.setReadinessStatus(status);
+
+    final profile = appProvider.driverProfile;
+    final lat = (profile?['latitude'] ?? profile?['lat']) as num?;
+    final lng = (profile?['longitude'] ?? profile?['lng']) as num?;
+    if (lat != null && lng != null && lat != 0 && lng != 0) {
+      taxiProvider.updateIncomingPollLocation(
+        lat: lat.toDouble(),
+        lng: lng.toDouble(),
+      );
+    }
+
+    final shouldBeOnline = status.isReady;
+    if (shouldBeOnline != taxiProvider.isOnline) {
+      try {
+        await taxiProvider.setOnline(shouldBeOnline);
+      } catch (error, stack) {
+        debugPrint('syncDriverOnlineFromReadiness failed: $error\n$stack');
+      }
+    }
+    return status;
+  }
+
+  static String offlineHint(DriverReadinessStatus status) {
+    final issues = status.issues;
+    if (issues.isEmpty) return 'غير متصل';
+    return issueTitle(issues.first);
   }
 
   static Future<bool> checkNotificationsAuthorized() async {

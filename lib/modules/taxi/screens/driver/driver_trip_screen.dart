@@ -158,25 +158,41 @@ class _ActiveTripCardState extends State<_ActiveTripCard> {
     if (_isBusy) return;
 
     setState(() => _isBusy = true);
-    final id = widget.request.id;
-    switch (widget.request.statusKey) {
-      case 'accepted':
-        await provider.markTaxiOnWay(id);
-        break;
-      case 'on_way':
-        await provider.markTaxiArrived(id);
-        break;
-      case 'arrived':
-        await provider.markTaxiPickedUp(id);
-        break;
-      case 'picked_up':
-        await provider.completeTaxiRequest(id);
-        break;
-      case 'cancel_requested':
-        await provider.approveTaxiCancellationByDriver(id);
-        break;
+    try {
+      final id = widget.request.id;
+      switch (widget.request.statusKey) {
+        case 'accepted':
+          await provider.markTaxiOnWay(id);
+          break;
+        case 'on_way':
+          await provider.markTaxiArrived(id);
+          break;
+        case 'arrived':
+          await provider.markTaxiPickedUp(id);
+          break;
+        case 'picked_up':
+          await provider.completeTaxiRequest(id);
+          break;
+        case 'cancel_requested':
+          await provider.approveTaxiCancellationByDriver(id);
+          break;
+      }
+    } catch (error) {
+      debugPrint('_advance error: $error');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'فشل تحديث الرحلة: ${error.toString().replaceFirst("ApiException: ", "").replaceFirst("Exception: ", "")}',
+              style: const TextStyle(fontFamily: 'Cairo'),
+            ),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isBusy = false);
     }
-    if (mounted) setState(() => _isBusy = false);
   }
 
   @override
@@ -399,6 +415,7 @@ class _ActiveTripCardState extends State<_ActiveTripCard> {
                     label: _nextActionLabel,
                     color: _statusColor,
                     isLoading: _isBusy,
+                    widthFactor: req.statusKey == 'accepted' ? 0.3 : null,
                     onTap: () => _advance(provider),
                   ),
                 ],
@@ -511,19 +528,22 @@ class _ActionBtn extends StatelessWidget {
   final Color color;
   final bool isLoading;
   final VoidCallback onTap;
+  final double? widthFactor;
 
   const _ActionBtn({
     required this.label,
     required this.color,
     required this.isLoading,
     required this.onTap,
+    this.widthFactor,
   });
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
+    final button = GestureDetector(
       onTap: isLoading ? null : onTap,
       child: Container(
+        width: widthFactor == null ? double.infinity : null,
         padding: const EdgeInsets.symmetric(vertical: 13),
         decoration: BoxDecoration(
           color: color,
@@ -545,16 +565,32 @@ class _ActionBtn extends StatelessWidget {
                       strokeWidth: 2, color: Colors.white),
                 ),
               )
-            : Text(
-                label,
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  fontFamily: 'Cairo',
-                  fontSize: 14,
-                  fontWeight: FontWeight.w700,
-                  color: Colors.white,
+            : Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    label,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      fontFamily: 'Cairo',
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.white,
+                    ),
+                  ),
                 ),
               ),
+      ),
+    );
+
+    if (widthFactor == null) return button;
+
+    return Align(
+      alignment: Alignment.center,
+      child: FractionallySizedBox(
+        widthFactor: widthFactor,
+        child: button,
       ),
     );
   }

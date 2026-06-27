@@ -21,6 +21,7 @@ import '../models/merchant_store_view.dart';
 import '../services/supabase_service.dart';
 import '../services/image_storage_service.dart';
 import '../utils/merchant_service_labels.dart';
+import '../utils/driver_profile_fields.dart';
 import '../models/merchant_product_section.dart';
 import '../core/orders/order_adjustment.dart';
 import '../modules/taxi/models/taxi_request.dart';
@@ -1648,6 +1649,8 @@ class AppProvider extends ChangeNotifier {
   String? get driverType => driver.driverType;
   Map<String, dynamic>? get driverProfile => driver.driverProfile;
   bool get hasDriverProfile => driver.hasDriverProfile;
+  bool get isDriverProfileComplete =>
+      DriverProfileFields.isComplete(driver.driverProfile);
   bool get isDriverApproved => driver.isDriverApproved;
   bool get isDriver => driver.isDriver;
   bool get driverAcceptsTaxi => driver.driverAcceptsTaxi;
@@ -2131,7 +2134,7 @@ class AppProvider extends ChangeNotifier {
     String requestId, String statusKey, String statusAr, String statusEn,
   ) async {
     final phone = _trimmedOrNull(auth.authPhone);
-    if (phone == null) return;
+    if (phone == null) throw Exception('رقم الهاتف غير متوفر');
     await SupabaseService.updateTaxiRequestStatus(
       phone, requestId,
       statusKey: statusKey, statusAr: statusAr, statusEn: statusEn,

@@ -3,7 +3,6 @@ import 'package:provider/provider.dart';
 
 import '../models/taxi_request.dart';
 import '../providers/taxi_provider.dart';
-import 'taxi_cancel_dialog.dart';
 
 /// أزرار إلغاء / إنهاء الرحلة للزبون — تظهر حسب حالة الطلب.
 class TaxiCustomerTripActions extends StatefulWidget {
@@ -26,9 +25,37 @@ class _TaxiCustomerTripActionsState extends State<TaxiCustomerTripActions> {
 
   Future<void> _onCancel() async {
     final request = widget.request;
-    if (!request.canCustomerCancel || _busy) return;
+    if (_busy) return;
 
-    final confirmed = await showTaxiCancelDialog(context);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: AlertDialog(
+          title: const Text(
+            'إلغاء الرحلة',
+            style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w700),
+          ),
+          content: const Text(
+            'هل تريد إلغاء الرحلة؟',
+            style: TextStyle(fontFamily: 'Cairo', fontSize: 15),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: const Text('رجوع', style: TextStyle(fontFamily: 'Cairo')),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(true),
+              child: const Text(
+                'نعم، إلغاء',
+                style: TextStyle(fontFamily: 'Cairo', color: Colors.red),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
     if (confirmed != true || !mounted) return;
 
     setState(() => _busy = true);
@@ -130,6 +157,7 @@ class _TaxiCustomerTripActionsState extends State<TaxiCustomerTripActions> {
     final request = widget.request;
     final showCancel = request.canCustomerCancel;
     final showComplete = request.canCustomerCompleteTrip;
+
     if (!showCancel && !showComplete) return const SizedBox.shrink();
 
     return Column(

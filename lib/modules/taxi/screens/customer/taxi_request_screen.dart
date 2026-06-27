@@ -1297,15 +1297,6 @@ class _ActiveTripBanner extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 8),
-          const Text(
-            'تم إخفاء موقع الانطلاق والوجهة — تابع ${TaxiLabels.theCaptain} من الخريطة.',
-            style: TextStyle(
-              fontFamily: 'Cairo',
-              fontSize: 13,
-              color: AppColors.textSecondary,
-            ),
-          ),
           const SizedBox(height: 14),
           if (request.hasAssignedDriver) ...[
             TaxiCustomerContactSection(

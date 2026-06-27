@@ -28,7 +28,10 @@ class _DriverReadinessBannerState extends State<DriverReadinessBanner> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _refresh());
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await Future<void>.delayed(const Duration(milliseconds: 600));
+      if (mounted) await _refresh();
+    });
     _refreshTimer = Timer.periodic(const Duration(seconds: 30), (_) => _refresh());
   }
 
@@ -44,33 +47,14 @@ class _DriverReadinessBannerState extends State<DriverReadinessBanner> {
     final phone = provider.authPhone;
     if (phone == null || phone.isEmpty) return;
 
-    final notificationsOk = await DriverReadiness.checkNotificationsAuthorized();
-    final pushTokenOk = PushNotificationService.instance.hasToken ||
-        await PushNotificationService.instance.ensureUserBinding(phone);
-    final permission = await Geolocator.checkPermission();
-    final locationPermissionOk = permission == LocationPermission.always ||
-        permission == LocationPermission.whileInUse;
-
-    final status = DriverReadiness.fromProfile(
-      profile: provider.driverProfile,
-      notificationsOk: notificationsOk,
-      pushTokenOk: pushTokenOk,
-      locationPermissionOk: locationPermissionOk,
+    final status = await DriverReadiness.syncDriverOnlineFromReadiness(
+      appProvider: provider,
+      taxiProvider: context.read<TaxiProvider>(),
+      phone: phone,
     );
 
     if (!mounted) return;
     setState(() => _status = status);
-
-    final taxi = context.read<TaxiProvider>();
-    if (status.isReady) {
-      if (!taxi.isOnline) {
-        await taxi.setOnline(true);
-      }
-    } else {
-      if (taxi.isOnline) {
-        await taxi.setOnline(false);
-      }
-    }
   }
 
   Future<void> _fixIssue(DriverReadinessIssue issue) async {
@@ -261,39 +245,14 @@ Future<void> bootstrapDriverReadiness({
     await appProvider.setDriverProfile(normalized.profile);
   }
 
-  final permission = await DriverReadiness.ensureLocationPermission();
-  if (permission == LocationPermission.always ||
-      permission == LocationPermission.whileInUse) {
-    final pos = await DriverReadiness.captureCurrentPosition();
-    if (pos != null) {
-      final profile =
-          Map<String, dynamic>.from(appProvider.driverProfile ?? {});
-      profile['latitude'] = pos.latitude;
-      profile['longitude'] = pos.longitude;
-      profile['lat'] = pos.latitude;
-      profile['lng'] = pos.longitude;
-      await appProvider.setDriverProfile(profile);
-      taxiProvider.updateIncomingPollLocation(
-        lat: pos.latitude,
-        lng: pos.longitude,
-      );
-    }
-  }
+  taxiProvider.hydrateOnlineFromProfile(appProvider.driverProfile);
 
-  final notificationsOk = await DriverReadiness.checkNotificationsAuthorized();
-  final pushTokenOk = push.hasToken || await push.ensureUserBinding(phone);
-  final locationPermissionOk = permission == LocationPermission.always ||
-      permission == LocationPermission.whileInUse;
-  final status = DriverReadiness.fromProfile(
-    profile: appProvider.driverProfile,
-    notificationsOk: notificationsOk,
-    pushTokenOk: pushTokenOk,
-    locationPermissionOk: locationPermissionOk,
+  await DriverReadiness.ensureLocationPermission();
+
+  await DriverReadiness.syncDriverOnlineFromReadiness(
+    appProvider: appProvider,
+    taxiProvider: taxiProvider,
+    phone: phone,
+    captureLocationIfMissing: true,
   );
-
-  if (status.isReady) {
-    await taxiProvider.setOnline(true);
-  } else {
-    await taxiProvider.setOnline(false);
-  }
 }

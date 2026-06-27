@@ -7,6 +7,7 @@ import 'package:flutter/widgets.dart';
 
 import '../../../firebase_options.dart';
 import '../../../services/supabase_service.dart';
+import '../../../core/utils/phone_utils.dart';
 import 'push_notification_inbox.dart';
 
 @pragma('vm:entry-point')
@@ -85,7 +86,7 @@ class PushNotificationService {
       });
 
       _currentToken = await messaging.getToken().timeout(
-        const Duration(seconds: 5),
+        const Duration(seconds: 20),
         onTimeout: () {
           debugPrint('Push: getToken timed out on iOS — starting without token.');
           return null;
@@ -169,8 +170,11 @@ class PushNotificationService {
   }
 
   Future<void> bindToUser(String phone) async {
+    if (!_initialized) {
+      await initialize();
+    }
     if (!_initialized) return;
-    final normalized = phone.trim();
+    final normalized = PhoneUtils.normalize(phone);
     if (normalized.isEmpty) return;
     _boundPhone = normalized;
 
@@ -219,14 +223,17 @@ class PushNotificationService {
   }
 
   Future<void> _handleForegroundMessage(RemoteMessage message) async {
-    await PushNotificationInbox.handleIncoming(message);
     final eventKey = message.data['eventKey']?.toString() ?? '';
     final category = message.data['category']?.toString() ?? '';
     final requestId = message.data['orderId']?.toString() ?? '';
 
+    // المكالمة أولاً — لا تعتمد على معالجة الإشعار المحلي.
     if (eventKey == 'call:incoming') {
       onIncomingCall?.call(Map<String, dynamic>.from(message.data));
     }
+
+    await PushNotificationInbox.handleIncoming(message);
+
     if (eventKey == 'chat:new') {
       onChatMessage?.call(Map<String, dynamic>.from(message.data));
     }
@@ -278,6 +285,8 @@ class PushNotificationService {
   static void setRootNavigatorKey(GlobalKey<NavigatorState> key) {
     _rootNavigatorKey = key;
   }
+
+  static GlobalKey<NavigatorState>? get rootNavigatorKey => _rootNavigatorKey;
   void Function(Map<String, dynamic> data)? _onNotificationOpened;
   void Function(Map<String, dynamic> data)? onIncomingCall;
   void Function(Map<String, dynamic> data)? onChatMessage;

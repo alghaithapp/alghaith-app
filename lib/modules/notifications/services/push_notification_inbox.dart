@@ -63,6 +63,13 @@ class PushNotificationInbox {
     _pluginReady = true;
   }
 
+  static int _notificationCounter = 0;
+
+  static int _nextNotificationId() {
+    _notificationCounter++;
+    return DateTime.now().millisecondsSinceEpoch.hashCode ^ _notificationCounter;
+  }
+
   static Future<void> handleIncoming(RemoteMessage message) async {
     await ensureInitialized();
 
@@ -77,6 +84,10 @@ class PushNotificationInbox {
         category == 'taxi' &&
         audience == 'driver' &&
         (eventKey.contains(':pool_new') || eventKey.contains(':pool_returned'));
+    final isTaxiForCustomer =
+        category == 'taxi' &&
+        audience != 'driver' &&
+        eventKey.startsWith('taxi:');
 
     if (isTaxiForDriver && requestId.isNotEmpty) {
       await _showTaxiNotification(
@@ -88,15 +99,29 @@ class PushNotificationInbox {
       return;
     }
 
-    if (isIncomingCall) {
-      await _showIncomingCallNotification(
-        id: incomingCallNotificationId(
-          message.data['threadId']?.toString() ?? requestId,
-        ),
+    if (isTaxiForCustomer) {
+      final notifId = _nextNotificationId();
+      await _showNotificationWithSound(
+        id: notifId,
         title: title,
         body: body,
-        payload: _encodeCallPayload(message.data),
+        payload: requestId,
       );
+      _saveToInbox(title, body, requestId, eventKey);
+      return;
+    }
+
+    if (isIncomingCall) {
+      if (message.notification == null) {
+        await _showIncomingCallNotification(
+          id: incomingCallNotificationId(
+            message.data['threadId']?.toString() ?? requestId,
+          ),
+          title: title,
+          body: body,
+          payload: _encodeCallPayload(message.data),
+        );
+      }
       return;
     }
 
@@ -115,32 +140,33 @@ class PushNotificationInbox {
 
     if (body.isEmpty && title == 'الغيث') return;
 
+    final notifId = _nextNotificationId();
+    await _showNotificationWithSound(
+      id: notifId,
+      title: title,
+      body: body,
+      payload: message.data['orderId'],
+    );
+    _saveToInbox(title, body, requestId, eventKey);
+  }
+
+  static Future<void> _saveToInbox(String title, String body, String orderId, String eventKey) async {
     final prefs = await SharedPreferences.getInstance();
     final count = (prefs.getInt(unreadCountKey) ?? 0) + 1;
     await prefs.setInt(unreadCountKey, count);
 
     final items = _readItems(prefs);
-    items.insert(
-      0,
-      {
-        'title': title,
-        'body': body,
-        'orderId': message.data['orderId'] ?? '',
-        'eventKey': eventKey,
-        'receivedAt': DateTime.now().toIso8601String(),
-      },
-    );
+    items.insert(0, {
+      'title': title,
+      'body': body,
+      'orderId': orderId,
+      'eventKey': eventKey,
+      'receivedAt': DateTime.now().toIso8601String(),
+    });
     if (items.length > maxStoredItems) {
       items.removeRange(maxStoredItems, items.length);
     }
     await prefs.setString(inboxItemsKey, jsonEncode(items));
-
-    await _showSummary(
-      count: count,
-      latestTitle: title,
-      latestBody: body,
-      orderId: message.data['orderId'],
-    );
   }
 
   /// إظهار إشعار طلب تكسي مع أزرار قبول / رفض في الإشعار الخارجي
@@ -344,25 +370,14 @@ class PushNotificationInbox {
     return prefs.getInt(unreadCountKey) ?? 0;
   }
 
-  static Future<void> _showSummary({
-    required int count,
-    required String latestTitle,
-    required String latestBody,
-    String? orderId,
+  static Future<void> _showNotificationWithSound({
+    required int id,
+    required String title,
+    required String body,
+    String? payload,
   }) async {
-    final String title;
-    final String body;
-
-    if (count <= 1) {
-      title = latestTitle;
-      body = latestBody;
-    } else {
-      title = 'الغيث';
-      body = 'لديك $count إشعارات لم تقرأها';
-    }
-
     await _localNotifications.show(
-      summaryNotificationId,
+      id,
       title,
       body,
       NotificationDetails(
@@ -374,13 +389,12 @@ class PushNotificationInbox {
           priority: Priority.high,
           playSound: true,
           sound: NotificationSound.androidSound,
-          groupKey: 'alghaith_unread_group',
-          setAsGroupSummary: true,
+          groupKey: 'alghaith_group',
           styleInformation: BigTextStyleInformation(body),
         ),
         iOS: NotificationSound.iosDetails,
       ),
-      payload: orderId,
+      payload: payload,
     );
   }
 

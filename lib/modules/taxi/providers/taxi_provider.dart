@@ -10,6 +10,7 @@ import '../models/taxi_saved_place_use.dart';
 import '../models/driver_model.dart';
 import '../services/taxi_api_service.dart';
 import '../services/taxi_favorites_service.dart';
+import '../utils/driver_readiness.dart';
 
 /// مزود حالة التكسي (Provider) — يدير الطلبات، السائقين القريبين، والـ Polling
 class TaxiProvider extends ChangeNotifier {
@@ -21,6 +22,7 @@ class TaxiProvider extends ChangeNotifier {
   List<TaxiRequest> _incomingRequests = [];
   bool _isLoading = false;
   bool _isOnline = false;
+  DriverReadinessStatus? _readinessStatus;
   String? _error;
   Timer? _pollTimer;
   Timer? _incomingPoolTimer;
@@ -71,6 +73,8 @@ class TaxiProvider extends ChangeNotifier {
   bool get isLoading => _isLoading;
 
   bool get isOnline => _isOnline;
+
+  DriverReadinessStatus? get readinessStatus => _readinessStatus;
 
   String? get error => _error;
 
@@ -138,15 +142,29 @@ class TaxiProvider extends ChangeNotifier {
 
   int get todayTrips => completedRequests.length;
 
+  void hydrateOnlineFromProfile(Map<String, dynamic>? profile) {
+    final available = profile?['available'];
+    if (available is bool) {
+      _isOnline = available;
+      notifyListeners();
+    }
+  }
+
+  void setReadinessStatus(DriverReadinessStatus status) {
+    _readinessStatus = status;
+    notifyListeners();
+  }
+
   // ── Toggle حالة الاتصال ──
 
   Future<void> toggleOnline() async {
-    _isOnline = !_isOnline;
-    notifyListeners();
+    final next = !_isOnline;
     try {
-      await TaxiApiService.setDriverOnlineStatus(_isOnline);
+      await TaxiApiService.setDriverOnlineStatus(next);
+      _isOnline = next;
+      _error = null;
+      notifyListeners();
     } catch (e) {
-      _isOnline = !_isOnline;
       _error = e.toString();
       notifyListeners();
     }
@@ -154,14 +172,15 @@ class TaxiProvider extends ChangeNotifier {
 
   Future<void> setOnline(bool value) async {
     if (_isOnline == value) return;
-    _isOnline = value;
-    notifyListeners();
     try {
       await TaxiApiService.setDriverOnlineStatus(value);
+      _isOnline = value;
+      _error = null;
+      notifyListeners();
     } catch (e) {
-      _isOnline = !value;
       _error = e.toString();
       notifyListeners();
+      rethrow;
     }
   }
 
@@ -686,6 +705,7 @@ class TaxiProvider extends ChangeNotifier {
     _tripAwaitingRating = null;
     _nearbyDrivers = [];
     _isOnline = false;
+    _readinessStatus = null;
     _error = null;
     _favoritePlaces = [];
     _pendingSavedPlace = null;

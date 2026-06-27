@@ -7,6 +7,8 @@ class ChatThreadSummary {
   final String? contextLabel;
   final String lastMessage;
   final DateTime? lastAt;
+  final int unreadCount;
+  final bool hasUnread;
 
   const ChatThreadSummary({
     required this.threadType,
@@ -17,6 +19,8 @@ class ChatThreadSummary {
     this.contextLabel,
     required this.lastMessage,
     this.lastAt,
+    this.unreadCount = 0,
+    this.hasUnread = false,
   });
 
   factory ChatThreadSummary.fromMap(Map<String, dynamic> map) {
@@ -34,7 +38,17 @@ class ChatThreadSummary {
       lastAt: DateTime.tryParse(
         (map['last_at'] ?? map['lastAt'] ?? '').toString(),
       ),
+      unreadCount: _readInt(map['unread_count'] ?? map['unreadCount']),
+      hasUnread: _readBool(map['has_unread'] ?? map['hasUnread']) ||
+          _readInt(map['unread_count'] ?? map['unreadCount']) > 0,
     );
+  }
+
+  static bool _readBool(dynamic value) => value == true;
+
+  static int _readInt(dynamic value) {
+    if (value is int) return value;
+    return int.tryParse(value?.toString() ?? '') ?? 0;
   }
 
   String get displayTitle {

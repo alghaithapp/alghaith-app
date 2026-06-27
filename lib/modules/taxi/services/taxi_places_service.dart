@@ -6,6 +6,7 @@ import 'package:latlong2/latlong.dart';
 import '../../../core/config/app_config.dart';
 import '../../../core/network/api_client.dart';
 import '../utils/polyline_decoder.dart';
+import '../utils/route_destination_trim.dart';
 import '../utils/taxi_distance_calculator.dart';
 
 /// اقتراح مكان من Google Places أو قاعدة محلية.
@@ -192,15 +193,34 @@ class TaxiPlacesService {
   /// مسار القيادة — الخادم أولاً ثم Google ثم Mapbox ثم خط مباشر.
   static Future<TaxiDrivingRoute> fetchDrivingRoute(LatLng from, LatLng to) async {
     final backend = await _backendDirections(from, to);
-    if (backend.points.length >= 2) return backend;
+    if (backend.points.length >= 2) return _finalizeDrivingRoute(backend, to);
 
     final google = await _googleDirections(from, to);
-    if (google.points.length >= 2) return google;
+    if (google.points.length >= 2) return _finalizeDrivingRoute(google, to);
 
     final mapbox = await _mapboxDirections(from, to);
-    if (mapbox.points.length >= 2) return mapbox;
+    if (mapbox.points.length >= 2) return _finalizeDrivingRoute(mapbox, to);
 
-    return _straightLineRoute(from, to);
+    return _finalizeDrivingRoute(_straightLineRoute(from, to), to);
+  }
+
+  static TaxiDrivingRoute _finalizeDrivingRoute(
+    TaxiDrivingRoute route,
+    LatLng destination,
+  ) {
+    if (route.points.length < 2) return route;
+    final trimmed = trimRouteNearDestination(
+      points: route.points,
+      destination: destination,
+      distanceMeters: route.distanceMeters,
+      durationSeconds: route.durationSeconds,
+    );
+    return TaxiDrivingRoute(
+      points: trimmed.points,
+      distanceMeters: trimmed.distanceMeters,
+      durationSeconds: trimmed.durationSeconds,
+      isApproximate: route.isApproximate,
+    );
   }
 
   static Future<TaxiDrivingRoute> _backendDirections(LatLng from, LatLng to) async {
@@ -339,7 +359,7 @@ class TaxiPlacesService {
         'https://api.mapbox.com/directions/v5/mapbox/driving/'
         '${from.longitude},${from.latitude};${to.longitude},${to.latitude}'
         '?geometries=geojson&access_token=$token'
-        '&language=ar&overview=full',
+        '&language=ar&overview=full&approaches=unrestricted;curb',
       );
       final response =
           await http.get(uri).timeout(const Duration(seconds: 10));

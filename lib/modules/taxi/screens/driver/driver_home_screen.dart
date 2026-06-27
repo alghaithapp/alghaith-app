@@ -7,6 +7,7 @@ import '../../../../providers/app_provider.dart';
 import '../../models/taxi_request.dart';
 import '../../providers/taxi_provider.dart';
 import '../../widgets/taxi_type_image.dart';
+import '../../utils/driver_readiness.dart';
 import '../../utils/taxi_driver_request_actions.dart';
 import '../../widgets/taxi_map_widget.dart';
 
@@ -108,9 +109,13 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
   }
 
   Widget _buildAppBar(BuildContext context, AppProvider provider, String driverName) {
-    final isOnline = context.watch<TaxiProvider>().isOnline;
+    final taxi = context.watch<TaxiProvider>();
+    final isOnline = taxi.isOnline;
     final onlineColor = isOnline ? AppColors.success : Colors.grey;
     final onlineLabel = isOnline ? 'متصل' : 'غير متصل';
+    final offlineHint = !isOnline && taxi.readinessStatus != null
+        ? DriverReadiness.offlineHint(taxi.readinessStatus!)
+        : null;
 
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 10),
@@ -148,6 +153,15 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
                     color: Colors.grey,
                   ),
                 ),
+                if (offlineHint != null)
+                  Text(
+                    offlineHint,
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontFamily: 'Cairo',
+                      color: Colors.grey.shade600,
+                    ),
+                  ),
               ],
             ),
           ),

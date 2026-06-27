@@ -226,7 +226,10 @@ class TaxiRequest {
   bool get isCancelRequested => statusKey == 'cancel_requested';
 
   bool get canCustomerCancel =>
-      isPending || isAccepted || isOnWay || isArrived || isCancelRequested;
+      !isCompleted && !isCancelled;
+
+  bool get canCustomerRequestCancel =>
+      isAccepted || isOnWay || isArrived;
 
   /// يمكن للزبون إنهاء الرحلة إذا نسي الكابتن (بعد الاستلام فقط).
   bool get canCustomerCompleteTrip => isPickedUp;
