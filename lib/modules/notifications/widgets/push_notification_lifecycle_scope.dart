@@ -26,6 +26,7 @@ class _PushNotificationLifecycleScopeState
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     IncomingCallWatcher.instance.onIncomingCall = _handleIncomingCall;
+    IncomingCallWatcher.instance.onCallCancelled = _handleCallCancelled;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       unawaited(_onLifecycleRefresh());
     });
@@ -57,10 +58,19 @@ class _PushNotificationLifecycleScopeState
     IncomingCallCoordinator.present(data);
   }
 
+  void _handleCallCancelled(String callId) {
+    // يُعلم شاشة المكالمة الواردة بإلغاء المتصل لإيقاف الرنين
+    IncomingCallCoordinator.present({
+      'eventKey': 'call:cancelled',
+      'callLogId': callId,
+    });
+  }
+
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     IncomingCallWatcher.instance.onIncomingCall = null;
+    IncomingCallWatcher.instance.onCallCancelled = null;
     IncomingCallWatcher.instance.unbind();
     super.dispose();
   }

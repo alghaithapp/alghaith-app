@@ -8,6 +8,7 @@ import 'package:permission_handler/permission_handler.dart';
 import '../core/theme/app_colors.dart';
 import '../screens/incoming_call_screen.dart';
 import '../services/incoming_call_ringtone.dart';
+import '../modules/notifications/services/push_notification_service.dart';
 import '../services/voice_call_service.dart';
 import '../modules/chat/services/chat_thread_refresh.dart';
 import '../services/zego_voice_service.dart';
@@ -101,11 +102,25 @@ class CallNavigation {
     );
   }
 
+  static void _dismissIncomingCall() {
+    final nav = PushNotificationService.rootNavigatorKey?.currentState;
+    if (nav == null || !nav.mounted) return;
+    nav.pop();
+  }
+
   static Future<void> handlePushData(
     BuildContext context,
     Map<String, dynamic> data,
   ) async {
     final eventKey = data['eventKey']?.toString() ?? '';
+    if (eventKey == 'call:cancelled') {
+      if (_incomingCallVisible) {
+        _incomingCallVisible = false;
+        await IncomingCallRingtone.instance.stop();
+        _dismissIncomingCall();
+      }
+      return;
+    }
     if (eventKey != 'call:incoming') return;
     if (_incomingCallVisible) return;
 
