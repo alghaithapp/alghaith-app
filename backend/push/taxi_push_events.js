@@ -63,7 +63,7 @@ async function notifyNewTaxiRequest(requestMeta, nearbyDrivers = []) {
     if (!phone || seenPhones.has(phone)) continue;
     seenPhones.add(phone);
     try {
-      await sendPushToPhone(phone, driverPayload);
+      await sendPushToPhone(phone, driverPayload, { showSystemBanner: true });
     } catch (error) {
       console.error(`taxi push notifyNewTaxiRequest error for ${phone}:`, error?.message || error);
     }
@@ -78,7 +78,7 @@ async function notifyNewTaxiRequest(requestMeta, nearbyDrivers = []) {
     if (!normalized || seenPhones.has(normalized)) continue;
     seenPhones.add(normalized);
     try {
-      await sendPushToPhone(normalized, driverPayload);
+      await sendPushToPhone(normalized, driverPayload, { showSystemBanner: true });
     } catch (error) {
       console.error(`taxi push notifyNewTaxiRequest fallback error for ${normalized}:`, error?.message || error);
     }
@@ -101,7 +101,7 @@ async function notifyDriverAccepted(customerPhone, driverName, vehicleInfo) {
     },
   });
 
-  await sendPushToPhone(customerPhone, payload);
+  await sendPushToPhone(customerPhone, payload, { showSystemBanner: true });
 }
 
 /**

@@ -10,6 +10,7 @@ const {
   PLATFORM_ADMIN_PHONES,
 } = require('./common');
 const { readTaxiMeta } = require('./taxi');
+const { deleteChatImageByUrl, purgeExpiredChatImages } = require('../services/chat_media_cleanup');
 
 const SUPPORT_PLATFORM_PHONE = '+9647830889994';
 
@@ -143,6 +144,62 @@ async function buildThreadContext(threadType, threadId, myPhone, otherPartyPhone
   };
 }
 
+function formatLastMessagePreview(row) {
+  const type = String(row.message_type || 'text').trim();
+  if (type === 'call') {
+    try {
+      const parsed = JSON.parse(String(row.content || '{}'));
+      const status = String(parsed.status || 'ended').trim();
+      if (status === 'missed' || status === 'no_answer') return 'مكالمة فائتة';
+      if (status === 'failed') return 'مكالمة · فشل الاتصال';
+      const duration = Number.parseInt(String(parsed.durationSeconds ?? 0), 10) || 0;
+      if (duration > 0) {
+        const minutes = Math.floor(duration / 60);
+        const seconds = duration % 60;
+        const clock =
+          minutes > 0
+            ? `${minutes}:${String(seconds).padStart(2, '0')}`
+            : `${seconds} ث`;
+        return `مكالمة صوتية · ${clock}`;
+      }
+      return 'مكالمة صوتية';
+    } catch (_) {
+      return 'مكالمة صوتية';
+    }
+  }
+  if (type === 'sticker') return 'ملصق';
+  if (type === 'image') return 'صورة';
+  return row.content;
+}
+
+function inboxThreadKey(row, myPhone) {
+  const type = String(row.thread_type || '').trim();
+  const id = String(row.thread_id || '').trim();
+  if (type === 'store' && phonesOverlap(id, myPhone)) {
+    const other = phonesOverlap(row.sender_phone, myPhone)
+      ? String(row.receiver_phone || '').trim()
+      : String(row.sender_phone || '').trim();
+    if (other) return `${type}:${id}:${other}`;
+  }
+  return `${type}:${id}`;
+}
+
+function summaryThreadKey(summary, myPhone) {
+  const type = String(summary.thread_type || '').trim();
+  const id = String(summary.thread_id || '').trim();
+  if (type === 'store' && phonesOverlap(id, myPhone)) {
+    const other = String(summary.other_party_phone || '').trim();
+    if (other) return `${type}:${id}:${other}`;
+  }
+  return `${type}:${id}`;
+}
+
+function isUnreadIncoming(row, myPhone) {
+  if (phonesOverlap(row.sender_phone, myPhone)) return false;
+  if (!phonesOverlap(row.receiver_phone, myPhone)) return false;
+  return !row.read_at;
+}
+
 function formatThreadSummary(row, myPhone) {
   const mine = phonesOverlap(row.sender_phone, myPhone);
   return {
@@ -150,9 +207,32 @@ function formatThreadSummary(row, myPhone) {
     thread_id: row.thread_id,
     other_party_phone: mine ? row.receiver_phone : row.sender_phone,
     other_party_name: mine ? null : row.sender_name,
-    last_message: row.content,
+    last_message: formatLastMessagePreview(row),
     last_at: row.created_at,
   };
+}
+
+function mapChatAccessError(message) {
+  const text = String(message || '').trim();
+  if (text === 'Store not found.') {
+    return 'المتجر غير موجود أو غير مسجّل في التطبيق.';
+  }
+  if (text === 'Order not found.') {
+    return 'الطلب غير موجود على السيرفر.';
+  }
+  if (text === 'Taxi request not found.') {
+    return 'رحلة التكسي غير موجودة.';
+  }
+  if (text === 'Unauthorized chat access.') {
+    return 'غير مصرّح لك بفتح هذه المحادثة.';
+  }
+  return text;
+}
+
+async function resolveStoreContact(phone) {
+  const merchant = await selectSingleByPhone('merchant_profiles', phone);
+  if (merchant) return merchant;
+  return selectSingleByPhone('app_users', phone);
 }
 
 function mapChatDbError(error) {
@@ -216,7 +296,8 @@ async function assertCanAccessThread(threadType, threadId, requestPhone) {
       return;
     }
     case 'store': {
-      // الزبون يتواصل قبل الطلب؛ التاجر يصل عبر thread_id = رقم متجره.
+      const contact = await resolveStoreContact(trimmedId);
+      if (!contact) throw new Error('Store not found.');
       if (phonesOverlap(phone, trimmedId)) return;
       return;
     }
@@ -277,17 +358,49 @@ async function resolveReceiverPhone(threadType, threadId, senderPhone, explicitR
   }
 }
 
-async function getChatMessages(threadType, threadId, requestPhone) {
-  await assertCanAccessThread(threadType, threadId, requestPhone);
-  const rows = await selectMany(
-    'chat_messages',
-    [
-      { method: 'eq', column: 'thread_type', value: threadType },
-      { method: 'eq', column: 'thread_id', value: String(threadId).trim() },
-    ],
-    { column: 'created_at', ascending: true },
-    100
-  );
+async function getChatMessages(threadType, threadId, requestPhone, options = {}) {
+  purgeExpiredChatImages({ batchSize: 50 }).catch(() => {});
+  const phone = await resolvePhoneKey(requestPhone);
+  const trimmedType = String(threadType || '').trim();
+  const trimmedId = String(threadId || '').trim();
+  await assertCanAccessThread(trimmedType, trimmedId, phone);
+
+  const limitNum = Math.min(Math.max(Number(options.limit) || 30, 1), 100);
+  const offsetNum = Math.max(Number(options.offset) || 0, 0);
+  const afterTimestamp = String(options.after || '').trim();
+
+  const supabase = assertSupabaseAdmin();
+
+  let query = supabase
+    .from('chat_messages')
+    .select('*')
+    .eq('thread_type', trimmedType)
+    .eq('thread_id', trimmedId)
+    .order('created_at', { ascending: false })
+    .limit(limitNum);
+
+  if (offsetNum > 0) {
+    query = query.range(offsetNum, offsetNum + limitNum - 1);
+  }
+
+  if (afterTimestamp) {
+    query = query.gt('created_at', afterTimestamp);
+  }
+
+  const { data, error } = await query;
+  if (error) throw new Error(error.message);
+
+  const rows = data || [];
+
+  if (trimmedType === 'store' && !phonesOverlap(phone, trimmedId)) {
+    return rows
+      .filter(
+        (row) =>
+          phonesOverlap(phone, row.sender_phone) ||
+          phonesOverlap(phone, row.receiver_phone)
+      )
+      .map(formatMessage);
+  }
   return rows.map(formatMessage);
 }
 
@@ -321,6 +434,7 @@ async function fetchInboxSide(supabase, phoneColumn, variants) {
 }
 
 async function getChatInbox(requestPhone) {
+  purgeExpiredChatImages({ batchSize: 50 }).catch(() => {});
   const phone = await resolvePhoneKey(requestPhone);
   const variants = getPhoneVariants(phone);
   if (variants.length === 0) return [];
@@ -341,10 +455,14 @@ async function getChatInbox(requestPhone) {
   );
 
   const threads = new Map();
+  const unreadCounts = new Map();
   for (const row of combined) {
-    const key = `${row.thread_type}:${row.thread_id}`;
+    const key = inboxThreadKey(row, phone);
     if (!threads.has(key)) {
       threads.set(key, formatThreadSummary(row, phone));
+    }
+    if (isUnreadIncoming(row, phone)) {
+      unreadCounts.set(key, (unreadCounts.get(key) || 0) + 1);
     }
   }
 
@@ -358,7 +476,14 @@ async function getChatInbox(requestPhone) {
         summary.other_party_phone,
         summary.other_party_name
       );
-      return { ...summary, ...context };
+      const key = summaryThreadKey(summary, phone);
+      const unreadCount = unreadCounts.get(key) || 0;
+      return {
+        ...summary,
+        ...context,
+        unread_count: unreadCount,
+        has_unread: unreadCount > 0,
+      };
     })
   );
 
@@ -407,10 +532,213 @@ async function saveChatMessage(payload) {
   return formatMessage(data);
 }
 
+async function appendCallChatEvent(callLogRow) {
+  const row = callLogRow || {};
+  const threadType = String(row.thread_type || '').trim();
+  const threadId = String(row.thread_id || '').trim();
+  const callLogId = String(row.id || '').trim();
+  if (!threadType || !threadId || !callLogId) return null;
+
+  const status = String(row.status || '').trim();
+  if (!['ended', 'missed', 'no_answer', 'failed'].includes(status)) return null;
+
+  const supabase = assertSupabaseAdmin();
+  const { data: recent, error: readError } = await supabase
+    .from('chat_messages')
+    .select('id, content')
+    .eq('thread_type', threadType)
+    .eq('thread_id', threadId)
+    .eq('message_type', 'call')
+    .order('created_at', { ascending: false })
+    .limit(30);
+  if (readError) throw new Error(mapChatDbError(readError));
+
+  for (const item of recent || []) {
+    try {
+      const parsed = JSON.parse(String(item.content || '{}'));
+      if (String(parsed.callLogId || '') === callLogId) return null;
+    } catch (_) {}
+  }
+
+  const content = JSON.stringify({
+    callLogId,
+    status,
+    durationSeconds: row.duration_seconds ?? 0,
+    direction: row.direction || 'outgoing',
+  });
+
+  return saveChatMessage({
+    threadType,
+    threadId,
+    senderPhone: row.caller_phone,
+    receiverPhone: row.receiver_phone,
+    senderName: row.caller_name,
+    messageType: 'call',
+    content,
+  });
+}
+
+async function markThreadAsRead(threadType, threadId, requestPhone, otherPartyPhone) {
+  const phone = await resolvePhoneKey(requestPhone);
+  const trimmedType = String(threadType || '').trim();
+  const trimmedId = String(threadId || '').trim();
+  if (!trimmedId) throw new Error('Thread id is required.');
+
+  await assertCanAccessThread(trimmedType, trimmedId, phone);
+
+  const supabase = assertSupabaseAdmin();
+  const receiverVariants = getPhoneVariants(phone);
+  if (receiverVariants.length === 0) return { success: true, updated: 0 };
+
+  let query = supabase
+    .from('chat_messages')
+    .update({ read_at: new Date().toISOString() })
+    .eq('thread_type', trimmedType)
+    .eq('thread_id', trimmedId)
+    .in('receiver_phone', receiverVariants)
+    .is('read_at', null);
+
+  if (trimmedType === 'store' && phonesOverlap(trimmedId, phone)) {
+    const other = String(otherPartyPhone || '').trim();
+    if (other) {
+      const senderVariants = getPhoneVariants(await resolvePhoneKey(other));
+      if (senderVariants.length > 0) {
+        query = query.in('sender_phone', senderVariants);
+      }
+    }
+  }
+
+  const { data, error } = await query.select('id');
+  if (error) {
+    if (isMissingColumnError(error, 'read_at')) {
+      return { success: true, updated: 0, read_at_supported: false };
+    }
+    throw new Error(mapChatDbError(error));
+  }
+
+  return {
+    success: true,
+    updated: Array.isArray(data) ? data.length : 0,
+    read_at_supported: true,
+  };
+}
+
+function threadRowMatchesDeleteScope(row, phone, threadType, threadId, otherPartyPhone) {
+  if (String(row.thread_type || '').trim() !== String(threadType || '').trim()) {
+    return false;
+  }
+  if (String(row.thread_id || '').trim() !== String(threadId || '').trim()) {
+    return false;
+  }
+
+  if (threadType === 'store') {
+    const merchantPhone = String(threadId).trim();
+    if (phonesOverlap(merchantPhone, phone)) {
+      const other = String(otherPartyPhone || '').trim();
+      if (!other) return false;
+      return (
+        (phonesOverlap(row.sender_phone, phone) && phonesOverlap(row.receiver_phone, other)) ||
+        (phonesOverlap(row.receiver_phone, phone) && phonesOverlap(row.sender_phone, other))
+      );
+    }
+    return phonesOverlap(row.sender_phone, phone) || phonesOverlap(row.receiver_phone, phone);
+  }
+
+  return true;
+}
+
+function callLogMatchesDeleteScope(row, phone, threadType, threadId, otherPartyPhone) {
+  if (threadType !== 'store') return true;
+  if (phonesOverlap(threadId, phone)) {
+    const other = String(otherPartyPhone || '').trim();
+    if (!other) return false;
+    return (
+      (phonesOverlap(row.caller_phone, phone) && phonesOverlap(row.receiver_phone, other)) ||
+      (phonesOverlap(row.receiver_phone, phone) && phonesOverlap(row.caller_phone, other))
+    );
+  }
+  return phonesOverlap(row.caller_phone, phone) || phonesOverlap(row.receiver_phone, phone);
+}
+
+async function deleteChatThread(threadType, threadId, requestPhone, otherPartyPhone) {
+  const phone = await resolvePhoneKey(requestPhone);
+  const trimmedType = String(threadType || '').trim();
+  const trimmedId = String(threadId || '').trim();
+  if (!trimmedId) throw new Error('Thread id is required.');
+
+  await assertCanAccessThread(trimmedType, trimmedId, phone);
+
+  const supabase = assertSupabaseAdmin();
+  const { data: rows, error: readError } = await supabase
+    .from('chat_messages')
+    .select('id, content, message_type, sender_phone, receiver_phone, thread_type, thread_id')
+    .eq('thread_type', trimmedType)
+    .eq('thread_id', trimmedId);
+
+  if (readError) throw new Error(mapChatDbError(readError));
+
+  const toDelete = (rows || []).filter((row) =>
+    threadRowMatchesDeleteScope(row, phone, trimmedType, trimmedId, otherPartyPhone)
+  );
+
+  for (const row of toDelete) {
+    if (String(row.message_type || '').trim() === 'image') {
+      try {
+        await deleteChatImageByUrl(row.content);
+      } catch (cleanupError) {
+        console.warn('delete chat image:', cleanupError?.message || cleanupError);
+      }
+    }
+  }
+
+  const ids = toDelete.map((row) => row.id);
+  if (ids.length > 0) {
+    const { error: deleteMessagesError } = await supabase
+      .from('chat_messages')
+      .delete()
+      .in('id', ids);
+    if (deleteMessagesError) throw new Error(mapChatDbError(deleteMessagesError));
+  }
+
+  let callLogsDeleted = 0;
+  try {
+    const { data: callRows, error: callReadError } = await supabase
+      .from('voice_call_logs')
+      .select('id, caller_phone, receiver_phone')
+      .eq('thread_type', trimmedType)
+      .eq('thread_id', trimmedId);
+    if (!callReadError && Array.isArray(callRows)) {
+      const callIds = callRows
+        .filter((row) =>
+          callLogMatchesDeleteScope(row, phone, trimmedType, trimmedId, otherPartyPhone)
+        )
+        .map((row) => row.id);
+      if (callIds.length > 0) {
+        const { error: callDeleteError } = await supabase
+          .from('voice_call_logs')
+          .delete()
+          .in('id', callIds);
+        if (!callDeleteError) callLogsDeleted = callIds.length;
+      }
+    }
+  } catch (_) {}
+
+  return {
+    success: true,
+    deleted_messages: ids.length,
+    deleted_call_logs: callLogsDeleted,
+  };
+}
+
 module.exports = {
   getChatMessages,
   getChatInbox,
   saveChatMessage,
+  appendCallChatEvent,
+  markThreadAsRead,
+  deleteChatThread,
   resolveReceiverPhone,
+  assertCanAccessThread,
+  mapChatAccessError,
   SUPPORT_PLATFORM_PHONE,
 };

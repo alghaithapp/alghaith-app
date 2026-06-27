@@ -537,7 +537,7 @@ async function updateTaxiRequestStatus(actorPhone, requestId, statusKey) {
 
   // التحقق من التسلسل الصحيح للحالات
   const allowedStatuses = [
-    'arrived', 'picked_up', 'completed', 'cancelled', 'accepted', 'cancel_requested',
+    'on_way', 'arrived', 'picked_up', 'completed', 'cancelled', 'accepted', 'cancel_requested',
   ];
   if (!allowedStatuses.includes(statusKey)) {
     throw new Error(`Invalid status key: ${statusKey}.`);
@@ -647,22 +647,15 @@ async function cancelTaxiRequest(customerPhone, requestId, reason) {
   if (currentStatus === 'completed' || currentStatus === 'cancelled') {
     throw new Error('لا يمكن إلغاء هذا الطلب.');
   }
-  if (currentStatus === 'picked_up') {
-    throw new Error('لا يمكن الإلغاء بعد بدء الرحلة.');
-  }
 
-  if (currentStatus !== 'pending') {
-    throw new Error('استخدم طلب الإلغاء للرحلات المقبولة من شاشة التتبع.');
-  }
-
-  const cancellableStatuses = ['pending'];
+  const allowedStatuses = ['pending', 'accepted', 'on_way', 'arrived', 'cancel_requested'];
 
   const cancelledAt = nowIso();
   const nextPayload = {
     ...meta.payload,
     statusKey: 'cancelled',
     statusAr: 'ملغي',
-    cancellationReason: 'ألغى الزبون الطلب',
+    cancellationReason: reason || 'ألغى الزبون الطلب',
     cancelledAt,
     updatedAt: cancelledAt,
   };
@@ -677,7 +670,7 @@ async function cancelTaxiRequest(customerPhone, requestId, reason) {
       updated_at: cancelledAt,
     })
     .eq('id', id)
-    .in('status_key', cancellableStatuses)
+    .in('status_key', allowedStatuses)
     .select()
     .maybeSingle();
 
