@@ -117,7 +117,31 @@ async function handlePost(req, res, threadType, threadId) {
       orderId: threadType === 'order' ? threadId : '',
     }).catch((err) => console.error('chat push error:', err?.message || err));
   }
+  _broadcastViaSocket(threadType, threadId, savedMessage);
   return res.json(savedMessage);
+}
+
+function _broadcastViaSocket(threadType, threadId, savedMessage) {
+  try {
+    const http = require('http');
+    const data = JSON.stringify({
+      key: process.env.SOCKET_BROADCAST_KEY || 'alghaith-socket-broadcast-key',
+      room: `${threadType}:${threadId}`,
+      event: 'message',
+      payload: savedMessage,
+    });
+    const req = http.request({
+      hostname: '155.117.43.250',
+      port: 10035,
+      path: '/api/broadcast',
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(data) },
+      timeout: 3000,
+    }, () => {});
+    req.on('error', () => {});
+    req.write(data);
+    req.end();
+  } catch (_) {}
 }
 
 router.get('/:threadType/:threadId', async (req, res) => {

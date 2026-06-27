@@ -7,8 +7,20 @@ class ChatService {
   static Future<List<ChatMessage>> fetchMessages({
     required String threadType,
     required String threadId,
+    int limit = 30,
+    int offset = 0,
+    String? after,
   }) async {
-    final data = await ApiClient.instance.get('/db/chat/$threadType/$threadId');
+    final params = <String, String>{
+      'limit': limit.toString(),
+    };
+    if (offset > 0) params['offset'] = offset.toString();
+    if (after != null && after.isNotEmpty) params['after'] = after;
+
+    final data = await ApiClient.instance.get(
+      '/db/chat/$threadType/$threadId',
+      queryParameters: params.isEmpty ? null : params,
+    );
     if (data is! List) return const [];
     return data
         .whereType<Map>()
@@ -23,6 +35,34 @@ class ChatService {
         .whereType<Map>()
         .map((item) => ChatThreadSummary.fromMap(Map<String, dynamic>.from(item)))
         .toList();
+  }
+
+  static Future<void> deleteThread({
+    required String threadType,
+    required String threadId,
+    String? otherPartyPhone,
+  }) async {
+    await ApiClient.instance.delete(
+      '/db/chat/$threadType/$threadId',
+      queryParameters: {
+        if (otherPartyPhone != null && otherPartyPhone.trim().isNotEmpty)
+          'otherPartyPhone': otherPartyPhone.trim(),
+      },
+    );
+  }
+
+  static Future<void> markThreadRead({
+    required String threadType,
+    required String threadId,
+    String? otherPartyPhone,
+  }) async {
+    await ApiClient.instance.post(
+      '/db/chat/$threadType/$threadId/read',
+      body: {
+        if (otherPartyPhone != null && otherPartyPhone.trim().isNotEmpty)
+          'otherPartyPhone': otherPartyPhone.trim(),
+      },
+    );
   }
 
   static Future<ChatMessage> sendMessage({
