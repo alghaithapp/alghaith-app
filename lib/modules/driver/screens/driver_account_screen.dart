@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../providers/app_provider.dart';
+import '../../notifications/services/push_notification_service.dart';
 import '../../../utils/account_role_switch.dart';
 import '../../common/screens/notifications_screen.dart';
 import '../../merchant/screens/merchant_chat_inbox_screen.dart';
@@ -33,6 +34,10 @@ class _DriverAccountScreenState extends State<DriverAccountScreen> {
     if (_testingPush) return;
     setState(() => _testingPush = true);
     try {
+      final phone = context.read<AppProvider>().authPhone ?? '';
+      if (phone.isNotEmpty) {
+        await PushNotificationService.instance.ensureUserBinding(phone);
+      }
       final result = await TaxiApiService.testDriverPush();
       final tokenCount = _asInt(result['tokenCount']);
       final sent = _asInt(result['sent']);

@@ -18,6 +18,12 @@ async function saveDeviceToken(phone, data = {}) {
   }
   const platform = String(data.platform ?? 'unknown').trim() || 'unknown';
   const supabase = assertSupabaseAdmin();
+  await supabase
+    .from('device_tokens')
+    .delete()
+    .eq('token', token)
+    .neq('phone', phoneKey);
+
   const existing = await supabase
     .from('device_tokens')
     .select('id')

@@ -1,4 +1,5 @@
 ﻿import 'dart:async';
+import 'dart:io';
 
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -85,13 +86,7 @@ class PushNotificationService {
         }
       });
 
-      _currentToken = await messaging.getToken().timeout(
-        const Duration(seconds: 20),
-        onTimeout: () {
-          debugPrint('Push: getToken timed out on iOS — starting without token.');
-          return null;
-        },
-      );
+      _currentToken = await _getMessagingTokenWithRetry();
       _initialized = true;
       debugPrint('Push: initialized token=${_currentToken != null}');
     } catch (error) {
@@ -159,7 +154,7 @@ class PushNotificationService {
 
     for (var attempt = 0; attempt < 3; attempt++) {
       final registered = await bindToUser(normalized);
-      final token = _currentToken ?? await FirebaseMessaging.instance.getToken();
+      final token = _currentToken ?? await _getMessagingTokenWithRetry();
       if (registered && token != null && token.trim().isNotEmpty) {
         _currentToken = token;
         return true;
@@ -178,7 +173,7 @@ class PushNotificationService {
     if (normalized.isEmpty) return false;
     _boundPhone = normalized;
 
-    final token = _currentToken ?? await FirebaseMessaging.instance.getToken();
+    final token = _currentToken ?? await _getMessagingTokenWithRetry();
     if (token == null || token.isEmpty) return false;
     _currentToken = token;
     final registered = await _registerToken(normalized, token);
@@ -223,6 +218,37 @@ class PushNotificationService {
       debugPrint('Push: failed to register token: $error');
       return false;
     }
+  }
+
+  Future<String?> _getMessagingTokenWithRetry() async {
+    final messaging = FirebaseMessaging.instance;
+    for (var attempt = 0; attempt < 5; attempt++) {
+      try {
+        if (!kIsWeb && Platform.isIOS) {
+          final apnsToken = await messaging.getAPNSToken().timeout(
+            const Duration(seconds: 5),
+            onTimeout: () => null,
+          );
+          debugPrint('Push: iOS APNs token available=${apnsToken != null}');
+          if (apnsToken == null) {
+            await Future<void>.delayed(Duration(milliseconds: 600 * (attempt + 1)));
+            continue;
+          }
+        }
+
+        final token = await messaging.getToken().timeout(
+          const Duration(seconds: 10),
+          onTimeout: () => null,
+        );
+        if (token != null && token.trim().isNotEmpty) {
+          return token;
+        }
+      } catch (error) {
+        debugPrint('Push: token attempt ${attempt + 1} failed: $error');
+      }
+      await Future<void>.delayed(Duration(milliseconds: 600 * (attempt + 1)));
+    }
+    return null;
   }
 
   Future<void> _handleForegroundMessage(RemoteMessage message) async {
