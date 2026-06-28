@@ -79,11 +79,15 @@ class ApiClient {
                 .timeout(AppConfig.apiTimeout);
           case 'PUT':
             response = await http
-                .put(uri, headers: headers, body: jsonEncode(body))
+                .put(uri,
+                    headers: headers,
+                    body: body == null ? null : jsonEncode(body))
                 .timeout(AppConfig.apiTimeout);
           case 'POST':
             response = await http
-                .post(uri, headers: headers, body: jsonEncode(body))
+                .post(uri,
+                    headers: headers,
+                    body: body == null ? null : jsonEncode(body))
                 .timeout(AppConfig.apiTimeout);
           case 'DELETE':
             response = await http
