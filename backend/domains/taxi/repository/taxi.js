@@ -800,8 +800,18 @@ async function updateDriverPresenceLocation(driverPhone, data = {}) {
   const lng = Number(data.lng ?? data.longitude ?? 0);
   if (!lat || !lng) throw new Error('Valid coordinates are required.');
 
-  const state = (await getUserState(normalizedDriver)) || {};
-  const profile = state.driverProfile || {};
+  const { getDriverProfile, saveDriverProfile } = require('../../../supabase_repo/operator_profiles');
+  const profile = (await getDriverProfile(normalizedDriver)) || {};
+
+  const supabase = assertSupabaseAdmin();
+  await supabase
+    .from('driver_profiles')
+    .update({ latitude: lat, longitude: lng, updated_at: nowIso() })
+    .eq('phone', normalizedDriver)
+    .then(({ error }) => {
+      if (error) console.error('driver_profiles location update error:', error.message);
+    });
+
   const result = await driverLocations.upsertDriverLocation(normalizedDriver, {
     lat,
     lng,
@@ -964,75 +974,60 @@ async function getNearbyDrivers(pickupLat, pickupLng, taxiType = 'economic', exc
   const supabase = assertSupabaseAdmin();
   const requestedType = normalizeTaxiType(taxiType);
 
-  // الحصول على جميع مستخدمين دور driver
-  const { data: appUsers, error } = await supabase
-    .from('app_users')
-    .select('phone, role, account_type');
-  if (error) throw new Error(error.message);
-
-  const candidates = [];
   const excludeSet = new Set(
     (excludeDriverIds || []).map((id) => String(id || '').trim()).filter(Boolean)
   );
 
-  const candidateUsers = (appUsers || []).filter((user) => {
-    const phone = String(user.phone || '').trim();
-    return phone && !excludeSet.has(phone);
-  });
+  const { data: driverRows, error } = await supabase
+    .from('driver_profiles')
+    .select('phone, latitude, longitude, profile_payload, driver_type, is_approved, available, is_suspended')
+    .eq('is_approved', true)
+    .eq('available', true)
+    .eq('is_suspended', false);
+  if (error) throw new Error(error.message);
 
-  const states = await Promise.allSettled(
-    candidateUsers.map((user) => getUserState(String(user.phone || '').trim()))
-  );
+  const candidates = [];
 
-  for (let i = 0; i < candidateUsers.length; i++) {
-    const phone = String(candidateUsers[i].phone || '').trim();
-    if (!phone) continue;
+  for (const row of driverRows || []) {
+    const phone = String(row.phone || '').trim();
+    if (!phone || excludeSet.has(phone)) continue;
 
-    const result = states[i];
-    if (result.status !== 'fulfilled' || !result.value) continue;
-    const state = result.value;
-    const profile = state?.driverProfile;
-    if (!profile || typeof profile !== 'object') continue;
-    if (Object.keys(profile).length === 0) continue;
-    if (profile.isApproved !== true) continue;
-    if (profile.available === false) continue;
-
-    // تحقق من service type
-    const services = profile.services || {};
+    const payload = typeof row.profile_payload === 'object' ? row.profile_payload : {};
+    const services = (payload.services || payload.services === false)
+      ? payload.services
+      : { taxi: true };
     if (services.taxi === false) continue;
 
-    const driverType = normalizeTaxiType(profile.taxiType);
+    const driverType = normalizeTaxiType(row.driver_type || payload.taxiType || 'economic');
     if (driverType !== requestedType) continue;
 
-    // حساب المسافة باستخدام Haversine
-    const driverLat = Number(profile.latitude ?? profile.lat ?? 0);
-    const driverLng = Number(profile.longitude ?? profile.lng ?? 0);
+    const driverLat = Number(row.latitude ?? payload.latitude ?? payload.lat ?? 0);
+    const driverLng = Number(row.longitude ?? payload.longitude ?? payload.lng ?? 0);
     if (!driverLat || !driverLng) continue;
 
     const distance = haversineDistance(pickupLat, pickupLng, driverLat, driverLng);
     if (distance > radiusKm) continue;
 
     candidates.push({
-      phone: phone,
+      phone,
       currentLat: driverLat,
       currentLng: driverLng,
-      name: profile.name || '',
+      name: String(payload.name ?? row.display_name ?? '').trim(),
       taxiType: driverType,
-      vehicleModel: profile.vehicleModel || '',
-      plateNumber: profile.plateNumber || '',
-      color: profile.color || '',
-      area: profile.area || '',
-      rating: profile.rating || 0,
+      vehicleModel: String(payload.vehicleModel ?? payload.vehicle ?? '').trim(),
+      plateNumber: String(payload.plateNumber ?? payload.plate ?? '').trim(),
+      color: String(payload.color ?? '').trim(),
+      area: String(payload.area ?? '').trim(),
+      rating: Number(payload.rating ?? 0),
       totalTrips: 0,
-      isAvailable: profile.available !== false,
-      isOnline: profile.available !== false,
-      isApproved: profile.isApproved === true,
-      services: profile.services || {},
+      isAvailable: true,
+      isOnline: true,
+      isApproved: true,
+      services,
       distanceKm: Math.round(distance * 100) / 100,
     });
   }
 
-  // ترتيب حسب المسافة (الأقرب أولاً)
   candidates.sort((a, b) => a.distanceKm - b.distanceKm);
 
   return candidates;
@@ -1120,36 +1115,27 @@ async function getActiveDriverPhonesByTaxiType(taxiType = 'economic') {
   const supabase = assertSupabaseAdmin();
   const requestedType = normalizeTaxiType(taxiType);
 
-  const { data: appUsers, error } = await supabase
-    .from('app_users')
-    .select('phone, role, account_type');
+  const { data: driverRows, error } = await supabase
+    .from('driver_profiles')
+    .select('phone, driver_type, is_approved, available, is_suspended, profile_payload')
+    .eq('is_approved', true)
+    .eq('available', true)
+    .eq('is_suspended', false);
   if (error) throw new Error(error.message);
 
   const result = [];
 
-  const states = await Promise.allSettled(
-    (appUsers || []).map((user) => {
-      const phone = String(user.phone || '').trim();
-      return phone ? getUserState(phone) : Promise.resolve(null);
-    })
-  );
-
-  for (let i = 0; i < (appUsers || []).length; i++) {
-    const phone = String(appUsers[i].phone || '').trim();
+  for (const row of driverRows || []) {
+    const phone = String(row.phone || '').trim();
     if (!phone) continue;
 
-    const entry = states[i];
-    if (entry.status !== 'fulfilled' || !entry.value) continue;
-    const state = entry.value;
-    const profile = state?.driverProfile;
-    if (!profile || typeof profile !== 'object') continue;
-    if (profile.isApproved !== true) continue;
-    if (profile.available === false) continue;
-
-    const services = profile.services || {};
+    const payload = typeof row.profile_payload === 'object' ? row.profile_payload : {};
+    const services = (payload.services || payload.services === false)
+      ? payload.services
+      : { taxi: true };
     if (services.taxi === false) continue;
 
-    const driverType = normalizeTaxiType(profile.taxiType);
+    const driverType = normalizeTaxiType(row.driver_type || payload.taxiType || 'economic');
     if (driverType !== requestedType) continue;
 
     result.push(phone);
