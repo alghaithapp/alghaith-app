@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 
 import '../../../core/realtime/realtime_subscription_mixin.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../notifications/services/push_notification_service.dart';
 import '../../taxi/providers/taxi_provider.dart';
 import '../../taxi/screens/driver/driver_home_screen.dart';
 import '../../taxi/screens/driver/driver_request_screen.dart';
@@ -52,6 +53,8 @@ class _DriverShellState extends State<DriverShell> with RealtimeSubscriptionMixi
       final provider = context.read<AppProvider>();
       final phone = provider.authPhone;
       if (phone != null && phone.isNotEmpty) {
+        // ربط FCM Token بحساب السائق لضمان وصول إشعارات التكسي
+        unawaited(_ensurePushBinding(phone));
         _initDriverLocation(provider, phone);
         _startDriverLocationUpdates(provider);
         context.read<TaxiProvider>().loadDriverActiveRequest();
@@ -70,6 +73,15 @@ class _DriverShellState extends State<DriverShell> with RealtimeSubscriptionMixi
         trackChannel(sub);
       }
     });
+  }
+
+  Future<void> _ensurePushBinding(String phone) async {
+    try {
+      await PushNotificationService.instance.ensureUserBinding(phone);
+      debugPrint('DriverShell: FCM token bound for $phone');
+    } catch (e) {
+      debugPrint('DriverShell: push binding error: $e');
+    }
   }
 
   Future<void> _initDriverLocation(AppProvider provider, String phone) async {
