@@ -131,7 +131,15 @@ class _DriverReadinessBannerState extends State<DriverReadinessBanner> {
       return const SizedBox.shrink();
     }
 
-    final issues = status.issues;
+    final taxi = context.watch<TaxiProvider>();
+    final issues = status.issues.where((issue) {
+      if (taxi.isOnline &&
+          (issue == DriverReadinessIssue.notificationsDenied ||
+              issue == DriverReadinessIssue.pushTokenMissing)) {
+        return false;
+      }
+      return true;
+    }).toList();
     if (issues.isEmpty) {
       return const SizedBox.shrink();
     }
