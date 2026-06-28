@@ -48,7 +48,9 @@ class DriverReadinessStatus {
   List<DriverReadinessIssue> get issues {
     final result = <DriverReadinessIssue>[];
     if (!notificationsOk) result.add(DriverReadinessIssue.notificationsDenied);
-    if (!pushTokenOk) result.add(DriverReadinessIssue.pushTokenMissing);
+    if (!pushTokenOk && !(!kIsWeb && Platform.isIOS && notificationsOk)) {
+      result.add(DriverReadinessIssue.pushTokenMissing);
+    }
     if (!locationPermissionOk) result.add(DriverReadinessIssue.locationDenied);
     if (locationPermissionOk && !locationSaved) {
       result.add(DriverReadinessIssue.locationMissing);

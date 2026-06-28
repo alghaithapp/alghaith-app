@@ -132,6 +132,9 @@ class _DriverReadinessBannerState extends State<DriverReadinessBanner> {
     }
 
     final issues = status.issues;
+    if (issues.isEmpty) {
+      return const SizedBox.shrink();
+    }
     return Material(
       color: const Color(0xFFFFF8E6),
       child: Padding(

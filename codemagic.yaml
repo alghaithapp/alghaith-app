@@ -91,6 +91,15 @@ workflows:
           flutter config --no-enable-swift-package-manager
           flutter pub get
           flutter precache --ios
+          APP_VERSION="$(grep '^version:' pubspec.yaml | awk '{print $2}')"
+          BUILD_NAME="${APP_VERSION%%+*}"
+          BUILD_NUMBER="${APP_VERSION##*+}"
+          echo "Codemagic build version: $BUILD_NAME+$BUILD_NUMBER"
+          test "$BUILD_NUMBER" -gt 183
+          {
+            echo "FLUTTER_BUILD_NAME=$BUILD_NAME"
+            echo "FLUTTER_BUILD_NUMBER=$BUILD_NUMBER"
+          } >> ios/Flutter/Generated.xcconfig
 
       - name: Install CocoaPods dependencies
         script: |
