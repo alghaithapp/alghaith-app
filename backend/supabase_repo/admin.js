@@ -392,7 +392,7 @@ async function getAllCouriers(adminPhone) {
 async function getAllDrivers(adminPhone) {
   await assertAdminAccess(adminPhone);
 
-  const [users, states] = await Promise.all([
+  const [users, states, driverRows] = await Promise.all([
     selectMany('app_users', [], { column: 'updated_at', ascending: false }, 3000),
     selectManyColumns(
       'app_state',
@@ -401,6 +401,7 @@ async function getAllDrivers(adminPhone) {
       { column: 'updated_at', ascending: false },
       2500
     ),
+    selectMany('driver_profiles', [], { column: 'updated_at', ascending: false }, 2000),
   ]);
 
   const stateByPhone = {};
@@ -408,6 +409,13 @@ async function getAllDrivers(adminPhone) {
     const phone = String(row.phone || '').trim();
     if (!phone) continue;
     stateByPhone[phone] = row.state || {};
+  }
+
+  const driverProfileByPhone = {};
+  for (const row of driverRows) {
+    const phone = String(row.phone || '').trim();
+    if (!phone) continue;
+    driverProfileByPhone[phone] = rowToDriverProfileMap(row);
   }
 
   const drivers = [];
@@ -418,7 +426,7 @@ async function getAllDrivers(adminPhone) {
     if (!phone || seen.has(phone)) continue;
 
     const state = stateByPhone[phone] || {};
-    const profile = readDriverProfileFromState(state);
+    const profile = driverProfileByPhone[phone] ?? readDriverProfileFromState(state);
     if (!profile || !isDriverProfileComplete(profile)) continue;
 
     const role = String(user.role ?? '').trim();
@@ -1176,6 +1184,25 @@ function resolveAccountSuspended(state, merchantProfile, operatorProfiles = {}) 
   return false;
 }
 
+const DRIVER_DOCUMENT_KEYS = [
+  'profileImage', 'vehicleImage', 'idFrontImage', 'idBackImage',
+  'residenceCardImage', 'vehicleRegFrontImage', 'vehicleRegBackImage',
+];
+
+function extractDriverDocuments(profile) {
+  if (!profile || typeof profile !== 'object') return undefined;
+  const docs = {};
+  let hasAny = false;
+  for (const key of DRIVER_DOCUMENT_KEYS) {
+    const url = String(profile[key] ?? '').trim();
+    if (url) {
+      docs[key] = url;
+      hasAny = true;
+    }
+  }
+  return hasAny ? docs : undefined;
+}
+
 function mapAdminAccountSummary(user, state, merchantProfile, operatorProfiles = {}) {
   const phone = String(user?.phone ?? '').trim();
   const kind = classifyAdminAccountKind(
@@ -1224,6 +1251,9 @@ function mapAdminAccountSummary(user, state, merchantProfile, operatorProfiles =
     hasDriverProfile: isDriverProfileComplete(driverProfile),
     hasDriverCredential,
     driverProfileComplete: isDriverProfileComplete(driverProfile),
+    documents: kind === 'driver' || hasDriverCredential
+      ? extractDriverDocuments(driverProfile)
+      : undefined,
   };
 }
 
