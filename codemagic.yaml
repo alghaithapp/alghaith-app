@@ -43,7 +43,7 @@ workflows:
 
     triggering:
       events:
-        - push
+        # - push # تم إيقاف البناء التلقائي بناءً على طلبك
       branch_patterns:
         - pattern: main
           include: true
