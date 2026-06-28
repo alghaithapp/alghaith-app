@@ -177,9 +177,13 @@ class TaxiApiService {
   }
 
   /// تحديث حالة اتصال السائق (متصل/غير متصل)
-  static Future<void> setDriverOnlineStatus(bool isOnline) async {
+  static Future<void> setDriverOnlineStatus(
+    bool isOnline, {
+    bool manual = false,
+  }) async {
     await ApiClient.instance.post('$_basePath/driver-status', body: {
       'isOnline': isOnline,
+      if (manual) 'manual': true,
     });
   }
 

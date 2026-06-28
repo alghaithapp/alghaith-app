@@ -239,6 +239,10 @@ router.post('/driver-status', async (req, res) => {
     const phone = requireOptionalAuthorizedPhone(req, res);
     if (!phone) return;
     const isOnline = req.body?.isOnline === true;
+    const manual = req.body?.manual === true;
+    if (!isOnline && !manual) {
+      return res.json({ success: true, phone, isOnline: true, ignored: 'offline_requires_manual' });
+    }
     const result = await repo.setDriverOnlineStatus(phone, isOnline);
     return res.json(result);
   } catch (error) {

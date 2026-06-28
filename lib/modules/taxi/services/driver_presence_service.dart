@@ -149,7 +149,7 @@ class DriverPresenceService {
     if (normalized.isEmpty) return;
     await DriverPresenceStore.setWantsOnline(normalized, false);
     try {
-      await TaxiApiService.setDriverOnlineStatus(false);
+      await TaxiApiService.setDriverOnlineStatus(false, manual: true);
     } catch (error) {
       debugPrint('DriverPresence: logout offline failed: $error');
     }
