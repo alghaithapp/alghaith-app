@@ -157,8 +157,18 @@ router.get('/active', async (req, res) => {
     const phone = requireOptionalAuthorizedPhone(req, res);
     if (!phone) return;
     const request = await repo.getCustomerActiveRequest(phone);
-    if (!request) return res.json(null);
-    return res.json(await formatRequestRowEnriched(request));
+    if (request) return res.json(await formatRequestRowEnriched(request));
+
+    // إذا لم يكن هناك طلب نشط، نتحقق من وجود طلب مُلغى قريب (لينتهي العداد من الجهاز)
+    const recent = await repo.getCustomerRecentRequest(phone);
+    if (!recent) return res.json(null);
+
+    const meta = repo.readTaxiMeta(recent);
+    if (meta.statusKey === 'cancelled') {
+      const enriched = repo.formatTaxiRequestForClient(recent);
+      return res.json(enriched);
+    }
+    return res.json(null);
   } catch (error) {
     console.error('taxi active error:', error);
     return res.status(500).json({ message: error?.message || 'Failed to get active request.' });

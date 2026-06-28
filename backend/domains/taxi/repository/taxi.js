@@ -1148,6 +1148,21 @@ async function getCustomerActiveRequest(customerPhone) {
   return Array.isArray(rows) && rows.length > 0 ? rows[0] : null;
 }
 
+async function getCustomerRecentRequest(customerPhone) {
+  const normalizedPhone = await resolvePhoneKey(customerPhone);
+  const variants = getPhoneVariants(normalizedPhone);
+  if (variants.length === 0) return null;
+
+  const rows = await selectMany(
+    'taxi_requests',
+    [{ method: 'in', column: 'phone', value: variants }],
+    { column: 'created_at', ascending: false },
+    5
+  );
+
+  return Array.isArray(rows) && rows.length > 0 ? rows[0] : null;
+}
+
 async function getDriverActiveRequest(driverPhone) {
   const normalizedDriver = await resolvePhoneKey(driverPhone);
   const variants = getPhoneVariants(normalizedDriver);
@@ -1395,6 +1410,7 @@ module.exports = {
   getActiveDriverPhonesByTaxiType,
   getDriverIncomingRequests,
   getCustomerActiveRequest,
+  getCustomerRecentRequest,
   getDriverActiveRequest,
   getCustomerPendingRatingRequest,
   getCustomerHistory,
