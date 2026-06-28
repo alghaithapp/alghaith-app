@@ -3,6 +3,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../services/push_notification_service.dart';
+import '../services/push_notification_inbox.dart';
+import '../../taxi/providers/taxi_provider.dart';
+import '../../taxi/services/driver_presence_service.dart';
 import '../../../providers/app_provider.dart';
 import '../../../services/incoming_call_watcher.dart';
 import '../../../services/incoming_call_coordinator.dart';
@@ -27,9 +30,17 @@ class _PushNotificationLifecycleScopeState
     WidgetsBinding.instance.addObserver(this);
     IncomingCallWatcher.instance.onIncomingCall = _handleIncomingCall;
     IncomingCallWatcher.instance.onCallCancelled = _handleCallCancelled;
+    PushNotificationInbox.onTaxiIncomingPush = _handleTaxiIncomingPush;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       unawaited(_onLifecycleRefresh());
     });
+  }
+
+  Future<void> _handleTaxiIncomingPush() async {
+    if (!mounted) return;
+    final provider = context.read<AppProvider>();
+    if (provider.userRole != 'driver') return;
+    await context.read<TaxiProvider>().fetchIncomingRequests();
   }
 
   Future<void> _onLifecycleRefresh() async {
@@ -49,6 +60,15 @@ class _PushNotificationLifecycleScopeState
     }
 
     await PushNotificationService.instance.ensureUserBinding(phone);
+    if (provider.userRole == 'driver') {
+      final taxi = context.read<TaxiProvider>();
+      await DriverPresenceService.instance.restoreIfNeeded(
+        phone: phone,
+        taxiProvider: taxi,
+        readProfile: () => provider.driverProfile,
+        writeProfile: provider.setDriverProfile,
+      );
+    }
     if (_watchedPhone == phone && IncomingCallWatcher.instance.isActive) return;
     _watchedPhone = phone;
     IncomingCallWatcher.instance.bind(phone);
@@ -72,6 +92,7 @@ class _PushNotificationLifecycleScopeState
     IncomingCallWatcher.instance.onIncomingCall = null;
     IncomingCallWatcher.instance.onCallCancelled = null;
     IncomingCallWatcher.instance.unbind();
+    PushNotificationInbox.onTaxiIncomingPush = null;
     super.dispose();
   }
 

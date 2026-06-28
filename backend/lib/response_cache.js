@@ -3,11 +3,9 @@
  * يُسرّع القراءة المتكررة دون تغيير التطبيق.
  */
 
-const logger = require('./logger');
+const { getRedisClient } = require('./redis_client');
 
 const memoryStore = new Map();
-let redisClient = null;
-let redisInitAttempted = false;
 
 function parseTtlMs(value, fallbackMs) {
   const parsed = Number.parseInt(String(value || ''), 10);
@@ -21,36 +19,6 @@ const DEFAULT_TTLS = {
   catalog: parseTtlMs(process.env.CACHE_TTL_CATALOG_MS, 2 * 60_000),
   appPolicy: parseTtlMs(process.env.CACHE_TTL_APP_POLICY_MS, 10 * 60_000),
 };
-
-function getRedisClient() {
-  if (redisInitAttempted) return redisClient;
-  redisInitAttempted = true;
-
-  const url = String(process.env.REDIS_URL || '').trim();
-  if (!url) return null;
-
-  try {
-    const Redis = require('ioredis');
-    redisClient = new Redis(url, {
-      maxRetriesPerRequest: 1,
-      enableReadyCheck: true,
-      lazyConnect: true,
-    });
-    redisClient.on('error', (error) => {
-      logger.warn('response_cache redis error', { message: error?.message || error });
-    });
-    redisClient.connect().catch((error) => {
-      logger.warn('response_cache redis connect failed', {
-        message: error?.message || error,
-      });
-    });
-  } catch (error) {
-    logger.warn('response_cache redis unavailable', { message: error?.message || error });
-    redisClient = null;
-  }
-
-  return redisClient;
-}
 
 function readMemory(key) {
   const entry = memoryStore.get(key);
@@ -139,6 +107,7 @@ async function remember(key, ttlMs, loader) {
 }
 
 function cacheStats() {
+  const redisClient = getRedisClient();
   const now = Date.now();
   let active = 0;
   for (const entry of memoryStore.values()) {

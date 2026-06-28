@@ -14,6 +14,8 @@ const {
 } = require('../../../supabase_repo/common');
 const { ensureAppUser, getUserState } = require('../../../supabase_repo/users');
 const { calculateFare, normalizeTaxiType } = require('../../../services/taxi_pricing_service');
+const driverLocations = require('./driver_locations');
+const { acquireLock, releaseLock } = require('../../../lib/redis_client');
 
 // ── دوال مساعدة ──────────────────────────────────────────────────
 
@@ -307,32 +309,8 @@ async function createTaxiRequest(customerPhone, data = {}) {
   const savedRow = await saveRow('taxi_requests', payload, 'id');
   const saved = readTaxiMeta(savedRow);
 
-  // إرسال إشعارات
-  try {
-    const { notifyNewTaxiRequest } = require('../../../push/taxi_push_events');
-    let nearbyDrivers = await getNearbyDrivers(
-      requestPayload.pickupLat,
-      requestPayload.pickupLng,
-      taxiType,
-      [],
-      10
-    );
-    if (!nearbyDrivers.length) {
-      nearbyDrivers = await getNearbyDrivers(
-        requestPayload.pickupLat,
-        requestPayload.pickupLng,
-        taxiType,
-        [],
-        25
-      );
-    }
-    await notifyNewTaxiRequest(
-      { ...saved, taxiType },
-      nearbyDrivers
-    );
-  } catch (e) {
-    console.error('taxi create push error:', e?.message || e);
-  }
+  // Push + بحث السائقين في الخلفية — الرد للزبون فوراً بعد الحفظ (Realtime يُطلق مع INSERT).
+  scheduleNewTaxiRequestNotifications(saved, requestPayload, taxiType);
 
   return {
     id: requestId,
@@ -362,6 +340,12 @@ async function acceptTaxiRequest(driverPhone, requestId, data = {}) {
   const id = String(requestId || '').trim();
   if (!id) throw new Error('Request id is required.');
 
+  const lockToken = await acquireLock(`taxi:accept:${id}`, 10_000);
+  if (!lockToken) {
+    throw new Error('Request is being accepted. Try again.');
+  }
+
+  try {
   const row = await selectSingle('taxi_requests', 'id', id);
   if (!row) throw new Error('Request not found.');
 
@@ -386,10 +370,16 @@ async function acceptTaxiRequest(driverPhone, requestId, data = {}) {
   let driverLngAtAccept = 0;
   let initialPickupEtaSeconds = 0;
   try {
-    const state = await getUserState(normalizedDriver);
-    const profile = state?.driverProfile || {};
-    driverLatAtAccept = Number(profile.latitude ?? profile.lat ?? 0);
-    driverLngAtAccept = Number(profile.longitude ?? profile.lng ?? 0);
+    const fastLocation = await driverLocations.getFreshDriverLocation(normalizedDriver);
+    if (fastLocation) {
+      driverLatAtAccept = Number(fastLocation.lat ?? 0);
+      driverLngAtAccept = Number(fastLocation.lng ?? 0);
+    } else {
+      const state = await getUserState(normalizedDriver);
+      const profile = state?.driverProfile || {};
+      driverLatAtAccept = Number(profile.latitude ?? profile.lat ?? 0);
+      driverLngAtAccept = Number(profile.longitude ?? profile.lng ?? 0);
+    }
     if (driverLatAtAccept && driverLngAtAccept && meta.pickupLat && meta.pickupLng) {
       const { computeLiveEta } = require('../../../services/taxi_trip_service');
       const live = computeLiveEta(
@@ -451,6 +441,9 @@ async function acceptTaxiRequest(driverPhone, requestId, data = {}) {
   }
 
   return formatTaxiRequestForClient(updated);
+  } finally {
+    await releaseLock(`taxi:accept:${id}`, lockToken);
+  }
 }
 
 // ── رفض السائق ───────────────────────────────────────────────────
@@ -737,6 +730,15 @@ async function updateDriverTripLocation(driverPhone, requestId, lat, lng) {
   if (!id) throw new Error('Request id is required.');
   if (!driverLat || !driverLng) throw new Error('Valid coordinates are required.');
 
+  await driverLocations.upsertDriverLocation(normalizedDriver, {
+    lat: driverLat,
+    lng: driverLng,
+    isOnline: true,
+    available: true,
+  }).catch((error) => {
+    console.error('driver location fast upsert error:', error?.message || error);
+  });
+
   const row = await selectSingle('taxi_requests', 'id', id);
   if (!row) throw new Error('Request not found.');
 
@@ -780,19 +782,34 @@ async function updateDriverTripLocation(driverPhone, requestId, lat, lng) {
     updated_at: updatedAt,
   });
 
-  try {
-    const state = await getUserState(normalizedDriver);
-    const profile = { ...(state?.driverProfile || {}) };
-    profile.latitude = driverLat;
-    profile.longitude = driverLng;
-    profile.lat = driverLat;
-    profile.lng = driverLng;
-    profile.updatedAt = updatedAt;
-    const { saveUserState } = require('./users');
-    await saveUserState(normalizedDriver, { ...state, driverProfile: profile });
-  } catch (_) {}
-
   return formatTaxiRequestForClient(await selectSingle('taxi_requests', 'id', id));
+}
+
+async function updateDriverPresenceLocation(driverPhone, data = {}) {
+  const normalizedDriver = await resolvePhoneKey(driverPhone);
+  const lat = Number(data.lat ?? data.latitude ?? 0);
+  const lng = Number(data.lng ?? data.longitude ?? 0);
+  if (!lat || !lng) throw new Error('Valid coordinates are required.');
+
+  const state = (await getUserState(normalizedDriver)) || {};
+  const profile = state.driverProfile || {};
+  const result = await driverLocations.upsertDriverLocation(normalizedDriver, {
+    lat,
+    lng,
+    isOnline: true,
+    available: profile.available !== false,
+    taxiType: data.taxiType || profile.taxiType,
+    driverName: profile.name,
+    vehicleModel: profile.vehicleModel,
+    plateNumber: profile.plateNumber,
+    color: profile.color,
+    governorate: profile.governorate,
+    city: profile.city ?? profile.area,
+    rating: profile.rating,
+    totalTrips: profile.totalTrips,
+    isApproved: profile.isApproved,
+  });
+  return result || { success: true, phone: normalizedDriver };
 }
 
 async function expireStalePendingTaxiRequests() {
@@ -876,9 +893,53 @@ async function getAdminTaxiComplaints(adminPhone, { limit = 100 } = {}) {
     });
 }
 
+// ── إشعار السائقين (خلفية) ───────────────────────────────────────
+
+function scheduleNewTaxiRequestNotifications(saved, requestPayload, taxiType) {
+  void notifyDriversForNewRequest(saved, requestPayload, taxiType).catch((error) => {
+    console.error('taxi create push error:', error?.message || error);
+  });
+}
+
+async function notifyDriversForNewRequest(saved, requestPayload, taxiType) {
+  const { notifyNewTaxiRequest } = require('../../../push/taxi_push_events');
+  let nearbyDrivers = await getNearbyDrivers(
+    requestPayload.pickupLat,
+    requestPayload.pickupLng,
+    taxiType,
+    [],
+    10
+  );
+  if (!nearbyDrivers.length) {
+    nearbyDrivers = await getNearbyDrivers(
+      requestPayload.pickupLat,
+      requestPayload.pickupLng,
+      taxiType,
+      [],
+      25
+    );
+  }
+  await notifyNewTaxiRequest({ ...saved, taxiType }, nearbyDrivers);
+}
+
 // ── البحث عن سائقين قريبين ────────────────────────────────────────
 
 async function getNearbyDrivers(pickupLat, pickupLng, taxiType = 'economic', excludeDriverIds = [], radiusKm = 5) {
+  try {
+    const fastDrivers = await driverLocations.findNearbyDrivers({
+      pickupLat,
+      pickupLng,
+      taxiType,
+      excludeDriverIds,
+      radiusKm,
+    });
+    if (Array.isArray(fastDrivers) && fastDrivers.length > 0) {
+      return fastDrivers;
+    }
+  } catch (error) {
+    console.error('taxi fast nearby drivers error:', error?.message || error);
+  }
+
   const supabase = assertSupabaseAdmin();
   const requestedType = normalizeTaxiType(taxiType);
 
@@ -1016,6 +1077,15 @@ async function getDriverIncomingRequests(driverPhone, lat, lng, taxiType, radius
 // ── الحصول على السائقين النشيطين حسب النوع ───────────────────────
 
 async function getActiveDriverPhonesByTaxiType(taxiType = 'economic') {
+  try {
+    const fastPhones = await driverLocations.getActiveDriverPhonesByTaxiType(taxiType);
+    if (Array.isArray(fastPhones) && fastPhones.length > 0) {
+      return fastPhones;
+    }
+  } catch (error) {
+    console.error('taxi fast active drivers error:', error?.message || error);
+  }
+
   const supabase = assertSupabaseAdmin();
   const requestedType = normalizeTaxiType(taxiType);
 
@@ -1029,11 +1099,6 @@ async function getActiveDriverPhonesByTaxiType(taxiType = 'economic') {
   for (const user of (appUsers || [])) {
     const phone = String(user.phone || '').trim();
     if (!phone) continue;
-
-    const role = String(user.role || '').trim();
-    const accountType = String(user.account_type || '').trim();
-    const isDriverAccount = role === 'driver' || accountType === 'driver';
-    if (!isDriverAccount) continue;
 
     const state = await getUserState(phone);
     const profile = state?.driverProfile;
@@ -1095,7 +1160,7 @@ async function updateDriverRatingStats(driverPhone, newRating) {
   const phoneKey = await resolvePhoneKey(driverPhone);
   if (!phoneKey) return;
 
-  const { saveUserState } = require('./users');
+  const { saveUserState } = require('../../../supabase_repo/users');
   const state = (await getUserState(phoneKey)) || {};
   const profile = { ...(state.driverProfile || {}) };
   const prevRating = Number(profile.rating ?? 0);
@@ -1240,13 +1305,16 @@ async function setDriverOnlineStatus(driverPhone, isOnline) {
       p_is_online: Boolean(isOnline),
     });
     if (!error) {
+      await driverLocations.setDriverOnline(phoneKey, Boolean(isOnline)).catch((locationError) => {
+        console.error('driver location status upsert error:', locationError?.message || locationError);
+      });
       return { success: true, phone: phoneKey, isOnline: Boolean(isOnline) };
     }
   } catch (_) {
     // fallback
   }
 
-  const { getUserState, saveUserState } = require('./users');
+  const { getUserState, saveUserState } = require('../../../supabase_repo/users');
   const state = (await getUserState(phoneKey)) || {};
   const profile = state.driverProfile || {};
 
@@ -1256,6 +1324,24 @@ async function setDriverOnlineStatus(driverPhone, isOnline) {
   await saveUserState(phoneKey, {
     ...state,
     driverProfile: profile,
+  });
+
+  await driverLocations.upsertDriverLocation(phoneKey, {
+    isOnline: Boolean(isOnline),
+    available: Boolean(isOnline),
+    lat: profile.latitude ?? profile.lat,
+    lng: profile.longitude ?? profile.lng,
+    taxiType: profile.taxiType,
+    driverName: profile.name,
+    vehicleModel: profile.vehicleModel,
+    plateNumber: profile.plateNumber,
+    color: profile.color,
+    governorate: profile.governorate,
+    city: profile.city ?? profile.area,
+    rating: profile.rating,
+    isApproved: profile.isApproved,
+  }).catch((locationError) => {
+    console.error('driver location online upsert error:', locationError?.message || locationError);
   });
 
   if (await hasColumn('taxi_driver_status')) {
@@ -1290,6 +1376,7 @@ module.exports = {
   cancelTaxiRequest,
   requestTripCancellation,
   updateDriverTripLocation,
+  updateDriverPresenceLocation,
   expireStalePendingTaxiRequests,
   getAdminTaxiTrips,
   getAdminTaxiComplaints,

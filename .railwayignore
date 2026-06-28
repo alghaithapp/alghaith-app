@@ -1,10 +1,15 @@
 # Smaller Railway CLI uploads — API only needs backend/ (service root).
 android/
 ios/
+/lib/
+/assets/
+/stitch_smart_taxi_hub/
+/node_modules/
 test/
 web/
 website/
 src/
+src-tauri/
 build/
 .dart_tool/
 .kotlin/
@@ -18,4 +23,5 @@ scripts/
 *.ipa
 *.keystore
 *.iml
+backend/output.txt
 .git/

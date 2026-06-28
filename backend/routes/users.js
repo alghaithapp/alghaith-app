@@ -87,6 +87,23 @@ router.put('/device-token', async (req, res) => {
   }
 });
 
+router.get('/device-token/status', async (req, res) => {
+  try {
+    const phone = requireAuthorizedPhone(req, res);
+    if (!phone) return;
+    const { getDeviceTokensForPhone } = require('../supabase_repo/push_notifications');
+    const rows = await getDeviceTokensForPhone(phone);
+    return res.json({
+      hasToken: Array.isArray(rows) && rows.length > 0,
+      count: Array.isArray(rows) ? rows.length : 0,
+      platforms: [...new Set((rows || []).map((row) => String(row.platform || 'unknown')))],
+    });
+  } catch (error) {
+    console.error('device-token status error:', error);
+    return res.status(500).json({ message: error?.message || 'Failed to get device token status.' });
+  }
+});
+
 router.delete('/device-token', async (req, res) => {
   try {
     const phone = requireAuthorizedPhone(req, res);

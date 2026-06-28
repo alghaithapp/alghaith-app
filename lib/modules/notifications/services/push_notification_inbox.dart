@@ -50,13 +50,7 @@ class PushNotificationInbox {
       );
       await androidPlugin?.requestNotificationsPermission();
       await androidPlugin?.createNotificationChannel(
-        const AndroidNotificationChannel(
-          'alghaith_taxi_requests',
-          'طلبات التكسي',
-          description: '🚕 طلبات تكسي مع أزرار قبول/رفض',
-          importance: Importance.high,
-          playSound: true,
-        ),
+        NotificationSound.taxiRequestAndroidChannel,
       );
     }
 
@@ -176,25 +170,12 @@ class PushNotificationInbox {
     required String body,
     required String requestId,
   }) async {
-    const taxiChannelId = 'alghaith_taxi_requests';
-    const taxiChannelName = 'طلبات التكسي';
-
-    final androidDetails = AndroidNotificationDetails(
-      taxiChannelId,
-      taxiChannelName,
-      channelDescription: '🚕 طلبات التكسي مع قبول/رفض',
-      importance: Importance.high,
-      priority: Priority.high,
-      playSound: true,
-      showWhen: true,
-    );
-
     await _localNotifications.show(
       id,
       title.isNotEmpty ? title : '🚕 طلب تكسي جديد',
       body,
       NotificationDetails(
-        android: androidDetails,
+        android: NotificationSound.taxiRequestAndroidDetails,
         iOS: const DarwinNotificationDetails(
           presentAlert: true,
           presentBadge: true,

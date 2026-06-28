@@ -229,7 +229,7 @@ class AppProvider extends ChangeNotifier {
     }
     if (auth.hasPhoneSession && auth.authPhone != null &&
         auth.authPhone!.isNotEmpty) {
-      unawaited(PushNotificationService.instance.bindToUser(auth.authPhone!));
+      unawaited(PushNotificationService.instance.ensureUserBinding(auth.authPhone!));
       unawaited(_preloadAllOperatorProfiles());
       unawaited(_checkMerchantServerProfileIfNeeded());
     }

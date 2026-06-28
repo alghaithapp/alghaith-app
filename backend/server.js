@@ -14,6 +14,7 @@ const { errorHandler, notFoundHandler } = require('./lib/error_handler');
 const { verifySessionToken } = require('./lib/session');
 const { cacheStats } = require('./lib/response_cache');
 const { scheduleServerWarmup } = require('./lib/server_warmup');
+const { redisStats } = require('./lib/redis_client');
 
 // ── Config ──────────────────────────────────────────────────────────────
 
@@ -79,19 +80,45 @@ app.use(
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
+app.use((req, res, next) => {
+  const startedAt = process.hrtime.bigint();
+  const originalWriteHead = res.writeHead;
+  res.writeHead = function writeHeadWithTiming(...args) {
+    const elapsedMs = Number(process.hrtime.bigint() - startedAt) / 1_000_000;
+    if (!res.headersSent) {
+      res.setHeader('X-Response-Time-Ms', elapsedMs.toFixed(1));
+    }
+    return originalWriteHead.apply(this, args);
+  };
+  res.on('finish', () => {
+    const elapsedMs = Number(process.hrtime.bigint() - startedAt) / 1_000_000;
+    if (elapsedMs >= Number.parseInt(process.env.SLOW_REQUEST_MS || '1000', 10)) {
+      logger.warn('slow request', {
+        method: req.method,
+        path: req.originalUrl,
+        status: res.statusCode,
+        elapsedMs: Math.round(elapsedMs),
+      });
+    }
+  });
+  next();
+});
+
 // ── Per-route rate limiters ─────────────────────────────────────────────
 // كل مسار بحد خاص حسب احتياجه، بدل limiter عام يمنع كل شيء.
 
 const minute = 60 * 1000;
 
 function createLimiter(maxReqs, windowMs = minute) {
-  return rateLimit({
+  const options = {
     windowMs,
     max: Number.parseInt(process.env[`RATE_LIMIT_${maxReqs}`] || String(maxReqs), 10),
     standardHeaders: true,
     legacyHeaders: false,
     message: { message: 'Too many requests. Try again later.' },
-  });
+  };
+
+  return rateLimit(options);
 }
 
 // مسارات سريعة للصحة والمعلومات العامة
@@ -102,7 +129,7 @@ app.use('/app', createLimiter(200));
 app.use('/db/chat', createLimiter(300));
 
 // مسارات التكسي والخرائط
-app.use('/db/taxi', createLimiter(100));
+app.use('/db/taxi', createLimiter(600));
 app.use('/maps', createLimiter(60));
 
 // مسارات المصادقة — حد منخفض للحماية من brute force
@@ -124,6 +151,7 @@ app.get('/health', (_, res) => {
     version: backendVersion,
     pushConfigured: isPushConfigured(),
     cache: cacheStats(),
+    redis: redisStats(),
   });
 });
 

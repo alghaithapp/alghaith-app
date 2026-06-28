@@ -22,10 +22,8 @@ function buildPushPayload({ title, body, data = {} }) {
 }
 
 /**
- * إرسال إشعار لأقرب 5 سائقين بوجود طلب تكسي جديد
- * 
- * @param {object} requestMeta - بيانات الطلب (تحتوي على requestId, pickupAddress, dropoffAddress, fare, distanceKm)
- * @param {object[]} nearbyDrivers - قائمة السائقين القريبين
+ * إرسال إشعار لكل السائقين المتصلين من نفس النوع.
+ * الأولوية للأقرب جغرافياً، ثم بقية السائقين المتصلين (بدون حد 5 مع إيقاف مبكر).
  */
 async function notifyNewTaxiRequest(requestMeta, nearbyDrivers = []) {
   const requestId = String(requestMeta?.id || requestMeta?.requestId || '').trim();
@@ -55,34 +53,49 @@ async function notifyNewTaxiRequest(requestMeta, nearbyDrivers = []) {
     },
   };
 
+  const taxiType = String(requestMeta.taxiType || 'economic').trim();
   const seenPhones = new Set();
-  const targetDrivers = Array.isArray(nearbyDrivers) ? nearbyDrivers.slice(0, 5) : [];
+  const orderedPhones = [];
 
-  for (const driver of targetDrivers) {
+  const nearbyList = Array.isArray(nearbyDrivers) ? nearbyDrivers : [];
+  for (const driver of nearbyList) {
     const phone = String(driver?.driverPhone || driver?.phone || '').trim();
     if (!phone || seenPhones.has(phone)) continue;
     seenPhones.add(phone);
-    try {
-      await sendPushToPhone(phone, driverPayload, { showSystemBanner: true, immediate: true });
-    } catch (error) {
-      console.error(`taxi push notifyNewTaxiRequest error for ${phone}:`, error?.message || error);
-    }
+    orderedPhones.push(phone);
   }
 
-  if (seenPhones.size > 0) return;
-
-  const taxiType = String(requestMeta.taxiType || 'economic').trim();
-  const fallbackPhones = await getActiveDriverPhonesByTaxiType(taxiType);
-  for (const phone of fallbackPhones.slice(0, 5)) {
+  const activePhones = await getActiveDriverPhonesByTaxiType(taxiType);
+  for (const phone of activePhones) {
     const normalized = String(phone || '').trim();
     if (!normalized || seenPhones.has(normalized)) continue;
     seenPhones.add(normalized);
+    orderedPhones.push(normalized);
+  }
+
+  const maxTargets = 40;
+  let sent = 0;
+  let failed = 0;
+  let noTokens = 0;
+  for (const phone of orderedPhones.slice(0, maxTargets)) {
     try {
-      await sendPushToPhone(normalized, driverPayload, { showSystemBanner: true, immediate: true });
+      const result = await sendPushToPhone(phone, driverPayload, { showSystemBanner: true, immediate: true });
+      sent += Number(result?.sent || 0);
+      failed += Number(result?.failed || 0);
+      if (result?.reason === 'no_tokens') noTokens += 1;
     } catch (error) {
-      console.error(`taxi push notifyNewTaxiRequest fallback error for ${normalized}:`, error?.message || error);
+      failed += 1;
+      console.error(`taxi push notifyNewTaxiRequest error for ${phone}:`, error?.message || error);
     }
   }
+  console.log('taxi push notifyNewTaxiRequest summary:', {
+    requestId,
+    taxiType,
+    targets: orderedPhones.length,
+    sent,
+    failed,
+    noTokens,
+  });
 }
 
 /**

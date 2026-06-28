@@ -158,9 +158,9 @@ class PushNotificationService {
     if (normalized.isEmpty) return false;
 
     for (var attempt = 0; attempt < 3; attempt++) {
-      await bindToUser(normalized);
+      final registered = await bindToUser(normalized);
       final token = _currentToken ?? await FirebaseMessaging.instance.getToken();
-      if (token != null && token.trim().isNotEmpty) {
+      if (registered && token != null && token.trim().isNotEmpty) {
         _currentToken = token;
         return true;
       }
@@ -169,24 +169,25 @@ class PushNotificationService {
     return false;
   }
 
-  Future<void> bindToUser(String phone) async {
+  Future<bool> bindToUser(String phone) async {
     if (!_initialized) {
       await initialize();
     }
-    if (!_initialized) return;
+    if (!_initialized) return false;
     final normalized = PhoneUtils.normalize(phone);
-    if (normalized.isEmpty) return;
+    if (normalized.isEmpty) return false;
     _boundPhone = normalized;
 
     final token = _currentToken ?? await FirebaseMessaging.instance.getToken();
-    if (token == null || token.isEmpty) return;
+    if (token == null || token.isEmpty) return false;
     _currentToken = token;
-    await _registerToken(normalized, token);
+    final registered = await _registerToken(normalized, token);
     try {
       await SupabaseService.markPushInboxOpened(phone: normalized);
     } catch (error) {
       debugPrint('Push: failed to mark inbox opened on bind: $error');
     }
+    return registered;
   }
 
   Future<void> unbindFromUser({String? phone}) async {
@@ -209,7 +210,7 @@ class PushNotificationService {
     _boundPhone = null;
   }
 
-  Future<void> _registerToken(String phone, String token) async {
+  Future<bool> _registerToken(String phone, String token) async {
     try {
       await SupabaseService.saveDeviceToken(
         phone: phone,
@@ -217,8 +218,10 @@ class PushNotificationService {
         platform: _platformLabel() ?? 'unknown',
       );
       debugPrint('Push: token registered for $phone');
+      return true;
     } catch (error) {
       debugPrint('Push: failed to register token: $error');
+      return false;
     }
   }
 

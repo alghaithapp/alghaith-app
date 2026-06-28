@@ -196,7 +196,15 @@ class _AlGhaithAppState extends State<AlGhaithApp> {
     super.initState();
     PushNotificationService.setRootNavigatorKey(_navigatorKey);
     PushNotificationInbox.onTaxiNotificationTapped = (requestId) {
-      debugPrint('TaxiPushAction: فتح طلب $requestId من الإشعار');
+      final nav = _navigatorKey.currentState;
+      if (nav == null || !nav.mounted) return;
+      nav.context.read<AppProvider>().handleNotificationOpen({
+        'eventKey': 'taxi:pool_new',
+        'role': 'driver',
+        'orderId': requestId,
+        'audience': 'driver',
+      });
+      unawaited(nav.context.read<TaxiProvider>().fetchIncomingRequests());
     };
     PushNotificationService.instance.onIncomingCall = _handleIncomingCallPush;
     PushNotificationService.instance.onChatMessage = _handleChatPush;

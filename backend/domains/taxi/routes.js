@@ -117,6 +117,19 @@ router.post('/driver-location', async (req, res) => {
   }
 });
 
+// POST /db/taxi/driver-presence-location - تحديث موقع السائق المتصل بدون تحميل app_state
+router.post('/driver-presence-location', async (req, res) => {
+  try {
+    const phone = requireOptionalAuthorizedPhone(req, res);
+    if (!phone) return;
+    const result = await repo.updateDriverPresenceLocation(phone, req.body || {});
+    return res.json(result);
+  } catch (error) {
+    console.error('taxi driver-presence-location error:', error);
+    return res.status(500).json({ message: error?.message || 'Failed to update driver presence location.' });
+  }
+});
+
 // POST /db/taxi/status - تحديث حالة الرحلة
 router.post('/status', async (req, res) => {
   try {
@@ -251,6 +264,32 @@ router.get('/nearby-drivers', async (req, res) => {
   } catch (error) {
     console.error('taxi nearby-drivers error:', error);
     return res.status(500).json({ message: error?.message || 'Failed to get nearby drivers.' });
+  }
+});
+
+// GET /db/taxi/debug/active-drivers - تشخيص آمن لعدد السائقين المستهدفين والتوكنات
+router.get('/debug/active-drivers', async (req, res) => {
+  try {
+    const phone = requireOptionalAuthorizedPhone(req, res);
+    if (!phone) return;
+    const { ensurePlatformAdminAccess } = require('../../supabase_repo/admin');
+    await ensurePlatformAdminAccess(phone);
+    const taxiType = normalizeTaxiType(req.query.taxiType || 'economic');
+    const phones = await repo.getActiveDriverPhonesByTaxiType(taxiType);
+    const { getDeviceTokensForPhone } = require('../../supabase_repo/push_notifications');
+    const sample = [];
+    for (const driverPhone of phones.slice(0, 20)) {
+      const tokens = await getDeviceTokensForPhone(driverPhone);
+      sample.push({
+        phone: driverPhone,
+        tokenCount: tokens.length,
+        platforms: [...new Set(tokens.map((row) => String(row.platform || 'unknown')))],
+      });
+    }
+    return res.json({ taxiType, count: phones.length, sample });
+  } catch (error) {
+    console.error('taxi debug active-drivers error:', error);
+    return res.status(500).json({ message: error?.message || 'Failed to debug active drivers.' });
   }
 });
 

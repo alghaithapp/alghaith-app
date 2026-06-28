@@ -12,12 +12,13 @@ import '../../taxi/screens/driver/driver_home_screen.dart';
 import '../../taxi/screens/driver/driver_request_screen.dart';
 import '../../taxi/screens/driver/driver_trip_screen.dart';
 import '../../taxi/screens/driver/driver_earnings_screen.dart';
+import '../../taxi/services/driver_presence_service.dart';
+import '../../taxi/services/taxi_api_service.dart';
 import '../../taxi/utils/driver_readiness.dart';
 import '../../taxi/widgets/driver_readiness_banner.dart';
 import '../../../providers/app_provider.dart';
 import '../../../utils/driver_profile_fields.dart';
 import '../../../services/supabase_service.dart';
-import '../../notifications/services/push_notification_inbox.dart';
 import '../../../utils/role_notification_poller.dart';
 import '../../../utils/role_switch_notifications.dart';
 import '../../../widgets/safe_bottom_bar.dart';
@@ -51,12 +52,6 @@ class _DriverShellState extends State<DriverShell> with RealtimeSubscriptionMixi
       final provider = context.read<AppProvider>();
       final phone = provider.authPhone;
       if (phone != null && phone.isNotEmpty) {
-        PushNotificationInbox.onTaxiIncomingPush = () async {
-          if (!context.mounted) return;
-          final taxi = context.read<TaxiProvider>();
-          await taxi.fetchIncomingRequests();
-        };
-        // تحديث موقع السائق وتشغيل polling الطلبات
         _initDriverLocation(provider, phone);
         _startDriverLocationUpdates(provider);
         context.read<TaxiProvider>().loadDriverActiveRequest();
@@ -103,6 +98,8 @@ class _DriverShellState extends State<DriverShell> with RealtimeSubscriptionMixi
 
   void _startDriverLocationUpdates(AppProvider provider) {
     _locationTimer?.cancel();
+    if (DriverPresenceService.instance.isRunning) return;
+
     _locationTimer = Timer.periodic(const Duration(seconds: 5), (_) async {
       if (!mounted) return;
       try {
@@ -137,11 +134,16 @@ class _DriverShellState extends State<DriverShell> with RealtimeSubscriptionMixi
 
         final profile =
             Map<String, dynamic>.from(provider.driverProfile ?? {});
+        final taxiType = DriverProfileFields.taxiTypeOrDefault(profile);
+        await TaxiApiService.updateDriverPresenceLocation(
+          lat: pos.latitude,
+          lng: pos.longitude,
+          taxiType: taxiType,
+        );
         profile['latitude'] = pos.latitude;
         profile['longitude'] = pos.longitude;
         profile['lat'] = pos.latitude;
         profile['lng'] = pos.longitude;
-        await provider.setDriverProfile(profile);
 
         if (!mounted) return;
         taxi.updateIncomingPollLocation(
@@ -164,8 +166,8 @@ class _DriverShellState extends State<DriverShell> with RealtimeSubscriptionMixi
 
   @override
   void dispose() {
-    PushNotificationInbox.onTaxiIncomingPush = null;
     _locationTimer?.cancel();
+    // لا نوقف DriverPresenceService — يبقى السائق متصلاً بالخلفية.
     context.read<TaxiProvider>().stopPolling();
     disposeRealtime();
     super.dispose();

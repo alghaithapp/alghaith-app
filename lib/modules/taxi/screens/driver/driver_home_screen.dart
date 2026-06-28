@@ -6,6 +6,7 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../providers/app_provider.dart';
 import '../../models/taxi_request.dart';
 import '../../providers/taxi_provider.dart';
+import '../../services/driver_presence_service.dart';
 import '../../widgets/taxi_type_image.dart';
 import '../../utils/driver_readiness.dart';
 import '../../utils/taxi_driver_request_actions.dart';
@@ -29,6 +30,29 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<TaxiProvider>().loadDriverHistory();
     });
+  }
+
+  Future<void> _goOfflineManually(
+    BuildContext context,
+    AppProvider appProvider,
+    TaxiProvider taxi,
+  ) async {
+    final phone = appProvider.authPhone?.trim() ?? '';
+    if (phone.isEmpty) return;
+    await DriverPresenceService.instance.stop(
+      phone: phone,
+      taxiProvider: taxi,
+      goOffline: true,
+    );
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+          'أنت غير متصل ولن تستقبل طلبات حتى تعود للاتصال',
+          style: TextStyle(fontFamily: 'Cairo'),
+        ),
+      ),
+    );
   }
 
   @override
@@ -166,8 +190,13 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
             ),
           ),
 
-          // مؤشر الاتصال — يعتمد على جاهزية استقبال الطلبات
-          Container(
+          // مؤشر الاتصال — اضغط للتبديل إلى غير متصل يدوياً
+          InkWell(
+            onTap: isOnline
+                ? () => _goOfflineManually(context, provider, taxi)
+                : null,
+            borderRadius: BorderRadius.circular(20),
+            child: Container(
             padding:
                 const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
             decoration: BoxDecoration(
@@ -197,6 +226,7 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
                 ),
               ],
             ),
+          ),
           ),
 
           const SizedBox(width: 12),

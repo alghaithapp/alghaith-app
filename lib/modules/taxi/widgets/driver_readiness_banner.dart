@@ -10,6 +10,8 @@ import '../../../core/theme/app_colors.dart';
 import '../../../providers/app_provider.dart';
 import '../../../screens/shared/operator_setup_screen.dart';
 import '../providers/taxi_provider.dart';
+import '../services/driver_presence_service.dart';
+import '../services/driver_presence_store.dart';
 import '../utils/driver_readiness.dart';
 
 /// شريط تنبيهات يضمن جاهزية السائق لاستقبال الطلبات والإشعارات.
@@ -235,8 +237,27 @@ Future<void> bootstrapDriverReadiness({
 }) async {
   final push = PushNotificationService.instance;
   await push.initialize();
-  await DriverReadiness.requestNotifications();
-  await push.ensureUserBinding(phone);
+
+  taxiProvider.hydrateOnlineFromProfile(appProvider.driverProfile);
+
+  final wantsOnline = await DriverPresenceStore.getWantsOnline(phone);
+  if (wantsOnline || taxiProvider.isOnline) {
+    unawaited(
+      DriverPresenceService.instance.start(
+        phone: phone,
+        taxiProvider: taxiProvider,
+        readProfile: () => appProvider.driverProfile,
+        writeProfile: appProvider.setDriverProfile,
+        announceOnline: !taxiProvider.isOnline,
+      ),
+    );
+  }
+
+  await Future.wait([
+    DriverReadiness.requestNotifications(),
+    push.ensureUserBinding(phone),
+    DriverReadiness.ensureLocationPermission(),
+  ]);
 
   final normalized = DriverReadiness.ensureProfileDefaults(
     appProvider.driverProfile,
@@ -244,10 +265,6 @@ Future<void> bootstrapDriverReadiness({
   if (normalized.changed) {
     await appProvider.setDriverProfile(normalized.profile);
   }
-
-  taxiProvider.hydrateOnlineFromProfile(appProvider.driverProfile);
-
-  await DriverReadiness.ensureLocationPermission();
 
   await DriverReadiness.syncDriverOnlineFromReadiness(
     appProvider: appProvider,

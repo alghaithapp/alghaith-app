@@ -1,6 +1,7 @@
 ﻿import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
+import '../../../modules/taxi/services/driver_presence_service.dart';
 import '../../../core/notifications/push_notification_service.dart';
 import '../../../core/notifications/notification_hub.dart';
 import '../../../core/utils/phone_utils.dart';
@@ -171,7 +172,7 @@ class AuthService extends ChangeNotifier {
       _isReady = true;
       notifyListeners();
 
-      unawaited(PushNotificationService.instance.bindToUser(normalized));
+      unawaited(PushNotificationService.instance.ensureUserBinding(normalized));
     }
   }
 
@@ -679,6 +680,9 @@ class AuthService extends ChangeNotifier {
 
     unawaited(
         PushNotificationService.instance.unbindFromUser(phone: previousPhone));
+    if (previousPhone != null && previousPhone.trim().isNotEmpty) {
+      unawaited(DriverPresenceService.instance.releaseForLogout(previousPhone));
+    }
     unawaited(
       AccountRepository.instance.clearSession(phone: previousPhone).then((_) {
         debugPrint('LOGOUT: Local session cleared.');

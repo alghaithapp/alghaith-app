@@ -1,6 +1,7 @@
 const admin = require('firebase-admin');
 
 const ANDROID_NOTIFICATION_CHANNEL_ID = 'alghaith_orders_v3';
+const ANDROID_TAXI_REQUEST_CHANNEL_ID = 'alghaith_taxi_requests_v2';
 const ANDROID_INCOMING_CALL_CHANNEL_ID = 'alghaith_incoming_calls_v2';
 const ANDROID_NOTIFICATION_SOUND = 'alghaith_notify';
 const ANDROID_INCOMING_CALL_SOUND = 'alghaith_incoming_call';
@@ -130,6 +131,7 @@ module.exports = {
   initFirebaseAdmin,
   sendPushToTokens,
   ANDROID_NOTIFICATION_CHANNEL_ID,
+  ANDROID_TAXI_REQUEST_CHANNEL_ID,
   ANDROID_INCOMING_CALL_CHANNEL_ID,
   ANDROID_NOTIFICATION_SOUND,
   ANDROID_INCOMING_CALL_SOUND,

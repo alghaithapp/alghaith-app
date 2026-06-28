@@ -83,4 +83,28 @@ class NotificationSound {
     presentBadge: true,
     interruptionLevel: InterruptionLevel.timeSensitive,
   );
+
+  static const String taxiRequestChannelId = 'alghaith_taxi_requests_v2';
+  static const String taxiRequestChannelName = 'طلبات التكسي';
+
+  static const AndroidNotificationChannel taxiRequestAndroidChannel =
+      AndroidNotificationChannel(
+    taxiRequestChannelId,
+    taxiRequestChannelName,
+    description: 'طلبات التكسي الجديدة بصوت تنبيه الغيث',
+    importance: Importance.high,
+    playSound: true,
+    sound: androidSound,
+  );
+
+  static const AndroidNotificationDetails taxiRequestAndroidDetails =
+      AndroidNotificationDetails(
+    taxiRequestChannelId,
+    taxiRequestChannelName,
+    channelDescription: 'طلبات التكسي الجديدة بصوت تنبيه الغيث',
+    importance: Importance.high,
+    priority: Priority.high,
+    playSound: true,
+    sound: androidSound,
+  );
 }

@@ -72,6 +72,9 @@ class _ChatScreenState extends State<ChatScreen>
   static const _fastPollInterval = Duration(seconds: 20);
   static const _slowPollInterval = Duration(seconds: 120);
 
+  bool get _useVpsRealtime =>
+      FeatureConfig().chatV2 && FeatureConfig().useVpsSocket;
+
   @override
   void initState() {
     super.initState();
@@ -83,20 +86,7 @@ class _ChatScreenState extends State<ChatScreen>
       onRefresh: _refreshFromExternalEvent,
     );
     _subscribeToRealtime();
-
-    if (FeatureConfig().chatV2) {
-      final room = '${widget.threadType}:${widget.threadId}';
-      _socketService.connect(room);
-      _socketSub = _socketService.onMessage.listen((ChatMessage msg) {
-        if (!mounted) return;
-        if (_messages.any((m) => m.id == msg.id)) return;
-        setState(() {
-          _messages = [..._messages, msg];
-        });
-        _scrollToBottom();
-        _markThreadRead();
-      });
-    }
+    _connectSocketIfEnabled();
     _loadInitialMessages();
     _restartPolling(fast: true);
     _startIncomingCallPolling();
@@ -150,22 +140,45 @@ class _ChatScreenState extends State<ChatScreen>
     _isSending = false;
     _textController.clear();
     _subscribeToRealtime();
-    if (FeatureConfig().chatV2) {
-      final room = '${widget.threadType}:${widget.threadId}';
-      _socketService.connect(room);
-      _socketSub = _socketService.onMessage.listen((msg) {
-        if (!mounted) return;
-        if (_messages.any((m) => m.id == msg.id)) return;
-        setState(() {
-          _messages = [..._messages, msg];
-        });
-        _scrollToBottom();
-        _markThreadRead();
-      });
-    }
+    _connectSocketIfEnabled();
     _loadInitialMessages();
     _restartPolling(fast: true);
     _startIncomingCallPolling();
+  }
+
+  void _connectSocketIfEnabled() {
+    if (!_useVpsRealtime) return;
+
+    final room = '${widget.threadType}:${widget.threadId}';
+    _socketService.connect(room);
+    _socketSub = _socketService.onMessage.listen((ChatMessage msg) {
+      if (!mounted) return;
+      _appendIncomingMessage(msg);
+    });
+  }
+
+  void _appendIncomingMessage(ChatMessage msg) {
+    if (_messages.any((m) => m.id == msg.id)) return;
+    setState(() {
+      _messages = [..._messages, msg];
+    });
+    _scrollToBottom();
+    _markThreadRead();
+  }
+
+  void _replaceLocalMessage(String localId, ChatMessage saved) {
+    if (!mounted) return;
+    setState(() {
+      final index = _messages.indexWhere((m) => m.id == localId);
+      if (index >= 0) {
+        final updated = [..._messages];
+        updated[index] = saved;
+        _messages = updated;
+      } else if (!_messages.any((m) => m.id == saved.id)) {
+        _messages = [..._messages, saved];
+      }
+    });
+    _scrollToBottom();
   }
 
   @override
@@ -237,6 +250,8 @@ class _ChatScreenState extends State<ChatScreen>
   }
 
   void _subscribeToRealtime() {
+    if (_useVpsRealtime) return;
+
     try {
       trackChannel(
         SupabaseService.realtime.subscribeToChatMessages(
@@ -252,6 +267,8 @@ class _ChatScreenState extends State<ChatScreen>
 
   void _restartPolling({required bool fast}) {
     _pollTimer?.cancel();
+    if (_useVpsRealtime) return;
+
     _pollTimer = Timer.periodic(
       fast ? _fastPollInterval : _slowPollInterval,
       (_) => _pollNewMessages(),
@@ -259,7 +276,7 @@ class _ChatScreenState extends State<ChatScreen>
   }
 
   void _refreshFromExternalEvent() {
-    if (!mounted) return;
+    if (!mounted || _useVpsRealtime) return;
     _pollNewMessages();
   }
 
@@ -401,14 +418,18 @@ class _ChatScreenState extends State<ChatScreen>
     _scrollToBottom();
 
     try {
-      await ChatService.sendMessage(
+      final saved = await ChatService.sendMessage(
         threadType: widget.threadType,
         threadId: widget.threadId,
         content: content,
         receiverPhone: widget.receiverPhone,
         senderName: senderName,
       );
-      await _pollNewMessages();
+      if (_useVpsRealtime) {
+        _replaceLocalMessage(local.id, saved);
+      } else {
+        await _pollNewMessages();
+      }
     } catch (error) {
       if (!mounted) return;
       setState(() {
@@ -497,7 +518,7 @@ class _ChatScreenState extends State<ChatScreen>
       callerName: _senderDisplayName(provider),
       merchantProfile: widget.merchantProfile,
     );
-    if (!mounted) return;
+    if (!mounted || _useVpsRealtime) return;
     await _pollNewMessages();
   }
 
@@ -551,7 +572,7 @@ class _ChatScreenState extends State<ChatScreen>
         throw StateError('تعذر رفع الصورة.');
       }
 
-      await ChatService.sendMessage(
+      final saved = await ChatService.sendMessage(
         threadType: widget.threadType,
         threadId: widget.threadId,
         content: imageUrl.trim(),
@@ -564,7 +585,11 @@ class _ChatScreenState extends State<ChatScreen>
         _localImagePaths.remove(localId);
         _messages = _messages.where((m) => m.id != localId).toList();
       });
-      await _pollNewMessages();
+      if (_useVpsRealtime) {
+        _appendIncomingMessage(saved);
+      } else {
+        await _pollNewMessages();
+      }
     } catch (error) {
       if (!mounted) return;
       setState(() {
@@ -642,7 +667,7 @@ class _ChatScreenState extends State<ChatScreen>
     _scrollToBottom();
 
     try {
-      await ChatService.sendMessage(
+      final saved = await ChatService.sendMessage(
         threadType: widget.threadType,
         threadId: widget.threadId,
         content: content,
@@ -650,7 +675,11 @@ class _ChatScreenState extends State<ChatScreen>
         senderName: senderName,
         messageType: 'sticker',
       );
-      await _pollNewMessages();
+      if (_useVpsRealtime) {
+        _replaceLocalMessage(local.id, saved);
+      } else {
+        await _pollNewMessages();
+      }
     } catch (error) {
       if (!mounted) return;
       setState(() {

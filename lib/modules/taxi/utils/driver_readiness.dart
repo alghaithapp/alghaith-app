@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -6,6 +8,8 @@ import '../../../core/notifications/push_notification_service.dart';
 import '../../../providers/app_provider.dart';
 import '../../../utils/driver_profile_fields.dart';
 import '../providers/taxi_provider.dart';
+import '../services/driver_presence_service.dart';
+import '../services/driver_presence_store.dart';
 
 enum DriverReadinessIssue {
   notificationsDenied,
@@ -35,7 +39,7 @@ class DriverReadinessStatus {
 
   bool get isReady =>
       notificationsOk &&
-      pushTokenOk &&
+      (pushTokenOk || (!kIsWeb && Platform.isIOS && notificationsOk)) &&
       locationPermissionOk &&
       locationSaved &&
       taxiTypeOk &&
@@ -98,12 +102,8 @@ abstract final class DriverReadiness {
     final push = PushNotificationService.instance;
 
     var pushTokenOk = push.hasToken;
-    if (!pushTokenOk && phone.isNotEmpty) {
+    if (phone.isNotEmpty) {
       pushTokenOk = await push.ensureUserBinding(phone);
-    }
-    if (!pushTokenOk && retryPushToken && phone.isNotEmpty) {
-      await Future<void>.delayed(const Duration(milliseconds: 1200));
-      pushTokenOk = push.hasToken || await push.ensureUserBinding(phone);
     }
 
     final permission = await Geolocator.checkPermission();
@@ -157,13 +157,24 @@ abstract final class DriverReadiness {
     }
 
     final shouldBeOnline = status.isReady;
-    if (shouldBeOnline != taxiProvider.isOnline) {
-      try {
-        await taxiProvider.setOnline(shouldBeOnline);
-      } catch (error, stack) {
-        debugPrint('syncDriverOnlineFromReadiness failed: $error\n$stack');
-      }
+    final wantsOnline = await DriverPresenceStore.getWantsOnline(phone);
+
+    if (shouldBeOnline || wantsOnline) {
+      await DriverPresenceService.instance.start(
+        phone: phone,
+        taxiProvider: taxiProvider,
+        readProfile: () => appProvider.driverProfile,
+        writeProfile: appProvider.setDriverProfile,
+        announceOnline: (shouldBeOnline || wantsOnline) && !taxiProvider.isOnline,
+      );
+      return status;
     }
+
+    await DriverPresenceService.instance.stop(
+      phone: phone,
+      taxiProvider: taxiProvider,
+      goOffline: true,
+    );
     return status;
   }
 

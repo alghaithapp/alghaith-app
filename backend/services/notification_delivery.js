@@ -1,6 +1,7 @@
 const admin = require('firebase-admin');
 const {
   ANDROID_NOTIFICATION_CHANNEL_ID,
+  ANDROID_TAXI_REQUEST_CHANNEL_ID,
   ANDROID_INCOMING_CALL_CHANNEL_ID,
   ANDROID_NOTIFICATION_SOUND,
   ANDROID_INCOMING_CALL_SOUND,
@@ -38,8 +39,10 @@ async function sendPushToTokensDirect(
   const safeTitle = String(title || 'الغيث').trim();
   const safeBody = String(body || '').trim();
   const category = String(data?.category ?? '').trim();
+  const eventKey = String(data?.eventKey ?? '').trim();
   const isIncomingCall =
-    category === 'call' || String(data?.eventKey ?? '').trim() === 'call:incoming';
+    category === 'call' || eventKey === 'call:incoming';
+  const isTaxiRequest = category === 'taxi' && eventKey === 'taxi:pool_new';
   const wantsBanner = !dataOnly && (showSystemBanner || isIncomingCall);
   const message = {
     tokens: uniqueTokens,
@@ -71,6 +74,8 @@ async function sendPushToTokensDirect(
     message.android.notification = {
       channelId: isIncomingCall
         ? ANDROID_INCOMING_CALL_CHANNEL_ID
+        : isTaxiRequest
+          ? ANDROID_TAXI_REQUEST_CHANNEL_ID
         : ANDROID_NOTIFICATION_CHANNEL_ID,
       sound: isIncomingCall ? ANDROID_INCOMING_CALL_SOUND : ANDROID_NOTIFICATION_SOUND,
       priority: isIncomingCall ? 'max' : 'high',

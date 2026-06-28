@@ -107,6 +107,20 @@ class TaxiApiService {
     return TaxiRequest.fromMap(Map<String, dynamic>.from(result as Map));
   }
 
+  /// تحديث موقع السائق المتصل خارج الرحلة النشطة (للمطابقة السريعة فقط)
+  static Future<void> updateDriverPresenceLocation({
+    required double lat,
+    required double lng,
+    String? taxiType,
+  }) async {
+    await ApiClient.instance.post('$_basePath/driver-presence-location', body: {
+      'lat': lat,
+      'lng': lng,
+      if (taxiType != null && taxiType.trim().isNotEmpty)
+        'taxiType': taxiType.trim(),
+    });
+  }
+
   /// جلب الطلب النشط للزبون
   static Future<TaxiRequest?> getActiveRequest() async {
     final result = await ApiClient.instance.get('$_basePath/active');
