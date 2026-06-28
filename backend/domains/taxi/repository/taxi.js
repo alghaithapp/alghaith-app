@@ -1038,8 +1038,6 @@ async function getNearbyDrivers(pickupLat, pickupLng, taxiType = 'economic', exc
 async function getDriverIncomingRequests(driverPhone, lat, lng, taxiType, radiusKm = 15) {
   const normalizedDriver = await resolvePhoneKey(driverPhone);
   const hasLocation = Number(lat) && Number(lng);
-  if (!hasLocation) return [];
-
   const driverType = normalizeTaxiType(taxiType);
 
   const rows = await selectMany(
@@ -1085,10 +1083,12 @@ async function getDriverIncomingRequests(driverPhone, lat, lng, taxiType, radius
     }
 
     let roundedDistance = 0;
-    if (meta.pickupLat && meta.pickupLng) {
+    if (hasLocation && meta.pickupLat && meta.pickupLng) {
       const distance = haversineDistance(lat, lng, meta.pickupLat, meta.pickupLng);
       roundedDistance = Math.round(distance * 100) / 100;
       if (distance > radiusKm) continue;
+    } else if (!hasLocation) {
+      // بدون موقع نعرض الطلب مع مسافة 0
     } else {
       continue;
     }
