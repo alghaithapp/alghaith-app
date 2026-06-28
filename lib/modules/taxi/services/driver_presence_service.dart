@@ -25,6 +25,17 @@ class DriverPresenceService {
 
   bool get isRunning => _activePhone != null && _activePhone!.isNotEmpty;
 
+  /// يضمن أن السائق متصل على الخادم دون إعادة تشغيل التدفقات.
+  /// يُستدعى عند استئناف التطبيق وكانت الخدمة تعمل مسبقاً.
+  Future<void> ensureOnline() async {
+    final taxi = _taxi;
+    if (taxi == null) return;
+    if (!taxi.isOnline) {
+      taxi.hydrateOnline(true);
+    }
+    await _setOnlineWithRetry(taxi);
+  }
+
   LocationSettings _locationSettings() {
     if (!kIsWeb && Platform.isAndroid) {
       return AndroidSettings(
@@ -88,11 +99,9 @@ class DriverPresenceService {
     _writeProfile = writeProfile;
 
     if (announceOnline) {
-      try {
-        await taxiProvider.setOnline(true);
-      } catch (error, stack) {
-        debugPrint('DriverPresence: setOnline failed: $error\n$stack');
-      }
+      // Optimistic: set local state first so UI shows "متصل" immediately
+      taxiProvider.hydrateOnline(true);
+      await _setOnlineWithRetry(taxiProvider);
     }
 
     final permission = await Geolocator.checkPermission();
@@ -101,7 +110,7 @@ class DriverPresenceService {
       return;
     }
 
-    _heartbeatTimer = Timer.periodic(const Duration(seconds: 45), (_) {
+    _heartbeatTimer = Timer.periodic(const Duration(seconds: 30), (_) {
       unawaited(_heartbeat());
     });
 
@@ -114,6 +123,20 @@ class DriverPresenceService {
 
     unawaited(_captureOnce());
     unawaited(_heartbeat());
+  }
+
+  Future<void> _setOnlineWithRetry(TaxiProvider taxiProvider) async {
+    for (var attempt = 0; attempt < 3; attempt++) {
+      try {
+        await taxiProvider.setOnline(true);
+        return;
+      } catch (error) {
+        debugPrint('DriverPresence: setOnline attempt ${attempt + 1} failed: $error');
+        if (attempt < 2) {
+          await Future<void>.delayed(Duration(seconds: 2 * (attempt + 1)));
+        }
+      }
+    }
   }
 
   Future<void> stop({
@@ -179,6 +202,9 @@ class DriverPresenceService {
     if (phone == null || taxi == null) return;
     try {
       await TaxiApiService.setDriverOnlineStatus(true);
+      if (!taxi.isOnline) {
+        taxi.hydrateOnline(true);
+      }
     } catch (error) {
       debugPrint('DriverPresence: heartbeat online ping failed: $error');
     }

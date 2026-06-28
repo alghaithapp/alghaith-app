@@ -75,12 +75,19 @@ class _PushNotificationLifecycleScopeState
     await PushNotificationService.instance.ensureUserBinding(phone);
     if (provider.userRole == 'driver') {
       final taxi = context.read<TaxiProvider>();
-      await DriverPresenceService.instance.restoreIfNeeded(
-        phone: phone,
-        taxiProvider: taxi,
-        readProfile: () => provider.driverProfile,
-        writeProfile: provider.setDriverProfile,
-      );
+      final presence = DriverPresenceService.instance;
+      // لا نعيد بدء الخدمة إذا كانت تعمل بالفعل لتجنب قطع التدفق
+      if (!presence.isRunning) {
+        await presence.restoreIfNeeded(
+          phone: phone,
+          taxiProvider: taxi,
+          readProfile: () => provider.driverProfile,
+          writeProfile: provider.setDriverProfile,
+        );
+      } else {
+        // فقط نضمن أن الـ heartbeat سيعيد الاتصال إذا انقطع
+        await presence.ensureOnline();
+      }
     }
     if (_watchedPhone == phone && IncomingCallWatcher.instance.isActive) return;
     _watchedPhone = phone;
