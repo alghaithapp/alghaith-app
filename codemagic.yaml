@@ -42,8 +42,18 @@ workflows:
         # بدونها يُحمّل المفتاح من GET /maps/public-token على الخادم عند تشغيل التطبيق.
 
     triggering:
-      events: []
-      cancel_previous_builds: false
+      events:
+        - push
+      branch_patterns:
+        - pattern: main
+          include: true
+          source: true
+        - pattern: master
+          include: true
+          source: true
+        - pattern: release/*
+          include: true
+          source: true
 
     scripts:
       # يجب توليد ملفات iOS قبل use-profiles حتى يُعثر Codemagic على Scheme Runner
