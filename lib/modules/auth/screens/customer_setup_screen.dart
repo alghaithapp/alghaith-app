@@ -127,7 +127,7 @@ class _CustomerSetupScreenState extends State<CustomerSetupScreen> {
       debugPrint('Save error: $error');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('حدث خطأ أثناء الحفظ: $error')),
+          const SnackBar(content: Text('تعذر حفظ البيانات. حاول مرة أخرى.')),
         );
       }
     } finally {

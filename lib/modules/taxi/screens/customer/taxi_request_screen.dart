@@ -1174,7 +1174,7 @@ class _TaxiRequestScreenState extends State<TaxiRequestScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('فشل الحصول على الموقع: $e')),
+          const SnackBar(content: Text('تعذر تحديد موقعك. حاول مرة أخرى.')),
         );
       }
     } finally {

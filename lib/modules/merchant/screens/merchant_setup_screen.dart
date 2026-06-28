@@ -970,7 +970,7 @@ class _MerchantSetupScreenState extends State<MerchantSetupScreen> {
                                   );
                                 } catch (error) {
                                   _showMessage(
-                                      'تعذر حفظ بيانات التاجر: $error');
+                                      'تعذر حفظ البيانات حالياً. حاول مرة أخرى.');
                                 } finally {
                                   if (mounted) setState(() => _isSaving = false);
                                 }

@@ -733,7 +733,7 @@ Future<void> _showEditProfileDialog(
                     ScaffoldMessenger.of(dialogContext).showSnackBar(
                       SnackBar(
                         content: Text(
-                          'تعذر حفظ الصورة: $error',
+                          'تعذر حفظ الصورة. حاول مرة أخرى.',
                           style: const TextStyle(fontFamily: 'Cairo'),
                         ),
                       ),

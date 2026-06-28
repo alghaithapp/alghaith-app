@@ -183,7 +183,7 @@ class _ActiveTripCardState extends State<_ActiveTripCard> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              'فشل تحديث الرحلة: ${error.toString().replaceFirst("ApiException: ", "").replaceFirst("Exception: ", "")}',
+              'تعذر تحديث الرحلة الآن. حاول مرة أخرى.',
               style: const TextStyle(fontFamily: 'Cairo'),
             ),
             backgroundColor: Colors.red,

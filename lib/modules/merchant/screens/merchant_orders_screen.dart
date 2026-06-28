@@ -290,7 +290,7 @@ class _MerchantOrdersScreenState extends State<MerchantOrdersScreen> {
     } catch (e) {
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('فشل رفض الطلب: $e', style: const TextStyle(fontFamily: 'Cairo'))),
+        const SnackBar(content: Text('تعذر رفض الطلب حالياً. حاول مرة أخرى.', style: TextStyle(fontFamily: 'Cairo'))),
       );
     }
   }

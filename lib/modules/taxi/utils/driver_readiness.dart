@@ -277,7 +277,7 @@ abstract final class DriverReadiness {
       case DriverReadinessIssue.notificationsDenied:
         return 'لن تصلك طلبات الرحلات على الهاتف بدون إذن الإشعارات.';
       case DriverReadinessIssue.pushTokenMissing:
-        return 'التطبيق لم يحفظ توكن الإشعارات بعد. أعد المحاولة أو أعد فتح التطبيق.';
+        return 'لم يكتمل تفعيل الإشعارات بعد. اضغط إصلاح أو أعد فتح التطبيق.';
       case DriverReadinessIssue.locationDenied:
         return 'النظام يحتاج موقعك لإرسال الطلبات القريبة منك فقط.';
       case DriverReadinessIssue.locationMissing:

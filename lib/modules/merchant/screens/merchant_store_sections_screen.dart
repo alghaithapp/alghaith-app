@@ -63,7 +63,7 @@ class _MerchantStoreSectionsScreenState
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'تعذر الحفظ: $error',
+            'تعذر الحفظ حالياً. حاول مرة أخرى.',
             style: const TextStyle(fontFamily: 'Cairo'),
           ),
         ),

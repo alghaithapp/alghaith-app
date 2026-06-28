@@ -52,7 +52,7 @@ class ApiClient {
   }) async {
     final baseUrl = AppConfig.normalizedDatabaseUrl;
     if (baseUrl.isEmpty) {
-      throw ApiException('Backend URL is not configured.');
+      throw ApiException('الخدمة غير متاحة حالياً. حاول لاحقاً.');
     }
 
     final uri = Uri.parse('$baseUrl$path')
@@ -90,7 +90,7 @@ class ApiClient {
                 .delete(uri, headers: headers)
                 .timeout(AppConfig.apiTimeout);
           default:
-            throw ApiException('Unsupported method: $method');
+            throw ApiException('تعذر تنفيذ الطلب حالياً.');
         }
         break;
       } catch (error) {
@@ -111,17 +111,17 @@ class ApiClient {
       } catch (_) {
         final preview = response.body.trim();
         if (preview.length > 80) {
-          throw ApiException('استجابة غير متوقعة من الخادم.');
+          throw ApiException('تعذر قراءة الاستجابة. حاول مرة أخرى.');
         }
         throw ApiException(
           preview.isNotEmpty
-              ? 'استجابة غير متوقعة من الخادم: $preview'
-              : 'استجابة غير متوقعة من الخادم.',
+              ? 'تعذر قراءة الاستجابة. حاول مرة أخرى.'
+              : 'تعذر قراءة الاستجابة. حاول مرة أخرى.',
         );
       }
     }
 
-    var message = 'Server error (${response.statusCode})';
+    var message = 'تعذر إكمال الطلب حالياً. حاول مرة أخرى.';
     try {
       final decoded = jsonDecode(response.body);
       if (decoded is Map && decoded['message'] is String) {

@@ -36,7 +36,7 @@ class _AccountDeletionScreenState extends State<AccountDeletionScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'تعذر حذف الحساب: $error',
+            'تعذر حذف الحساب حالياً. حاول مرة أخرى.',
             style: const TextStyle(fontFamily: 'Cairo'),
           ),
         ),
