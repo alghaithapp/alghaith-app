@@ -127,6 +127,14 @@ workflows:
       - name: Set up code signing on Xcode project
         script: |
           set -e
+          echo "Cleaning up old provisioning profiles without Push Notifications..."
+          # مسح أي بروفايل قديم باسم AlGhaith App Store لتجنب استخدامه بالخطأ
+          for profile in ~/Library/MobileDevice/Provisioning\ Profiles/*.mobileprovision; do
+            if grep -q "AlGhaith App Store" "$profile" && ! grep -q "AlGhaith App Store V2" "$profile"; then
+              echo "Deleting old profile: $profile"
+              rm "$profile"
+            fi
+          done
           xcode-project use-profiles --project ios/Runner.xcodeproj
           if ! grep -q "PROVISIONING_PROFILE_SPECIFIER" ios/Runner.xcodeproj/project.pbxproj; then
             echo "ERROR: PROVISIONING_PROFILE_SPECIFIER missing after use-profiles."
