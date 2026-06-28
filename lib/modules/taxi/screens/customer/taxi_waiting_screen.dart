@@ -50,7 +50,7 @@ class TaxiWaitingScreen extends StatefulWidget {
 
 class _TaxiWaitingScreenState extends State<TaxiWaitingScreen> {
   Timer? _timer;
-  int _secondsLeft = 120;
+  int _secondsLeft = 180;
   bool _isCreating = false;
   String? _createError;
 

@@ -232,7 +232,7 @@ async function getActiveDriverPhonesByTaxiType(taxiType = 'economic') {
     .eq('available', true)
     .eq('is_approved', true)
     .eq('taxi_type', normalizeTaxiType(taxiType))
-    .gte('updated_at', new Date(Date.now() - 30 * 60_000).toISOString())
+    .gte('updated_at', new Date(Date.now() - 2 * 60 * 60_000).toISOString())
     .order('updated_at', { ascending: false })
     .limit(500);
   if (error) throw new Error(error.message);

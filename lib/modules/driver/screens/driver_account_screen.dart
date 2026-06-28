@@ -7,12 +7,10 @@ import 'package:provider/provider.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../providers/app_provider.dart';
-import '../../notifications/services/push_notification_service.dart';
 import '../../../utils/account_role_switch.dart';
 import '../../common/screens/notifications_screen.dart';
 import '../../merchant/screens/merchant_chat_inbox_screen.dart';
 import '../../../widgets/app_image.dart';
-import '../../taxi/services/taxi_api_service.dart';
 import 'driver_shared_widgets.dart';
 
 class DriverAccountScreen extends StatefulWidget {
@@ -23,49 +21,6 @@ class DriverAccountScreen extends StatefulWidget {
 }
 
 class _DriverAccountScreenState extends State<DriverAccountScreen> {
-  bool _testingPush = false;
-
-  int _asInt(Object? value) {
-    if (value is num) return value.toInt();
-    return int.tryParse(value?.toString() ?? '') ?? 0;
-  }
-
-  Future<void> _testPush() async {
-    if (_testingPush) return;
-    setState(() => _testingPush = true);
-    try {
-      final phone = context.read<AppProvider>().authPhone ?? '';
-      if (phone.isNotEmpty) {
-        await PushNotificationService.instance.ensureUserBinding(phone);
-      }
-      final result = await TaxiApiService.testDriverPush();
-      final tokenCount = _asInt(result['tokenCount']);
-      final sent = _asInt(result['sent']);
-      final failed = _asInt(result['failed']);
-      final platforms = (result['platforms'] as List?)
-              ?.map((item) => item.toString())
-              .where((item) => item.isNotEmpty)
-              .join('، ') ??
-          '';
-      final message = sent > 0
-          ? 'تم إرسال إشعار اختبار. الأجهزة المسجلة: $tokenCount${platforms.isNotEmpty ? ' ($platforms)' : ''}.'
-          : 'لم يتم إرسال الإشعار. الأجهزة المسجلة: $tokenCount، فشل: $failed.';
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(message, style: const TextStyle(fontFamily: 'Cairo'))),
-      );
-    } catch (_) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('تعذر فحص الإشعارات حالياً. حاول مرة أخرى.', style: TextStyle(fontFamily: 'Cairo')),
-        ),
-      );
-    } finally {
-      if (mounted) setState(() => _testingPush = false);
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<AppProvider>();
@@ -129,34 +84,6 @@ class _DriverAccountScreenState extends State<DriverAccountScreen> {
           onTap: () => Navigator.of(context).push(
             MaterialPageRoute(builder: (_) => const NotificationsScreen()),
           ),
-        ),
-        const SizedBox(height: 12),
-        ListTile(
-          tileColor: Colors.white,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-          leading:
-              const Icon(Icons.notification_important_outlined, color: AppColors.accent),
-          title: const Text(
-            'فحص إشعارات الرحلات',
-            style: TextStyle(
-              fontFamily: 'Cairo',
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          subtitle: const Text(
-            'يرسل تنبيهاً تجريبياً لهذا الجهاز',
-            style: TextStyle(fontFamily: 'Cairo', fontSize: 12),
-          ),
-          trailing: _testingPush
-              ? const SizedBox(
-                  width: 18,
-                  height: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : const Icon(Icons.chevron_right),
-          onTap: _testingPush ? null : _testPush,
         ),
         const SizedBox(height: 12),
         Container(

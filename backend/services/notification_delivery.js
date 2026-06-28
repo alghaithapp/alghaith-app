@@ -53,7 +53,7 @@ async function sendPushToTokensDirect(
     }),
     android: {
       priority: 'high',
-      ttl: isTaxiRequest ? 120000 : 45000,
+      ttl: isTaxiRequest ? 180000 : 45000,
     },
     apns: {
       headers: {

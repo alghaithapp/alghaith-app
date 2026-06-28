@@ -183,15 +183,6 @@ class TaxiApiService {
     });
   }
 
-  /// فحص إشعارات هذا الجهاز لحساب السائق الحالي.
-  static Future<Map<String, dynamic>> testDriverPush() async {
-    final result = await ApiClient.instance.post(
-      '$_basePath/debug/test-push',
-      body: const <String, dynamic>{},
-    );
-    return Map<String, dynamic>.from(result as Map);
-  }
-
   /// جلب الطلبات الواردة للسائق
   static Future<List<TaxiRequest>> getIncomingRequests({
     double? lat,
