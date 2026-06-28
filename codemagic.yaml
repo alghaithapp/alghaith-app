@@ -177,9 +177,10 @@ workflows:
           set -e
           if [ "$BUILD_STATUS" -ne 0 ]; then
             echo "========== IPA BUILD FAILED =========="
-            grep -E "error:|Error:|fatal error|ARCHIVE FAILED|CodeSign|Provisioning|ConformanceIsolation" "$LOG_FILE" | tail -80 || true
-            echo "========== LAST 200 LOG LINES =========="
-            tail -200 "$LOG_FILE" || true
+            echo "========== XCODEBUILD ACTUAL ERRORS =========="
+            find /tmp/xcodebuild_logs -name "*.log" -exec cat {} + | grep -i -A 10 -B 10 "error" | tail -1000 || true
+            echo "========== LAST 200 LINES OF XCODEBUILD LOG =========="
+            find /tmp/xcodebuild_logs -name "*.log" -exec tail -200 {} + || true
             exit 1
           fi
           ls -la build/ios/ipa/
