@@ -110,6 +110,10 @@ railway up .. --path-as-root --detach
 
 Upload the **full repo** archive; the Railway service root directory is `backend/`.
 
+### `.railwayignore`
+
+`.railwayignore` at the repo root excludes large/generated directories (`android/`, `ios/`, `lib/`, `node_modules/`, etc.) from Railway uploads. Only `backend/` is needed for the Node.js API. See [Railway docs](https://docs.railway.app/guides/ignore-files).
+
 ### Verify
 
 ```powershell

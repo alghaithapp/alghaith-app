@@ -169,7 +169,7 @@ class TaxiProvider extends ChangeNotifier {
   Future<void> toggleOnline() async {
     final next = !_isOnline;
     try {
-      await TaxiApiService.setDriverOnlineStatus(next, manual: !next);
+      await TaxiApiService.setDriverOnlineStatus(next, manual: true);
       _isOnline = next;
       _error = null;
       notifyListeners();
@@ -182,7 +182,7 @@ class TaxiProvider extends ChangeNotifier {
   Future<void> setOnline(bool value) async {
     if (_isOnline == value) return;
     try {
-      await TaxiApiService.setDriverOnlineStatus(value, manual: !value);
+      await TaxiApiService.setDriverOnlineStatus(value, manual: true);
       _isOnline = value;
       _error = null;
       notifyListeners();

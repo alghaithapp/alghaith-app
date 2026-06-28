@@ -188,8 +188,6 @@ async function findNearbyDrivers({
     const radius = Math.max(Number(radiusKm) || 5, 1);
     const latDelta = radius / 111;
     const lngDelta = radius / (111 * Math.max(Math.cos((lat * Math.PI) / 180), 0.2));
-    const freshnessCutoff = new Date(Date.now() - 3 * 60_000).toISOString();
-
     let query = supabase
       .from('driver_locations')
       .select('*')
@@ -222,6 +220,23 @@ async function findNearbyDrivers({
     .sort((a, b) => a.distanceKm - b.distanceKm);
 }
 
+/**
+ * قطع الاتصال تلقائياً عن السائقين الخاملين بعد 24 ساعة من آخر تحديث.
+ * يُستدعى من taxi_scheduler.js كل 30 دقيقة.
+ */
+async function expireStaleOnlineDrivers() {
+  const supabase = assertSupabaseAdmin();
+  const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  const { error } = await supabase
+    .from('driver_locations')
+    .update({ is_online: false, available: false, updated_at: nowIso() })
+    .eq('is_online', true)
+    .lt('updated_at', cutoff);
+  if (error) {
+    console.error('expireStaleOnlineDrivers error:', error.message);
+  }
+}
+
 async function getActiveDriverPhonesByTaxiType(taxiType = 'economic') {
   if (!(await hasDriverLocationsTable())) return null;
   const supabase = assertSupabaseAdmin();
@@ -232,7 +247,6 @@ async function getActiveDriverPhonesByTaxiType(taxiType = 'economic') {
     .eq('available', true)
     .eq('is_approved', true)
     .eq('taxi_type', normalizeTaxiType(taxiType))
-    .gte('updated_at', new Date(Date.now() - 2 * 60 * 60_000).toISOString())
     .order('updated_at', { ascending: false })
     .limit(500);
   if (error) throw new Error(error.message);
@@ -245,4 +259,5 @@ module.exports = {
   getFreshDriverLocation,
   findNearbyDrivers,
   getActiveDriverPhonesByTaxiType,
+  expireStaleOnlineDrivers,
 };

@@ -12,12 +12,16 @@ typedef DriverProfileReader = Map<String, dynamic>? Function();
 typedef DriverProfileWriter = Future<void> Function(Map<String, dynamic> profile);
 
 /// يُبقي السائق «متصل» ويحدّث موقعه بالخلفية (Foreground Service على أندرويد).
+///
+/// ملاحظة: السائق يبقى متصلاً على الخادم بمجرد الضغط على "اتصال" حتى لو أغلق التطبيق.
+/// يتم قطع الاتصال فقط عندما يضغط السائق "غير متصل" يدوياً، أو بعد 24 ساعة من الخمول
+/// (عبر آلية expireStaleOnlineDrivers في الخادم).
+/// لم نعد نرسل heartbeat دورياً لأن حالة الاتصال ثابتة على الخادم.
 class DriverPresenceService {
   DriverPresenceService._();
   static final DriverPresenceService instance = DriverPresenceService._();
 
   StreamSubscription<Position>? _positionSub;
-  Timer? _heartbeatTimer;
   String? _activePhone;
   TaxiProvider? _taxi;
   DriverProfileReader? _readProfile;
@@ -72,6 +76,13 @@ class DriverPresenceService {
   }) async {
     final wantsOnline = await DriverPresenceStore.getWantsOnline(phone);
     if (!wantsOnline) return;
+
+    // السائق متصل فعلاً على الخادم، فقط أعد تشغيل تتبع الموقع
+    if (taxiProvider.isOnline) {
+      await _startLocationTracking(phone, taxiProvider, readProfile, writeProfile);
+      return;
+    }
+
     await start(
       phone: phone,
       taxiProvider: taxiProvider,
@@ -110,9 +121,35 @@ class DriverPresenceService {
       return;
     }
 
-    _heartbeatTimer = Timer.periodic(const Duration(seconds: 30), (_) {
-      unawaited(_heartbeat());
-    });
+    _positionSub = Geolocator.getPositionStream(
+      locationSettings: _locationSettings(),
+    ).listen(
+      (pos) => unawaited(_onPosition(pos)),
+      onError: (error) => debugPrint('DriverPresence: position error: $error'),
+    );
+
+    unawaited(_captureOnce());
+  }
+
+  /// يبدأ فقط تتبع الموقع بدون إرسال heartbeat أو إعلان online.
+  /// يُستعمل عندما يكون السائق متصلاً فعلاً على الخادم ونحتاج إعادة تشغيل tracking.
+  Future<void> _startLocationTracking(
+    String phone,
+    TaxiProvider taxiProvider,
+    DriverProfileReader readProfile,
+    DriverProfileWriter writeProfile,
+  ) async {
+    await _stopStreams();
+    _activePhone = phone.trim();
+    _taxi = taxiProvider;
+    _readProfile = readProfile;
+    _writeProfile = writeProfile;
+
+    final permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied ||
+        permission == LocationPermission.deniedForever) {
+      return;
+    }
 
     _positionSub = Geolocator.getPositionStream(
       locationSettings: _locationSettings(),
@@ -122,7 +159,6 @@ class DriverPresenceService {
     );
 
     unawaited(_captureOnce());
-    unawaited(_heartbeat());
   }
 
   Future<void> _setOnlineWithRetry(TaxiProvider taxiProvider) async {
@@ -181,8 +217,6 @@ class DriverPresenceService {
   Future<void> _stopStreams() async {
     await _positionSub?.cancel();
     _positionSub = null;
-    _heartbeatTimer?.cancel();
-    _heartbeatTimer = null;
   }
 
   Future<void> _captureOnce() async {
@@ -193,20 +227,6 @@ class DriverPresenceService {
       await _onPosition(pos);
     } catch (error) {
       debugPrint('DriverPresence: captureOnce failed: $error');
-    }
-  }
-
-  Future<void> _heartbeat() async {
-    final phone = _activePhone;
-    final taxi = _taxi;
-    if (phone == null || taxi == null) return;
-    try {
-      await TaxiApiService.setDriverOnlineStatus(true);
-      if (!taxi.isOnline) {
-        taxi.hydrateOnline(true);
-      }
-    } catch (error) {
-      debugPrint('DriverPresence: heartbeat online ping failed: $error');
     }
   }
 
