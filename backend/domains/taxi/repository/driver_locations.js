@@ -77,7 +77,7 @@ async function upsertDriverLocation(driverPhone, data = {}) {
   if (data.totalTrips !== undefined) payload.total_trips = Number(data.totalTrips) || 0;
   if (data.isApproved !== undefined) {
     payload.is_approved = data.isApproved === true;
-  } else if (data.isOnline === true || data.available === true) {
+  } else {
     payload.is_approved = true;
   }
 

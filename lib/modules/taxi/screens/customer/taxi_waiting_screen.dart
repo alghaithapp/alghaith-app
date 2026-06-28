@@ -53,6 +53,8 @@ class _TaxiWaitingScreenState extends State<TaxiWaitingScreen> {
   int _secondsLeft = 180;
   bool _isCreating = false;
   String? _createError;
+  bool _expired = false;
+  bool _hasTimedOut = false;
 
   @override
   void initState() {
@@ -105,14 +107,10 @@ class _TaxiWaitingScreenState extends State<TaxiWaitingScreen> {
   void _startTimer() {
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) async {
       if (_secondsLeft <= 0) {
-        timer.cancel();
-        if (!mounted) return;
-        final provider = context.read<TaxiProvider>();
-        await provider.loadActiveRequest();
-        if (!mounted) return;
-        final request = provider.currentRequest;
-        if (request == null || request.isCancelled) {
-          _showExpiredAndExit();
+        if (!_hasTimedOut) {
+          _hasTimedOut = true;
+          setState(() {});
+          await _checkExpired();
         }
         return;
       }
@@ -120,8 +118,20 @@ class _TaxiWaitingScreenState extends State<TaxiWaitingScreen> {
     });
   }
 
-  void _showExpiredAndExit() {
+  Future<void> _checkExpired() async {
     if (!mounted) return;
+    final provider = context.read<TaxiProvider>();
+    await provider.loadActiveRequest();
+    if (!mounted) return;
+    final request = provider.currentRequest;
+    if (request == null || request.isCancelled) {
+      _showExpiredAndExit();
+    }
+  }
+
+  void _showExpiredAndExit() {
+    if (!mounted || _expired) return;
+    setState(() => _expired = true);
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
         content: Text(
@@ -201,6 +211,8 @@ class _TaxiWaitingScreenState extends State<TaxiWaitingScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (_expired) return const SizedBox.shrink();
+
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
@@ -208,7 +220,13 @@ class _TaxiWaitingScreenState extends State<TaxiWaitingScreen> {
           builder: (context, provider, _) {
             final request = provider.currentRequest;
 
-            if (request != null && request.isCancelled) {
+            if (_hasTimedOut && (request == null || request.isCancelled || provider.hasExpired)) {
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (mounted) _showExpiredAndExit();
+              });
+            }
+
+            if (request != null && request.isCancelled && !_hasTimedOut) {
               WidgetsBinding.instance.addPostFrameCallback((_) {
                 if (mounted) _showExpiredAndExit();
               });
@@ -301,7 +319,7 @@ class _TaxiWaitingScreenState extends State<TaxiWaitingScreen> {
                     ),
                   ),
                 ),
-                if (_createError == null)
+                if (_createError == null && !_hasTimedOut)
                   Positioned(
                     top: 130,
                     left: 0,

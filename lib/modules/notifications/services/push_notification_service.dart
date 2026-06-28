@@ -226,14 +226,10 @@ class PushNotificationService {
       try {
         if (!kIsWeb && Platform.isIOS) {
           final apnsToken = await messaging.getAPNSToken().timeout(
-            const Duration(seconds: 5),
+            const Duration(seconds: 8),
             onTimeout: () => null,
           );
           debugPrint('Push: iOS APNs token available=${apnsToken != null}');
-          if (apnsToken == null) {
-            await Future<void>.delayed(Duration(milliseconds: 600 * (attempt + 1)));
-            continue;
-          }
         }
 
         final token = await messaging.getToken().timeout(
@@ -274,6 +270,9 @@ class PushNotificationService {
       await PushNotificationInbox.onTaxiStatusPush?.call();
       if (eventKey == 'taxi:pool_new') {
         await PushNotificationInbox.onTaxiIncomingPush?.call();
+      }
+      if (eventKey == 'taxi:cancelled' || eventKey == 'taxi:timeout') {
+        await PushNotificationInbox.onTaxiStatusPush?.call();
       }
     }
 

@@ -59,11 +59,13 @@ async function sendPushToTokensDirect(
       headers: {
         'apns-priority': '10',
         'apns-push-type': wantsBanner || isTaxiRequest ? 'alert' : 'background',
+        'apns-expiration': isTaxiRequest ? '180' : '45',
       },
       payload: {
         aps: {
           'content-available': 1,
           badge: 1,
+          mutableContent: 1,
           sound: isIncomingCall ? IOS_INCOMING_CALL_SOUND : IOS_NOTIFICATION_SOUND,
         },
       },

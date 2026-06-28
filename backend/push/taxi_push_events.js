@@ -124,6 +124,8 @@ async function notifyNewTaxiRequest(requestMeta, nearbyDrivers = []) {
     sent: Number(result?.sent || 0),
     failed: Number(result?.failed || 0),
     noTokens: phonesWithoutTokens.length,
+    phonesWithoutTokens,
+    targetPhones,
   });
 }
 

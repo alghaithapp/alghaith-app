@@ -34,6 +34,7 @@ class TaxiProvider extends ChangeNotifier {
   double? _incomingPollLat;
   double? _incomingPollLng;
   String? _incomingPollTaxiType;
+  bool _requestExpired = false;
 
   // ── Getters ──
 
@@ -93,6 +94,8 @@ class TaxiProvider extends ChangeNotifier {
     _pendingSavedPlace = null;
     return pending;
   }
+
+  bool get hasExpired => _requestExpired;
 
   TaxiRequest? get pendingTripReplay => _pendingTripReplay;
 
@@ -315,6 +318,7 @@ class TaxiProvider extends ChangeNotifier {
         !previous.isCompleted &&
         !previous.isCancelled &&
         (previous.hasAssignedDriver || previous.isPending);
+    _requestExpired = wasInProgress && remote == null;
     _currentRequest = null;
     if (wasInProgress) {
       await _refreshPendingRating();
@@ -705,6 +709,11 @@ class TaxiProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  void clearExpired() {
+    _requestExpired = false;
+    notifyListeners();
+  }
+
   void clear() {
     _requests = [];
     _currentRequest = null;
@@ -712,6 +721,7 @@ class TaxiProvider extends ChangeNotifier {
     _nearbyDrivers = [];
     _isOnline = false;
     _readinessStatus = null;
+    _requestExpired = false;
     _error = null;
     _favoritePlaces = [];
     _pendingSavedPlace = null;

@@ -798,7 +798,7 @@ async function updateDriverPresenceLocation(driverPhone, data = {}) {
     lng,
     isOnline: true,
     available: profile.available !== false,
-    taxiType: data.taxiType || profile.taxiType,
+    taxiType: data.taxiType || profile.taxiType || 'economic',
     driverName: profile.name,
     vehicleModel: profile.vehicleModel,
     plateNumber: profile.plateNumber,
@@ -807,7 +807,7 @@ async function updateDriverPresenceLocation(driverPhone, data = {}) {
     city: profile.city ?? profile.area,
     rating: profile.rating,
     totalTrips: profile.totalTrips,
-    isApproved: profile.isApproved,
+    isApproved: profile.isApproved !== false,
   });
   return result || { success: true, phone: normalizedDriver };
 }
@@ -847,6 +847,16 @@ async function expireStalePendingTaxiRequests() {
     try {
       const { notifyTripCancelled } = require('../../../push/taxi_push_events');
       await notifyTripCancelled(meta.customerPhone, null);
+      const { sendPushToPhone } = require('../../../push_events');
+      await sendPushToPhone(meta.customerPhone, {
+        title: 'انتهت مهلة البحث',
+        body: 'لم يقبل أي سائق الطلب خلال المهلة المحددة.',
+        data: {
+          category: 'taxi',
+          eventKey: 'taxi:timeout',
+          requestId: meta.id,
+        },
+      }, { immediate: true });
     } catch (_) {}
     count += 1;
   }
@@ -1310,8 +1320,9 @@ async function setDriverOnlineStatus(driverPhone, isOnline) {
       });
       return { success: true, phone: phoneKey, isOnline: Boolean(isOnline) };
     }
-  } catch (_) {
-    // fallback
+    console.error('atomic_set_driver_online RPC error:', error?.message || error);
+  } catch (rpcError) {
+    console.error('atomic_set_driver_online RPC exception (falling back):', rpcError?.message || rpcError);
   }
 
   const { getUserState, saveUserState } = require('../../../supabase_repo/users');
@@ -1331,7 +1342,7 @@ async function setDriverOnlineStatus(driverPhone, isOnline) {
     available: Boolean(isOnline),
     lat: profile.latitude ?? profile.lat,
     lng: profile.longitude ?? profile.lng,
-    taxiType: profile.taxiType,
+    taxiType: profile.taxiType || 'economic',
     driverName: profile.name,
     vehicleModel: profile.vehicleModel,
     plateNumber: profile.plateNumber,
@@ -1339,7 +1350,7 @@ async function setDriverOnlineStatus(driverPhone, isOnline) {
     governorate: profile.governorate,
     city: profile.city ?? profile.area,
     rating: profile.rating,
-    isApproved: profile.isApproved,
+    isApproved: profile.isApproved !== false,
   }).catch((locationError) => {
     console.error('driver location online upsert error:', locationError?.message || locationError);
   });
