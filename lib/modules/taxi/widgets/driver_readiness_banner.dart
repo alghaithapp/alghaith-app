@@ -252,6 +252,9 @@ Future<void> bootstrapDriverReadiness({
   taxiProvider.hydrateOnlineFromProfile(appProvider.driverProfile);
 
   final wantsOnline = await DriverPresenceStore.getWantsOnline(phone);
+  if (wantsOnline) {
+    taxiProvider.hydrateOnline(true);
+  }
   if (wantsOnline || taxiProvider.isOnline) {
     unawaited(
       DriverPresenceService.instance.start(

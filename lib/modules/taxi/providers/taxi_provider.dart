@@ -150,6 +150,12 @@ class TaxiProvider extends ChangeNotifier {
     }
   }
 
+  void hydrateOnline(bool value) {
+    if (_isOnline == value) return;
+    _isOnline = value;
+    notifyListeners();
+  }
+
   void setReadinessStatus(DriverReadinessStatus status) {
     _readinessStatus = status;
     notifyListeners();

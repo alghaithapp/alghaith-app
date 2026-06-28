@@ -6,6 +6,8 @@
 
 const { sendPushToPhone } = require('../push_events');
 const { getActiveDriverPhonesByTaxiType } = require('../supabase_repo/taxi');
+const { getDeviceTokensForPhone, removeDeviceTokens } = require('../supabase_repo');
+const { sendPushToTokensDirect } = require('../services/notification_delivery');
 
 /**
  * بناء payload موحد للإشعارات
@@ -73,28 +75,55 @@ async function notifyNewTaxiRequest(requestMeta, nearbyDrivers = []) {
     orderedPhones.push(normalized);
   }
 
-  const maxTargets = 40;
-  let sent = 0;
-  let failed = 0;
-  let noTokens = 0;
-  for (const phone of orderedPhones.slice(0, maxTargets)) {
-    try {
-      const result = await sendPushToPhone(phone, driverPayload, { showSystemBanner: true, immediate: true });
-      sent += Number(result?.sent || 0);
-      failed += Number(result?.failed || 0);
-      if (result?.reason === 'no_tokens') noTokens += 1;
-    } catch (error) {
-      failed += 1;
-      console.error(`taxi push notifyNewTaxiRequest error for ${phone}:`, error?.message || error);
+  if (orderedPhones.length === 0) {
+    for (const fallbackType of ['economic', 'tuktuk', 'wazz', 'super']) {
+      if (fallbackType === taxiType) continue;
+      const fallbackPhones = await getActiveDriverPhonesByTaxiType(fallbackType);
+      for (const phone of fallbackPhones) {
+        const normalized = String(phone || '').trim();
+        if (!normalized || seenPhones.has(normalized)) continue;
+        seenPhones.add(normalized);
+        orderedPhones.push(normalized);
+      }
     }
   }
+
+  const maxTargets = 40;
+  const targetPhones = orderedPhones.slice(0, maxTargets);
+  const tokens = [];
+  const phonesWithoutTokens = [];
+  for (const phone of targetPhones) {
+    try {
+      const rows = await getDeviceTokensForPhone(phone);
+      const phoneTokens = rows.map((row) => String(row.token || '').trim()).filter(Boolean);
+      if (phoneTokens.length === 0) {
+        phonesWithoutTokens.push(phone);
+      }
+      tokens.push(...phoneTokens);
+    } catch (error) {
+      phonesWithoutTokens.push(phone);
+      console.error(`taxi push token lookup error for ${phone}:`, error?.message || error);
+    }
+  }
+
+  const result = await sendPushToTokensDirect(tokens, {
+    title: driverPayload.title,
+    body: driverPayload.body,
+    data: driverPayload.data,
+    showSystemBanner: true,
+  });
+  if (result.invalidTokens?.length) {
+    await removeDeviceTokens(result.invalidTokens);
+  }
+
   console.log('taxi push notifyNewTaxiRequest summary:', {
     requestId,
     taxiType,
-    targets: orderedPhones.length,
-    sent,
-    failed,
-    noTokens,
+    targets: targetPhones.length,
+    tokenCount: [...new Set(tokens)].length,
+    sent: Number(result?.sent || 0),
+    failed: Number(result?.failed || 0),
+    noTokens: phonesWithoutTokens.length,
   });
 }
 

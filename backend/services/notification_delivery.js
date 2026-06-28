@@ -43,7 +43,7 @@ async function sendPushToTokensDirect(
   const isIncomingCall =
     category === 'call' || eventKey === 'call:incoming';
   const isTaxiRequest = category === 'taxi' && eventKey === 'taxi:pool_new';
-  const wantsBanner = !dataOnly && (showSystemBanner || isIncomingCall);
+  const wantsBanner = !dataOnly && (showSystemBanner || isIncomingCall || isTaxiRequest);
   const message = {
     tokens: uniqueTokens,
     data: normalizeData({
@@ -53,11 +53,12 @@ async function sendPushToTokensDirect(
     }),
     android: {
       priority: 'high',
-      ttl: 45000,
+      ttl: isTaxiRequest ? 120000 : 45000,
     },
     apns: {
       headers: {
         'apns-priority': '10',
+        'apns-push-type': wantsBanner || isTaxiRequest ? 'alert' : 'background',
       },
       payload: {
         aps: {
@@ -91,7 +92,6 @@ async function sendPushToTokensDirect(
     message.apns.payload.aps.sound = isIncomingCall
       ? IOS_INCOMING_CALL_SOUND
       : IOS_NOTIFICATION_SOUND;
-    message.apns.headers['apns-push-type'] = 'alert';
     if (isIncomingCall) {
       message.apns.payload.aps['interruption-level'] = 'time-sensitive';
     }
