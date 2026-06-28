@@ -293,6 +293,44 @@ router.get('/debug/active-drivers', async (req, res) => {
   }
 });
 
+// POST /db/taxi/debug/test-push - يرسل إشعار اختبار لحساب السائق الحالي بدون كشف التوكن
+router.post('/debug/test-push', async (req, res) => {
+  try {
+    const phone = requireOptionalAuthorizedPhone(req, res);
+    if (!phone) return;
+    const { getDeviceTokensForPhone, removeDeviceTokens } = require('../../supabase_repo/push_notifications');
+    const { sendPushToTokensDirect } = require('../../services/notification_delivery');
+    const rows = await getDeviceTokensForPhone(phone);
+    const tokens = rows.map((row) => String(row.token || '').trim()).filter(Boolean);
+    const platforms = [...new Set(rows.map((row) => String(row.platform || 'unknown')))];
+    const result = await sendPushToTokensDirect(tokens, {
+      title: 'اختبار إشعارات الغيث',
+      body: 'إذا وصل هذا التنبيه فإشعارات هذا الجهاز تعمل.',
+      data: {
+        category: 'taxi',
+        audience: 'driver',
+        eventKey: 'taxi:test_push',
+        orderId: 'test',
+      },
+      showSystemBanner: true,
+    });
+    if (result.invalidTokens?.length) {
+      await removeDeviceTokens(result.invalidTokens);
+    }
+    return res.json({
+      hasToken: tokens.length > 0,
+      tokenCount: tokens.length,
+      platforms,
+      sent: Number(result.sent || 0),
+      failed: Number(result.failed || 0),
+      invalidTokens: result.invalidTokens?.length || 0,
+    });
+  } catch (error) {
+    console.error('taxi debug test-push error:', error);
+    return res.status(500).json({ message: error?.message || 'Failed to test push.' });
+  }
+});
+
 // GET /db/taxi/incoming-requests - الطلبات الواردة للسائق
 // يقبل lat/lng من query params (موقع حالي) أو من ملف السائق المحفوظ
 router.get('/incoming-requests', async (req, res) => {
