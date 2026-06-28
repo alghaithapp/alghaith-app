@@ -84,8 +84,8 @@ class NotificationSound {
     interruptionLevel: InterruptionLevel.timeSensitive,
   );
 
-  static const String taxiRequestChannelId = 'alghaith_taxi_requests_v2';
-  static const String taxiRequestChannelName = 'طلبات التكسي';
+  static const String taxiRequestChannelId = channelId;
+  static const String taxiRequestChannelName = channelName;
 
   static const AndroidNotificationChannel taxiRequestAndroidChannel =
       AndroidNotificationChannel(
