@@ -453,6 +453,12 @@ async function rejectTaxiRequest(driverPhone, requestId) {
   const id = String(requestId || '').trim();
   if (!id) throw new Error('Request id is required.');
 
+  const lockToken = await acquireLock(`taxi:reject:${id}`, 5_000);
+  if (!lockToken) {
+    throw new Error('Request is being processed. Try again.');
+  }
+
+  try {
   const row = await selectSingle('taxi_requests', 'id', id);
   if (!row) throw new Error('Request not found.');
 
@@ -495,10 +501,10 @@ async function rejectTaxiRequest(driverPhone, requestId) {
     if (nextDriver?.driverPhone) {
       const refreshed = await selectSingle('taxi_requests', 'id', id);
       const formatted = formatTaxiRequestForClient(refreshed);
-      const { notifyNewTaxiRequest } = require('../../../push/taxi_push_events');
-      await notifyNewTaxiRequest(
+      const { notifySingleDriver } = require('../../../push/taxi_push_events');
+      await notifySingleDriver(
         { ...formatted, taxiType: meta.taxiType },
-        [{ phone: nextDriver.driverPhone, distanceKm: nextDriver.distanceKm }]
+        nextDriver.driverPhone
       );
     }
   } catch (e) {
@@ -506,6 +512,9 @@ async function rejectTaxiRequest(driverPhone, requestId) {
   }
 
   return formatTaxiRequestForClient(await selectSingle('taxi_requests', 'id', id));
+  } finally {
+    await releaseLock(`taxi:reject:${id}`, lockToken);
+  }
 }
 
 // ── تحديث حالة الرحلة ────────────────────────────────────────────
@@ -845,8 +854,6 @@ async function expireStalePendingTaxiRequests() {
       updated_at: cancelledAt,
     });
     try {
-      const { notifyTripCancelled } = require('../../../push/taxi_push_events');
-      await notifyTripCancelled(meta.customerPhone, null);
       const { sendPushToPhone } = require('../../../push_events');
       await sendPushToPhone(meta.customerPhone, {
         title: 'انتهت مهلة البحث',
@@ -913,11 +920,14 @@ function scheduleNewTaxiRequestNotifications(saved, requestPayload, taxiType) {
 
 async function notifyDriversForNewRequest(saved, requestPayload, taxiType) {
   const { notifyNewTaxiRequest } = require('../../../push/taxi_push_events');
+  const rejectedIds = Array.isArray(requestPayload.rejectedByDriverIds)
+    ? requestPayload.rejectedByDriverIds
+    : [];
   let nearbyDrivers = await getNearbyDrivers(
     requestPayload.pickupLat,
     requestPayload.pickupLng,
     taxiType,
-    [],
+    rejectedIds,
     10
   );
   if (!nearbyDrivers.length) {
@@ -925,11 +935,12 @@ async function notifyDriversForNewRequest(saved, requestPayload, taxiType) {
       requestPayload.pickupLat,
       requestPayload.pickupLng,
       taxiType,
-      [],
+      rejectedIds,
       25
     );
   }
-  await notifyNewTaxiRequest({ ...saved, taxiType }, nearbyDrivers);
+  const excludePhones = rejectedIds;
+  await notifyNewTaxiRequest({ ...saved, taxiType, excludePhones }, nearbyDrivers);
 }
 
 // ── البحث عن سائقين قريبين ────────────────────────────────────────
@@ -964,12 +975,22 @@ async function getNearbyDrivers(pickupLat, pickupLng, taxiType = 'economic', exc
     (excludeDriverIds || []).map((id) => String(id || '').trim()).filter(Boolean)
   );
 
-  for (const user of (appUsers || [])) {
+  const candidateUsers = (appUsers || []).filter((user) => {
     const phone = String(user.phone || '').trim();
-    if (!phone || excludeSet.has(phone)) continue;
+    return phone && !excludeSet.has(phone);
+  });
 
-    // قراءة driver profile من getUserState — لا نعتمد على role في app_users
-    const state = await getUserState(phone);
+  const states = await Promise.allSettled(
+    candidateUsers.map((user) => getUserState(String(user.phone || '').trim()))
+  );
+
+  for (let i = 0; i < candidateUsers.length; i++) {
+    const phone = String(candidateUsers[i].phone || '').trim();
+    if (!phone) continue;
+
+    const result = states[i];
+    if (result.status !== 'fulfilled' || !result.value) continue;
+    const state = result.value;
     const profile = state?.driverProfile;
     if (!profile || typeof profile !== 'object') continue;
     if (Object.keys(profile).length === 0) continue;
@@ -1106,11 +1127,20 @@ async function getActiveDriverPhonesByTaxiType(taxiType = 'economic') {
 
   const result = [];
 
-  for (const user of (appUsers || [])) {
-    const phone = String(user.phone || '').trim();
+  const states = await Promise.allSettled(
+    (appUsers || []).map((user) => {
+      const phone = String(user.phone || '').trim();
+      return phone ? getUserState(phone) : Promise.resolve(null);
+    })
+  );
+
+  for (let i = 0; i < (appUsers || []).length; i++) {
+    const phone = String(appUsers[i].phone || '').trim();
     if (!phone) continue;
 
-    const state = await getUserState(phone);
+    const entry = states[i];
+    if (entry.status !== 'fulfilled' || !entry.value) continue;
+    const state = entry.value;
     const profile = state?.driverProfile;
     if (!profile || typeof profile !== 'object') continue;
     if (profile.isApproved !== true) continue;

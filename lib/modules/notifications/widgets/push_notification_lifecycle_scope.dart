@@ -31,6 +31,7 @@ class _PushNotificationLifecycleScopeState
     IncomingCallWatcher.instance.onIncomingCall = _handleIncomingCall;
     IncomingCallWatcher.instance.onCallCancelled = _handleCallCancelled;
     PushNotificationInbox.onTaxiIncomingPush = _handleTaxiIncomingPush;
+    PushNotificationInbox.onTaxiStatusPush = _handleTaxiStatusPush;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       unawaited(_onLifecycleRefresh());
     });
@@ -41,6 +42,18 @@ class _PushNotificationLifecycleScopeState
     final provider = context.read<AppProvider>();
     if (provider.userRole != 'driver') return;
     await context.read<TaxiProvider>().fetchIncomingRequests();
+  }
+
+  Future<void> _handleTaxiStatusPush() async {
+    if (!mounted) return;
+    final provider = context.read<AppProvider>();
+    final taxi = context.read<TaxiProvider>();
+    if (provider.userRole == 'driver') {
+      await taxi.loadDriverActiveRequest();
+      await taxi.fetchIncomingRequests();
+    } else {
+      await taxi.loadActiveRequest();
+    }
   }
 
   Future<void> _onLifecycleRefresh() async {
@@ -93,6 +106,7 @@ class _PushNotificationLifecycleScopeState
     IncomingCallWatcher.instance.onCallCancelled = null;
     IncomingCallWatcher.instance.unbind();
     PushNotificationInbox.onTaxiIncomingPush = null;
+    PushNotificationInbox.onTaxiStatusPush = null;
     super.dispose();
   }
 

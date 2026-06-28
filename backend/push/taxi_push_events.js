@@ -23,15 +23,40 @@ function buildPushPayload({ title, body, data = {} }) {
   };
 }
 
+async function collectTokensForPhones(phones) {
+  const results = await Promise.allSettled(
+    phones.map(async (phone) => {
+      const rows = await getDeviceTokensForPhone(phone);
+      const phoneTokens = rows.map((row) => String(row.token || '').trim()).filter(Boolean);
+      return { phone, tokens: phoneTokens };
+    })
+  );
+
+  const tokens = [];
+  const phonesWithoutTokens = [];
+  for (const result of results) {
+    if (result.status === 'fulfilled') {
+      if (result.value.tokens.length === 0) {
+        phonesWithoutTokens.push(result.value.phone);
+      }
+      tokens.push(...result.value.tokens);
+    } else {
+      phonesWithoutTokens.push('unknown');
+      console.error('taxi push token lookup error:', result.reason?.message || result.reason);
+    }
+  }
+  return { tokens, phonesWithoutTokens };
+}
+
 /**
  * إرسال إشعار لكل السائقين المتصلين من نفس النوع.
- * الأولوية للأقرب جغرافياً، ثم بقية السائقين المتصلين (بدون حد 5 مع إيقاف مبكر).
+ * الأولوية للأقرب جغرافياً، ثم بقية السائقين المتصلين.
  */
 async function notifyNewTaxiRequest(requestMeta, nearbyDrivers = []) {
   const requestId = String(requestMeta?.id || requestMeta?.requestId || '').trim();
   if (!requestId) return;
 
-  const payload = buildPushPayload({
+  const driverPayload = buildPushPayload({
     title: '🚕 طلب تكسي جديد',
     body: `من: ${requestMeta.pickupAddress || 'غير محدد'} → إلى: ${requestMeta.dropoffAddress || 'غير محدد'}`,
     data: {
@@ -47,16 +72,10 @@ async function notifyNewTaxiRequest(requestMeta, nearbyDrivers = []) {
     },
   });
 
-  const driverPayload = {
-    ...payload,
-    data: {
-      ...payload.data,
-      audience: 'driver',
-    },
-  };
-
   const taxiType = String(requestMeta.taxiType || 'economic').trim();
-  const seenPhones = new Set();
+  const excludePhones = Array.isArray(requestMeta.excludePhones) ? requestMeta.excludePhones : [];
+  const excludeSet = new Set(excludePhones.map((p) => String(p || '').trim()).filter(Boolean));
+  const seenPhones = new Set(excludeSet);
   const orderedPhones = [];
 
   const nearbyList = Array.isArray(nearbyDrivers) ? nearbyDrivers : [];
@@ -90,21 +109,7 @@ async function notifyNewTaxiRequest(requestMeta, nearbyDrivers = []) {
 
   const maxTargets = 40;
   const targetPhones = orderedPhones.slice(0, maxTargets);
-  const tokens = [];
-  const phonesWithoutTokens = [];
-  for (const phone of targetPhones) {
-    try {
-      const rows = await getDeviceTokensForPhone(phone);
-      const phoneTokens = rows.map((row) => String(row.token || '').trim()).filter(Boolean);
-      if (phoneTokens.length === 0) {
-        phonesWithoutTokens.push(phone);
-      }
-      tokens.push(...phoneTokens);
-    } catch (error) {
-      phonesWithoutTokens.push(phone);
-      console.error(`taxi push token lookup error for ${phone}:`, error?.message || error);
-    }
-  }
+  const { tokens, phonesWithoutTokens } = await collectTokensForPhones(targetPhones);
 
   const result = await sendPushToTokensDirect(tokens, {
     title: driverPayload.title,
@@ -127,6 +132,47 @@ async function notifyNewTaxiRequest(requestMeta, nearbyDrivers = []) {
     phonesWithoutTokens,
     targetPhones,
   });
+}
+
+/**
+ * إرسال إشعار لسائق واحد محدد (بعد رفض سابق أو مطابقة تلقائية).
+ * لا يبحث عن سائقين إضافيين  Avoids notifying all active drivers on rejection.
+ */
+async function notifySingleDriver(requestMeta, driverPhone) {
+  const requestId = String(requestMeta?.id || requestMeta?.requestId || '').trim();
+  const phone = String(driverPhone || '').trim();
+  if (!requestId || !phone) return;
+
+  const payload = buildPushPayload({
+    title: '🚕 طلب تكسي جديد',
+    body: `من: ${requestMeta.pickupAddress || 'غير محدد'} → إلى: ${requestMeta.dropoffAddress || 'غير محدد'}`,
+    data: {
+      audience: 'driver',
+      eventKey: 'taxi:pool_new',
+      orderId: requestId,
+      requestId,
+      pickupAddress: String(requestMeta.pickupAddress || '').trim(),
+      dropoffAddress: String(requestMeta.dropoffAddress || '').trim(),
+      fare: String(requestMeta.fare || '0'),
+      distanceKm: String(requestMeta.distanceKm || '0'),
+      taxiType: String(requestMeta.taxiType || 'economic').trim(),
+    },
+  });
+
+  const { tokens } = await collectTokensForPhones([phone]);
+  if (tokens.length === 0) return;
+
+  const result = await sendPushToTokensDirect(tokens, {
+    title: payload.title,
+    body: payload.body,
+    data: payload.data,
+    showSystemBanner: true,
+  });
+  if (result.invalidTokens?.length) {
+    await removeDeviceTokens(result.invalidTokens);
+  }
+
+  console.log('taxi push notifySingleDriver:', { requestId, driverPhone: phone, sent: result.sent });
 }
 
 /**
@@ -273,6 +319,7 @@ async function notifyDriverLate(customerPhone, minutesLate) {
 
 module.exports = {
   notifyNewTaxiRequest,
+  notifySingleDriver,
   notifyDriverAccepted,
   notifyDriverArrived,
   notifyTripCompleted,

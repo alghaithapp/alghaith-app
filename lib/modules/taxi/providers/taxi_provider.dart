@@ -664,6 +664,7 @@ class TaxiProvider extends ChangeNotifier {
       table: table,
       filterColumn: column,
       filterValue: phone,
+      event: PostgresChangeEvent.update,
       onData: (_) {
         if (isDriver) {
           loadDriverActiveRequest();

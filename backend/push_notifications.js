@@ -15,19 +15,29 @@ function initFirebaseAdmin() {
 
   const raw = String(process.env.FIREBASE_SERVICE_ACCOUNT_JSON || '').trim();
   if (!raw) {
+    console.error('push: FIREBASE_SERVICE_ACCOUNT_JSON env var is empty or not set. Push notifications disabled.');
     return false;
   }
 
   try {
     const credentials = JSON.parse(raw);
-    if (!credentials?.project_id || !credentials?.client_email || !credentials?.private_key) {
-      console.error('push: FIREBASE_SERVICE_ACCOUNT_JSON is missing required fields.');
+    if (!credentials?.project_id) {
+      console.error('push: FIREBASE_SERVICE_ACCOUNT_JSON missing project_id.');
+      return false;
+    }
+    if (!credentials?.client_email) {
+      console.error('push: FIREBASE_SERVICE_ACCOUNT_JSON missing client_email.');
+      return false;
+    }
+    if (!credentials?.private_key) {
+      console.error('push: FIREBASE_SERVICE_ACCOUNT_JSON missing private_key.');
       return false;
     }
     admin.initializeApp({
       credential: admin.credential.cert(credentials),
     });
     initialized = true;
+    console.log('push: Firebase Admin initialized successfully.', credentials.project_id);
     return true;
   } catch (error) {
     console.error('push: failed to initialize Firebase Admin:', error?.message || error);

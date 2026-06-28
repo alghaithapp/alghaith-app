@@ -50,7 +50,7 @@ class TaxiWaitingScreen extends StatefulWidget {
 
 class _TaxiWaitingScreenState extends State<TaxiWaitingScreen> {
   Timer? _timer;
-  int _secondsLeft = 180;
+  int _secondsLeft = 300;
   bool _isCreating = false;
   String? _createError;
   bool _expired = false;
@@ -119,13 +119,23 @@ class _TaxiWaitingScreenState extends State<TaxiWaitingScreen> {
   }
 
   Future<void> _checkExpired() async {
-    if (!mounted) return;
-    final provider = context.read<TaxiProvider>();
-    await provider.loadActiveRequest();
-    if (!mounted) return;
-    final request = provider.currentRequest;
-    if (request == null || request.isCancelled) {
-      _showExpiredAndExit();
+    for (var attempt = 0; attempt < 3; attempt++) {
+      if (!mounted) return;
+      try {
+        final provider = context.read<TaxiProvider>();
+        await provider.loadActiveRequest();
+        if (!mounted) return;
+        final request = provider.currentRequest;
+        if (request == null || request.isCancelled) {
+          _showExpiredAndExit();
+          return;
+        }
+        return;
+      } catch (_) {
+        if (attempt < 2) {
+          await Future<void>.delayed(Duration(seconds: 2 * (attempt + 1)));
+        }
+      }
     }
   }
 

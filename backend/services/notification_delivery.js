@@ -21,6 +21,8 @@ function normalizeData(data = {}) {
   return normalized;
 }
 
+const FCM_BATCH_SIZE = 500;
+
 async function sendPushToTokensDirect(
   tokens,
   { title, body, data = {}, showSystemBanner = false, dataOnly = false } = {}
@@ -35,6 +37,8 @@ async function sendPushToTokensDirect(
     return { sent: 0, failed: uniqueTokens.length, invalidTokens: [], skipped: true };
   }
 
+  if (!uniqueTokens.length) return { sent: 0, failed: 0, invalidTokens: [] };
+
   const messaging = admin.messaging();
   const safeTitle = String(title || 'الغيث').trim();
   const safeBody = String(body || '').trim();
@@ -44,75 +48,92 @@ async function sendPushToTokensDirect(
     category === 'call' || eventKey === 'call:incoming';
   const isTaxiRequest = category === 'taxi' && eventKey === 'taxi:pool_new';
   const wantsBanner = !dataOnly && (showSystemBanner || isIncomingCall || isTaxiRequest);
-  const message = {
-    tokens: uniqueTokens,
-    data: normalizeData({
-      ...data,
-      title: safeTitle,
-      body: safeBody,
-    }),
-    android: {
-      priority: 'high',
-      ttl: isTaxiRequest ? 180000 : 45000,
-    },
-    apns: {
-      headers: {
-        'apns-priority': '10',
-        'apns-push-type': wantsBanner || isTaxiRequest ? 'alert' : 'background',
-        'apns-expiration': isTaxiRequest ? '180' : '45',
+
+  function buildBatchMessage(batchTokens) {
+    const msg = {
+      tokens: batchTokens,
+      data: normalizeData({
+        ...data,
+        title: safeTitle,
+        body: safeBody,
+      }),
+      android: {
+        priority: 'high',
+        ttl: isTaxiRequest ? 300000 : 45000,
       },
-      payload: {
-        aps: {
-          'content-available': 1,
-          badge: 1,
-          mutableContent: 1,
-          sound: isIncomingCall ? IOS_INCOMING_CALL_SOUND : IOS_NOTIFICATION_SOUND,
+      apns: {
+        headers: {
+          'apns-priority': '10',
+          'apns-push-type': wantsBanner || isTaxiRequest ? 'alert' : 'background',
+          'apns-expiration': isTaxiRequest ? '300' : '45',
+        },
+        payload: {
+          aps: {
+            'content-available': 1,
+            badge: 1,
+            mutableContent: 1,
+            sound: isIncomingCall ? IOS_INCOMING_CALL_SOUND : IOS_NOTIFICATION_SOUND,
+          },
         },
       },
-    },
-  };
-
-  if (wantsBanner) {
-    message.notification = { title: safeTitle, body: safeBody };
-    message.android.notification = {
-      channelId: isIncomingCall
-        ? ANDROID_INCOMING_CALL_CHANNEL_ID
-        : isTaxiRequest
-          ? ANDROID_TAXI_REQUEST_CHANNEL_ID
-        : ANDROID_NOTIFICATION_CHANNEL_ID,
-      sound: isIncomingCall ? ANDROID_INCOMING_CALL_SOUND : ANDROID_NOTIFICATION_SOUND,
-      priority: isIncomingCall ? 'max' : 'high',
-      visibility: isIncomingCall ? 'public' : 'private',
-      defaultVibrateTimings: isIncomingCall,
-      notificationCount: isIncomingCall ? 1 : undefined,
     };
-    if (isIncomingCall) {
-      message.android.collapseKey = 'alghaith_incoming_call';
-      message.android.ttl = 120000;
+
+    if (wantsBanner) {
+      msg.notification = { title: safeTitle, body: safeBody };
+      msg.android.notification = {
+        channelId: isIncomingCall
+          ? ANDROID_INCOMING_CALL_CHANNEL_ID
+          : isTaxiRequest
+            ? ANDROID_TAXI_REQUEST_CHANNEL_ID
+          : ANDROID_NOTIFICATION_CHANNEL_ID,
+        sound: isIncomingCall ? ANDROID_INCOMING_CALL_SOUND : ANDROID_NOTIFICATION_SOUND,
+        priority: isIncomingCall ? 'max' : 'high',
+        visibility: isIncomingCall ? 'public' : 'private',
+        defaultVibrateTimings: isIncomingCall,
+        notificationCount: isIncomingCall ? 1 : undefined,
+      };
+      if (isIncomingCall) {
+        msg.android.collapseKey = 'alghaith_incoming_call';
+        msg.android.ttl = 120000;
+      }
+      msg.apns.payload.aps.alert = { title: safeTitle, body: safeBody };
+      msg.apns.payload.aps.sound = isIncomingCall
+        ? IOS_INCOMING_CALL_SOUND
+        : IOS_NOTIFICATION_SOUND;
+      if (isIncomingCall) {
+        msg.apns.payload.aps['interruption-level'] = 'time-sensitive';
+      }
     }
-    message.apns.payload.aps.alert = { title: safeTitle, body: safeBody };
-    message.apns.payload.aps.sound = isIncomingCall
-      ? IOS_INCOMING_CALL_SOUND
-      : IOS_NOTIFICATION_SOUND;
-    if (isIncomingCall) {
-      message.apns.payload.aps['interruption-level'] = 'time-sensitive';
+    return msg;
+  }
+
+  let totalSent = 0;
+  let totalFailed = 0;
+  const allInvalidTokens = [];
+
+  for (let i = 0; i < uniqueTokens.length; i += FCM_BATCH_SIZE) {
+    const batch = uniqueTokens.slice(i, i + FCM_BATCH_SIZE);
+    try {
+      const response = await messaging.sendEachForMulticast(buildBatchMessage(batch));
+      totalSent += response.successCount;
+      totalFailed += response.failureCount;
+      response.responses.forEach((item, index) => {
+        if (item.success) return;
+        const code = item.error?.code || '';
+        if (code.includes('registration-token-not-registered') || code.includes('invalid')) {
+          allInvalidTokens.push(batch[index]);
+        }
+      });
+    } catch (batchError) {
+      console.error('push: FCM batch send error:', batchError?.message || batchError);
+      totalFailed += batch.length;
     }
   }
 
-  const response = await messaging.sendEachForMulticast(message);
-  const invalidTokens = [];
-  response.responses.forEach((item, index) => {
-    if (item.success) return;
-    const code = item.error?.code || '';
-    if (code.includes('registration-token-not-registered') || code.includes('invalid')) {
-      invalidTokens.push(uniqueTokens[index]);
-    }
-  });
-
   return {
-    sent: response.successCount,
-    failed: response.failureCount,
-    invalidTokens,
+    sent: totalSent,
+    failed: totalFailed,
+    invalidTokens: allInvalidTokens,
   };
 }
 
