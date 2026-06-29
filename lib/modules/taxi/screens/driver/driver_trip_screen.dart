@@ -33,12 +33,7 @@ class DriverTripScreen extends StatelessWidget {
           backgroundColor: Colors.white,
           foregroundColor: Colors.black,
           elevation: 0,
-          actions: [
-            IconButton(
-              icon: const Icon(Icons.refresh_rounded),
-              onPressed: () => provider.refreshDriverTaxiRequests(),
-            ),
-          ],
+          actions: const [],
           bottom: TabBar(
             labelStyle: const TextStyle(
                 fontFamily: 'Cairo', fontWeight: FontWeight.w700),

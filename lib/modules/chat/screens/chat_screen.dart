@@ -1032,11 +1032,6 @@ class _ChatScreenState extends State<ChatScreen>
           foregroundColor: Colors.white,
           actions: [
             IconButton(
-              onPressed: () => _loadInitialMessages(),
-              icon: const Icon(Icons.refresh),
-              tooltip: 'تحديث',
-            ),
-            IconButton(
               onPressed: _showCallHistory,
               icon: const Icon(Icons.history),
               tooltip: 'سجل المكالمات',

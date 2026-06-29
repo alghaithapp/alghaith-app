@@ -29,19 +29,16 @@ class DriverRequestScreen extends StatelessWidget {
         backgroundColor: Colors.white,
         foregroundColor: Colors.black,
         elevation: 0,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh_rounded),
-            onPressed: () => context.read<TaxiProvider>().fetchIncomingRequests(),
-          ),
-        ],
+        actions: const [],
       ),
       body: pending.isEmpty
           ? _buildEmptyState()
-          : ListView.builder(
-              padding: const EdgeInsets.all(16),
-              itemCount: pending.length,
-              itemBuilder: (context, i) =>
+          : RefreshIndicator(
+              onRefresh: () => context.read<TaxiProvider>().fetchIncomingRequests(),
+              child: ListView.builder(
+                padding: const EdgeInsets.all(16),
+                itemCount: pending.length,
+                itemBuilder: (context, i) =>
                   _RequestCard(request: pending[i]),
             ),
     );
@@ -386,15 +383,18 @@ class _RequestCardState extends State<_RequestCard> {
                                   ),
                                 ),
                               ],
-                            ),
+                              ),
+                          ),
+                        ),
                     ),
-                  ),
+                  ],
                 ),
-              ],
+              ),
             ),
-          ],
+          ),
         ),
-      ),
+      );
     );
   }
+}
 }

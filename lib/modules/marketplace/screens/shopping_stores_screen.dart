@@ -279,10 +279,6 @@ class _ShoppingStoresScreenState extends State<ShoppingStoresScreen> {
                           ],
                         ),
                       ),
-                      ServiceRefreshButton(
-                        onPressed: _reloadStores,
-                        isLoading: _isLoadingStores,
-                      ),
                     ],
                   ),
                   const SizedBox(height: 20),
@@ -295,7 +291,9 @@ class _ShoppingStoresScreenState extends State<ShoppingStoresScreen> {
             ),
             // المحتوى القابل للتمرير
             Expanded(
-              child: CustomScrollView(
+              child: RefreshIndicator(
+                onRefresh: () => _refreshStores(showLoading: false),
+                child: CustomScrollView(
                 physics: const BouncingScrollPhysics(),
                 slivers: [
                   // 1. Bazaar Banner
@@ -555,6 +553,7 @@ class _ShoppingStoresScreenState extends State<ShoppingStoresScreen> {
                       },
                     ),
                 ],
+              ),
               ),
             ),
           ],

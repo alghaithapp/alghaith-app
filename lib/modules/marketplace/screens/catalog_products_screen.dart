@@ -96,7 +96,6 @@ class _CatalogProductsScreenState extends State<CatalogProductsScreen> {
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            ServiceRefreshButton(onPressed: _reload),
             if (!_contactOnly) ...[
               const SizedBox(width: 8),
               CupertinoButton(

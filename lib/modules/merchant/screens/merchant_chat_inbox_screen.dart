@@ -256,13 +256,7 @@ class _ChatInboxScreenState extends State<ChatInboxScreen> {
           ),
           backgroundColor: AppColors.primary,
           foregroundColor: Colors.white,
-          actions: [
-            IconButton(
-              onPressed: _loadInbox,
-              icon: const Icon(Icons.refresh),
-              tooltip: 'تحديث',
-            ),
-          ],
+          actions: const [],
         ),
         body: Column(
           children: [
