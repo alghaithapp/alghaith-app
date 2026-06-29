@@ -42,9 +42,7 @@ class DriverRequestScreen extends StatelessWidget {
                   _RequestCard(request: pending[i]),
             ),
           ),
-        ),
       );
-    }
   }
 
   Widget _buildEmptyState() {
