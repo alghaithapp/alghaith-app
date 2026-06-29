@@ -724,4 +724,78 @@ router.delete('/user-state', async (req, res) => {
   }
 });
 
+/// إرسال إشعار يدوي من لوحة الأدمن
+router.post('/admin/push/send', async (req, res) => {
+  try {
+    const phone = requireOptionalAuthorizedPhone(req, res);
+    if (!phone) return;
+
+    const { title, body, audience } = req.body;
+    if (!title?.trim() || !body?.trim()) {
+      return res.status(400).json({ message: 'العنوان والنص مطلوبان.' });
+    }
+
+    const { assertSupabaseAdmin } = require('../supabase_repo/common');
+    const supabase = assertSupabaseAdmin();
+    let query = supabase.from('device_tokens').select('token, platform');
+
+    switch (audience) {
+      case 'drivers':
+        const driverPhones = (await supabase.from('driver_profiles').select('phone'))
+          .data?.map(r => r.phone) || [];
+        if (driverPhones.length > 0) query = query.in('phone', driverPhones);
+        else return res.json({ message: 'لا يوجد سائقون.', sent: 0 });
+        break;
+      case 'merchants':
+        const merchantPhones = (await supabase.from ('merchant_profiles').select('phone'))
+          .data?.map(r => r.phone) || [];
+        if (merchantPhones.length > 0) query = query.in('phone', merchantPhones);
+        else return res.json({ message: 'لا يوجد تجار.', sent: 0 });
+        break;
+      case 'customers':
+        const customerPhones = (await supabase.from('customer_profiles').select('phone'))
+          .data?.map(r => r.phone) || [];
+        if (customerPhones.length > 0) query = query.in('phone', customerPhones);
+        else return res.json({ message: 'لا يوجد زبائن.', sent: 0 });
+        break;
+      case 'all':
+      default:
+        // الجميع — بدون فلتر
+        break;
+    }
+
+    const { data: tokens } = await query;
+    if (!tokens?.length) {
+      return res.json({ message: 'لا توجد أجهزة مسجلة لهذا الجمهور.', sent: 0 });
+    }
+
+    const uniqueTokens = [...new Set(tokens.map(t => t.token).filter(Boolean))];
+    const platforms = [...new Set(tokens.map(t => t.platform).filter(Boolean))];
+
+    const { sendPushToTokensDirect } = require('../services/notification_delivery');
+    const result = await sendPushToTokensDirect(uniqueTokens, {
+      title: title.trim(),
+      body: body.trim(),
+      data: {
+        category: 'admin',
+        audience: audience || 'all',
+        eventKey: 'admin:manual_push',
+      },
+      showSystemBanner: true,
+    });
+
+    return res.json({
+      sent: result.sent || 0,
+      failed: result.failed || 0,
+      invalidTokens: result.invalidTokens?.length || 0,
+      tokenCount: uniqueTokens.length,
+      platforms,
+      message: `تم الإرسال إلى ${result.sent} جهاز${result.failed > 0 ? `، فشل: ${result.failed}` : ''}.`,
+    });
+  } catch (error) {
+    console.error('admin push send error:', error);
+    return res.status(500).json({ message: error?.message || 'Failed to send push notification.' });
+  }
+});
+
 module.exports = router;

@@ -7,6 +7,7 @@ import 'tabs/merchants_tab.dart';
 import 'tabs/couriers_tab.dart';
 import 'tabs/drivers_tab.dart';
 import 'tabs/home_categories_tab.dart';
+import 'tabs/push_notifications_tab.dart';
 import 'widgets/admin_sidebar.dart';
 
 class AdminDashboardScreen extends StatefulWidget {
@@ -112,6 +113,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         return const HomeCategoriesTab();
       case AdminNavItem.appUpdate:
         return _ComingSoon(label: 'تحديث التطبيق');
+      case AdminNavItem.pushNotifications:
+        return const PushNotificationsTab();
       case AdminNavItem.reports:
         return _ComingSoon(label: 'التقارير');
       case AdminNavItem.auditLog:
