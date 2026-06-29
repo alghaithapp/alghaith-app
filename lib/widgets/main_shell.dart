@@ -192,7 +192,6 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed && mounted) {
-      setState(() => _currentIndex = 0);
       _pollCustomerOrders();
     }
   }
