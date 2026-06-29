@@ -296,10 +296,14 @@ class _DriverAccountScreenState extends State<DriverAccountScreen> {
       final failed = result['failed'] ?? 0;
       final platforms = (result['platforms'] as List?)?.join(', ') ?? '-';
       final invalid = result['invalidTokens'] ?? 0;
+      final errors = (result['errors'] as List?)?.join(' | ') ?? '';
 
       String diagnostics = '';
       if (!hasLocalToken) {
         diagnostics = '\n⚠️ هذا الجهاز ليس لديه توكن FCM محلي.';
+      }
+      if (errors.isNotEmpty) {
+        diagnostics += '\n❌ سبب فشل iOS: $errors';
       }
 
       if (!hasToken) {

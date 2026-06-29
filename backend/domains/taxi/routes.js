@@ -331,6 +331,7 @@ router.post('/debug/test-push', async (req, res) => {
     if (result.invalidTokens?.length) {
       await removeDeviceTokens(result.invalidTokens);
     }
+    const errorMessages = (result.errors || []).map((e) => `${e.code}: ${e.message}`);
     return res.json({
       hasToken: tokens.length > 0,
       tokenCount: tokens.length,
@@ -338,6 +339,7 @@ router.post('/debug/test-push', async (req, res) => {
       sent: Number(result.sent || 0),
       failed: Number(result.failed || 0),
       invalidTokens: result.invalidTokens?.length || 0,
+      errors: errorMessages,
     });
   } catch (error) {
     console.error('taxi debug test-push error:', error);

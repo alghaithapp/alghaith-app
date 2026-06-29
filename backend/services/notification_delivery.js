@@ -116,6 +116,7 @@ async function sendPushToTokensDirect(
   let totalSent = 0;
   let totalFailed = 0;
   const allInvalidTokens = [];
+  const errors = [];
 
   for (let i = 0; i < uniqueTokens.length; i += FCM_BATCH_SIZE) {
     const batch = uniqueTokens.slice(i, i + FCM_BATCH_SIZE);
@@ -126,9 +127,11 @@ async function sendPushToTokensDirect(
       response.responses.forEach((item, index) => {
         if (item.success) return;
         const code = item.error?.code || '';
+        const message = item.error?.message || '';
         if (code.includes('registration-token-not-registered') || code.includes('invalid')) {
           allInvalidTokens.push(batch[index]);
         }
+        errors.push({ index, code, message });
       });
     } catch (batchError) {
       console.error('push: FCM batch send error:', batchError?.message || batchError);
@@ -140,6 +143,7 @@ async function sendPushToTokensDirect(
     sent: totalSent,
     failed: totalFailed,
     invalidTokens: allInvalidTokens,
+    errors,
   };
 }
 
