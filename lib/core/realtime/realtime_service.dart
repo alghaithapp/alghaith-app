@@ -87,8 +87,9 @@ class RealtimeService {
     required void Function(Map<String, dynamic> payload) onData,
     PostgresChangeEvent event = PostgresChangeEvent.all,
   }) {
+    final channelName = 'public:$table:$filterColumn:$filterValue:${event.name}';
     return _client
-        .channel('public:$table')
+        .channel(channelName)
         .onPostgresChanges(
           event: event,
           schema: 'public',

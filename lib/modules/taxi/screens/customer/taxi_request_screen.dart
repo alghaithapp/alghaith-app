@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
@@ -849,23 +850,34 @@ class _TaxiRequestScreenState extends State<TaxiRequestScreen> {
             if (!hideLocationFields && _showCarSelection)
               Positioned(
                 bottom: 0, left: 0, right: 0,
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 300),
-                  curve: Curves.easeOutCubic,
-                  decoration: const BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.only(
-                      topLeft: Radius.circular(28),
-                      topRight: Radius.circular(28),
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Color(0x1A000000),
-                        blurRadius: 30,
-                        offset: Offset(0, -6),
-                      ),
-                    ],
+                child: ClipRRect(
+                  borderRadius: const BorderRadius.only(
+                    topLeft: Radius.circular(28),
+                    topRight: Radius.circular(28),
                   ),
+                  child: BackdropFilter(
+                    filter: ui.ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 300),
+                      curve: Curves.easeOutCubic,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.82),
+                        borderRadius: const BorderRadius.only(
+                          topLeft: Radius.circular(28),
+                          topRight: Radius.circular(28),
+                        ),
+                        border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.25),
+                          width: 1.5,
+                        ),
+                        boxShadow: const [
+                          BoxShadow(
+                            color: Color(0x1A000000),
+                            blurRadius: 30,
+                            offset: Offset(0, -6),
+                          ),
+                        ],
+                      ),
                   child: SafeArea(
                     top: false,
                     child: Padding(
@@ -1197,48 +1209,58 @@ class _TaxiRequestScreenState extends State<TaxiRequestScreen> {
   }) {
     return GestureDetector(
       onTap: onTap,
-      child: Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.08),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      child: Row(
-        children: [
-          Icon(icon, color: iconColor, size: 22),
-          const SizedBox(width: 12),
-          Expanded(
-            child: TextField(
-              controller: controller,
-              focusNode: focusNode,
-              style: const TextStyle(
-                fontFamily: 'Cairo', fontSize: 16, fontWeight: FontWeight.w600,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: BackdropFilter(
+          filter: ui.ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+          child: Container(
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.75),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: Colors.white.withValues(alpha: 0.35),
+                width: 1.5,
               ),
-              decoration: InputDecoration(
-                border: InputBorder.none,
-                hintText: hint,
-                hintStyle: const TextStyle(
-                  fontFamily: 'Cairo', color: AppColors.textSecondary,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.06),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
                 ),
-                isDense: true,
-                contentPadding: EdgeInsets.zero,
-              ),
+              ],
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            child: Row(
+              children: [
+                Icon(icon, color: iconColor, size: 22),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: TextField(
+                    controller: controller,
+                    focusNode: focusNode,
+                    style: const TextStyle(
+                      fontFamily: 'Cairo', fontSize: 16, fontWeight: FontWeight.w600,
+                    ),
+                    decoration: InputDecoration(
+                      border: InputBorder.none,
+                      hintText: hint,
+                      hintStyle: const TextStyle(
+                        fontFamily: 'Cairo', color: AppColors.textSecondary,
+                      ),
+                      isDense: true,
+                      contentPadding: EdgeInsets.zero,
+                    ),
+                  ),
+                ),
+                if (trailing != null) ...[
+                  const SizedBox(width: 8),
+                  trailing,
+                ],
+              ],
             ),
           ),
-          if (trailing != null) ...[
-            const SizedBox(width: 8),
-            trailing,
-          ],
-        ],
+        ),
       ),
-    ),
     );
   }
 }

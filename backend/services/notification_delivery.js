@@ -50,6 +50,28 @@ async function sendPushToTokensDirect(
   const wantsBanner = !dataOnly && (showSystemBanner || isIncomingCall || isTaxiRequest);
 
   function buildBatchMessage(batchTokens) {
+    const apnsHeaders = {
+      'apns-expiration': isTaxiRequest ? '300' : '45',
+    };
+    const apnsAps = {
+      'content-available': 1,
+    };
+
+    if (wantsBanner) {
+      apnsHeaders['apns-priority'] = '10';
+      apnsHeaders['apns-push-type'] = 'alert';
+      apnsAps.alert = { title: safeTitle, body: safeBody };
+      apnsAps.sound = isIncomingCall ? IOS_INCOMING_CALL_SOUND : IOS_NOTIFICATION_SOUND;
+      apnsAps.badge = 1;
+      apnsAps.mutableContent = 1;
+      if (isIncomingCall) {
+        apnsAps['interruption-level'] = 'time-sensitive';
+      }
+    } else {
+      apnsHeaders['apns-priority'] = '5';
+      apnsHeaders['apns-push-type'] = 'background';
+    }
+
     const msg = {
       tokens: batchTokens,
       data: normalizeData({
@@ -62,18 +84,9 @@ async function sendPushToTokensDirect(
         ttl: isTaxiRequest ? 300000 : 45000,
       },
       apns: {
-        headers: {
-          'apns-priority': '10',
-          'apns-push-type': wantsBanner || isTaxiRequest ? 'alert' : 'background',
-          'apns-expiration': isTaxiRequest ? '300' : '45',
-        },
+        headers: apnsHeaders,
         payload: {
-          aps: {
-            'content-available': 1,
-            badge: 1,
-            mutableContent: 1,
-            sound: isIncomingCall ? IOS_INCOMING_CALL_SOUND : IOS_NOTIFICATION_SOUND,
-          },
+          aps: apnsAps,
         },
       },
     };
@@ -95,13 +108,6 @@ async function sendPushToTokensDirect(
       if (isIncomingCall) {
         msg.android.collapseKey = 'alghaith_incoming_call';
         msg.android.ttl = 120000;
-      }
-      msg.apns.payload.aps.alert = { title: safeTitle, body: safeBody };
-      msg.apns.payload.aps.sound = isIncomingCall
-        ? IOS_INCOMING_CALL_SOUND
-        : IOS_NOTIFICATION_SOUND;
-      if (isIncomingCall) {
-        msg.apns.payload.aps['interruption-level'] = 'time-sensitive';
       }
     }
     return msg;

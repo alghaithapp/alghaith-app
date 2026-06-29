@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'dart:io';
 
 import 'package:firebase_core/firebase_core.dart';
@@ -230,6 +230,10 @@ class PushNotificationService {
             onTimeout: () => null,
           );
           debugPrint('Push: iOS APNs token available=${apnsToken != null}');
+          if (apnsToken == null) {
+            debugPrint('Push: iOS APNs token not set yet. Skipping getToken.');
+            continue;
+          }
         }
 
         final token = await messaging.getToken().timeout(

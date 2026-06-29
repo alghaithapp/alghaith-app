@@ -167,13 +167,16 @@ class TaxiProvider extends ChangeNotifier {
   // ── Toggle حالة الاتصال ──
 
   Future<void> toggleOnline() async {
-    final next = !_isOnline;
+    final previous = _isOnline;
+    final next = !previous;
+    _isOnline = next;
+    _error = null;
+    notifyListeners();
+
     try {
       await TaxiApiService.setDriverOnlineStatus(next, manual: true);
-      _isOnline = next;
-      _error = null;
-      notifyListeners();
     } catch (e) {
+      _isOnline = previous;
       _error = e.toString();
       notifyListeners();
     }
@@ -181,12 +184,15 @@ class TaxiProvider extends ChangeNotifier {
 
   Future<void> setOnline(bool value) async {
     if (_isOnline == value) return;
+    final previous = _isOnline;
+    _isOnline = value;
+    _error = null;
+    notifyListeners();
+
     try {
       await TaxiApiService.setDriverOnlineStatus(value, manual: true);
-      _isOnline = value;
-      _error = null;
-      notifyListeners();
     } catch (e) {
+      _isOnline = previous;
       _error = e.toString();
       notifyListeners();
       rethrow;
@@ -331,24 +337,24 @@ class TaxiProvider extends ChangeNotifier {
     String requestId,
     String statusKey,
   ) async {
-    _isLoading = true;
+    if (_currentRequest == null || _currentRequest!.id != requestId) return false;
+    final previous = _currentRequest;
+    final next = _currentRequest!.copyWith(statusKey: statusKey);
+
+    // Optimistically update status
+    await _applyCustomerActiveRequest(previous: previous, remote: next);
     _error = null;
     notifyListeners();
 
     try {
       await TaxiApiService.updateStatus(requestId, statusKey);
-      if (_currentRequest != null && _currentRequest!.id == requestId) {
-        final previous = _currentRequest;
-        final next = _currentRequest!.copyWith(statusKey: statusKey);
-        await _applyCustomerActiveRequest(previous: previous, remote: next);
-      }
       return true;
     } catch (e) {
+      // Rollback on failure
+      await _applyCustomerActiveRequest(previous: next, remote: previous);
       _error = e.toString().replaceFirst('ApiException: ', '');
-      return false;
-    } finally {
-      _isLoading = false;
       notifyListeners();
+      return false;
     }
   }
 

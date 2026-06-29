@@ -435,7 +435,9 @@ async function acceptTaxiRequest(driverPhone, requestId, data = {}) {
   // إشعار للزبون
   try {
     const { notifyDriverAccepted } = require('../../../push/taxi_push_events');
-    await notifyDriverAccepted(meta.customerPhone, driverName, vehicleInfo);
+    notifyDriverAccepted(meta.customerPhone, driverName, vehicleInfo).catch((e) => {
+      console.error('taxi accept push error:', e?.message || e);
+    });
   } catch (e) {
     console.error('taxi accept push error:', e?.message || e);
   }
@@ -482,7 +484,7 @@ async function rejectTaxiRequest(driverPhone, requestId) {
     updatedAt: nowIso(),
   };
 
-  await updateRow('taxi_requests', 'id', id, {
+  const updatedRow = await updateRow('taxi_requests', 'id', id, {
     request_payload: nextPayload,
     updated_at: nowIso(),
   });
@@ -490,28 +492,30 @@ async function rejectTaxiRequest(driverPhone, requestId) {
   // البحث عن سائق بديل تلقائياً
   try {
     const { findNextAvailableDriver } = require('../../../services/taxi_matching_service');
-    const nextDriver = await findNextAvailableDriver(
+    findNextAvailableDriver(
       id,
       meta.pickupLat,
       meta.pickupLng,
       meta.taxiType,
       rejectedIds
-    );
-
-    if (nextDriver?.driverPhone) {
-      const refreshed = await selectSingle('taxi_requests', 'id', id);
-      const formatted = formatTaxiRequestForClient(refreshed);
-      const { notifySingleDriver } = require('../../../push/taxi_push_events');
-      await notifySingleDriver(
-        { ...formatted, taxiType: meta.taxiType },
-        nextDriver.driverPhone
-      );
-    }
+    ).then(async (nextDriver) => {
+      if (nextDriver?.driverPhone) {
+        const refreshed = await selectSingle('taxi_requests', 'id', id);
+        const formatted = formatTaxiRequestForClient(refreshed);
+        const { notifySingleDriver } = require('../../../push/taxi_push_events');
+        notifySingleDriver(
+          { ...formatted, taxiType: meta.taxiType },
+          nextDriver.driverPhone
+        ).catch((e) => console.error('taxi reject push notify error:', e));
+      }
+    }).catch((e) => {
+      console.error('taxi auto-match background error:', e?.message || e);
+    });
   } catch (e) {
     console.error('taxi auto-match error:', e?.message || e);
   }
 
-  return formatTaxiRequestForClient(await selectSingle('taxi_requests', 'id', id));
+  return formatTaxiRequestForClient(updatedRow);
   } finally {
     await releaseLock(`taxi:reject:${id}`, lockToken);
   }
@@ -602,31 +606,31 @@ async function updateTaxiRequestStatus(actorPhone, requestId, statusKey) {
 
   dbUpdate.request_payload = nextPayload;
 
-  await updateRow('taxi_requests', 'id', id, dbUpdate);
+  const updatedRow = await updateRow('taxi_requests', 'id', id, dbUpdate);
 
   // إشعارات
   try {
     const push = require('../../../push/taxi_push_events');
     if (statusKey === 'arrived') {
-      await push.notifyDriverArrived(meta.customerPhone);
+      push.notifyDriverArrived(meta.customerPhone).catch((e) => console.error('taxi status push error arrived:', e));
     } else if (statusKey === 'completed') {
-      await push.notifyTripCompleted(meta.customerPhone, meta.driverPhone, meta.fare);
+      push.notifyTripCompleted(meta.customerPhone, meta.driverPhone, meta.fare).catch((e) => console.error('taxi status push error completed:', e));
     } else if (statusKey === 'cancel_requested' && isCustomer) {
-      await push.notifyCancelRequested(meta.driverPhone, meta.customerPhone);
+      push.notifyCancelRequested(meta.driverPhone, meta.customerPhone).catch((e) => console.error('taxi status push error cancel_requested:', e));
     } else if (statusKey === 'cancelled') {
       if (row.status_key === 'cancel_requested') {
-        await push.notifyCancellationApproved(meta.customerPhone);
+        push.notifyCancellationApproved(meta.customerPhone).catch((e) => console.error('taxi status push error cancel_approved:', e));
       } else {
-        await push.notifyTripCancelled(meta.customerPhone, meta.driverPhone);
+        push.notifyTripCancelled(meta.customerPhone, meta.driverPhone).catch((e) => console.error('taxi status push error trip_cancelled:', e));
       }
     } else if (statusKey === 'accepted' && row.status_key === 'cancel_requested') {
-      await push.notifyCancellationRejected(meta.customerPhone);
+      push.notifyCancellationRejected(meta.customerPhone).catch((e) => console.error('taxi status push error cancel_rejected:', e));
     }
   } catch (e) {
     console.error('taxi status push error:', e?.message || e);
   }
 
-  return formatTaxiRequestForClient(await selectSingle('taxi_requests', 'id', id));
+  return formatTaxiRequestForClient(updatedRow);
 }
 
 // ── إلغاء من الزبون ──────────────────────────────────────────────
@@ -681,7 +685,9 @@ async function cancelTaxiRequest(customerPhone, requestId, reason) {
 
   try {
     const { notifyTripCancelled } = require('../../../push/taxi_push_events');
-    await notifyTripCancelled(meta.customerPhone, null);
+    notifyTripCancelled(meta.customerPhone, null).catch((e) => {
+      console.error('taxi cancel push error:', e?.message || e);
+    });
   } catch (_) {}
 
   return formatTaxiRequestForClient(updated);
@@ -715,7 +721,7 @@ async function requestTripCancellation(customerPhone, requestId, reason) {
     updatedAt: nowIso(),
   };
 
-  await updateRow('taxi_requests', 'id', id, {
+  const updatedRow = await updateRow('taxi_requests', 'id', id, {
     status_key: 'cancel_requested',
     request_payload: nextPayload,
     updated_at: nowIso(),
@@ -723,12 +729,14 @@ async function requestTripCancellation(customerPhone, requestId, reason) {
 
   try {
     const { notifyCancelRequested } = require('../../../push/taxi_push_events');
-    await notifyCancelRequested(meta.driverPhone, meta.customerPhone);
+    notifyCancelRequested(meta.driverPhone, meta.customerPhone).catch((e) => {
+      console.error('taxi cancel request push error:', e?.message || e);
+    });
   } catch (e) {
     console.error('taxi cancel request push error:', e?.message || e);
   }
 
-  return formatTaxiRequestForClient(await selectSingle('taxi_requests', 'id', id));
+  return formatTaxiRequestForClient(updatedRow);
 }
 
 async function updateDriverTripLocation(driverPhone, requestId, lat, lng) {
