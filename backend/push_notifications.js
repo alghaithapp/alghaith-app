@@ -1,6 +1,6 @@
 const admin = require('firebase-admin');
 
-const ANDROID_NOTIFICATION_CHANNEL_ID = 'alghaith_orders_v3';
+const ANDROID_NOTIFICATION_CHANNEL_ID = 'alghaith_orders_v4';
 const ANDROID_TAXI_REQUEST_CHANNEL_ID = ANDROID_NOTIFICATION_CHANNEL_ID;
 const ANDROID_INCOMING_CALL_CHANNEL_ID = 'alghaith_incoming_calls_v2';
 const ANDROID_NOTIFICATION_SOUND = 'alghaith_notify';
