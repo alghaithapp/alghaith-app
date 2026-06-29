@@ -6,6 +6,8 @@ import '../../../core/catalog/marketplace_catalog.dart';
 import '../../../providers/app_provider.dart';
 import 'category_items_screen.dart';
 import 'catalog_search_screen.dart';
+import 'shopping_stores_screen.dart';
+import 'shopping_shared_widgets.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../widgets/app_image.dart';
 
@@ -36,17 +38,19 @@ class _HomeScreenState extends State<HomeScreen> {
     final isActive = _bazaarFilter == filter;
     return GestureDetector(
       onTap: () {
-        final cat = MarketplaceCatalog.find('bazar_ghaith');
-        if (cat != null) {
-          Navigator.of(context).push(
-            CupertinoPageRoute(
-              builder: (context) => CategoryItemsScreen(
-                category: cat.asServiceCategory,
-                hideBack: false,
-              ),
+        setState(() => _bazaarFilter = filter);
+        Navigator.of(context).push(
+          CupertinoPageRoute(
+            builder: (context) => ShoppingStoresScreen(
+              storeKind: MerchantStoreKind.shopping,
+              marketplaceCategory: 'bazar_ghaith',
+              titleAr: 'بازار ومطاعم الغيث',
+              subtitleAr: 'تسوق واطلب من أفضل المتاجر والمطاعم',
+              bazaarKindFilter: filter ?? 'all',
+              hideBack: false,
             ),
-          );
-        }
+          ),
+        );
       },
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),

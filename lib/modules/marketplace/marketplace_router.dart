@@ -28,6 +28,7 @@ class MarketplaceRouter {
           titleAr: def.storeTitleAr,
           subtitleAr: def.storeSubtitleAr,
           showCuisineFilters: def.showCuisineFilters,
+          bazaarKindFilter: def.id == 'bazar_ghaith' ? 'all' : null,
           hideBack: hideBack,
         );
       case CategoryEntryMode.offers:

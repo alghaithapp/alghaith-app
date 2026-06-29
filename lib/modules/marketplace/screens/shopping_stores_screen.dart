@@ -37,6 +37,9 @@ class ShoppingStoresScreen extends StatefulWidget {
   /// مثال: product | global_shopping | restaurant
   final String? marketplaceCategory;
 
+  /// تصفية البازار: all | restaurant | shopping
+  final String? bazaarKindFilter;
+
   const ShoppingStoresScreen({
     super.key,
     this.subCategory,
@@ -48,6 +51,7 @@ class ShoppingStoresScreen extends StatefulWidget {
     this.subtitleAr,
     this.showCuisineFilters = false,
     this.hideBack = false,
+    this.bazaarKindFilter,
   });
 
   @override
@@ -60,23 +64,14 @@ class _ShoppingStoresScreenState extends State<ShoppingStoresScreen> {
   Object? _storesLoadError;
   bool _isLoadingStores = true;
   String _selectedFilter = 'الكل';
-  String _bazaarKindFilter = 'all';
+  String _bazaarKindFilter = '';
 
-  final List<String> _filters = [
-    'الكل',
-    'مشويات',
-    'وجبات سريعة',
-  ];
-
-  Future<List<Map<String, dynamic>>> _loadStores() {
-    if (widget.serviceId != null && widget.serviceId!.trim().isNotEmpty) {
-      return SupabaseService.loadServiceStores(
-        serviceId: widget.serviceId!,
-        productCategory: widget.productCategory ?? widget.serviceId,
-        subCategoryId: widget.subCategory?.id,
-        marketplaceCategory: widget.marketplaceCategory,
-      );
-    }
+  @override
+  void initState() {
+    super.initState();
+    _bazaarKindFilter = widget.bazaarKindFilter ?? 'all';
+    unawaited(_bootstrapStores());
+  }
     if (widget.storeKind == MerchantStoreKind.restaurant) {
       return SupabaseService.loadRestaurantStores(
         subCategoryId: widget.subCategory?.id,
