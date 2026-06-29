@@ -189,7 +189,7 @@ async function resolvePhoneKey(phone) {
   const raw = String(phone || '').trim();
   if (!raw) return raw;
 
-  const tables = ['app_users', 'customer_profiles', 'merchant_profiles', 'app_state'];
+  const tables = ['app_users', 'driver_profiles', 'customer_profiles', 'merchant_profiles', 'app_state'];
   for (const table of tables) {
     const existing = await selectSingleByPhone(table, phone);
     if (existing?.phone) {

@@ -535,8 +535,22 @@ async function updateTaxiRequestStatus(actorPhone, requestId, statusKey) {
   const meta = readTaxiMeta(row);
 
   // تحقق من الصلاحية
-  const isCustomer = phonesOverlap(normalizedPhone, meta.customerPhone);
-  const isDriver = phonesOverlap(normalizedPhone, meta.driverPhone);
+  let isCustomer = phonesOverlap(normalizedPhone, meta.customerPhone);
+  let isDriver = phonesOverlap(normalizedPhone, meta.driverPhone);
+
+  // Fallback: مقارن آخر 10 أرقام لضمان التطابق التام وتجنب أي فروقات في الصيغ (+964 أو 07 أو غيرها)
+  if (!isCustomer && !isDriver) {
+    const cleanActor = normalizedPhone.replace(/\D/g, '').slice(-10);
+    const cleanCustomer = meta.customerPhone.replace(/\D/g, '').slice(-10);
+    const cleanDriver = meta.driverPhone.replace(/\D/g, '').slice(-10);
+    if (cleanActor && cleanCustomer && cleanActor === cleanCustomer) {
+      isCustomer = true;
+    }
+    if (cleanActor && cleanDriver && cleanActor === cleanDriver) {
+      isDriver = true;
+    }
+  }
+
   if (!isCustomer && !isDriver) {
     throw new Error('You are not authorized to update this request.');
   }
