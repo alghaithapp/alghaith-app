@@ -109,7 +109,7 @@ router.post('/driver-location', async (req, res) => {
     const { requestId, lat, lng } = req.body || {};
     const id = String(requestId || '').trim();
     await repo.updateDriverTripLocation(phone, id, Number(lat), Number(lng));
-    const row = await require('../supabase_repo/common').selectSingle('taxi_requests', 'id', id);
+    const row = await require('../../supabase_repo/common').selectSingle('taxi_requests', 'id', id);
     return res.json(row ? await formatRequestRowEnriched(row, { forDriver: true }) : null);
   } catch (error) {
     console.error('taxi driver-location error:', error);
@@ -137,10 +137,10 @@ router.post('/status', async (req, res) => {
     if (!phone) return;
     const { requestId, statusKey } = req.body || {};
     const result = await repo.updateTaxiRequestStatus(phone, requestId, statusKey);
-    const row = await require('../supabase_repo/common').selectSingle('taxi_requests', 'id', requestId);
+    const row = await require('../../supabase_repo/common').selectSingle('taxi_requests', 'id', requestId);
     if (row) {
       const driverPhone = String(row.driver_phone ?? '').trim();
-      const { phonesOverlap } = require('../supabase_repo/common');
+      const { phonesOverlap } = require('../../supabase_repo/common');
       const forDriver = phonesOverlap(phone, driverPhone);
       return res.json(await formatRequestRowEnriched(row, { forDriver }));
     }
