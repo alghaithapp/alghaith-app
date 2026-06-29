@@ -10,6 +10,7 @@ import '../../../providers/app_provider.dart';
 import '../../../utils/account_role_switch.dart';
 import '../../common/screens/notifications_screen.dart';
 import '../../merchant/screens/merchant_chat_inbox_screen.dart';
+import '../../notifications/services/push_notification_service.dart';
 import '../../taxi/services/taxi_api_service.dart';
 import '../../../widgets/app_image.dart';
 import 'driver_shared_widgets.dart';
@@ -281,6 +282,12 @@ class _DriverAccountScreenState extends State<DriverAccountScreen> {
         duration: Duration(seconds: 1),
       ),
     );
+
+    // تشخيص التوكن المحلي
+    final push = PushNotificationService.instance;
+    final hasLocalToken = push.hasToken;
+    debugPrint('TEST_PUSH: hasLocalToken=$hasLocalToken boundPhone=${push.boundPhone}');
+
     try {
       final result = await TaxiApiService.testPushNotification();
       final hasToken = result['hasToken'] == true;
@@ -289,6 +296,11 @@ class _DriverAccountScreenState extends State<DriverAccountScreen> {
       final failed = result['failed'] ?? 0;
       final platforms = (result['platforms'] as List?)?.join(', ') ?? '-';
       final invalid = result['invalidTokens'] ?? 0;
+
+      String diagnostics = '';
+      if (!hasLocalToken) {
+        diagnostics = '\n⚠️ هذا الجهاز ليس لديه توكن FCM محلي.';
+      }
 
       if (!hasToken) {
         messenger.showSnackBar(
@@ -305,10 +317,10 @@ class _DriverAccountScreenState extends State<DriverAccountScreen> {
         SnackBar(
           content: Text(
             '✅ تم الإرسال: $sent جهاز | فشل: $failed | غير صالح: $invalid\n'
-            'عدد التوكنات: $tokenCount | المنصات: $platforms',
+            'عدد التوكنات: $tokenCount | المنصات: $platforms$diagnostics',
             style: const TextStyle(fontFamily: 'Cairo', fontSize: 12),
           ),
-          duration: const Duration(seconds: 6),
+          duration: const Duration(seconds: 8),
           backgroundColor: sent > 0 ? Colors.green : Colors.orange,
         ),
       );
