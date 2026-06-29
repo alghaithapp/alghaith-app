@@ -85,6 +85,26 @@ workflows:
           fi
           echo "Firebase iOS config OK"
 
+      - name: Link GoogleService-Info.plist in Xcode
+        script: |
+          set -e
+          cat << 'EOF' > link_plist.rb
+          require 'xcodeproj'
+          project_path = 'ios/Runner.xcodeproj'
+          project = Xcodeproj::Project.open(project_path)
+          target = project.targets.first
+          file_path = 'Runner/GoogleService-Info.plist'
+          unless project.main_group.find_subpath(file_path)
+            file_ref = project.main_group.find_subpath('Runner', true).new_reference('GoogleService-Info.plist')
+            target.add_resources([file_ref])
+            project.save
+            puts "Successfully linked GoogleService-Info.plist"
+          else
+            puts "GoogleService-Info.plist is already linked"
+          end
+          EOF
+          ruby link_plist.rb
+
       - name: Get Flutter packages
         script: |
           set -e

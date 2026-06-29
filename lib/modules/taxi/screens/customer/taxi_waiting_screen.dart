@@ -242,7 +242,7 @@ class _TaxiWaitingScreenState extends State<TaxiWaitingScreen> {
               });
             }
 
-            if (request != null && request.isAccepted) {
+            if (request != null && (request.isAccepted || request.isOnWay || request.isArrived || request.isPickedUp)) {
               WidgetsBinding.instance.addPostFrameCallback((_) {
                 if (mounted) {
                   _timer?.cancel();
