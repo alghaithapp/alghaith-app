@@ -6,8 +6,6 @@ import '../../../core/catalog/marketplace_catalog.dart';
 import '../../../providers/app_provider.dart';
 import 'category_items_screen.dart';
 import 'catalog_search_screen.dart';
-import 'shopping_stores_screen.dart';
-import 'shopping_shared_widgets.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../widgets/app_image.dart';
 
@@ -19,8 +17,6 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  String? _bazaarFilter;
-
   @override
   void initState() {
     super.initState();
@@ -32,46 +28,6 @@ class _HomeScreenState extends State<HomeScreen> {
         provider.refreshMarketplaceStats();
       }
     });
-  }
-
-  Widget _bazaarChip(String label, String? filter) {
-    final isActive = _bazaarFilter == filter;
-    return GestureDetector(
-      onTap: () {
-        setState(() => _bazaarFilter = filter);
-        Navigator.of(context).push(
-          CupertinoPageRoute(
-            builder: (context) => ShoppingStoresScreen(
-              storeKind: MerchantStoreKind.shopping,
-              marketplaceCategory: 'bazar_ghaith',
-              titleAr: 'بازار ومطاعم الغيث',
-              subtitleAr: 'تسوق واطلب من أفضل المتاجر والمطاعم',
-              bazaarKindFilter: filter ?? 'all',
-              hideBack: false,
-            ),
-          ),
-        );
-      },
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        decoration: BoxDecoration(
-          color: isActive ? AppColors.accent : Colors.white,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-            color: isActive ? AppColors.accent : Colors.grey.shade300,
-          ),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontFamily: 'Cairo',
-            fontSize: 13,
-            fontWeight: FontWeight.w700,
-            color: isActive ? Colors.white : Colors.black87,
-          ),
-        ),
-      ),
-    );
   }
 
   @override
@@ -138,20 +94,6 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                   ),
                 ),
-              ),
-            ),
-          ),
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-              child: Row(
-                children: [
-                  _bazaarChip('الكل', null),
-                  const SizedBox(width: 8),
-                  _bazaarChip('🍽 مطاعم', 'restaurant'),
-                  const SizedBox(width: 8),
-                  _bazaarChip('🛍 متاجر', 'shopping'),
-                ],
               ),
             ),
           ),

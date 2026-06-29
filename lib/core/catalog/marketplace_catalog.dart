@@ -105,7 +105,7 @@ class MarketplaceCatalog {
       hubTitleAr: 'بازار ومطاعم الغيث',
       hubSubtitleAr: 'كل احتياجاتك في سلة واحدة وبكلفة توصيل 1000 دينار فقط',
       storeTitleAr: 'بازار ومطاعم الغيث',
-      storeSubtitleAr: 'اختر منتجاتك من مختلف المتاجر والمطاعم المشمولة',
+      storeSubtitleAr: '',
       showCuisineFilters: true,
     ),
     MarketplaceCategoryDefinition(

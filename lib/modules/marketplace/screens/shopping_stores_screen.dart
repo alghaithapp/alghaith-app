@@ -66,12 +66,26 @@ class _ShoppingStoresScreenState extends State<ShoppingStoresScreen> {
   String _selectedFilter = 'الكل';
   String _bazaarKindFilter = '';
 
+  final List<String> _filters = [
+    'الكل',
+    'مشويات',
+    'وجبات سريعة',
+  ];
+
+  final List<Map<String, String>> _bazaarFilters = [
+    {'label': 'الكل', 'key': 'all'},
+    {'label': '🍽 مطاعم', 'key': 'restaurant'},
+    {'label': '🛍 متاجر', 'key': 'shopping'},
+  ];
+
   @override
   void initState() {
     super.initState();
     _bazaarKindFilter = widget.bazaarKindFilter ?? 'all';
     unawaited(_bootstrapStores());
   }
+
+  Future<List<Map<String, dynamic>>> _loadStores() {
     if (widget.storeKind == MerchantStoreKind.restaurant) {
       return SupabaseService.loadRestaurantStores(
         subCategoryId: widget.subCategory?.id,
@@ -338,9 +352,52 @@ class _ShoppingStoresScreenState extends State<ShoppingStoresScreen> {
                   if (widget.showCuisineFilters &&
                       (!_isBazaarChannel || _bazaarKindFilter == 'restaurant'))
                     SliverToBoxAdapter(
-                      child: Container(
-                        height: 55,
-                        margin: const EdgeInsets.symmetric(vertical: 10),
+                      child: _isBazaarChannel
+                          ? Container(
+                              height: 45,
+                              margin: const EdgeInsets.symmetric(vertical: 6),
+                              child: ListView.builder(
+                                scrollDirection: Axis.horizontal,
+                                padding: const EdgeInsets.symmetric(horizontal: 16),
+                                itemCount: _bazaarFilters.length,
+                                itemBuilder: (context, index) {
+                                  final filter = _bazaarFilters[index];
+                                  final isSelected = _bazaarKindFilter == filter['key'];
+                                  return GestureDetector(
+                                    onTap: () => setState(() => _bazaarKindFilter = filter['key']!),
+                                    child: AnimatedContainer(
+                                      duration: const Duration(milliseconds: 300),
+                                      margin: const EdgeInsets.symmetric(horizontal: 5, vertical: 5),
+                                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                                      decoration: BoxDecoration(
+                                        color: isSelected ? AppColors.accent : Colors.grey.shade100,
+                                        borderRadius: BorderRadius.circular(20),
+                                        border: Border.all(
+                                          color: isSelected ? AppColors.accent : Colors.grey.shade200,
+                                        ),
+                                      ),
+                                      alignment: Alignment.center,
+                                      child: Text(
+                                        filter['label']!,
+                                        style: TextStyle(
+                                          fontFamily: 'Cairo',
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w700,
+                                          color: isSelected ? Colors.white : Colors.black87,
+                                        ),
+                                      ),
+                                    ),
+                                  );
+                                },
+                              ),
+                            )
+                          : const SizedBox.shrink(),
+                    ),
+                    if (widget.showCuisineFilters)
+                      SliverToBoxAdapter(
+                        child: Container(
+                          height: 55,
+                          margin: const EdgeInsets.symmetric(vertical: 10),
                         child: ListView.builder(
                           scrollDirection: Axis.horizontal,
                           padding: const EdgeInsets.symmetric(horizontal: 16),
