@@ -735,7 +735,6 @@ router.post('/admin/push/send', async (req, res) => {
       return res.status(400).json({ message: 'العنوان والنص مطلوبان.' });
     }
 
-    const { assertSupabaseAdmin } = require('../supabase_repo/common');
     const supabase = assertSupabaseAdmin();
     let query = supabase.from('device_tokens').select('token, platform');
 
@@ -760,7 +759,6 @@ router.post('/admin/push/send', async (req, res) => {
         break;
       case 'all':
       default:
-        // الجميع — بدون فلتر
         break;
     }
 
@@ -798,5 +796,69 @@ router.post('/admin/push/send', async (req, res) => {
     return res.status(500).json({ message: error?.message || 'Failed to send push notification.' });
   }
 });
+
+/// إشعارات لوحة الأدمن
+router.get('/admin/notifications', async (req, res) => {
+  try {
+    const phone = requireOptionalAuthorizedPhone(req, res);
+    if (!phone) return;
+
+    const supabase = assertSupabaseAdmin();
+    const limit = Math.min(Number(req.query.limit) || 50, 200);
+    const unreadOnly = req.query.unreadOnly === 'true';
+
+    let query = supabase
+      .from('admin_notifications')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(limit);
+
+    if (unreadOnly) query = query.eq('is_read', false);
+
+    const { data, error } = await query;
+    if (error) throw new Error(error.message);
+
+    return res.json(data || []);
+  } catch (error) {
+    console.error('admin notifications fetch error:', error);
+    return res.status(500).json({ message: error?.message || 'Failed to fetch notifications.' });
+  }
+});
+
+router.put('/admin/notifications/read', async (req, res) => {
+  try {
+    const phone = requireOptionalAuthorizedPhone(req, res);
+    if (!phone) return;
+
+    const supabase = assertSupabaseAdmin();
+    const { ids } = req.body;
+
+    if (Array.isArray(ids) && ids.length > 0) {
+      await supabase.from('admin_notifications').update({ is_read: true }).in('id', ids);
+    } else {
+      await supabase.from('admin_notifications').update({ is_read: true }).eq('is_read', false);
+    }
+
+    return res.json({ success: true });
+  } catch (error) {
+    console.error('admin notifications mark read error:', error);
+    return res.status(500).json({ message: error?.message || 'Failed to mark notifications as read.' });
+  }
+});
+
+/// إضافة إشعار للأدمن
+async function insertAdminNotification(type, title, body, data = {}) {
+  try {
+    const supabase = assertSupabaseAdmin();
+    await supabase.from('admin_notifications').insert({
+      type,
+      title,
+      body,
+      data: { ...data, timestamp: new Date().toISOString() },
+    });
+  } catch (e) {
+    console.error('insertAdminNotification error:', e?.message || e);
+  }
+}
 
 module.exports = router;

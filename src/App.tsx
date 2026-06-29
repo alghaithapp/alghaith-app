@@ -1,5 +1,5 @@
-import React, { FormEvent, Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react';
-import { Shield, LoaderCircle, BadgeCheck, Lock, Store, Search } from 'lucide-react';
+import React, { FormEvent, Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Shield, LoaderCircle, BadgeCheck, Lock, Store, Search, Bell, X } from 'lucide-react';
 
 import {
   deleteAdminAccount,
@@ -31,10 +31,13 @@ import {
   toggleMerchantBazaar,
   toggleMerchantFreeze,
   verifyCode,
+  loadAdminNotifications,
+  markAdminNotificationsRead,
 } from './admin-api';
 import type {
   AdminAccountKind,
   AdminAccountSummary,
+  AdminNotification,
   AdminReports,
   AdminTaxiTrip,
   AdminView,
@@ -254,6 +257,8 @@ export default function App() {
   const [isLoadingDetails, setIsLoadingDetails] = useState(false);
   const [activeActionKey, setActiveActionKey] = useState('');
   const [rejectAccountTarget, setRejectAccountTarget] = useState<RejectAccountTarget | null>(null);
+  const [adminNotifications, setAdminNotifications] = useState<AdminNotification[]>([]);
+  const [showNotifications, setShowNotifications] = useState(false);
   const [rejectMessage, setRejectMessage] = useState('');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<AdminAccountSummary | null>(null);
@@ -322,6 +327,21 @@ export default function App() {
   useEffect(() => {
     if (!token) return;
     refreshCoreData(token).catch(() => undefined);
+  }, [token]);
+
+  // Poll for admin notifications every 15 seconds
+  useEffect(() => {
+    if (!token) return;
+    let active = true;
+    const poll = async () => {
+      try {
+        const notifs = await loadAdminNotifications(token, true);
+        if (active) setAdminNotifications(notifs);
+      } catch { /* ignore */ }
+    };
+    poll();
+    const id = setInterval(poll, 15_000);
+    return () => { active = false; clearInterval(id); };
   }, [token]);
 
   useEffect(() => {
@@ -932,7 +952,167 @@ export default function App() {
                     onChange={(event) => setSearch(event.target.value)}
                   />
                 </div>
-              ) : null}
+              ) : <div />}
+              <div style={{ position: 'relative' }}>
+                <button
+                  type="button"
+                  onClick={() => setShowNotifications((p) => !p)}
+                  style={{
+                    background: '#F3F4F6',
+                    border: 'none',
+                    borderRadius: 10,
+                    width: 40,
+                    height: 40,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    position: 'relative',
+                  }}
+                >
+                  <Bell size={20} color="#374151" />
+                  {adminNotifications.length > 0 && (
+                    <span style={{
+                      position: 'absolute',
+                      top: -2,
+                      right: -2,
+                      background: '#EF4444',
+                      color: 'white',
+                      fontSize: 10,
+                      fontWeight: 700,
+                      minWidth: 18,
+                      height: 18,
+                      borderRadius: 999,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      padding: '0 4px',
+                    }}>
+                      {adminNotifications.length > 99 ? '99+' : adminNotifications.length}
+                    </span>
+                  )}
+                </button>
+                {showNotifications && (
+                  <>
+                    <div
+                      style={{ position: 'fixed', inset: 0, zIndex: 99 }}
+                      onClick={() => setShowNotifications(false)}
+                    />
+                    <div style={{
+                      position: 'absolute',
+                      top: '100%',
+                      left: 0,
+                      marginTop: 8,
+                      width: 360,
+                      maxHeight: 420,
+                      overflow: 'auto',
+                      background: 'white',
+                      borderRadius: 16,
+                      boxShadow: '0 20px 60px rgba(0,0,0,0.15)',
+                      zIndex: 100,
+                      border: '1px solid #E5E7EB',
+                    }}>
+                      <div style={{
+                        padding: '14px 16px',
+                        borderBottom: '1px solid #F0F0F0',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                      }}>
+                        <span style={{ fontFamily: 'Cairo, sans-serif', fontWeight: 800, fontSize: 14, color: '#1A1A1A' }}>
+                          الإشعارات ({adminNotifications.length})
+                        </span>
+                        {adminNotifications.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              await markAdminNotificationsRead(token).catch(() => undefined);
+                              setAdminNotifications([]);
+                            }}
+                            style={{
+                              background: 'none',
+                              border: 'none',
+                              color: '#0EA5E9',
+                              fontFamily: 'Cairo, sans-serif',
+                              fontSize: 12,
+                              fontWeight: 700,
+                              cursor: 'pointer',
+                            }}
+                          >
+                            تحديد الكل كمقروء
+                          </button>
+                        )}
+                      </div>
+                      {adminNotifications.length === 0 ? (
+                        <div style={{
+                          padding: '32px 16px',
+                          textAlign: 'center',
+                          color: '#9CA3AF',
+                          fontFamily: 'Cairo, sans-serif',
+                          fontSize: 13,
+                        }}>
+                          لا توجد إشعارات جديدة
+                        </div>
+                      ) : (
+                        adminNotifications.map((n) => (
+                          <div key={n.id} style={{
+                            padding: '12px 16px',
+                            borderBottom: '1px solid #F9FAFB',
+                            cursor: 'pointer',
+                            transition: 'background 0.15s',
+                          }}
+                            onMouseEnter={(e) => { e.currentTarget.style.background = '#F9FAFB'; }}
+                            onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+                          >
+                            <div style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 10,
+                            }}>
+                              <div style={{
+                                width: 8,
+                                height: 8,
+                                borderRadius: '50%',
+                                background: '#0EA5E9',
+                                flexShrink: 0,
+                              }} />
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{
+                                  fontFamily: 'Cairo, sans-serif',
+                                  fontWeight: 700,
+                                  fontSize: 13,
+                                  color: '#1A1A1A',
+                                }}>
+                                  {n.title}
+                                </div>
+                                <div style={{
+                                  fontFamily: 'Cairo, sans-serif',
+                                  fontSize: 11,
+                                  color: '#6B7280',
+                                  marginTop: 1,
+                                  whiteSpace: 'nowrap',
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis',
+                                }}>
+                                  {n.body}
+                                </div>
+                                <div style={{
+                                  fontFamily: 'Cairo, sans-serif',
+                                  fontSize: 10,
+                                  color: '#9CA3AF',
+                                  marginTop: 2,
+                                }}>
+                                  {new Date(n.created_at).toLocaleString('ar-IQ')}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
             </header>
           </div>
 
@@ -1146,7 +1326,7 @@ export default function App() {
 
               {view === 'notifications' ? (
                 <NotificationsView
-                  token={session.token}
+                  token={token}
                   onError={(msg) => setActionError(msg)}
                   onSuccess={(msg) => setActionSuccess(msg)}
                 />

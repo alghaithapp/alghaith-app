@@ -319,6 +319,10 @@ export async function loadHomeCategoriesConfig(token: string): Promise<HomeCateg
 }
 
 export async function saveHomeCategoriesConfig(token: string, overrides: Record<string, HomeCategoryPlatformOverride>): Promise<HomeCategoriesConfig> {
+  return request<HomeCategoriesConfig>(DATABASE_API_BASE_URL, '/db/admin/home-categories', {
+    method: 'PUT', token, body: JSON.stringify({ overrides }),
+  });
+}
 
 export async function sendPushNotification(token: string, payload: { title: string; body: string; audience: string }) {
   return request<{ sent: number; failed: number; message: string }>(
@@ -331,8 +335,27 @@ export async function sendPushNotification(token: string, payload: { title: stri
     },
   );
 }
-  return request<HomeCategoriesConfig>(DATABASE_API_BASE_URL, '/db/admin/home-categories', {
-    method: 'PUT', token, body: JSON.stringify({ overrides }),
+
+export interface AdminNotification {
+  id: string;
+  type: string;
+  title: string;
+  body: string;
+  data: Record<string, unknown>;
+  is_read: boolean;
+  created_at: string;
+}
+
+export async function loadAdminNotifications(token: string, unreadOnly = false): Promise<AdminNotification[]> {
+  const qs = unreadOnly ? '?unreadOnly=true' : '';
+  return request<AdminNotification[]>(DATABASE_API_BASE_URL, `/db/admin/notifications${qs}`, { token });
+}
+
+export async function markAdminNotificationsRead(token: string, ids?: string[]) {
+  return request<{ success: boolean }>(DATABASE_API_BASE_URL, '/db/admin/notifications/read', {
+    method: 'PUT',
+    token,
+    body: JSON.stringify(ids ? { ids } : {}),
   });
 }
 
