@@ -1,10 +1,12 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:ui' show PlatformDispatcher;
 
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart' hide TextDirection;
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'core/config/app_config.dart';
 import 'core/storage/catalog_cache.dart';
 import 'core/theme/app_colors.dart';
@@ -233,6 +235,10 @@ class _AlGhaithAppState extends State<AlGhaithApp> {
         _handleChatPush(data);
         return;
       }
+      if (eventKey == 'admin:manual_push' && data['storeUpdate'] == 'true') {
+        _openAppStore();
+        return;
+      }
       try {
         context.read<AppProvider>().handleNotificationOpen(data);
       } catch (_) {}
@@ -248,6 +254,16 @@ class _AlGhaithAppState extends State<AlGhaithApp> {
     if (nav == null || !nav.mounted) return;
     final context = nav.context;
     unawaited(ChatNavigation.handlePushData(context, data));
+  }
+
+  Future<void> _openAppStore() async {
+    final url = Platform.isAndroid
+        ? 'https://play.google.com/store/apps/details?id=com.alghaith.app'
+        : 'https://apps.apple.com/app/id6776741811';
+    final uri = Uri.parse(url);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
   }
 
   @override

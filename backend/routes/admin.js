@@ -730,7 +730,7 @@ router.post('/admin/push/send', async (req, res) => {
     const phone = requireOptionalAuthorizedPhone(req, res);
     if (!phone) return;
 
-    const { title, body, audience } = req.body;
+    const { title, body, audience, storeUpdate } = req.body;
     if (!title?.trim() || !body?.trim()) {
       return res.status(400).json({ message: 'العنوان والنص مطلوبان.' });
     }
@@ -780,6 +780,7 @@ router.post('/admin/push/send', async (req, res) => {
         category: 'admin',
         audience: audience || 'all',
         eventKey: 'admin:manual_push',
+        storeUpdate: storeUpdate === true ? 'true' : 'false',
       },
       showSystemBanner: true,
     });

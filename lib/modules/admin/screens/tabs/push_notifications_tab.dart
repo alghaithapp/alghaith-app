@@ -15,6 +15,7 @@ class _PushNotificationsTabState extends State<PushNotificationsTab> {
   final _titleController = TextEditingController();
   final _bodyController = TextEditingController();
   String _audience = 'all';
+  bool _storeUpdate = false;
   bool _isSending = false;
   Map<String, dynamic>? _result;
   String? _error;
@@ -57,6 +58,7 @@ class _PushNotificationsTabState extends State<PushNotificationsTab> {
           'title': title,
           'body': body,
           'audience': _audience,
+          'storeUpdate': _storeUpdate,
         },
       );
       setState(() {
@@ -174,6 +176,51 @@ class _PushNotificationsTabState extends State<PushNotificationsTab> {
             ),
           ),
           const SizedBox(height: 24),
+
+          // تحديث التطبيق
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: Colors.blue.shade50,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: Colors.blue.shade200),
+            ),
+            child: Row(
+              children: [
+                Checkbox(
+                  value: _storeUpdate,
+                  onChanged: (v) => setState(() => _storeUpdate = v ?? false),
+                  activeColor: Colors.blue,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: const [
+                      Text(
+                        'تحديث التطبيق',
+                        style: TextStyle(
+                          fontFamily: 'Cairo',
+                          fontSize: 14,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      SizedBox(height: 2),
+                      Text(
+                        'عند الضغط على الإشعار يذهب المستخدم إلى المتجر (Google Play / App Store)',
+                        style: TextStyle(
+                          fontFamily: 'Cairo',
+                          fontSize: 11,
+                          color: Colors.grey,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 20),
 
           // زر الإرسال
           SizedBox(
