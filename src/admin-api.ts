@@ -319,6 +319,18 @@ export async function loadHomeCategoriesConfig(token: string): Promise<HomeCateg
 }
 
 export async function saveHomeCategoriesConfig(token: string, overrides: Record<string, HomeCategoryPlatformOverride>): Promise<HomeCategoriesConfig> {
+
+export async function sendPushNotification(token: string, payload: { title: string; body: string; audience: string }) {
+  return request<{ sent: number; failed: number; message: string }>(
+    DATABASE_API_BASE_URL,
+    '/db/admin/push/send',
+    {
+      method: 'POST',
+      token,
+      body: JSON.stringify(payload),
+    },
+  );
+}
   return request<HomeCategoriesConfig>(DATABASE_API_BASE_URL, '/db/admin/home-categories', {
     method: 'PUT', token, body: JSON.stringify({ overrides }),
   });

@@ -99,6 +99,7 @@ export type AdminView =
   | 'taxi'
   | 'homeCategories'
   | 'appUpdate'
+  | 'notifications'
   | 'maintenance';
 
 export interface AdminTaxiTrip {

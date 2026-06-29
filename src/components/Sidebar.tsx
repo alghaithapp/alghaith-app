@@ -2,6 +2,7 @@ import React from 'react';
 import {
   BarChart3,
   Bike,
+  Bell,
   Grid3x3,
   LogOut,
   Shield,
@@ -179,6 +180,13 @@ export default function Sidebar({
               iconClass="nav-icon-settings"
               icon={<Smartphone size={16} />}
               label="تحديث التطبيق"
+            />
+            <NavButton
+              isActive={view === 'notifications'}
+              onClick={() => onSwitchView('notifications')}
+              iconClass="nav-icon-settings"
+              icon={<Bell size={16} />}
+              label="الإشعارات"
             />
             <NavButton
               isActive={view === 'maintenance'}

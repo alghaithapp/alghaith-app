@@ -66,6 +66,7 @@ const TaxiAdminView = lazy(() => import('./components/views/TaxiAdminView'));
 const AccountsView = lazy(() => import('./components/views/AccountsView'));
 const HomeCategoriesView = lazy(() => import('./components/views/HomeCategoriesView'));
 const AppUpdateView = lazy(() => import('./components/views/AppUpdateView'));
+const NotificationsView = lazy(() => import('./components/views/NotificationsView'));
 const MaintenanceView = lazy(() => import('./components/views/MaintenanceView'));
 
 function ViewLoadingFallback() {
@@ -143,9 +144,14 @@ const VIEW_META: Record<
   },
   maintenance: {
     eyebrow: 'وضع الصيانة',
-    title: 'صيانة المنصة',
-    subtitle:
-      'فعّل وضع الصيانة لإظهار شاشة للمستخدمين أثناء أعمال قاعدة البيانات. الإيقاف فوري دون تحديث التطبيق.',
+    title: 'تفعيل الصيانة',
+    subtitle: 'أوقف التطبيق مؤقتاً وأظهر رسالة الصيانة لجميع المستخدمين.',
+    showSearch: false,
+  },
+  notifications: {
+    eyebrow: 'الإشعارات',
+    title: 'إرسال إشعار يدوي',
+    subtitle: 'أرسل إشعاراً فورياً لجميع المستخدمين أو لفئة محددة.',
     showSearch: false,
   },
 };
@@ -1135,6 +1141,14 @@ export default function App() {
                   formatDate={formatDate}
                   onDraftChange={(partial) => setMaintenanceDraft((prev) => ({ ...prev, ...partial }))}
                   onSave={handleSaveMaintenancePolicy}
+                />
+              ) : null}
+
+              {view === 'notifications' ? (
+                <NotificationsView
+                  token={session.token}
+                  onError={(msg) => setActionError(msg)}
+                  onSuccess={(msg) => setActionSuccess(msg)}
                 />
               ) : null}
             </>
