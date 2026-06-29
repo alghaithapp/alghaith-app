@@ -379,7 +379,9 @@ class _ChatScreenState extends State<ChatScreen>
         threadId: widget.threadId,
         otherPartyPhone: widget.receiverPhone,
       );
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('Chat: markThreadRead failed: $e');
+    }
   }
 
   String _senderDisplayName(AppProvider provider) {

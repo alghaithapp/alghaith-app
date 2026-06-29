@@ -143,6 +143,7 @@ class TaxiRequest {
   final String statusKey; // pending -> accepted -> arrived -> picked_up -> completed / cancelled
   final String statusAr;
   final int driverRating;
+  final int driverRatingCount;
   final bool cashCollected;
   final DateTime? acceptedAt;
   final DateTime? completedAt;
@@ -187,6 +188,7 @@ class TaxiRequest {
     this.statusKey = 'pending',
     this.statusAr = '',
     this.driverRating = 0,
+    this.driverRatingCount = 0,
     this.cashCollected = false,
     this.acceptedAt,
     this.completedAt,
@@ -325,6 +327,7 @@ class TaxiRequest {
       'statusKey': statusKey,
       'statusAr': statusAr,
       'driverRating': driverRating,
+      'driverRatingCount': driverRatingCount,
       'cashCollected': cashCollected,
       'acceptedAt': acceptedAt?.toIso8601String(),
       'completedAt': completedAt?.toIso8601String(),
@@ -372,6 +375,7 @@ class TaxiRequest {
       statusKey: (map['statusKey'] as String?) ?? 'pending',
       statusAr: (map['statusAr'] as String?) ?? '',
       driverRating: (map['driverRating'] as num?)?.toInt() ?? 0,
+      driverRatingCount: (map['driverRatingCount'] as num?)?.toInt() ?? 0,
       cashCollected: (map['cashCollected'] as bool?) ?? false,
       acceptedAt: map['acceptedAt'] != null
           ? DateTime.tryParse(map['acceptedAt'] as String)
@@ -433,6 +437,7 @@ class TaxiRequest {
     String? statusKey,
     String? statusAr,
     int? driverRating,
+    int? driverRatingCount,
     bool? cashCollected,
     DateTime? acceptedAt,
     DateTime? completedAt,
@@ -477,6 +482,7 @@ class TaxiRequest {
       statusKey: statusKey ?? this.statusKey,
       statusAr: statusAr ?? this.statusAr,
       driverRating: driverRating ?? this.driverRating,
+      driverRatingCount: driverRatingCount ?? this.driverRatingCount,
       cashCollected: cashCollected ?? this.cashCollected,
       acceptedAt: acceptedAt ?? this.acceptedAt,
       completedAt: completedAt ?? this.completedAt,

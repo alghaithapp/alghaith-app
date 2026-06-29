@@ -590,13 +590,11 @@ class _CompletedTripsTab extends StatelessWidget {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      '${req.pickupAddressAr} → ${req.dropoffAddressAr}',
+                      req.requestNumber,
                       style: const TextStyle(
                           fontFamily: 'Cairo',
                           fontSize: 11,
                           color: Colors.grey),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
                     ),
                   ],
                 ),

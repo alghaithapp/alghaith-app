@@ -161,12 +161,20 @@ async function enrichTaxiRequestForClient(row) {
       if (driverProfile?.profileImage) {
         base.driverPhoto = String(driverProfile.profileImage).trim();
       }
+      if (driverProfile?.rating) {
+        base.driverRating = Number(driverProfile.rating) || 0;
+      }
+      if (driverProfile?.ratingCount) {
+        base.driverRatingCount = Number(driverProfile.ratingCount) || 0;
+      }
     } catch (e) {
       try {
         const state = await getUserState(driverPhone);
         const profile = state?.driverProfile || {};
         const img = String(profile.profileImage ?? '').trim();
         if (img) base.driverPhoto = img;
+        if (profile.rating) base.driverRating = Number(profile.rating) || 0;
+        if (profile.ratingCount) base.driverRatingCount = Number(profile.ratingCount) || 0;
       } catch (_) {}
     }
   }

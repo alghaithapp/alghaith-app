@@ -400,7 +400,30 @@ class _TaxiLiveTrackingScreenState extends State<TaxiLiveTrackingScreen> {
                                           fontWeight: FontWeight.w700,
                                         ),
                                       ),
-                                      const SizedBox(height: 4),
+                                      const SizedBox(height: 2),
+                                      if ((request?.driverRatingCount ?? 0) > 0)
+                                        Row(
+                                          children: [
+                                            ...List.generate(5, (i) {
+                                              final filled = i < (request?.driverRating ?? 0);
+                                              return Icon(
+                                                filled ? Icons.star_rounded : Icons.star_border_rounded,
+                                                color: filled ? const Color(0xFFFCD400) : Colors.grey.shade300,
+                                                size: 14,
+                                              );
+                                            }),
+                                            const SizedBox(width: 4),
+                                            Text(
+                                              '${request?.driverRating ?? 0}',
+                                              style: const TextStyle(
+                                                fontFamily: 'Cairo',
+                                                fontSize: 12,
+                                                color: Colors.grey,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      const SizedBox(height: 2),
                                       Text(
                                         request?.taxiTypeLabelAr ?? '',
                                         style: const TextStyle(

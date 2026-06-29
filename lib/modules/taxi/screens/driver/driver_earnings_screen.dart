@@ -344,6 +344,17 @@ class _CompletedTripTile extends StatelessWidget {
                     ),
                   ],
                 ),
+                const SizedBox(height: 2),
+                Text(
+                  trip.customerNameAr,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontFamily: 'Cairo',
+                    fontSize: 11,
+                    color: Colors.black54,
+                  ),
+                ),
                 const SizedBox(height: 4),
                 Text(
                   '${trip.pickupAddress} → ${trip.dropoffAddress}',

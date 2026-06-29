@@ -109,11 +109,7 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
                   right: 20,
                   child: _buildStatsWidget(todayTrips, todayEarnings, todayDistance),
                 ),
-                Positioned(
-                  bottom: 20,
-                  right: 20,
-                  child: _buildRecenterFab(),
-                ),
+
               ],
             ),
           ),
@@ -710,29 +706,6 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
             ),
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _buildRecenterFab() {
-    return Container(
-      width: 48,
-      height: 48,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.12),
-            blurRadius: 12,
-            offset: const Offset(0, 3),
-          ),
-        ],
-      ),
-      child: const Icon(
-        Icons.my_location_rounded,
-        color: Colors.black87,
-        size: 22,
       ),
     );
   }
