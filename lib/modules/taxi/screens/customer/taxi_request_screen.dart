@@ -1069,6 +1069,7 @@ class _TaxiRequestScreenState extends State<TaxiRequestScreen> {
                 ),
               ),
             ),
+          ),
           ],
         ),
       ),
