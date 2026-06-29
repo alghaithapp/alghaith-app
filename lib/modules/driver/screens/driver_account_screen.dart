@@ -10,8 +10,6 @@ import '../../../providers/app_provider.dart';
 import '../../../utils/account_role_switch.dart';
 import '../../common/screens/notifications_screen.dart';
 import '../../merchant/screens/merchant_chat_inbox_screen.dart';
-import '../../notifications/services/push_notification_service.dart';
-import '../../taxi/services/taxi_api_service.dart';
 import '../../../widgets/app_image.dart';
 import 'driver_shared_widgets.dart';
 
@@ -86,27 +84,6 @@ class _DriverAccountScreenState extends State<DriverAccountScreen> {
           onTap: () => Navigator.of(context).push(
             MaterialPageRoute(builder: (_) => const NotificationsScreen()),
           ),
-        ),
-        const SizedBox(height: 12),
-        ListTile(
-          tileColor: Colors.white,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-          leading:
-              const Icon(Icons.bug_report_outlined, color: Color(0xFFE040FB)),
-          title: const Text(
-            'اختبار الإشعارات',
-            style: TextStyle(
-              fontFamily: 'Cairo',
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          subtitle: const Text(
-            'إرسال إشعار تجريبي مع صوت لاختبار وصول الإشعارات',
-            style: TextStyle(fontFamily: 'Cairo', fontSize: 12),
-          ),
-          onTap: () => _sendTestNotification(context),
         ),
         const SizedBox(height: 12),
         Container(
@@ -272,71 +249,6 @@ class _DriverAccountScreenState extends State<DriverAccountScreen> {
         ),
       ],
     );
-  }
-
-  Future<void> _sendTestNotification(BuildContext context) async {
-    final messenger = ScaffoldMessenger.of(context);
-    messenger.showSnackBar(
-      const SnackBar(
-        content: Text('جاري إرسال إشعار تجريبي...', style: TextStyle(fontFamily: 'Cairo')),
-        duration: Duration(seconds: 1),
-      ),
-    );
-
-    // تشخيص التوكن المحلي
-    final push = PushNotificationService.instance;
-    final hasLocalToken = push.hasToken;
-    debugPrint('TEST_PUSH: hasLocalToken=$hasLocalToken boundPhone=${push.boundPhone}');
-
-    try {
-      final result = await TaxiApiService.testPushNotification();
-      final hasToken = result['hasToken'] == true;
-      final tokenCount = result['tokenCount'] ?? 0;
-      final sent = result['sent'] ?? 0;
-      final failed = result['failed'] ?? 0;
-      final platforms = (result['platforms'] as List?)?.join(', ') ?? '-';
-      final invalid = result['invalidTokens'] ?? 0;
-      final errors = (result['errors'] as List?)?.join(' | ') ?? '';
-
-      String diagnostics = '';
-      if (!hasLocalToken) {
-        diagnostics = '\n⚠️ هذا الجهاز ليس لديه توكن FCM محلي.';
-      }
-      if (errors.isNotEmpty) {
-        diagnostics += '\n❌ سبب فشل iOS: $errors';
-      }
-
-      if (!hasToken) {
-        messenger.showSnackBar(
-          const SnackBar(
-            content: Text('⚠️ لا يوجد جهاز مسجل للإشعارات. تأكد من تسجيل الدخول ومنح إذن الإشعارات.', style: TextStyle(fontFamily: 'Cairo')),
-            duration: Duration(seconds: 5),
-            backgroundColor: Colors.orange,
-          ),
-        );
-        return;
-      }
-
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text(
-            '✅ تم الإرسال: $sent جهاز | فشل: $failed | غير صالح: $invalid\n'
-            'عدد التوكنات: $tokenCount | المنصات: $platforms$diagnostics',
-            style: const TextStyle(fontFamily: 'Cairo', fontSize: 12),
-          ),
-          duration: const Duration(seconds: 8),
-          backgroundColor: sent > 0 ? Colors.green : Colors.orange,
-        ),
-      );
-    } catch (e) {
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text('❌ فشل الإرسال: $e', style: const TextStyle(fontFamily: 'Cairo')),
-          duration: const Duration(seconds: 5),
-          backgroundColor: Colors.red,
-        ),
-      );
-    }
   }
 
   Future<void> _showEditProfileSheet(BuildContext context) async {
