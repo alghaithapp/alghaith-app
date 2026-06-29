@@ -52,15 +52,24 @@ class _DriverShellState extends State<DriverShell> with RealtimeSubscriptionMixi
       RoleSwitchNotificationPresenter.showIfNeeded(context);
       final provider = context.read<AppProvider>();
       final phone = provider.authPhone;
+
+      // التوجيه الفوري عند فتح التطبيق من إشعار
+      final pendingTab = provider.takePendingDriverTab();
+      if (pendingTab != null && pendingTab >= 0) {
+        _currentIndex = pendingTab;
+      }
+      final pendingOrderId = provider.takePendingOrderId('driver');
+      if (pendingOrderId != null && pendingOrderId.isNotEmpty) {
+        context.read<TaxiProvider>().fetchIncomingRequests();
+      }
+
       if (phone != null && phone.isNotEmpty) {
-        // ربط FCM Token بحساب السائق لضمان وصول إشعارات التكسي
         unawaited(_ensurePushBinding(phone));
         _initDriverLocation(provider, phone);
         _startDriverLocationUpdates(provider);
         context.read<TaxiProvider>().loadDriverActiveRequest();
         context.read<TaxiProvider>().loadDriverHistory();
 
-        // Realtime للرحلة النشطة (بعد القبول)
         final sub = SupabaseService.realtime.subscribeToTable(
           table: 'taxi_requests',
           filterColumn: 'driver_phone',
@@ -187,6 +196,7 @@ class _DriverShellState extends State<DriverShell> with RealtimeSubscriptionMixi
 
   @override
   Widget build(BuildContext context) {
+    _resolvePendingNavigation();
     final isDark = Theme.of(context).brightness == Brightness.dark;
     const accentColor = AppColors.accent;
 
@@ -235,6 +245,22 @@ class _DriverShellState extends State<DriverShell> with RealtimeSubscriptionMixi
         ),
       ),
     );
+  }
+
+  /// التوجيه الفوري عند فتح التطبيق من إشعار (حتى لو كان التطبيق في الخلفية)
+  void _resolvePendingNavigation() {
+    final provider = context.read<AppProvider>();
+    final pendingTab = provider.takePendingDriverTab();
+    if (pendingTab != null && pendingTab >= 0 && pendingTab != _currentIndex) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        setState(() => _currentIndex = pendingTab);
+        final pendingOrderId = provider.takePendingOrderId('driver');
+        if (pendingOrderId != null && pendingOrderId.isNotEmpty) {
+          context.read<TaxiProvider>().fetchIncomingRequests();
+        }
+      });
+    }
   }
 
   int _pendingCount(BuildContext context) {
