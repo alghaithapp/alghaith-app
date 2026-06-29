@@ -155,6 +155,28 @@ class _TaxiLiveTrackingScreenState extends State<TaxiLiveTrackingScreen> {
                 ? LatLng(request!.driverLat!, request.driverLng!)
                 : null;
 
+            final statusKey = request?.statusKey ?? '';
+            final showBanner = request != null &&
+                (request.hasLiveEta || statusKey == 'arrived');
+
+            String bannerText = '';
+            IconData bannerIcon = Icons.schedule;
+            Color bannerColor = AppColors.primary.withValues(alpha: 0.92);
+
+            if (request != null) {
+              if (statusKey == 'arrived') {
+                bannerText = 'وصل الكابتن إلى موقعك وهو بانتظارك';
+                bannerIcon = Icons.check_circle_rounded;
+                bannerColor = AppColors.success.withValues(alpha: 0.95);
+              } else if (statusKey == 'picked_up') {
+                bannerText = 'الوصول للوجهة خلال ${request.liveEtaLabelAr}';
+                bannerIcon = Icons.navigation_rounded;
+              } else {
+                bannerText = 'وصول الكابتن خلال ${request.liveEtaLabelAr}';
+                bannerIcon = Icons.schedule;
+              }
+            }
+
             return Stack(
               children: [
                 Positioned.fill(
@@ -230,7 +252,7 @@ class _TaxiLiveTrackingScreenState extends State<TaxiLiveTrackingScreen> {
                   ),
                 ),
 
-                if (request != null && request.hasLiveEta)
+                if (showBanner && bannerText.isNotEmpty)
                   Positioned(
                     top: MediaQuery.of(context).padding.top + 64,
                     left: 16,
@@ -241,21 +263,24 @@ class _TaxiLiveTrackingScreenState extends State<TaxiLiveTrackingScreen> {
                         vertical: 10,
                       ),
                       decoration: BoxDecoration(
-                        color: AppColors.primary.withValues(alpha: 0.92),
+                        color: bannerColor,
                         borderRadius: BorderRadius.circular(14),
                       ),
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          const Icon(Icons.schedule, color: Colors.white, size: 18),
+                          Icon(bannerIcon, color: Colors.white, size: 18),
                           const SizedBox(width: 8),
-                          Text(
-                            'وصول الكابتن خلال ${request.liveEtaLabelAr}',
-                            style: const TextStyle(
-                              fontFamily: 'Cairo',
-                              fontSize: 14,
-                              fontWeight: FontWeight.w700,
-                              color: Colors.white,
+                          Flexible(
+                            child: Text(
+                              bannerText,
+                              style: const TextStyle(
+                                fontFamily: 'Cairo',
+                                fontSize: 14,
+                                fontWeight: FontWeight.w700,
+                                color: Colors.white,
+                              ),
+                              overflow: TextOverflow.ellipsis,
                             ),
                           ),
                         ],

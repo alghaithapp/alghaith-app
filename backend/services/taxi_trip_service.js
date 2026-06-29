@@ -97,7 +97,7 @@ function attachLiveEtaToClientRequest(base) {
   if (status === 'picked_up') {
     targetLat = Number(base.dropoffLat ?? 0);
     targetLng = Number(base.dropoffLng ?? 0);
-  } else if (['accepted', 'on_way', 'arrived'].includes(status)) {
+  } else if (['accepted', 'on_way'].includes(status)) {
     targetLat = Number(base.pickupLat ?? 0);
     targetLng = Number(base.pickupLng ?? 0);
   } else {
