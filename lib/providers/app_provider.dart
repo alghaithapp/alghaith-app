@@ -2057,6 +2057,13 @@ class AppProvider extends ChangeNotifier {
     })));
   }
 
+  List<TaxiRequest> get visibleTaxiCancelledRequests {
+    final source = driver.isDriver ? _taxiDriverAssignedRequests : _taxiRequests;
+    return List<TaxiRequest>.unmodifiable(_dedupeTaxiById(source.where((r) {
+      return const {'cancelled', 'cancelled_by_driver', 'cancelled_by_customer'}.contains(r.statusKey);
+    })));
+  }
+
   List<TaxiRequest> _mergedTaxiSnapshotList() {
     if (driver.isDriver) {
       final merged = <String, TaxiRequest>{};

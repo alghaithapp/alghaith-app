@@ -279,8 +279,8 @@ class MarketplaceCatalog {
   /// البازار يُعرض عبر البانر العلوي وليس ضمن هذه القائمة.
   static const Set<String> customerHomeCategoryIds = {
     'restaurant',
-    'product',
     'cars',
+    'product',
     'eden_printing',
     'global_shopping',
   };

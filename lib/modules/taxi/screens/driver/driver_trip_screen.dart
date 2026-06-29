@@ -18,9 +18,10 @@ class DriverTripScreen extends StatelessWidget {
     final provider = context.watch<AppProvider>();
     final active = provider.visibleTaxiActiveRequests;
     final completed = provider.visibleTaxiCompletedRequests;
+    final cancelled = provider.visibleTaxiCancelledRequests;
 
     return DefaultTabController(
-      length: 2,
+      length: 3,
       child: Scaffold(
         backgroundColor: AppColors.scaffold,
         appBar: AppBar(
@@ -49,6 +50,7 @@ class DriverTripScreen extends StatelessWidget {
             tabs: [
               Tab(text: 'نشطة (${active.length})'),
               Tab(text: 'مكتملة (${completed.length})'),
+              Tab(text: 'ملغاة (${cancelled.length})'),
             ],
           ),
         ),
@@ -56,6 +58,7 @@ class DriverTripScreen extends StatelessWidget {
           children: [
             _ActiveTripsTab(active: active),
             _CompletedTripsTab(completed: completed),
+            _CancelledTripsTab(cancelled: cancelled),
           ],
         ),
       ),
@@ -606,6 +609,98 @@ class _CompletedTripsTab extends StatelessWidget {
                   fontWeight: FontWeight.w900,
                   fontSize: 15,
                   color: AppColors.success,
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+// ── تبويب الرحلات الملغاة ────────────────────────────────────────────────
+
+class _CancelledTripsTab extends StatelessWidget {
+  final List<TaxiRequest> cancelled;
+  const _CancelledTripsTab({required this.cancelled});
+
+  @override
+  Widget build(BuildContext context) {
+    if (cancelled.isEmpty) {
+      return const Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(CupertinoIcons.clear_circled, size: 64, color: Colors.grey),
+            SizedBox(height: 16),
+            Text(
+              'لا توجد رحلات ملغاة',
+              style: TextStyle(
+                  fontFamily: 'Cairo',
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.grey),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return ListView.builder(
+      padding: const EdgeInsets.all(16),
+      itemCount: cancelled.length,
+      itemBuilder: (context, i) {
+        final req = cancelled[i];
+        return Container(
+          margin: const EdgeInsets.only(bottom: 10),
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: Colors.red.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(Icons.cancel_rounded,
+                    color: Colors.red, size: 24),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      req.customerNameAr,
+                      style: const TextStyle(
+                          fontFamily: 'Cairo',
+                          fontWeight: FontWeight.w700,
+                          fontSize: 13),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      req.requestNumber,
+                      style: const TextStyle(
+                          fontFamily: 'Cairo',
+                          fontSize: 11,
+                          color: Colors.grey),
+                    ),
+                  ],
+                ),
+              ),
+              Text(
+                '${req.fare} د.ع',
+                style: const TextStyle(
+                  fontFamily: 'Cairo',
+                  fontWeight: FontWeight.w900,
+                  fontSize: 15,
+                  color: Colors.red,
                 ),
               ),
             ],

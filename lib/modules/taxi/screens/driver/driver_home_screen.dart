@@ -4,6 +4,7 @@ import 'package:latlong2/latlong.dart' as latlong2;
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../../providers/app_provider.dart';
+import '../../../../widgets/app_image.dart';
 import '../../models/taxi_request.dart';
 import '../../providers/taxi_provider.dart';
 import '../../services/driver_presence_service.dart';
@@ -104,7 +105,7 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
                   ),
                 ),
                 Positioned(
-                  top: 112,
+                  top: 85,
                   left: 20,
                   right: 20,
                   child: _buildStatsWidget(todayTrips, todayEarnings, todayDistance),
@@ -254,15 +255,21 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
 
           // صورة الملف الشخصي
           Container(
-            width: 40,
-            height: 40,
+            width: 60,
+            height: 60,
             decoration: BoxDecoration(
               color: AppColors.accent.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(20),
+              borderRadius: BorderRadius.circular(30),
               border: Border.all(
                   color: AppColors.accent.withValues(alpha: 0.3), width: 2),
             ),
-            child: const Icon(Icons.person, color: AppColors.accent, size: 22),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(30),
+              child: AppImage(
+                imageData: driverProfile['profileImage'] as String?,
+                fit: BoxFit.cover,
+              ),
+            ),
           ),
         ],
       ),
