@@ -24,28 +24,77 @@ function buildPushPayload({ title, body, data = {} }) {
 }
 
 async function collectTokensForPhones(phones) {
-  const results = await Promise.allSettled(
-    phones.map(async (phone) => {
-      const rows = await getDeviceTokensForPhone(phone);
-      const phoneTokens = rows.map((row) => String(row.token || '').trim()).filter(Boolean);
-      return { phone, tokens: phoneTokens };
-    })
-  );
+  const uniquePhones = [...new Set(phones.map((p) => String(p || '').trim()).filter(Boolean))];
+  if (uniquePhones.length === 0) return { tokens: [], phonesWithoutTokens: [] };
 
-  const tokens = [];
-  const phonesWithoutTokens = [];
-  for (const result of results) {
-    if (result.status === 'fulfilled') {
-      if (result.value.tokens.length === 0) {
-        phonesWithoutTokens.push(result.value.phone);
+  const { getPhoneVariants } = require('../supabase_repo/common');
+  const allVariants = uniquePhones.flatMap((phone) => getPhoneVariants(phone));
+  const uniqueVariants = [...new Set(allVariants)];
+
+  if (uniqueVariants.length === 0) return { tokens: [], phonesWithoutTokens: uniquePhones };
+
+  try {
+    const { selectMany } = require('../supabase_repo');
+    const rows = await selectMany(
+      'device_tokens',
+      [{ method: 'in', column: 'phone', value: uniqueVariants }],
+      { column: 'updated_at', ascending: false }
+    );
+
+    const tokens = [];
+    const phonesWithoutTokens = [];
+
+    const variantToTokens = {};
+    for (const row of rows) {
+      const token = String(row.token || '').trim();
+      const phoneVal = String(row.phone || '').trim();
+      if (token && phoneVal) {
+        if (!variantToTokens[phoneVal]) variantToTokens[phoneVal] = [];
+        variantToTokens[phoneVal].push(token);
       }
-      tokens.push(...result.value.tokens);
-    } else {
-      phonesWithoutTokens.push('unknown');
-      console.error('taxi push token lookup error:', result.reason?.message || result.reason);
     }
+
+    for (const phone of uniquePhones) {
+      const variants = getPhoneVariants(phone);
+      const phoneTokens = [];
+      for (const variant of variants) {
+        if (variantToTokens[variant]) {
+          phoneTokens.push(...variantToTokens[variant]);
+        }
+      }
+      if (phoneTokens.length === 0) {
+        phonesWithoutTokens.push(phone);
+      } else {
+        tokens.push(...phoneTokens);
+      }
+    }
+
+    return { tokens: [...new Set(tokens)], phonesWithoutTokens };
+  } catch (error) {
+    console.error('taxi batch push token lookup error:', error?.message || error);
+    // Fallback to legacy loop if batch fails
+    const results = await Promise.allSettled(
+      uniquePhones.map(async (phone) => {
+        const rows = await getDeviceTokensForPhone(phone);
+        const phoneTokens = rows.map((row) => String(row.token || '').trim()).filter(Boolean);
+        return { phone, tokens: phoneTokens };
+      })
+    );
+
+    const tokens = [];
+    const phonesWithoutTokens = [];
+    for (const result of results) {
+      if (result.status === 'fulfilled') {
+        if (result.value.tokens.length === 0) {
+          phonesWithoutTokens.push(result.value.phone);
+        }
+        tokens.push(...result.value.tokens);
+      } else {
+        phonesWithoutTokens.push('unknown');
+      }
+    }
+    return { tokens: [...new Set(tokens)], phonesWithoutTokens };
   }
-  return { tokens, phonesWithoutTokens };
 }
 
 /**
