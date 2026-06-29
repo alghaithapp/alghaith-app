@@ -116,27 +116,36 @@ function createLimiter(maxReqs, windowMs = minute) {
     standardHeaders: true,
     legacyHeaders: false,
     message: { message: 'Too many requests. Try again later.' },
+    keyGenerator: (req) => {
+      // إذا كان الطلب يحتوي على توكن تسجيل دخول، نقوم بتحديد المعدل بناءً على التوكن لمنع تعارض المستخدمين المشتركين في نفس الـ IP (شبكات الهاتف)
+      const authHeader = req.headers.authorization;
+      if (authHeader && authHeader.startsWith('Bearer ')) {
+        const token = authHeader.slice(7).trim();
+        if (token) return `token:${token}`;
+      }
+      return req.ip;
+    },
   };
 
   return rateLimit(options);
 }
 
 // مسارات سريعة للصحة والمعلومات العامة
-app.use('/health', createLimiter(300));
-app.use('/app', createLimiter(200));
+app.use('/health', createLimiter(500));
+app.use('/app', createLimiter(400));
 
 // مسارات المحادثة — تحتاج حد أعلى بسبب الـ polling
-app.use('/db/chat', createLimiter(300));
+app.use('/db/chat', createLimiter(600));
 
 // مسارات التكسي والخرائط
-app.use('/db/taxi', createLimiter(600));
-app.use('/maps', createLimiter(60));
+app.use('/db/taxi', createLimiter(1200));
+app.use('/maps', createLimiter(300));
 
 // مسارات المصادقة — حد منخفض للحماية من brute force
-app.use('/auth', createLimiter(30));
+app.use('/auth', createLimiter(60));
 
 // المسارات الأخرى (الطلبات، المتاجر، المستخدمين، إلخ)
-app.use('/db', createLimiter(120));
+app.use('/db', createLimiter(300));
 
 // ── Session verification ────────────────────────────────────────────────
 // تستخدم دوال verifySessionToken من lib/session.js
