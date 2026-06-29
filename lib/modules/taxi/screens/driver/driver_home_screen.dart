@@ -101,7 +101,7 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
                   left: 0,
                   right: 0,
                   child: SafeArea(
-                    child: _buildAppBar(context, appProvider, driverName),
+                    child: _buildAppBar(context, appProvider, driverName, driverRating, driverRatingCount, driverProfile),
                   ),
                 ),
                 Positioned(
@@ -132,7 +132,7 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
     );
   }
 
-  Widget _buildAppBar(BuildContext context, AppProvider provider, String driverName) {
+  Widget _buildAppBar(BuildContext context, AppProvider provider, String driverName, double driverRating, int driverRatingCount, Map<String, dynamic> driverProfile) {
     final taxi = context.watch<TaxiProvider>();
     final isOnline = taxi.isOnline;
     final onlineColor = isOnline ? AppColors.success : Colors.grey;
