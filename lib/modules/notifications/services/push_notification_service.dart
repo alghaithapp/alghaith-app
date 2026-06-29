@@ -5,6 +5,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
+import 'package:audioplayers/audioplayers.dart';
 
 import '../../../firebase_options.dart';
 import '../../../services/supabase_service.dart';
@@ -255,6 +256,17 @@ class PushNotificationService {
     final eventKey = message.data['eventKey']?.toString() ?? '';
     final category = message.data['category']?.toString() ?? '';
     final requestId = message.data['orderId']?.toString() ?? '';
+
+    // تشغيل صوت تنبيه فوري عندما يكون التطبيق مفتوحاً وتصل رحلة تاكسي أو طلب جديد
+    if (eventKey == 'taxi:pool_new' || eventKey.endsWith(':new')) {
+      try {
+        final player = AudioPlayer();
+        await player.setVolume(1.0);
+        await player.play(AssetSource('sounds/alghaith_notify.wav'));
+      } catch (e) {
+        debugPrint('Push: error playing foreground request sound: $e');
+      }
+    }
 
     // المكالمة أولاً — لا تعتمد على معالجة الإشعار المحلي.
     if (eventKey == 'call:incoming') {

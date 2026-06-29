@@ -1,4 +1,4 @@
-﻿import 'dart:convert';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -180,6 +180,7 @@ class PushNotificationInbox {
           presentAlert: true,
           presentBadge: true,
           presentSound: true,
+          sound: NotificationSound.fileName,
         ),
       ),
       payload: 'taxi_request:$requestId',
