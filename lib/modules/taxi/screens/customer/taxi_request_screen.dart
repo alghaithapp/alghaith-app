@@ -878,7 +878,7 @@ class _TaxiRequestScreenState extends State<TaxiRequestScreen> {
                           ),
                         ],
                       ),
-                  child: SafeArea(
+                      child: SafeArea(
                     top: false,
                     child: Padding(
                       padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
@@ -1068,6 +1068,7 @@ class _TaxiRequestScreenState extends State<TaxiRequestScreen> {
                   ),
                 ),
               ),
+            ),
           ],
         ),
       ),
