@@ -195,6 +195,100 @@ class _ActiveTripCardState extends State<_ActiveTripCard> {
     }
   }
 
+  Widget _buildStatusStepper(String statusKey, Color statusColor) {
+    final stages = [
+      {'key': 'accepted', 'label': 'مقبول'},
+      {'key': 'on_way', 'label': 'في الطريق'},
+      {'key': 'arrived', 'label': 'وصلت'},
+      {'key': 'picked_up', 'label': 'في الرحلة'},
+    ];
+
+    int activeIndex = 0;
+    if (statusKey == 'on_way') activeIndex = 1;
+    if (statusKey == 'arrived') activeIndex = 2;
+    if (statusKey == 'picked_up') activeIndex = 3;
+    if (statusKey == 'completed') activeIndex = 4;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade50,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey.shade100),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: List.generate(stages.length, (index) {
+          final stage = stages[index];
+          final isCompleted = index < activeIndex;
+          final isActive = index == activeIndex;
+
+          Color circleColor = Colors.grey.shade300;
+          Color textColor = Colors.grey.shade500;
+          IconData icon = Icons.circle_outlined;
+
+          if (isCompleted) {
+            circleColor = AppColors.success;
+            textColor = AppColors.success;
+            icon = Icons.check_circle_rounded;
+          } else if (isActive) {
+            circleColor = statusColor;
+            textColor = Colors.black;
+            switch (statusKey) {
+              case 'accepted':
+                icon = Icons.thumb_up_alt_rounded;
+                break;
+              case 'on_way':
+                icon = Icons.directions_car_rounded;
+                break;
+              case 'arrived':
+                icon = Icons.hail_rounded;
+                break;
+              case 'picked_up':
+                icon = Icons.map_rounded;
+                break;
+              default:
+                icon = Icons.play_arrow_rounded;
+            }
+          }
+
+          return Expanded(
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(icon, size: 20, color: circleColor),
+                      const SizedBox(height: 4),
+                      Text(
+                        stage['label']!,
+                        style: TextStyle(
+                          fontFamily: 'Cairo',
+                          fontSize: 10,
+                          fontWeight: isActive || isCompleted ? FontWeight.w800 : FontWeight.normal,
+                          color: textColor,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
+                  ),
+                ),
+                if (index < stages.length - 1)
+                  Container(
+                    width: 15,
+                    height: 2,
+                    color: index < activeIndex ? AppColors.success : Colors.grey.shade300,
+                  ),
+              ],
+            ),
+          );
+        }),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final provider = context.read<AppProvider>();
@@ -253,6 +347,9 @@ class _ActiveTripCardState extends State<_ActiveTripCard> {
               ],
             ),
             const SizedBox(height: 10),
+
+            // مؤشر مسار ومراحل الرحلة للكابتن
+            _buildStatusStepper(req.statusKey, _statusColor),
 
             // الزبون
             Row(
