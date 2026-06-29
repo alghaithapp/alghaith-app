@@ -18,7 +18,7 @@ class TaxiRatingScreen extends StatefulWidget {
 }
 
 class _TaxiRatingScreenState extends State<TaxiRatingScreen> {
-  int _selectedStars = 5;
+  int _selectedStars = 0;
   final _commentController = TextEditingController();
   bool _isSubmitting = false;
 
@@ -30,6 +30,8 @@ class _TaxiRatingScreenState extends State<TaxiRatingScreen> {
 
   String get _ratingLabel {
     switch (_selectedStars) {
+      case 0:
+        return 'اختر تقييمك';
       case 1:
         return 'سيئة جداً';
       case 2:
@@ -47,6 +49,15 @@ class _TaxiRatingScreenState extends State<TaxiRatingScreen> {
 
   Future<void> _submit() async {
     if (_isSubmitting) return;
+    if (_selectedStars == 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('اختر تقييمك أولاً', style: TextStyle(fontFamily: 'Cairo')),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
     setState(() => _isSubmitting = true);
 
     final provider = context.read<TaxiProvider>();
