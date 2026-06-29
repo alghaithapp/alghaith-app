@@ -66,6 +66,10 @@ class TaxiProvider extends ChangeNotifier {
   int get totalEarnings =>
       _requests.where((r) => r.isCompleted).fold(0, (sum, r) => sum + r.fare);
 
+  double get todayDistanceKm =>
+      _requests.where((r) => r.isCompleted && r.completedAt != null && _isSameDay(r.completedAt!))
+          .fold<double>(0, (sum, r) => sum + r.distanceKm);
+
   List<TaxiRequest> get pendingRequests =>
       _requests.where((r) => r.isPending).toList();
 

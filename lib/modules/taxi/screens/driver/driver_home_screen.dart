@@ -71,8 +71,11 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
         })
         .length;
     final todayEarnings = taxiProvider.todayEarnings;
-    final driverProfile = appProvider.driverProfile ?? const {};
+    final todayDistance = taxiProvider.todayDistanceKm;
+    final driverProfile = appProvider.driverProfile ?? {};
     final driverName = (driverProfile['name'] as String?)?.trim() ?? 'السائق';
+    final driverRating = appProvider.driverRating;
+    final driverRatingCount = appProvider.driverRatingCount;
 
     latlong2.LatLng? pickup;
     if (pendingRequests.isNotEmpty) {
@@ -104,7 +107,7 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
                   top: 112,
                   left: 20,
                   right: 20,
-                  child: _buildStatsWidget(todayTrips, todayEarnings),
+                  child: _buildStatsWidget(todayTrips, todayEarnings, todayDistance),
                 ),
                 Positioned(
                   bottom: 20,
@@ -177,6 +180,28 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
                     color: Colors.grey,
                   ),
                 ),
+                if (driverRatingCount > 0)
+                  Row(
+                    children: [
+                      ...List.generate(5, (i) {
+                        final star = i < driverRating.round();
+                        return Icon(
+                          star ? Icons.star_rounded : Icons.star_border_rounded,
+                          color: star ? const Color(0xFFFCD400) : Colors.grey.shade300,
+                          size: 14,
+                        );
+                      }),
+                      const SizedBox(width: 4),
+                      Text(
+                        driverRating.toStringAsFixed(1),
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontFamily: 'Cairo',
+                          color: Colors.grey.shade600,
+                        ),
+                      ),
+                    ],
+                  ),
                 if (offlineHint != null)
                   Text(
                     offlineHint,
@@ -248,7 +273,7 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
     );
   }
 
-  Widget _buildStatsWidget(int todayTrips, int todayEarnings) {
+  Widget _buildStatsWidget(int todayTrips, int todayEarnings, double todayDistance) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -265,7 +290,6 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
       ),
       child: Row(
         children: [
-          // رحلات اليوم
           Expanded(
             child: Row(
               children: [
@@ -310,7 +334,6 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
             ),
           ),
           Container(height: 32, width: 1, color: Colors.grey.shade200),
-          // أرباح اليوم
           Expanded(
             child: Row(
               mainAxisAlignment: MainAxisAlignment.end,
@@ -355,6 +378,53 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
               ],
             ),
           ),
+          if (todayDistance > 0) ...[
+            Container(height: 32, width: 1, color: Colors.grey.shade200),
+            Expanded(
+              child: Row(
+                children: [
+                  const SizedBox(width: 10),
+                  Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: Colors.blue.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(
+                      Icons.straighten,
+                      color: Colors.blue,
+                      size: 24,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'المسافة اليوم',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontFamily: 'Cairo',
+                          color: Colors.grey,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        '${todayDistance.toStringAsFixed(1)} كم',
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w900,
+                          fontFamily: 'Cairo',
+                          color: Colors.black,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
         ],
       ),
     );

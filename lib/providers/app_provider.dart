@@ -1659,6 +1659,8 @@ class AppProvider extends ChangeNotifier {
   String get driverServiceModeLabelAr => driver.driverServiceModeLabelAr;
   String get driverServiceModeLabelEn => driver.driverServiceModeLabelEn;
   String get driverDisplayName => driver.driverDisplayName;
+  double get driverRating => (driverProfile?['rating'] as num?)?.toDouble() ?? 0.0;
+  int get driverRatingCount => (driverProfile?['ratingCount'] as int?) ?? 0;
 
   void setDriverType(String type) => driver.setDriverType(type);
   Future<void> setDriverProfile(Map<String, dynamic> profile) =>
