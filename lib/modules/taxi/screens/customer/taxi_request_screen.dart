@@ -820,26 +820,44 @@ class _TaxiRequestScreenState extends State<TaxiRequestScreen> {
             // ── زر "اطلب رحلة" (يظهر بعد تحديد الوجهة) ──
             if (!hideLocationFields && _hasBothLocations && !_showCarSelection)
               Positioned(
-                bottom: 40 + widget.bottomNavInset, left: 20, right: 20,
-                child: SizedBox(
-                  width: double.infinity,
-                  height: 56,
-                  child: ElevatedButton(
-                    onPressed: _onRequestTrip,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.accent,
-                      foregroundColor: Colors.white,
-                      elevation: 6,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
+                bottom: 0, left: 0, right: 0,
+                child: ClipRRect(
+                  borderRadius: const BorderRadius.only(
+                    topLeft: Radius.circular(20),
+                    topRight: Radius.circular(20),
+                  ),
+                  child: BackdropFilter(
+                    filter: ui.ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+                    child: Container(
+                      padding: EdgeInsets.fromLTRB(20, 12, 20, 12 + widget.bottomNavInset),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.92),
+                        border: Border(
+                          top: BorderSide(color: Colors.grey.shade200, width: 0.5),
+                        ),
                       ),
-                    ),
-                    child: const Text(
-                      'اطلب رحلة 🌍',
-                      style: TextStyle(
-                        fontFamily: 'Cairo',
-                        fontSize: 20,
-                        fontWeight: FontWeight.w900,
+                      child: SizedBox(
+                        width: double.infinity,
+                        height: 56,
+                        child: ElevatedButton(
+                          onPressed: _onRequestTrip,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.accent,
+                            foregroundColor: Colors.white,
+                            elevation: 6,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                          ),
+                          child: const Text(
+                            'اطلب رحلة 🌍',
+                            style: TextStyle(
+                              fontFamily: 'Cairo',
+                              fontSize: 20,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                        ),
                       ),
                     ),
                   ),
@@ -1251,7 +1269,28 @@ class _TaxiRequestScreenState extends State<TaxiRequestScreen> {
                       ),
                       isDense: true,
                       contentPadding: EdgeInsets.zero,
+                      suffixIcon: controller.text.isNotEmpty
+                          ? GestureDetector(
+                              onTap: () {
+                                controller.clear();
+                                FocusScope.of(context).unfocus();
+                              },
+                              child: Padding(
+                                padding: const EdgeInsets.only(right: 4),
+                                child: Icon(
+                                  Icons.close,
+                                  size: 18,
+                                  color: Colors.grey.shade500,
+                                ),
+                              ),
+                            )
+                          : null,
+                      suffixIconConstraints: const BoxConstraints(
+                        minWidth: 28,
+                        minHeight: 28,
+                      ),
                     ),
+                    onChanged: (_) => setState(() {}),
                   ),
                 ),
                 if (trailing != null) ...[

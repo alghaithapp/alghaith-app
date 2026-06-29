@@ -17,6 +17,8 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  String? _bazaarFilter;
+
   @override
   void initState() {
     super.initState();
@@ -28,6 +30,44 @@ class _HomeScreenState extends State<HomeScreen> {
         provider.refreshMarketplaceStats();
       }
     });
+  }
+
+  Widget _bazaarChip(String label, String? filter) {
+    final isActive = _bazaarFilter == filter;
+    return GestureDetector(
+      onTap: () {
+        final cat = MarketplaceCatalog.find('bazar_ghaith');
+        if (cat != null) {
+          Navigator.of(context).push(
+            CupertinoPageRoute(
+              builder: (context) => CategoryItemsScreen(
+                category: cat.asServiceCategory,
+                hideBack: false,
+              ),
+            ),
+          );
+        }
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(
+          color: isActive ? AppColors.accent : Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: isActive ? AppColors.accent : Colors.grey.shade300,
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontFamily: 'Cairo',
+            fontSize: 13,
+            fontWeight: FontWeight.w700,
+            color: isActive ? Colors.white : Colors.black87,
+          ),
+        ),
+      ),
+    );
   }
 
   @override
@@ -94,6 +134,20 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                   ),
                 ),
+              ),
+            ),
+          ),
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+              child: Row(
+                children: [
+                  _bazaarChip('الكل', null),
+                  const SizedBox(width: 8),
+                  _bazaarChip('🍽 مطاعم', 'restaurant'),
+                  const SizedBox(width: 8),
+                  _bazaarChip('🛍 متاجر', 'shopping'),
+                ],
               ),
             ),
           ),
