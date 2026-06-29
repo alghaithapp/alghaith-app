@@ -144,14 +144,14 @@ class ShopRestaurantCard extends StatelessWidget {
                   child: Container(
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
-                        begin: Alignment.centerRight,
-                        end: Alignment.centerLeft,
+                        begin: Alignment.centerLeft,
+                        end: Alignment.centerRight,
                         colors: [
-                          Colors.black.withValues(alpha: 0.6),
-                          Colors.black.withValues(alpha: 0.15),
+                          Colors.black.withValues(alpha: 0.75),
+                          Colors.black.withValues(alpha: 0.45),
                           Colors.transparent,
                         ],
-                        stops: const [0.0, 0.35, 0.65],
+                        stops: const [0.0, 0.4, 0.7],
                       ),
                     ),
                   ),
