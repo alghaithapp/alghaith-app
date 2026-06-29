@@ -5,7 +5,7 @@
 const { nowIso } = require('../supabase_repo/common');
 
 const PENDING_AUTO_CANCEL_MS = 300 * 1000;
-const APPROACHING_KM = 0.5;
+const APPROACHING_KM = 0.2;
 const LATE_ETA_FACTOR = 1.6;
 const AVG_SPEED_KMH = 28;
 

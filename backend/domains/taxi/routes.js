@@ -318,8 +318,8 @@ router.post('/debug/test-push', async (req, res) => {
     const tokens = rows.map((row) => String(row.token || '').trim()).filter(Boolean);
     const platforms = [...new Set(rows.map((row) => String(row.platform || 'unknown')))];
     const result = await sendPushToTokensDirect(tokens, {
-      title: 'اختبار إشعارات الغيث',
-      body: 'إذا وصل هذا التنبيه فإشعارات هذا الجهاز تعمل.',
+      title: '🔔 اختبار الإشعارات',
+      body: '✅ إذا رأيت هذا الإشعار مع الصوت، فالإشعارات تعمل بشكل صحيح.',
       data: {
         category: 'taxi',
         audience: 'driver',

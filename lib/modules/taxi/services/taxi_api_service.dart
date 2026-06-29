@@ -210,6 +210,12 @@ class TaxiApiService {
     return list;
   }
 
+  static Future<Map<String, dynamic>> testPushNotification() async {
+    final result = await ApiClient.instance.post('$_basePath/debug/test-push');
+    if (result is! Map) return {};
+    return Map<String, dynamic>.from(result);
+  }
+
   /// جلب السائقين القريبين
   static Future<List<DriverModel>> getNearbyDrivers(
     double lat,

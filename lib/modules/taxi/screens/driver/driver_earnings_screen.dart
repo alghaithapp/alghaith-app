@@ -66,7 +66,7 @@ class DriverEarningsScreen extends StatelessWidget {
           if (completedTrips.isEmpty)
             _buildEmptyState()
           else
-            ...completedTrips.take(20).map(
+            ...completedTrips.take(5).map(
                   (trip) => Padding(
                     padding: const EdgeInsets.only(bottom: 10),
                     child: _CompletedTripTile(trip: trip),

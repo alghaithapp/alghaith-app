@@ -126,32 +126,48 @@ async function enrichTaxiRequestForClient(row) {
     ? Date.now() - Date.parse(locationUpdatedAt) < 90 * 1000
     : false;
 
+  const driverPhone = String(base.driverPhone || '').trim();
+
   if (payloadDriverLat && payloadDriverLng && locationFresh) {
     base.driverLat = payloadDriverLat;
     base.driverLng = payloadDriverLng;
-  } else {
-    const driverPhone = String(base.driverPhone || '').trim();
-    if (driverPhone) {
+  } else if (driverPhone) {
+    try {
+      const state = await getUserState(driverPhone);
+      const profile = state?.driverProfile || {};
+      const lat = Number(profile.latitude ?? profile.lat ?? 0);
+      const lng = Number(profile.longitude ?? profile.lng ?? 0);
+      if (lat && lng) {
+        base.driverLat = lat;
+        base.driverLng = lng;
+      }
+      if (!base.plateNumber) {
+        base.plateNumber = String(profile.plateNumber ?? profile.plate ?? '').trim() || null;
+      }
+      if (!base.vehicleModel) {
+        base.vehicleModel = String(
+          profile.vehicleModel ?? profile.vehicle ?? profile.carModel ?? ''
+        ).trim() || null;
+      }
+    } catch (e) {
+      console.error('taxi enrich driver profile error:', e?.message || e);
+    }
+  }
+
+  if (driverPhone && !base.driverPhoto) {
+    try {
+      const { getDriverProfile } = require('../../../supabase_repo/operator_profiles');
+      const driverProfile = await getDriverProfile(driverPhone);
+      if (driverProfile?.profileImage) {
+        base.driverPhoto = String(driverProfile.profileImage).trim();
+      }
+    } catch (e) {
       try {
         const state = await getUserState(driverPhone);
         const profile = state?.driverProfile || {};
-        const lat = Number(profile.latitude ?? profile.lat ?? 0);
-        const lng = Number(profile.longitude ?? profile.lng ?? 0);
-        if (lat && lng) {
-          base.driverLat = lat;
-          base.driverLng = lng;
-        }
-        if (!base.plateNumber) {
-          base.plateNumber = String(profile.plateNumber ?? profile.plate ?? '').trim() || null;
-        }
-        if (!base.vehicleModel) {
-          base.vehicleModel = String(
-            profile.vehicleModel ?? profile.vehicle ?? profile.carModel ?? ''
-          ).trim() || null;
-        }
-      } catch (e) {
-        console.error('taxi enrich driver profile error:', e?.message || e);
-      }
+        const img = String(profile.profileImage ?? '').trim();
+        if (img) base.driverPhoto = img;
+      } catch (_) {}
     }
   }
 

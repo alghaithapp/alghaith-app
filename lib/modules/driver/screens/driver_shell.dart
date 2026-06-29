@@ -218,7 +218,7 @@ class _DriverShellState extends State<DriverShell> with RealtimeSubscriptionMixi
             ),
           ],
           child: SizedBox(
-            height: 64,
+            height: 76,
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
@@ -246,7 +246,7 @@ class _DriverShellState extends State<DriverShell> with RealtimeSubscriptionMixi
       {int badge = 0}) {
     final isActive = _currentIndex == index;
     final iconWidget = Icon(icon,
-        color: isActive ? accentColor : CupertinoColors.systemGrey, size: 26);
+        color: isActive ? accentColor : CupertinoColors.systemGrey, size: 39);
 
     return GestureDetector(
       onTap: () => setState(() => _currentIndex = index),
@@ -260,11 +260,11 @@ class _DriverShellState extends State<DriverShell> with RealtimeSubscriptionMixi
                   child: iconWidget,
                 )
               : iconWidget,
-          const SizedBox(height: 4),
+          const SizedBox(height: 6),
           Text(
             label,
             style: TextStyle(
-              fontSize: 10,
+              fontSize: 13,
               fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
               color: isActive ? accentColor : CupertinoColors.systemGrey,
               fontFamily: 'Cairo',

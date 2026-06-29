@@ -28,14 +28,25 @@ function pickRemoteImageUrl(...values) {
 
 const BASE64_FIELD_RE = /base64/i;
 
+/** مفاتيح تحوي مرجع صورة مرفوع من المستخدم — تحفظ كما هي حتى لو كانت Base64 */
+const IMAGE_REF_KEYS = new Set([
+  'profileImage', 'carImage', 'vehicleImage',
+  'idFrontImage', 'idBackImage',
+  'residenceCardImage',
+  'vehicleRegFrontImage', 'vehicleRegBackImage',
+]);
+
 /** يزيل حقول Base64 من أي كائن قبل إرساله للعميل أو حفظه. */
-function stripBase64Deep(value) {
+function stripBase64Deep(value, parentKey) {
   if (value == null) return value;
   if (Array.isArray(value)) {
-    return value.map(stripBase64Deep);
+    return value.map((v) => stripBase64Deep(v));
   }
   if (typeof value !== 'object') {
-    if (typeof value === 'string' && isBase64Image(value)) return '';
+    if (typeof value === 'string' && isBase64Image(value)) {
+      if (parentKey && IMAGE_REF_KEYS.has(parentKey)) return value;
+      return '';
+    }
     return value;
   }
 
@@ -61,7 +72,7 @@ function stripBase64Deep(value) {
       continue;
     }
 
-    out[key] = stripBase64Deep(raw);
+    out[key] = stripBase64Deep(raw, key);
   }
   return out;
 }

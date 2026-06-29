@@ -1,4 +1,4 @@
-﻿import 'dart:convert';
+﻿import 'dart:io';
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
@@ -10,6 +10,7 @@ import '../../../providers/app_provider.dart';
 import '../../../utils/account_role_switch.dart';
 import '../../common/screens/notifications_screen.dart';
 import '../../merchant/screens/merchant_chat_inbox_screen.dart';
+import '../../taxi/services/taxi_api_service.dart';
 import '../../../widgets/app_image.dart';
 import 'driver_shared_widgets.dart';
 
@@ -86,6 +87,27 @@ class _DriverAccountScreenState extends State<DriverAccountScreen> {
           ),
         ),
         const SizedBox(height: 12),
+        ListTile(
+          tileColor: Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          leading:
+              const Icon(Icons.bug_report_outlined, color: Color(0xFFE040FB)),
+          title: const Text(
+            'اختبار الإشعارات',
+            style: TextStyle(
+              fontFamily: 'Cairo',
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          subtitle: const Text(
+            'إرسال إشعار تجريبي مع صوت لاختبار وصول الإشعارات',
+            style: TextStyle(fontFamily: 'Cairo', fontSize: 12),
+          ),
+          onTap: () => _sendTestNotification(context),
+        ),
+        const SizedBox(height: 12),
         Container(
           padding: const EdgeInsets.all(18),
           decoration: BoxDecoration(
@@ -99,7 +121,7 @@ class _DriverAccountScreenState extends State<DriverAccountScreen> {
           child: Row(
             children: [
               DrvAvatar(
-                avatarBase64: profile['avatarBase64'] as String?,
+                imageRef: profile['profileImage'] as String?,
               ),
               const SizedBox(width: 14),
               Expanded(
@@ -158,7 +180,7 @@ class _DriverAccountScreenState extends State<DriverAccountScreen> {
             Expanded(
               child: DrvImageCard(
                 title: 'الصورة الشخصية',
-                imageBase64: profile['avatarBase64'] as String?,
+                imageRef: profile['profileImage'] as String?,
                 icon: Icons.person,
                 onTap: () => _showEditProfileSheet(context),
               ),
@@ -167,7 +189,7 @@ class _DriverAccountScreenState extends State<DriverAccountScreen> {
             Expanded(
               child: DrvImageCard(
                 title: 'صورة السيارة',
-                imageBase64: profile['carImageBase64'] as String?,
+                imageRef: profile['carImage'] as String?,
                 icon: Icons.directions_car,
                 onTap: () => _showEditProfileSheet(context),
               ),
@@ -251,6 +273,56 @@ class _DriverAccountScreenState extends State<DriverAccountScreen> {
     );
   }
 
+  Future<void> _sendTestNotification(BuildContext context) async {
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.showSnackBar(
+      const SnackBar(
+        content: Text('جاري إرسال إشعار تجريبي...', style: TextStyle(fontFamily: 'Cairo')),
+        duration: Duration(seconds: 1),
+      ),
+    );
+    try {
+      final result = await TaxiApiService.testPushNotification();
+      final hasToken = result['hasToken'] == true;
+      final tokenCount = result['tokenCount'] ?? 0;
+      final sent = result['sent'] ?? 0;
+      final failed = result['failed'] ?? 0;
+      final platforms = (result['platforms'] as List?)?.join(', ') ?? '-';
+      final invalid = result['invalidTokens'] ?? 0;
+
+      if (!hasToken) {
+        messenger.showSnackBar(
+          const SnackBar(
+            content: Text('⚠️ لا يوجد جهاز مسجل للإشعارات. تأكد من تسجيل الدخول ومنح إذن الإشعارات.', style: TextStyle(fontFamily: 'Cairo')),
+            duration: Duration(seconds: 5),
+            backgroundColor: Colors.orange,
+          ),
+        );
+        return;
+      }
+
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            '✅ تم الإرسال: $sent جهاز | فشل: $failed | غير صالح: $invalid\n'
+            'عدد التوكنات: $tokenCount | المنصات: $platforms',
+            style: const TextStyle(fontFamily: 'Cairo', fontSize: 12),
+          ),
+          duration: const Duration(seconds: 6),
+          backgroundColor: sent > 0 ? Colors.green : Colors.orange,
+        ),
+      );
+    } catch (e) {
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text('❌ فشل الإرسال: $e', style: const TextStyle(fontFamily: 'Cairo')),
+          duration: const Duration(seconds: 5),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
   Future<void> _showEditProfileSheet(BuildContext context) async {
     final provider = context.read<AppProvider>();
     final profile = provider.driverProfile ?? const {};
@@ -266,17 +338,17 @@ class _DriverAccountScreenState extends State<DriverAccountScreen> {
         TextEditingController(text: '${profile['area'] ?? ''}');
     final notesController =
         TextEditingController(text: '${profile['notes'] ?? ''}');
-    String? avatarBase64 = profile['avatarBase64'] as String?;
-    String? carImageBase64 = profile['carImageBase64'] as String?;
+    String? profileImage = profile['profileImage'] as String?;
+    String? carImage = profile['carImage'] as String?;
     bool isAvailable = profile['available'] as bool? ?? true;
 
-    Future<String?> pickImage() async {
+    Future<String?> pickAndUploadImage() async {
       final picker = ImagePicker();
       final picked =
           await picker.pickImage(source: ImageSource.gallery, imageQuality: 80);
       if (picked == null) return null;
-      final bytes = await picked.readAsBytes();
-      return base64Encode(bytes);
+      if (!context.mounted) return null;
+      return provider.uploadImage(File(picked.path));
     }
 
     await showModalBottomSheet<void>(
@@ -323,24 +395,24 @@ class _DriverAccountScreenState extends State<DriverAccountScreen> {
                       const SizedBox(height: 14),
                       DrvImageCard(
                         title: 'الصورة الشخصية',
-                        imageBase64: avatarBase64,
+                        imageRef: profileImage,
                         icon: Icons.person,
                         onTap: () async {
-                          final picked = await pickImage();
-                          if (picked != null) {
-                            setSheetState(() => avatarBase64 = picked);
+                          final url = await pickAndUploadImage();
+                          if (url != null) {
+                            setSheetState(() => profileImage = url);
                           }
                         },
                       ),
                       const SizedBox(height: 12),
                       DrvImageCard(
                         title: 'صورة السيارة',
-                        imageBase64: carImageBase64,
+                        imageRef: carImage,
                         icon: Icons.directions_car,
                         onTap: () async {
-                          final picked = await pickImage();
-                          if (picked != null) {
-                            setSheetState(() => carImageBase64 = picked);
+                          final url = await pickAndUploadImage();
+                          if (url != null) {
+                            setSheetState(() => carImage = url);
                           }
                         },
                       ),
@@ -385,8 +457,8 @@ class _DriverAccountScreenState extends State<DriverAccountScreen> {
                               'area': areaController.text.trim(),
                               'notes': notesController.text.trim(),
                               'available': isAvailable,
-                              'avatarBase64': avatarBase64,
-                              'carImageBase64': carImageBase64,
+                              'profileImage': profileImage,
+                              'carImage': carImage,
                             });
                             if (context.mounted) Navigator.pop(sheetContext);
                           },
@@ -440,9 +512,9 @@ class _DriverAccountScreenState extends State<DriverAccountScreen> {
 }
 
 class DrvAvatar extends StatelessWidget {
-  final String? avatarBase64;
+  final String? imageRef;
 
-  const DrvAvatar({required this.avatarBase64});
+  const DrvAvatar({required this.imageRef});
 
   @override
   Widget build(BuildContext context) {
@@ -455,7 +527,7 @@ class DrvAvatar extends StatelessWidget {
       ),
       child: ClipOval(
         child: AppImage(
-          imageData: avatarBase64,
+          imageData: imageRef,
         ),
       ),
     );
@@ -464,13 +536,13 @@ class DrvAvatar extends StatelessWidget {
 
 class DrvImageCard extends StatelessWidget {
   final String title;
-  final String? imageBase64;
+  final String? imageRef;
   final IconData icon;
   final VoidCallback onTap;
 
   const DrvImageCard({
     required this.title,
-    required this.imageBase64,
+    required this.imageRef,
     required this.icon,
     required this.onTap,
   });
@@ -492,7 +564,7 @@ class DrvImageCard extends StatelessWidget {
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(24),
                 child: AppImage(
-                  imageData: imageBase64,
+                  imageData: imageRef,
                 ),
               ),
             ),
