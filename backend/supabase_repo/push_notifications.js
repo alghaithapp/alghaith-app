@@ -18,11 +18,22 @@ async function saveDeviceToken(phone, data = {}) {
   }
   const platform = String(data.platform ?? 'unknown').trim() || 'unknown';
   const supabase = assertSupabaseAdmin();
+
+  // حذف هذا التوكن من أي حساب آخر (إن وجد)
   await supabase
     .from('device_tokens')
     .delete()
     .eq('token', token)
     .neq('phone', phoneKey);
+
+  // حذف التوكنات القديمة لنفس رقم الهاتف (للأجهزة السابقة)
+  // نحتفظ فقط بآخر توكن لكل منصة (Android/iOS)
+  await supabase
+    .from('device_tokens')
+    .delete()
+    .eq('phone', phoneKey)
+    .eq('platform', platform)
+    .neq('token', token);
 
   const existing = await supabase
     .from('device_tokens')
