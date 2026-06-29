@@ -105,9 +105,11 @@ async function notifyNewTaxiRequest(requestMeta, nearbyDrivers = []) {
   const requestId = String(requestMeta?.id || requestMeta?.requestId || '').trim();
   if (!requestId) return;
 
+  const taxiTypeAr = { economic: 'تكسي', tuktuk: 'تكتك', wazz: 'واز' }[requestMeta.taxiType] || 'تكسي';
+
   const driverPayload = buildPushPayload({
-    title: '🚕 طلب تكسي جديد',
-    body: `من: ${requestMeta.pickupAddress || 'غير محدد'} → إلى: ${requestMeta.dropoffAddress || 'غير محدد'}`,
+    title: `🚕 طلب ${taxiTypeAr}`,
+    body: 'لديك طلب خدمة توصيل، افتح التطبيق لعرض التفاصيل.',
     data: {
       audience: 'driver',
       eventKey: 'taxi:pool_new',
