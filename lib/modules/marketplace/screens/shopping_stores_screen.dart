@@ -215,12 +215,6 @@ class _ShoppingStoresScreenState extends State<ShoppingStoresScreen> {
   }
 
   @override
-  void initState() {
-    super.initState();
-    unawaited(_bootstrapStores());
-  }
-
-  @override
   void dispose() {
     _searchController.dispose();
     super.dispose();

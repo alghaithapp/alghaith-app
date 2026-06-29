@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../../../core/theme/app_colors.dart';
-import '../../../../services/api_client.dart';
+import '../../../../core/network/api_client.dart';
 
 class PushNotificationsTab extends StatefulWidget {
   const PushNotificationsTab({super.key});

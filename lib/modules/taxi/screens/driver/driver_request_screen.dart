@@ -41,7 +41,10 @@ class DriverRequestScreen extends StatelessWidget {
                 itemBuilder: (context, i) =>
                   _RequestCard(request: pending[i]),
             ),
-    );
+          ),
+        ),
+      );
+    }
   }
 
   Widget _buildEmptyState() {
@@ -382,19 +385,16 @@ class _RequestCardState extends State<_RequestCard> {
                                     color: Colors.white,
                                   ),
                                 ),
-                              ],
-                              ),
-                          ),
-                        ),
+                              ],  
+                            ),
                     ),
-                  ],
+                  ),
                 ),
-              ),
+              ],
             ),
-          ),
+          ],
         ),
-      );
+      ),
     );
   }
-}
 }
