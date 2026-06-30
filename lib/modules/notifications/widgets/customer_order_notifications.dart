@@ -118,7 +118,7 @@ CustomerBannerData? detectCustomerOrderBanner({
 
     if (status == 'cancelled') {
       if (prevStatus == 'cancel_requested' ||
-          order.noteAr.contains('موافقة التاجر') ||
+          order.statusAr.contains('بموافقة التاجر') ||
           order.noteEn.contains('Merchant approved cancellation')) {
         return CustomerBannerData(
           type: CustomerBannerType.cancelApproved,

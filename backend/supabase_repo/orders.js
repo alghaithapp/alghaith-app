@@ -135,7 +135,7 @@ async function saveCustomerOrder(phone, data = {}, options = {}) {
 
   if (!options.skipPush) {
     try {
-      const { onOrderSaved } = require('./push_events');
+      const { onOrderSaved } = require('../push_events');
       await onOrderSaved({
         previousMeta,
         nextMeta,

@@ -1,0 +1,14 @@
+{
+  "flutter": {
+    "platforms": {
+      "android": {
+        "notification_channel": {
+          "id": "alghaith_orders_v5",
+          "name": "طلبات الغيث",
+          "description": "إشعارات الطلبات والتوصيل بصوت الغيث",
+          "importance": "high"
+        }
+      }
+    }
+  }
+}

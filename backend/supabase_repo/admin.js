@@ -622,7 +622,7 @@ async function toggleCourierApprovalStatus(adminPhone, courierPhone, isApproved)
 
       if (Boolean(isApproved)) {
         try {
-          const { onCourierApproved } = require('./push_events');
+          const { onCourierApproved } = require('../push_events');
           await onCourierApproved(phoneKey);
         } catch (pushError) {
           console.error('push onCourierApproved error:', pushError?.message || pushError);
@@ -657,7 +657,7 @@ async function toggleCourierApprovalStatus(adminPhone, courierPhone, isApproved)
 
   if (Boolean(isApproved)) {
     try {
-      const { onCourierApproved } = require('./push_events');
+      const { onCourierApproved } = require('../push_events');
       await onCourierApproved(phoneKey);
     } catch (pushError) {
       console.error('push onCourierApproved error:', pushError?.message || pushError);
@@ -715,7 +715,7 @@ async function rejectCourierApplication(
       const mapped = mapCourierForAdmin(phoneKey, user, profile);
 
       try {
-        const { onCourierRejected } = require('./push_events');
+        const { onCourierRejected } = require('../push_events');
         await onCourierRejected(phoneKey, message, normalizedReason);
       } catch (pushError) {
         console.error('push onCourierRejected error:', pushError?.message || pushError);
@@ -746,7 +746,7 @@ async function rejectCourierApplication(
   const mapped = mapCourierForAdmin(phoneKey, user, nextProfile);
 
   try {
-    const { onCourierRejected } = require('./push_events');
+    const { onCourierRejected } = require('../push_events');
     await onCourierRejected(phoneKey, message, normalizedReason);
   } catch (pushError) {
     console.error('push onCourierRejected error:', pushError?.message || pushError);
@@ -772,7 +772,7 @@ async function toggleMerchantApprovalStatus(adminPhone, merchantPhone, isApprove
 
   if (Boolean(isApproved)) {
     try {
-      const { onMerchantApproved } = require('./push_events');
+      const { onMerchantApproved } = require('../push_events');
       await onMerchantApproved(phoneKey);
     } catch (error) {
       console.error('push onMerchantApproved error:', error?.message || error);
@@ -820,7 +820,7 @@ async function rejectMerchantApplication(
   });
 
   try {
-    const { onMerchantRejected } = require('./push_events');
+    const { onMerchantRejected } = require('../push_events');
     await onMerchantRejected(phoneKey, message, normalizedReason);
   } catch (error) {
     console.error('push onMerchantRejected error:', error?.message || error);
@@ -851,7 +851,7 @@ async function toggleMerchantFreezeStatus(adminPhone, merchantPhone, isFrozen) {
     });
     if (!error) {
       try {
-        const { onMerchantFrozen } = require('./push_events');
+        const { onMerchantFrozen } = require('../push_events');
         await onMerchantFrozen(merchantPhone, Boolean(isFrozen));
       } catch (pushError) {
         console.error('push onMerchantFrozen error:', pushError?.message || pushError);
@@ -876,7 +876,7 @@ async function toggleMerchantFreezeStatus(adminPhone, merchantPhone, isFrozen) {
   }
 
   try {
-    const { onMerchantFrozen } = require('./push_events');
+    const { onMerchantFrozen } = require('../push_events');
     await onMerchantFrozen(merchantPhone, Boolean(isFrozen));
   } catch (pushError) {
     console.error('push onMerchantFrozen error:', pushError?.message || pushError);
@@ -984,7 +984,7 @@ async function toggleDriverApprovalStatus(adminPhone, driverPhone, isApproved) {
 
       if (Boolean(isApproved)) {
         try {
-          const { onDriverApproved } = require('./push_events');
+          const { onDriverApproved } = require('../push_events');
           await onDriverApproved(phoneKey);
         } catch (pushError) {
           console.error('push onDriverApproved error:', pushError?.message || pushError);
@@ -1022,7 +1022,7 @@ async function toggleDriverApprovalStatus(adminPhone, driverPhone, isApproved) {
 
   if (Boolean(isApproved)) {
     try {
-      const { onDriverApproved } = require('./push_events');
+      const { onDriverApproved } = require('../push_events');
       await onDriverApproved(phoneKey);
     } catch (pushError) {
       console.error('push onDriverApproved error:', pushError?.message || pushError);
@@ -1068,7 +1068,7 @@ async function rejectDriverApplication(
       );
 
       try {
-        const { onDriverRejected } = require('./push_events');
+        const { onDriverRejected } = require('../push_events');
         await onDriverRejected(phoneKey, message, normalizedReason);
       } catch (pushError) {
         console.error('push onDriverRejected error:', pushError?.message || pushError);
@@ -1102,7 +1102,7 @@ async function rejectDriverApplication(
   });
 
   try {
-    const { onDriverRejected } = require('./push_events');
+    const { onDriverRejected } = require('../push_events');
     await onDriverRejected(phoneKey, message, normalizedReason);
   } catch (pushError) {
     console.error('push onDriverRejected error:', pushError?.message || pushError);

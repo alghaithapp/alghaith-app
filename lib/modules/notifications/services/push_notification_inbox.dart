@@ -28,7 +28,7 @@ class PushNotificationInbox {
   static Future<void> ensureInitialized() async {
     if (_pluginReady) return;
 
-    const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
+    const androidSettings = AndroidInitializationSettings('@drawable/ic_notification');
     const iosSettings = DarwinInitializationSettings();
     await _localNotifications.initialize(
       const InitializationSettings(
@@ -178,7 +178,6 @@ class PushNotificationInbox {
           presentAlert: true,
           presentBadge: true,
           presentSound: true,
-          sound: NotificationSound.fileName,
         ),
       ),
       payload: 'taxi_request:$requestId',
@@ -322,7 +321,6 @@ class PushNotificationInbox {
           importance: Importance.max,
           priority: Priority.high,
           playSound: true,
-          sound: NotificationSound.incomingCallAndroidSound,
           category: AndroidNotificationCategory.call,
           ongoing: true,
           autoCancel: false,
@@ -368,7 +366,6 @@ class PushNotificationInbox {
           importance: Importance.high,
           priority: Priority.high,
           playSound: true,
-          sound: NotificationSound.androidSound,
           groupKey: 'alghaith_group',
           styleInformation: BigTextStyleInformation(body),
         ),
