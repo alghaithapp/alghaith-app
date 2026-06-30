@@ -611,7 +611,7 @@ class _MerchantStoreSettingsScreenState
             child: Text(
               'حفظ التغييرات',
               style: const TextStyle(
-                  fontFamily: 'Cairo', fontWeight: FontWeight.w900),
+                  fontFamily: 'Cairo', fontWeight: FontWeight.w900, color: Colors.white),
             ),
           ),
         ],
@@ -645,7 +645,7 @@ class _MerchantStoreSettingsScreenState
           FilledButton(
             style: FilledButton.styleFrom(backgroundColor: Colors.redAccent),
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('حذف', style: TextStyle(fontFamily: 'Cairo')),
+            child: const Text('حذف', style: TextStyle(fontFamily: 'Cairo', color: Colors.white)),
           ),
         ],
       ),

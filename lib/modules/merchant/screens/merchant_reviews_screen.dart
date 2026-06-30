@@ -87,7 +87,7 @@ class MerchantReviewsScreen extends StatelessWidget {
             ),
             FilledButton(
               onPressed: () => Navigator.pop(dialogContext, controller.text),
-              child: const Text('حفظ'),
+              child: const Text('حفظ', style: TextStyle(color: Colors.white)),
             ),
           ],
         );

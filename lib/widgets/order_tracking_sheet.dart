@@ -154,7 +154,7 @@ class _OrderTrackingSheetState extends State<OrderTrackingSheet> {
                         ),
                       );
                     },
-                    child: const Text('رفض'),
+                    child: const Text('رفض', style: TextStyle(color: Colors.white)),
                   ),
                 ),
               ],

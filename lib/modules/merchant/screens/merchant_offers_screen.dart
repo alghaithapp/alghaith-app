@@ -351,7 +351,7 @@ class MerchantOffersScreen extends StatelessWidget {
           ),
           FilledButton(
             onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text('حذف'),
+            child: const Text('حذف', style: TextStyle(color: Colors.white)),
           ),
         ],
       ),

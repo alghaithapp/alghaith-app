@@ -188,7 +188,7 @@ class _ChatInboxScreenState extends State<ChatInboxScreen> {
           FilledButton(
             style: FilledButton.styleFrom(backgroundColor: Colors.red),
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('حذف', style: TextStyle(fontFamily: 'Cairo')),
+            child: const Text('حذف', style: TextStyle(fontFamily: 'Cairo', color: Colors.white)),
           ),
         ],
       ),
@@ -362,7 +362,7 @@ class _ChatInboxScreenState extends State<ChatInboxScreen> {
               onPressed: _loadInbox,
               child: const Text(
                 'إعادة المحاولة',
-                style: TextStyle(fontFamily: 'Cairo'),
+                style: TextStyle(fontFamily: 'Cairo', color: Colors.white),
               ),
             ),
           ],

@@ -112,10 +112,10 @@ class _TaxiCustomerTripActionsState extends State<TaxiCustomerTripActions> {
             ),
             FilledButton(
               onPressed: () => Navigator.pop(ctx, true),
-              child: const Text(
-                'نعم، أنهيت الرحلة',
-                style: TextStyle(fontFamily: 'Cairo'),
-              ),
+  child: const Text(
+    'نعم، أنهيت الرحلة',
+    style: TextStyle(fontFamily: 'Cairo', color: Colors.white),
+  ),
             ),
           ],
         ),

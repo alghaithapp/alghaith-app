@@ -977,12 +977,13 @@ class _MerchantSetupScreenState extends State<MerchantSetupScreen> {
                               },
                               child: _isSaving
                                   ? const CupertinoActivityIndicator(color: Colors.white)
-                                  : Text(
-                                      'إرسال طلب ${labels.storeLabelAr}',
-                                      style: const TextStyle(
-                                        fontWeight: FontWeight.w800,
-                                        fontFamily: 'Cairo',
-                                      ),
+: Text(
+          'إرسال طلب ${labels.storeLabelAr}',
+          style: const TextStyle(
+            fontWeight: FontWeight.w800,
+            fontFamily: 'Cairo',
+            color: Colors.white,
+          ),
                                     ),
                             ),
                           ),

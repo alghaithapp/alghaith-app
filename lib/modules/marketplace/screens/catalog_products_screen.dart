@@ -349,16 +349,17 @@ class _CatalogProductCard extends StatelessWidget {
                         color: const Color(0xFFF5A01D),
                         borderRadius: BorderRadius.circular(20),
                         onPressed: item.isAvailable ? onAdd : null,
-                        child: Text(
-                          item.actionLabelAr.isNotEmpty
-                              ? item.actionLabelAr
-                              : 'أضف للسلة',
-                          style: const TextStyle(
-                            fontFamily: 'Cairo',
-                            fontWeight: FontWeight.bold,
-                            fontSize: 13,
-                          ),
-                        ),
+  child: Text(
+    item.actionLabelAr.isNotEmpty
+        ? item.actionLabelAr
+        : 'أضف للسلة',
+    style: const TextStyle(
+      fontFamily: 'Cairo',
+      fontWeight: FontWeight.bold,
+      fontSize: 13,
+      color: Colors.white,
+    ),
+  ),
                       ),
                     ],
                   ),
