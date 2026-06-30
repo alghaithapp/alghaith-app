@@ -340,52 +340,51 @@ class _ShoppingStoresScreenState extends State<ShoppingStoresScreen> {
                       ),
                     ),
 
-                  // 2. Category Filters
-                  if (widget.showCuisineFilters &&
-                      (!_isBazaarChannel || _bazaarKindFilter == 'restaurant'))
+                  // 2. Bazaar Kind Filters
+                  if (_isBazaarChannel)
                     SliverToBoxAdapter(
-                      child: _isBazaarChannel
-                          ? Container(
-                              height: 45,
-                              margin: const EdgeInsets.symmetric(vertical: 6),
-                              child: ListView.builder(
-                                scrollDirection: Axis.horizontal,
-                                padding: const EdgeInsets.symmetric(horizontal: 16),
-                                itemCount: _bazaarFilters.length,
-                                itemBuilder: (context, index) {
-                                  final filter = _bazaarFilters[index];
-                                  final isSelected = _bazaarKindFilter == filter['key'];
-                                  return GestureDetector(
-                                    onTap: () => setState(() => _bazaarKindFilter = filter['key']!),
-                                    child: AnimatedContainer(
-                                      duration: const Duration(milliseconds: 300),
-                                      margin: const EdgeInsets.symmetric(horizontal: 5, vertical: 5),
-                                      padding: const EdgeInsets.symmetric(horizontal: 20),
-                                      decoration: BoxDecoration(
-                                        color: isSelected ? AppColors.accent : Colors.grey.shade100,
-                                        borderRadius: BorderRadius.circular(20),
-                                        border: Border.all(
-                                          color: isSelected ? AppColors.accent : Colors.grey.shade200,
-                                        ),
-                                      ),
-                                      alignment: Alignment.center,
-                                      child: Text(
-                                        filter['label']!,
-                                        style: TextStyle(
-                                          fontFamily: 'Cairo',
-                                          fontSize: 13,
-                                          fontWeight: FontWeight.w700,
-                                          color: isSelected ? Colors.white : Colors.black87,
-                                        ),
-                                      ),
-                                    ),
-                                  );
-                                },
+                      child: Container(
+                        height: 45,
+                        margin: const EdgeInsets.symmetric(vertical: 6),
+                        child: ListView.builder(
+                          scrollDirection: Axis.horizontal,
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          itemCount: _bazaarFilters.length,
+                          itemBuilder: (context, index) {
+                            final filter = _bazaarFilters[index];
+                            final isSelected = _bazaarKindFilter == filter['key'];
+                            return GestureDetector(
+                              onTap: () => setState(() => _bazaarKindFilter = filter['key']!),
+                              child: AnimatedContainer(
+                                duration: const Duration(milliseconds: 300),
+                                margin: const EdgeInsets.symmetric(horizontal: 5, vertical: 5),
+                                padding: const EdgeInsets.symmetric(horizontal: 20),
+                                decoration: BoxDecoration(
+                                  color: isSelected ? AppColors.accent : Colors.grey.shade100,
+                                  borderRadius: BorderRadius.circular(20),
+                                  border: Border.all(
+                                    color: isSelected ? AppColors.accent : Colors.grey.shade200,
+                                  ),
+                                ),
+                                alignment: Alignment.center,
+                                child: Text(
+                                  filter['label']!,
+                                  style: TextStyle(
+                                    fontFamily: 'Cairo',
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w700,
+                                    color: isSelected ? Colors.white : Colors.black87,
+                                  ),
+                                ),
                               ),
-                            )
-                          : const SizedBox.shrink(),
+                            );
+                          },
+                        ),
+                      ),
                     ),
-                    if (widget.showCuisineFilters)
+
+                  // 3. Cuisine Filters (only for non-bazaar channels)
+                  if (widget.showCuisineFilters && !_isBazaarChannel)
                       SliverToBoxAdapter(
                         child: Container(
                           height: 55,
