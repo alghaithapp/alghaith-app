@@ -18,6 +18,8 @@ class TaxiApiService {
     required double distanceKm,
     required String taxiType,
     List<TaxiWaypoint> waypoints = const [],
+    bool isRoundTrip = false,
+    int? waitingMinutes,
   }) async {
     final result = await ApiClient.instance.post('$_basePath/create', body: {
       'pickupAddress': pickupAddress,
@@ -28,6 +30,8 @@ class TaxiApiService {
       'dropoffLng': dropoffLng,
       'distanceKm': distanceKm,
       'taxiType': taxiType,
+      'tripType': isRoundTrip ? 'round_trip' : 'one_way',
+      if (isRoundTrip && waitingMinutes != null) 'waitingMinutes': waitingMinutes,
       if (waypoints.isNotEmpty)
         'waypoints': waypoints.map((wp) => wp.toApiMap()).toList(),
     });

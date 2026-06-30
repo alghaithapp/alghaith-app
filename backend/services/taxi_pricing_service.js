@@ -51,10 +51,11 @@ function fareForType(distanceKm, taxiType) {
  * @param {string} [taxiType]
  * @returns {{ fareEconomic: number, fareSuper: number, fare: number }}
  */
-function calculateFare(distanceKm, taxiType = 'economic') {
+function calculateFare(distanceKm, taxiType = 'economic', tripType = 'one_way') {
   const type = normalizeTaxiType(taxiType);
-  const fare = fareForType(distanceKm, type);
-  const fareEconomic = fareForType(distanceKm, 'economic');
+  const effectiveDistance = tripType === 'round_trip' ? distanceKm * 2 : distanceKm;
+  const fare = fareForType(effectiveDistance, type);
+  const fareEconomic = fareForType(effectiveDistance, 'economic');
 
   return { fareEconomic, fareSuper: fare, fare };
 }

@@ -42,6 +42,8 @@ function readTaxiMeta(row) {
     fare: Number(payload.fare ?? 0),
     fareEconomic: Number(payload.fareEconomic ?? 0),
     fareSuper: Number(payload.fareSuper ?? 0),
+    tripType: String(payload.tripType || 'one_way').trim(),
+    waitingMinutes: payload.waitingMinutes ? Number(payload.waitingMinutes) : null,
   };
 }
 
@@ -97,6 +99,8 @@ function formatTaxiRequestForClient(row) {
     liveEtaDistanceKm: Number(payload.liveEtaDistanceKm ?? 0) || null,
     adminReviewRequired: Boolean(payload.adminReviewRequired ?? false),
     cancelRequestReason: payload.cancelRequestReason ?? null,
+    isRoundTrip: payload.tripType === 'round_trip',
+    waitingMinutes: payload.waitingMinutes ? Number(payload.waitingMinutes) : null,
   };
 }
 
@@ -257,6 +261,8 @@ async function createTaxiRequest(customerPhone, data = {}) {
   const requestId = uuidv4();
   const requestNumber = generateRequestNumber();
   const taxiType = normalizeTaxiType(data.taxiType);
+  const tripType = String(data.tripType || 'one_way').trim();
+  const waitingMinutes = tripType === 'round_trip' ? (Number(data.waitingMinutes) || 15) : null;
   const waypoints = Array.isArray(data.waypoints)
     ? data.waypoints
         .map((wp) => ({
@@ -285,8 +291,8 @@ async function createTaxiRequest(customerPhone, data = {}) {
     0
   );
 
-  // حساب السعر تلقائياً
-  const { fareEconomic, fareSuper, fare } = calculateFare(distanceKm, taxiType);
+  // حساب السعر تلقائياً (×2 للذهاب والعودة)
+  const { fareEconomic, fareSuper, fare } = calculateFare(distanceKm, taxiType, tripType);
 
   const requestPayload = {
     id: requestId,
@@ -307,6 +313,8 @@ async function createTaxiRequest(customerPhone, data = {}) {
     statusAr: 'بانتظار سائق',
     rejectedByDriverIds: [],
     waypoints,
+    tripType,
+    waitingMinutes,
     createdAt: nowIso(),
     updatedAt: nowIso(),
   };
@@ -581,20 +589,26 @@ async function updateTaxiRequestStatus(actorPhone, requestId, statusKey) {
 
   // التحقق من التسلسل الصحيح للحالات
   const allowedStatuses = [
-    'on_way', 'arrived', 'picked_up', 'completed', 'cancelled', 'accepted', 'cancel_requested',
+    'on_way', 'arrived', 'picked_up', 'completed', 'cancelled', 'accepted',
+    'cancel_requested', 'return_waiting', 'return_on_way', 'return_arrived',
   ];
   if (!allowedStatuses.includes(statusKey)) {
     throw new Error(`Invalid status key: ${statusKey}.`);
   }
 
   const currentStatus = meta.statusKey;
+  const isRoundTrip = meta.payload?.tripType === 'round_trip';
+
   const validTransitions = {
     accepted: ['on_way', 'arrived', 'cancelled', 'cancel_requested'],
     arrived: ['picked_up', 'cancelled', 'cancel_requested'],
-    picked_up: ['completed'],
+    picked_up: isRoundTrip ? ['completed', 'return_waiting'] : ['completed'],
     pending: ['cancelled'],
     cancel_requested: ['cancelled', 'accepted'],
     on_way: ['arrived', 'cancelled', 'cancel_requested'],
+    return_waiting: ['return_on_way', 'cancelled'],
+    return_on_way: ['return_arrived', 'cancelled'],
+    return_arrived: ['completed', 'cancelled'],
   };
   const allowedNext = validTransitions[currentStatus] || [];
 
@@ -642,6 +656,19 @@ async function updateTaxiRequestStatus(actorPhone, requestId, statusKey) {
     nextPayload.cancelRequestedAt = nowIso();
   }
 
+  if (statusKey === 'return_waiting') {
+    nextPayload.statusAr = 'بانتظار الزبون للعودة';
+    nextPayload.returnWaitingAt = nowIso();
+  }
+  if (statusKey === 'return_on_way') {
+    nextPayload.statusAr = 'في طريق العودة';
+    nextPayload.returnStartedAt = nowIso();
+  }
+  if (statusKey === 'return_arrived') {
+    nextPayload.statusAr = 'وصل لنقطة الانطلاق للعودة';
+    nextPayload.returnArrivedAt = nowIso();
+  }
+
   dbUpdate.request_payload = nextPayload;
 
   const updatedRow = await updateRow('taxi_requests', 'id', id, dbUpdate);
@@ -663,6 +690,12 @@ async function updateTaxiRequestStatus(actorPhone, requestId, statusKey) {
       }
     } else if (statusKey === 'accepted' && row.status_key === 'cancel_requested') {
       push.notifyCancellationRejected(meta.customerPhone).catch((e) => console.error('taxi status push error cancel_rejected:', e));
+    } else if (statusKey === 'return_waiting') {
+      push.notifyReturnWaiting(meta.customerPhone, meta.driverPhone, meta.waitingMinutes).catch((e) => console.error('taxi status push error return_waiting:', e));
+    } else if (statusKey === 'return_on_way') {
+      push.notifyReturnOnWay(meta.customerPhone, meta.driverPhone).catch((e) => console.error('taxi status push error return_on_way:', e));
+    } else if (statusKey === 'return_arrived') {
+      push.notifyReturnArrived(meta.customerPhone, meta.driverPhone).catch((e) => console.error('taxi status push error return_arrived:', e));
     }
   } catch (e) {
     console.error('taxi status push error:', e?.message || e);

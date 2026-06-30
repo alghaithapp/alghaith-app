@@ -358,6 +358,52 @@ async function notifyDriverApproaching(customerPhone, distanceMeters) {
   await sendPushToPhone(customerPhone, payload);
 }
 
+async function notifyReturnWaiting(customerPhone, driverPhone, waitingMinutes) {
+  const title = 'انتظار العودة';
+  const body = waitingMinutes ? `السائق ينتظرك للعودة — ${waitingMinutes} دقيقة` : 'السائق ينتظرك للعودة';
+  const targets = [customerPhone, driverPhone].filter(Boolean);
+  const data = { eventKey: 'taxi:return_waiting' };
+  for (const phone of targets) {
+    try {
+      await sendPushToPhone(phone, buildPushPayload({ title, body, data }));
+    } catch (e) {
+      console.error('taxi push notifyReturnWaiting error:', e?.message || e);
+    }
+  }
+}
+
+async function notifyReturnOnWay(customerPhone, driverPhone) {
+  const payload = buildPushPayload({
+    title: 'في طريق العودة',
+    body: 'السائق في طريق العودة إلى نقطة الانطلاق',
+    data: { eventKey: 'taxi:return_on_way' },
+  });
+  const targets = [customerPhone, driverPhone].filter(Boolean);
+  for (const phone of targets) {
+    try {
+      await sendPushToPhone(phone, payload);
+    } catch (e) {
+      console.error('taxi push notifyReturnOnWay error:', e?.message || e);
+    }
+  }
+}
+
+async function notifyReturnArrived(customerPhone, driverPhone) {
+  const payload = buildPushPayload({
+    title: 'وصل السائق',
+    body: 'وصل السائق إلى نقطة الانطلاق للعودة',
+    data: { eventKey: 'taxi:return_arrived' },
+  });
+  const targets = [customerPhone, driverPhone].filter(Boolean);
+  for (const phone of targets) {
+    try {
+      await sendPushToPhone(phone, payload);
+    } catch (e) {
+      console.error('taxi push notifyReturnArrived error:', e?.message || e);
+    }
+  }
+}
+
 async function notifyDriverLate(customerPhone, minutesLate) {
   if (!customerPhone) return;
   const payload = buildPushPayload({
@@ -381,4 +427,7 @@ module.exports = {
   notifyTripCancelled,
   notifyDriverApproaching,
   notifyDriverLate,
+  notifyReturnWaiting,
+  notifyReturnOnWay,
+  notifyReturnArrived,
 };

@@ -30,12 +30,14 @@ class TaxiDrivingRoute {
   final int? durationSeconds;
   final double? distanceMeters;
   final bool isApproximate;
+  final List<TaxiDrivingRoute>? alternatives;
 
   const TaxiDrivingRoute({
     this.points = const [],
     this.durationSeconds,
     this.distanceMeters,
     this.isApproximate = false,
+    this.alternatives,
   });
 
   double? get distanceKm {
@@ -195,13 +197,26 @@ class TaxiPlacesService {
     final backend = await _backendDirections(from, to);
     if (backend.points.length >= 2) return _finalizeDrivingRoute(backend, to);
 
-    final google = await _googleDirections(from, to);
+    final google = await _googleDirections(from, to, alternatives: false);
     if (google.points.length >= 2) return _finalizeDrivingRoute(google, to);
 
     final mapbox = await _mapboxDirections(from, to);
     if (mapbox.points.length >= 2) return _finalizeDrivingRoute(mapbox, to);
 
     return _finalizeDrivingRoute(_straightLineRoute(from, to), to);
+  }
+
+  static Future<List<TaxiDrivingRoute>> fetchDrivingRouteAlternatives(LatLng from, LatLng to) async {
+    if (!isGoogleConfigured) return [await fetchDrivingRoute(from, to)];
+    final main = await _googleDirections(from, to, alternatives: true);
+    if (main.points.length < 2) return [await fetchDrivingRoute(from, to)];
+
+    final routes = [main];
+    if (main.alternatives != null) {
+      routes.addAll(main.alternatives!);
+    }
+    if (routes.length > 2) routes.removeRange(2, routes.length);
+    return routes;
   }
 
   static TaxiDrivingRoute _finalizeDrivingRoute(
@@ -294,23 +309,45 @@ class TaxiPlacesService {
     );
   }
 
-  static Future<TaxiDrivingRoute> _googleDirections(LatLng from, LatLng to) async {
+  static TaxiDrivingRoute _routeFromDirectionsMap(Map route) {
+    final polyline = route['overview_polyline']?['points']?.toString();
+    if (polyline == null || polyline.isEmpty) return const TaxiDrivingRoute();
+
+    int? durationSeconds;
+    double? distanceMeters;
+    final legs = route['legs'];
+    if (legs is List) {
+      for (final leg in legs) {
+        if (leg is! Map) continue;
+        final legDuration = (leg['duration']?['value'] as num?)?.toInt();
+        final legDistance = (leg['distance']?['value'] as num?)?.toDouble();
+        if (legDuration != null && legDuration > 0) durationSeconds = (durationSeconds ?? 0) + legDuration;
+        if (legDistance != null && legDistance > 0) distanceMeters = (distanceMeters ?? 0) + legDistance;
+      }
+    }
+
+    return TaxiDrivingRoute(
+      points: decodeGooglePolyline(polyline),
+      durationSeconds: durationSeconds,
+      distanceMeters: distanceMeters,
+    );
+  }
+
+  static Future<TaxiDrivingRoute> _googleDirections(LatLng from, LatLng to, {bool alternatives = false}) async {
     if (!isGoogleConfigured) return const TaxiDrivingRoute();
     try {
-      final params = {
+      final params = <String, String>{
         'origin': '${from.latitude},${from.longitude}',
         'destination': '${to.latitude},${to.longitude}',
         'key': _apiKey,
         'language': 'ar',
         'mode': 'driving',
+        'traffic_model': 'best_guess',
+        'departure_time': 'now',
       };
-      final uri = Uri.https(
-        'maps.googleapis.com',
-        '/maps/api/directions/json',
-        params,
-      );
-      final response =
-          await http.get(uri).timeout(const Duration(seconds: 12));
+      if (alternatives) params['alternatives'] = 'true';
+      final uri = Uri.https('maps.googleapis.com', '/maps/api/directions/json', params);
+      final response = await http.get(uri).timeout(const Duration(seconds: 12));
       if (response.statusCode != 200) return const TaxiDrivingRoute();
 
       final data = jsonDecode(response.body);
@@ -318,33 +355,22 @@ class TaxiPlacesService {
       final routes = data['routes'];
       if (routes is! List || routes.isEmpty) return const TaxiDrivingRoute();
 
-      final route = routes.first;
-      if (route is! Map) return const TaxiDrivingRoute();
+      final mainRoute = _routeFromDirectionsMap(routes.first);
+      if (mainRoute.points.length < 2) return const TaxiDrivingRoute();
 
-      final polyline = route['overview_polyline']?['points']?.toString();
-      if (polyline == null || polyline.isEmpty) return const TaxiDrivingRoute();
-
-      int? durationSeconds;
-      double? distanceMeters;
-      final legs = route['legs'];
-      if (legs is List) {
-        for (final leg in legs) {
-          if (leg is! Map) continue;
-          final legDuration = (leg['duration']?['value'] as num?)?.toInt();
-          final legDistance = (leg['distance']?['value'] as num?)?.toDouble();
-          if (legDuration != null && legDuration > 0) {
-            durationSeconds = (durationSeconds ?? 0) + legDuration;
-          }
-          if (legDistance != null && legDistance > 0) {
-            distanceMeters = (distanceMeters ?? 0) + legDistance;
-          }
+      final altRoutes = <TaxiDrivingRoute>[];
+      if (alternatives && routes.length > 1) {
+        for (var i = 1; i < routes.length && i < 3; i++) {
+          final alt = _routeFromDirectionsMap(routes[i]);
+          if (alt.points.length >= 2) altRoutes.add(alt);
         }
       }
 
       return TaxiDrivingRoute(
-        points: decodeGooglePolyline(polyline),
-        durationSeconds: durationSeconds,
-        distanceMeters: distanceMeters,
+        points: mainRoute.points,
+        durationSeconds: mainRoute.durationSeconds,
+        distanceMeters: mainRoute.distanceMeters,
+        alternatives: altRoutes.isNotEmpty ? altRoutes : null,
       );
     } catch (_) {
       return const TaxiDrivingRoute();

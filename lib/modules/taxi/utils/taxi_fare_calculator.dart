@@ -43,16 +43,22 @@ class TaxiFareCalculator {
     return ((safe / fareRoundingStep).round()) * fareRoundingStep;
   }
 
-  static FareResult calculateFare(double distanceKm, {TaxiType? taxiType}) {
+  static FareResult calculateFare(double distanceKm, {TaxiType? taxiType, bool isRoundTrip = false}) {
     final type = taxiType ?? TaxiType.economic;
-    final fare = fareForType(distanceKm, type);
-    final economicFare = fareForType(distanceKm, TaxiType.economic);
+    final effectiveDistance = isRoundTrip ? distanceKm * 2 : distanceKm;
+    final fare = fareForType(effectiveDistance, type);
+    final economicFare = fareForType(effectiveDistance, TaxiType.economic);
 
     return FareResult(
       fareEconomic: economicFare,
       fareSuper: fare,
       fare: fare,
     );
+  }
+
+  static int fareForTypeWithRoundTrip(double distanceKm, TaxiType type, bool isRoundTrip) {
+    final effectiveDistance = isRoundTrip ? distanceKm * 2 : distanceKm;
+    return fareForType(effectiveDistance, type);
   }
 
   static int fareForType(double distanceKm, TaxiType type) {

@@ -168,6 +168,9 @@ class TaxiRequest {
   final String? cancelRequestReason;
   final DateTime? createdAt;
 
+  final bool isRoundTrip;
+  final int? waitingMinutes;
+
   const TaxiRequest({
     required this.id,
     required this.requestNumber,
@@ -212,6 +215,8 @@ class TaxiRequest {
     this.adminReviewRequired = false,
     this.cancelRequestReason,
     this.createdAt,
+    this.isRoundTrip = false,
+    this.waitingMinutes,
   });
 
   String get pickupAddressAr => pickupAddress;
@@ -226,9 +231,12 @@ class TaxiRequest {
   bool get isCompleted => statusKey == 'completed';
   bool get isCancelled => statusKey == 'cancelled';
   bool get isCancelRequested => statusKey == 'cancel_requested';
+  bool get isReturnWaiting => statusKey == 'return_waiting';
+  bool get isReturnOnWay => statusKey == 'return_on_way';
+  bool get isReturnArrived => statusKey == 'return_arrived';
 
   bool get canCustomerCancel =>
-      !isCompleted && !isCancelled;
+      !isCompleted && !isCancelled && !isReturnWaiting;
 
   bool get canCustomerRequestCancel =>
       isAccepted || isOnWay || isArrived;
@@ -269,6 +277,12 @@ class TaxiRequest {
         return 'ملغي';
       case 'cancel_requested':
         return 'بانتظار موافقة الكابتن على الإلغاء';
+      case 'return_waiting':
+        return 'السائق ينتظرك للعودة';
+      case 'return_on_way':
+        return 'في طريق العودة';
+      case 'return_arrived':
+        return 'وصل الكابتن لنقطة الانطلاق';
       default:
         return statusAr.isNotEmpty ? statusAr : statusKey;
     }
@@ -351,6 +365,8 @@ class TaxiRequest {
       'adminReviewRequired': adminReviewRequired,
       if (cancelRequestReason != null) 'cancelRequestReason': cancelRequestReason,
       if (createdAt != null) 'createdAt': createdAt!.toIso8601String(),
+      'isRoundTrip': isRoundTrip,
+      if (waitingMinutes != null) 'waitingMinutes': waitingMinutes,
     };
   }
 
@@ -414,6 +430,8 @@ class TaxiRequest {
       createdAt: map['createdAt'] != null
           ? DateTime.tryParse(map['createdAt'] as String)
           : null,
+      isRoundTrip: (map['isRoundTrip'] as bool?) ?? false,
+      waitingMinutes: (map['waitingMinutes'] as num?)?.toInt(),
     );
   }
 
@@ -506,6 +524,8 @@ class TaxiRequest {
       adminReviewRequired: adminReviewRequired ?? this.adminReviewRequired,
       cancelRequestReason: cancelRequestReason ?? this.cancelRequestReason,
       createdAt: createdAt ?? this.createdAt,
+      isRoundTrip: isRoundTrip ?? this.isRoundTrip,
+      waitingMinutes: waitingMinutes ?? this.waitingMinutes,
     );
   }
 }

@@ -56,6 +56,9 @@ class _TaxiRequestScreenState extends State<TaxiRequestScreen> {
   int _fareEconomic = 0;
   TaxiType _selectedTaxiType = TaxiType.tuktuk;
   bool _showCarSelection = false;
+  bool _isRoundTrip = false;
+  int _waitingMinutes = 15;
+  static const List<int> _waitingOptions = [5, 10, 15, 30, 60];
   bool _isSearching = false;
   bool _isGettingLocation = false;
   List<TaxiPlaceSuggestion> _suggestions = [];
@@ -77,6 +80,9 @@ class _TaxiRequestScreenState extends State<TaxiRequestScreen> {
 
   final List<_TripStopDraft> _stops = [];
   int? _editingStopIndex;
+
+  List<TaxiDrivingRoute> _routeAlternatives = [];
+  int _selectedRouteIndex = 0;
 
   bool get _hasBothLocations =>
       _pickupController.text.trim().isNotEmpty &&
@@ -396,6 +402,14 @@ class _TaxiRequestScreenState extends State<TaxiRequestScreen> {
     final dropoff = _dropoffCoord;
     if (pickup == null || dropoff == null) return;
 
+    final hasStops = _stops.any((s) => s.coord != null);
+
+    if (!hasStops) {
+      await _fetchRoute(pickup, dropoff);
+      return;
+    }
+
+    // حساب المسافة الكلية عبر نقاط التوقف (خط مستقيم)
     final chain = <LatLng>[pickup];
     for (final stop in _stops) {
       final coord = stop.coord;
@@ -406,23 +420,18 @@ class _TaxiRequestScreenState extends State<TaxiRequestScreen> {
     double totalKm = 0;
     for (var i = 0; i < chain.length - 1; i++) {
       totalKm += TaxiDistanceCalculator.calculateDistance(
-        chain[i].latitude,
-        chain[i].longitude,
-        chain[i + 1].latitude,
-        chain[i + 1].longitude,
+        chain[i].latitude, chain[i].longitude,
+        chain[i + 1].latitude, chain[i + 1].longitude,
       );
     }
 
+    // جلب المسار من أول نقطة إلى آخر نقطة (Google/Mapbox يتجاهل نقاط التوقف)
     await _fetchRoute(pickup, dropoff);
     if (!mounted) return;
     if (totalKm > _distanceKm) {
       setState(() {
         _distanceKm = totalKm;
-        _fareTuktuk =
-            TaxiFareCalculator.fareForType(_distanceKm, TaxiType.tuktuk);
-        _fareWazz = TaxiFareCalculator.fareForType(_distanceKm, TaxiType.wazz);
-        _fareEconomic =
-            TaxiFareCalculator.fareForType(_distanceKm, TaxiType.economic);
+        _updateFares();
       });
     }
   }
@@ -462,26 +471,49 @@ class _TaxiRequestScreenState extends State<TaxiRequestScreen> {
         .toList();
   }
 
-  /// جلب المسار — Google Directions (مثل Google Maps) مع احتياط Mapbox.
+  /// جلب المسار — مع البدائل لعرضها للمستخدم لاختيار الأنسب.
   Future<void> _fetchRoute(LatLng from, LatLng to) async {
-    final route = await TaxiPlacesService.fetchDrivingRoute(from, to);
+    final alternatives = await TaxiPlacesService.fetchDrivingRouteAlternatives(from, to);
     if (!mounted) return;
+    final primary = alternatives.isNotEmpty ? alternatives[0] : const TaxiDrivingRoute();
+    final altList = alternatives.length > 1 ? [alternatives[1]] : <TaxiDrivingRoute>[];
+
     setState(() {
-      _routePoints = route.points.length >= 2 ? route.points : null;
-      _routeDurationSeconds = route.durationSeconds;
-      final routeDistanceKm = route.distanceKm;
+      _routePoints = primary.points.length >= 2 ? primary.points : null;
+      _routeDurationSeconds = primary.durationSeconds;
+      _routeAlternatives = altList;
+      _selectedRouteIndex = 0;
+      final routeDistanceKm = primary.distanceKm;
       if (routeDistanceKm != null && routeDistanceKm > 0) {
         _distanceKm = routeDistanceKm;
-        _fareTuktuk =
-            TaxiFareCalculator.fareForType(_distanceKm, TaxiType.tuktuk);
-        _fareWazz = TaxiFareCalculator.fareForType(_distanceKm, TaxiType.wazz);
-        _fareEconomic =
-            TaxiFareCalculator.fareForType(_distanceKm, TaxiType.economic);
+        _updateFares();
       }
     });
-    if (route.points.length >= 2) {
+    if (primary.points.length >= 2) {
       await _fitMapToLocations();
     }
+  }
+
+  void _selectRouteAlternative(int index) {
+    final routes = [if (_routePoints != null) TaxiDrivingRoute(points: _routePoints!, durationSeconds: _routeDurationSeconds, distanceMeters: _distanceKm * 1000), ..._routeAlternatives];
+    if (index < 0 || index >= routes.length) return;
+    final selected = routes[index];
+    setState(() {
+      _selectedRouteIndex = index;
+      _routePoints = selected.points.length >= 2 ? selected.points : _routePoints;
+      _routeDurationSeconds = selected.durationSeconds ?? _routeDurationSeconds;
+      final routeDistanceKm = selected.distanceKm;
+      if (routeDistanceKm != null && routeDistanceKm > 0) {
+        _distanceKm = routeDistanceKm;
+        _updateFares();
+      }
+    });
+  }
+
+  void _updateFares() {
+    _fareTuktuk = TaxiFareCalculator.fareForTypeWithRoundTrip(_distanceKm, TaxiType.tuktuk, _isRoundTrip);
+    _fareWazz = TaxiFareCalculator.fareForTypeWithRoundTrip(_distanceKm, TaxiType.wazz, _isRoundTrip);
+    _fareEconomic = TaxiFareCalculator.fareForTypeWithRoundTrip(_distanceKm, TaxiType.economic, _isRoundTrip);
   }
 
   Future<void> _fitMapToLocations() async {
@@ -526,7 +558,25 @@ class _TaxiRequestScreenState extends State<TaxiRequestScreen> {
     } catch (_) {}
   }
 
-  void _onRequestTrip() async {
+  void _calculateFares() {
+    _fareTuktuk = TaxiFareCalculator.fareForTypeWithRoundTrip(
+        _distanceKm, TaxiType.tuktuk, _isRoundTrip);
+    _fareWazz = TaxiFareCalculator.fareForTypeWithRoundTrip(
+        _distanceKm, TaxiType.wazz, _isRoundTrip);
+    _fareEconomic = TaxiFareCalculator.fareForTypeWithRoundTrip(
+        _distanceKm, TaxiType.economic, _isRoundTrip);
+    setState(() {});
+  }
+
+  Future<void> _onRequestTrip() async {
+    if (_pickupController.text.trim().isEmpty) {
+      _showSnackBar('يرجى تحديد نقطة الانطلاق أولاً.');
+      return;
+    }
+    if (_dropoffController.text.trim().isEmpty) {
+      _showSnackBar('يرجى تحديد الوجهة أولاً.');
+      return;
+    }
     final pickup = _pickupCoord;
     final dropoff = _dropoffCoord;
     if (pickup != null && dropoff != null && (_routePoints == null || _routePoints!.length < 2)) {
@@ -541,25 +591,10 @@ class _TaxiRequestScreenState extends State<TaxiRequestScreen> {
     setState(() => _showCarSelection = false);
   }
 
-  void _calculateFares() {
-    final pickup = _pickupCoord ?? const LatLng(32.9256, 44.7766);
-    final dropoff = _dropoffCoord ?? const LatLng(32.9300, 44.7800);
-
-    if (_distanceKm <= 0) {
-      _distanceKm = TaxiDistanceCalculator.calculateDistance(
-        pickup.latitude,
-        pickup.longitude,
-        dropoff.latitude,
-        dropoff.longitude,
-      );
-    }
-    setState(() {
-      _fareTuktuk =
-          TaxiFareCalculator.fareForType(_distanceKm, TaxiType.tuktuk);
-      _fareWazz = TaxiFareCalculator.fareForType(_distanceKm, TaxiType.wazz);
-      _fareEconomic =
-          TaxiFareCalculator.fareForType(_distanceKm, TaxiType.economic);
-    });
+  void _showSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message, style: const TextStyle(fontFamily: 'Cairo'))),
+    );
   }
 
   Future<void> _onConfirmRequest() async {
@@ -583,6 +618,8 @@ class _TaxiRequestScreenState extends State<TaxiRequestScreen> {
             distanceKm: _distanceKm,
             taxiType: _selectedTaxiType.toApiName,
             waypoints: _buildWaypoints(),
+            isRoundTrip: _isRoundTrip,
+            waitingMinutes: _isRoundTrip ? _waitingMinutes : null,
           ),
         ),
       ),
@@ -734,39 +771,70 @@ class _TaxiRequestScreenState extends State<TaxiRequestScreen> {
                   TaxiFavoritePlacesRow(
                     onSelected: (place) => _promptAndApplySavedPlace(place),
                   ),
-                  for (var i = 0; i < _stops.length; i++) ...[
-                    const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _buildSearchField(
-                            controller: _stops[i].controller,
-                            hint: 'توقف ${i + 1}',
-                            icon: Icons.add_location_alt_outlined,
-                            iconColor: AppColors.accent,
-                            onTap: () {
-                              _editingStopIndex = i;
-                              _isPickupField = false;
-                            },
-                          ),
-                        ),
-                        IconButton(
-                          onPressed: () => _removeStopField(i),
-                          icon: const Icon(Icons.close, color: Colors.red),
-                        ),
-                      ],
-                    ),
-                  ],
-                  if (_stops.length < 3)
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: TextButton.icon(
-                        onPressed: _addStopField,
-                        icon: const Icon(Icons.add, size: 18),
-                        label: Text(
-                          'إضافة توقف (${_stops.length}/3)',
-                          style: const TextStyle(fontFamily: 'Cairo'),
-                        ),
+                  // ── نقاط التوقف الوسيطة ──
+                  if (_stops.isNotEmpty || _stops.length < 3)
+                    Container(
+                      margin: const EdgeInsets.only(top: 4),
+                      padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+                      decoration: BoxDecoration(
+                        color: AppColors.accent.withValues(alpha: 0.05),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: AppColors.accent.withValues(alpha: 0.12)),
+                      ),
+                      child: Column(
+                        children: [
+                          for (var i = 0; i < _stops.length; i++) ...[
+                            if (i > 0) const SizedBox(height: 4),
+                            Row(
+                              children: [
+                                Container(
+                                  width: 22, height: 22,
+                                  decoration: BoxDecoration(
+                                    color: AppColors.accent,
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: Center(child: Text('${i + 1}', style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w800, fontFamily: 'Cairo'))),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: _buildSearchField(
+                                    controller: _stops[i].controller,
+                                    hint: 'نقطة توقف ${i + 1}',
+                                    icon: Icons.add_location_alt_outlined,
+                                    iconColor: AppColors.accent,
+                                    onTap: () {
+                                      _editingStopIndex = i;
+                                      _isPickupField = false;
+                                    },
+                                  ),
+                                ),
+                                GestureDetector(
+                                  onTap: () => _removeStopField(i),
+                                  child: Container(
+                                    width: 28, height: 28,
+                                    decoration: BoxDecoration(
+                                      color: Colors.red.withValues(alpha: 0.08),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: const Icon(Icons.close, size: 14, color: Colors.red),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                          if (_stops.length < 3)
+                            Align(
+                              alignment: Alignment.centerRight,
+                              child: TextButton.icon(
+                                onPressed: _addStopField,
+                                icon: const Icon(Icons.add, size: 16, color: AppColors.accent),
+                                label: Text(
+                                  'إضافة توقف',
+                                  style: TextStyle(fontFamily: 'Cairo', fontSize: 12, color: AppColors.accent, fontWeight: FontWeight.w600),
+                                ),
+                              ),
+                            ),
+                        ],
                       ),
                     ),
                   // الاقتراحات
@@ -1042,7 +1110,184 @@ class _TaxiRequestScreenState extends State<TaxiRequestScreen> {
                               () => _selectedTaxiType = TaxiType.economic,
                             ),
                           ),
-                          const SizedBox(height: 16),
+                          // ── Toggle: ذهاب فقط / ذهاب وعودة ──
+                          Container(
+                            padding: const EdgeInsets.all(4),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF2F2F7),
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: GestureDetector(
+                                    onTap: () => setState(() {
+                                      _isRoundTrip = false;
+                                      _calculateFares();
+                                    }),
+                                    child: AnimatedContainer(
+                                      duration: const Duration(milliseconds: 200),
+                                      padding: const EdgeInsets.symmetric(vertical: 10),
+                                      decoration: BoxDecoration(
+                                        color: !_isRoundTrip ? Colors.white : Colors.transparent,
+                                        borderRadius: BorderRadius.circular(11),
+                                        boxShadow: !_isRoundTrip
+                                            ? [BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 6, offset: const Offset(0, 2))]
+                                            : null,
+                                      ),
+                                      child: Row(
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        children: [
+                                          Icon(Icons.arrow_forward, size: 16, color: !_isRoundTrip ? AppColors.primary : Colors.grey),
+                                          const SizedBox(width: 4),
+                                          Text('ذهاب فقط',
+                                            style: TextStyle(fontFamily: 'Cairo', fontSize: 13, fontWeight: FontWeight.w700,
+                                              color: !_isRoundTrip ? AppColors.primary : Colors.grey),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                Expanded(
+                                  child: GestureDetector(
+                                    onTap: () => setState(() {
+                                      _isRoundTrip = true;
+                                      _calculateFares();
+                                    }),
+                                    child: AnimatedContainer(
+                                      duration: const Duration(milliseconds: 200),
+                                      padding: const EdgeInsets.symmetric(vertical: 10),
+                                      decoration: BoxDecoration(
+                                        color: _isRoundTrip ? Colors.white : Colors.transparent,
+                                        borderRadius: BorderRadius.circular(11),
+                                        boxShadow: _isRoundTrip
+                                            ? [BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 6, offset: const Offset(0, 2))]
+                                            : null,
+                                      ),
+                                      child: Row(
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        children: [
+                                          const Icon(Icons.replay, size: 16, color: AppColors.primary),
+                                          const SizedBox(width: 4),
+                                          Text('ذهاب وعودة',
+                                            style: TextStyle(fontFamily: 'Cairo', fontSize: 13, fontWeight: FontWeight.w700,
+                                              color: _isRoundTrip ? AppColors.primary : Colors.grey),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+
+                          // ── Waiting time selector (only for round trip) ──
+                          if (_isRoundTrip) ...[
+                            SizedBox(
+                              height: 34,
+                              child: ListView.separated(
+                                scrollDirection: Axis.horizontal,
+                                padding: const EdgeInsets.symmetric(horizontal: 4),
+                                itemCount: _waitingOptions.length,
+                                separatorBuilder: (_, __) => const SizedBox(width: 8),
+                                itemBuilder: (context, index) {
+                                  final min = _waitingOptions[index];
+                                  final selected = _waitingMinutes == min;
+                                  return GestureDetector(
+                                    onTap: () => setState(() => _waitingMinutes = min),
+                                    child: AnimatedContainer(
+                                      duration: const Duration(milliseconds: 200),
+                                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                                      decoration: BoxDecoration(
+                                        color: selected ? AppColors.primary : const Color(0xFFF2F2F7),
+                                        borderRadius: BorderRadius.circular(10),
+                                      ),
+                                      child: Text(
+                                        '$min دقيقة',
+                                        style: TextStyle(
+                                          fontFamily: 'Cairo',
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w600,
+                                          color: selected ? Colors.white : Colors.grey.shade600,
+                                        ),
+                                      ),
+                                    ),
+                                  );
+                                },
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                          ],
+
+                          // ── Route alternatives ──
+                          if (_routeAlternatives.isNotEmpty) ...[
+                            Container(
+                              padding: const EdgeInsets.all(4),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFF2F2F7),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    child: GestureDetector(
+                                      onTap: () => _selectRouteAlternative(0),
+                                      child: AnimatedContainer(
+                                        duration: const Duration(milliseconds: 200),
+                                        padding: const EdgeInsets.symmetric(vertical: 8),
+                                        decoration: BoxDecoration(
+                                          color: _selectedRouteIndex == 0 ? Colors.white : Colors.transparent,
+                                          borderRadius: BorderRadius.circular(9),
+                                          boxShadow: _selectedRouteIndex == 0
+                                              ? [BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 6, offset: const Offset(0, 2))]
+                                              : null,
+                                        ),
+                                        child: Column(
+                                          children: [
+                                            Text('المسار الأول', style: TextStyle(fontFamily: 'Cairo', fontSize: 12, fontWeight: FontWeight.w700,
+                                              color: _selectedRouteIndex == 0 ? AppColors.primary : Colors.grey)),
+                                            Text('${_distanceKm.toStringAsFixed(1)} كم', style: TextStyle(fontFamily: 'Cairo', fontSize: 10,
+                                              color: _selectedRouteIndex == 0 ? AppColors.primary : Colors.grey.shade500)),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  Expanded(
+                                    child: GestureDetector(
+                                      onTap: () => _selectRouteAlternative(1),
+                                      child: AnimatedContainer(
+                                        duration: const Duration(milliseconds: 200),
+                                        padding: const EdgeInsets.symmetric(vertical: 8),
+                                        decoration: BoxDecoration(
+                                          color: _selectedRouteIndex == 1 ? Colors.white : Colors.transparent,
+                                          borderRadius: BorderRadius.circular(9),
+                                          boxShadow: _selectedRouteIndex == 1
+                                              ? [BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 6, offset: const Offset(0, 2))]
+                                              : null,
+                                        ),
+                                        child: Column(
+                                          children: [
+                                            Text('المسار الثاني', style: TextStyle(fontFamily: 'Cairo', fontSize: 12, fontWeight: FontWeight.w700,
+                                              color: _selectedRouteIndex == 1 ? AppColors.accent : Colors.grey)),
+                                            if (_routeAlternatives.isNotEmpty)...[const SizedBox(height: 2)],
+                                            Text('${(_routeAlternatives.length > 0 ? (_routeAlternatives[0].distanceKm ?? _distanceKm) : _distanceKm).toStringAsFixed(1)} كم',
+                                              style: TextStyle(fontFamily: 'Cairo', fontSize: 10, color: _selectedRouteIndex == 1 ? AppColors.accent : Colors.grey.shade500)),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                          ],
+
+                          const SizedBox(height: 8),
 
                           // ── زر "تأكيد وطلب" بتدرج احترافي ──
                           SizedBox(

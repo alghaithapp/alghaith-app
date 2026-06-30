@@ -215,6 +215,8 @@ class TaxiProvider extends ChangeNotifier {
     required double distanceKm,
     required String taxiType,
     List<TaxiWaypoint> waypoints = const [],
+    bool isRoundTrip = false,
+    int? waitingMinutes,
   }) async {
     _isLoading = true;
     _error = null;
@@ -231,6 +233,8 @@ class TaxiProvider extends ChangeNotifier {
         distanceKm: distanceKm,
         taxiType: taxiType,
         waypoints: waypoints,
+        isRoundTrip: isRoundTrip,
+        waitingMinutes: waitingMinutes,
       );
       _currentRequest = request;
       _requests.insert(0, request);

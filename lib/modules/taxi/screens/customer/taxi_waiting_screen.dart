@@ -1,19 +1,21 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../providers/taxi_provider.dart';
 import '../../models/taxi_request.dart';
-import '../../widgets/taxi_type_image.dart';
+import '../../utils/taxi_fare_calculator.dart';
+import '../../utils/taxi_distance_calculator.dart';
 import '../../utils/taxi_labels.dart';
 import '../../utils/taxi_rating_navigation.dart';
 import 'taxi_live_tracking_screen.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../widgets/taxi_cancel_dialog.dart';
 import '../../../../providers/app_provider.dart';
+import '../../../../utils/extensions.dart';
 
-/// بيانات إنشاء طلب جديد — تُمرَّر لشاشة الانتظار لبدء الإرسال فوراً.
 class TaxiTripCreateParams {
   const TaxiTripCreateParams({
     required this.pickupAddress,
@@ -25,6 +27,8 @@ class TaxiTripCreateParams {
     required this.distanceKm,
     required this.taxiType,
     this.waypoints = const [],
+    this.isRoundTrip = false,
+    this.waitingMinutes,
   });
 
   final String pickupAddress;
@@ -36,9 +40,10 @@ class TaxiTripCreateParams {
   final double distanceKm;
   final String taxiType;
   final List<TaxiWaypoint> waypoints;
+  final bool isRoundTrip;
+  final int? waitingMinutes;
 }
 
-/// شاشة انتظار السائق
 class TaxiWaitingScreen extends StatefulWidget {
   final TaxiTripCreateParams? createParams;
 
@@ -48,36 +53,65 @@ class TaxiWaitingScreen extends StatefulWidget {
   State<TaxiWaitingScreen> createState() => _TaxiWaitingScreenState();
 }
 
-class _TaxiWaitingScreenState extends State<TaxiWaitingScreen> {
+class _TaxiWaitingScreenState extends State<TaxiWaitingScreen>
+    with TickerProviderStateMixin {
   Timer? _timer;
   int _secondsLeft = 300;
-  bool _isCreating = false;
-  String? _createError;
-  bool _expired = false;
-  bool _hasTimedOut = false;
+  bool _submitted = false;
+  bool _submitError = false;
+  String _errorMessage = '';
+  String _status = 'جار البحث عن كابتن...';
+
+  late AnimationController _pulseController;
+  late Animation<double> _pulseAnim;
+
+  late AnimationController _orbitController;
+  late AnimationController _dotController;
 
   @override
   void initState() {
     super.initState();
-    _startTimer();
+    _pulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1800),
+    )..repeat(reverse: true);
+    _pulseAnim = Tween<double>(begin: 0.85, end: 1.0).animate(
+      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
+    );
+
+    _orbitController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 4),
+    )..repeat();
+
+    _dotController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    )..repeat();
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (widget.createParams != null) {
+      if (widget.createParams != null && !_submitted) {
         _submitRequest();
-      } else {
-        _startPolling();
       }
     });
   }
 
-  Future<void> _submitRequest() async {
-    final params = widget.createParams;
-    if (params == null || _isCreating) return;
-    setState(() {
-      _isCreating = true;
-      _createError = null;
-    });
+  @override
+  void dispose() {
+    _timer?.cancel();
+    _pulseController.dispose();
+    _orbitController.dispose();
+    _dotController.dispose();
+    super.dispose();
+  }
 
+  Future<void> _submitRequest() async {
+    if (_submitted) return;
+    setState(() => _submitted = true);
+
+    final params = widget.createParams!;
     final provider = context.read<TaxiProvider>();
+
     final request = await provider.createTaxiRequest(
       pickupAddress: params.pickupAddress,
       dropoffAddress: params.dropoffAddress,
@@ -88,385 +122,494 @@ class _TaxiWaitingScreenState extends State<TaxiWaitingScreen> {
       distanceKm: params.distanceKm,
       taxiType: params.taxiType,
       waypoints: params.waypoints,
+      isRoundTrip: params.isRoundTrip,
+      waitingMinutes: params.waitingMinutes,
     );
 
     if (!mounted) return;
-
-    if (request == null) {
+    if (request != null) {
+      _startCountdown();
+    } else {
       setState(() {
-        _isCreating = false;
-        _createError = provider.error ?? 'تعذر إرسال الطلب، حاول مجدداً';
+        _submitError = true;
+        _errorMessage = 'تعذّر إنشاء الطلب. حاول مجدداً.';
+        _status = 'فشل إنشاء الطلب';
       });
-      return;
     }
-
-    setState(() => _isCreating = false);
-    _startPolling();
   }
 
-  void _startTimer() {
-    _timer = Timer.periodic(const Duration(seconds: 1), (timer) async {
-      if (_secondsLeft <= 0) {
-        if (!_hasTimedOut) {
-          _hasTimedOut = true;
-          setState(() {});
-          await _checkExpired();
-        }
+  void _startCountdown() {
+    _timer?.cancel();
+    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) {
+        timer.cancel();
         return;
       }
-      setState(() => _secondsLeft--);
+      setState(() {
+        _secondsLeft = 300 - timer.tick;
+        if (_secondsLeft <= 0) {
+          timer.cancel();
+          _status = 'انتهت مهلة البحث';
+        }
+      });
     });
   }
 
-  Future<void> _checkExpired() async {
-    for (var attempt = 0; attempt < 3; attempt++) {
-      if (!mounted) return;
-      try {
-        final provider = context.read<TaxiProvider>();
-        await provider.loadActiveRequest();
-        if (!mounted) return;
-        final request = provider.currentRequest;
-        if (request == null || request.isCancelled) {
-          _showExpiredAndExit();
-          return;
-        }
-        return;
-      } catch (_) {
-        if (attempt < 2) {
-          await Future<void>.delayed(Duration(seconds: 2 * (attempt + 1)));
-        }
-      }
-    }
+  String get _etaLabel {
+    if (_secondsLeft <= 0) return 'انتهى';
+    final min = _secondsLeft ~/ 60;
+    final sec = _secondsLeft % 60;
+    return '$min:${sec.toString().padLeft(2, '0')}';
   }
 
-  void _showExpiredAndExit() {
-    if (!mounted || _expired) return;
-    setState(() => _expired = true);
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text(
-          'انتهت مهلة البحث — لم يقبل أحد الطلب. يمكنك المحاولة مجدداً.',
-          style: TextStyle(fontFamily: 'Cairo'),
+  double get _progress => _secondsLeft > 0 ? _secondsLeft / 300 : 0.0;
+
+  Color get _progressColor {
+    if (_secondsLeft > 120) return const Color(0xFF0EA5E9);
+    if (_secondsLeft > 60) return const Color(0xFFF59E0B);
+    return const Color(0xFFEF4444);
+  }
+
+  Widget _buildAnimatedCar(Size size) {
+    return AnimatedBuilder(
+      animation: _pulseAnim,
+      builder: (context, child) => Transform.scale(
+        scale: _pulseAnim.value,
+        child: child,
+      ),
+      child: Container(
+        width: 120,
+        height: 120,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          gradient: const RadialGradient(
+            colors: [Color(0xFF0EA5E9), Color(0xFF0284C7)],
+            center: Alignment.center,
+            radius: 0.8,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF0EA5E9).withValues(alpha: 0.35),
+              blurRadius: 30,
+              spreadRadius: 4,
+            ),
+          ],
         ),
+        child: const Icon(Icons.local_taxi_rounded, size: 52, color: Colors.white),
       ),
     );
-    Navigator.of(context).pop();
   }
 
-  void _startPolling() {
-    final provider = context.read<TaxiProvider>();
-    final phone = context.read<AppProvider>().authPhone;
-    provider.startPolling(phone: phone);
-    provider.loadActiveRequest();
-  }
-
-  Future<void> _onCancelTrip() async {
-    final provider = context.read<TaxiProvider>();
-    final request = provider.currentRequest;
-    if (request == null || !request.canCustomerCancel) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'لا يمكن إلغاء الطلب حالياً',
-              style: TextStyle(fontFamily: 'Cairo'),
-            ),
+  Widget _buildOrbitDots(Size size) {
+    const dotCount = 3;
+    return AnimatedBuilder(
+      animation: _orbitController,
+      builder: (context, child) {
+        return CustomPaint(
+          size: size,
+          painter: _OrbitPainter(
+            progress: _orbitController.value,
+            dotProgress: _dotController.value,
           ),
         );
-      }
-      return;
-    }
-
-    final confirmed = await showTaxiCancelDialog(context);
-    if (confirmed != true || !mounted) return;
-
-    _timer?.cancel();
-    final ok = await provider.cancelRequest(request.id);
-    if (!mounted) return;
-
-    if (ok) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'تم إلغاء الرحلة',
-            style: TextStyle(fontFamily: 'Cairo'),
-          ),
-        ),
-      );
-      Navigator.of(context).pop();
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            provider.error ?? 'تعذر إلغاء الطلب',
-            style: const TextStyle(fontFamily: 'Cairo'),
-          ),
-          backgroundColor: Colors.red,
-        ),
-      );
-    }
-  }
-
-  @override
-  void dispose() {
-    _timer?.cancel();
-    super.dispose();
-  }
-
-  String get _formattedTime {
-    final minutes = _secondsLeft ~/ 60;
-    final seconds = _secondsLeft % 60;
-    return '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
+      },
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_expired) return const SizedBox.shrink();
+    final size = MediaQuery.of(context).size;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    return Directionality(
-      textDirection: TextDirection.rtl,
-      child: Scaffold(
-        body: Consumer<TaxiProvider>(
-          builder: (context, provider, _) {
-            final request = provider.currentRequest;
+    return Consumer<TaxiProvider>(
+      builder: (context, provider, _) {
+        final activeRequest = provider.currentRequest;
 
-            if (_hasTimedOut && (request == null || request.isCancelled || provider.hasExpired)) {
-              WidgetsBinding.instance.addPostFrameCallback((_) {
-                if (mounted) _showExpiredAndExit();
-              });
-            }
+        if (activeRequest != null && activeRequest.hasAssignedDriver) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted) return;
+            Navigator.of(context).pushReplacement(
+              MaterialPageRoute(
+                builder: (_) => const TaxiLiveTrackingScreen(),
+              ),
+            );
+          });
+        }
 
-            if (request != null && request.isCancelled && !_hasTimedOut) {
-              WidgetsBinding.instance.addPostFrameCallback((_) {
-                if (mounted) _showExpiredAndExit();
-              });
-            }
-
-            if (request != null && (request.isAccepted || request.isOnWay || request.isArrived || request.isPickedUp)) {
-              WidgetsBinding.instance.addPostFrameCallback((_) {
-                if (mounted) {
-                  _timer?.cancel();
-                  Navigator.of(context).pushReplacement(
-                    MaterialPageRoute(
-                      builder: (_) => const TaxiLiveTrackingScreen(),
-                    ),
-                  );
-                }
-              });
-            }
-
-            if (provider.tripAwaitingRating != null) {
-              final pending = provider.tripAwaitingRating!;
-              WidgetsBinding.instance.addPostFrameCallback((_) {
-                if (mounted) {
-                  _timer?.cancel();
-                  TaxiRatingNavigation.openIfNeeded(context, pending);
-                }
-              });
-            }
-
-            final statusText = _createError != null
-                ? _createError!
-                : _isCreating
-                    ? 'جاري إرسال طلبك...'
-                    : 'جاري البحث عن كابتن قريب...';
-            final waitingType = request?.taxiType ??
-                TaxiTypeX.fromApiName(widget.createParams?.taxiType);
-
-            return Stack(
-              children: [
-                Container(
-                  color: const Color(0xFFF3F3F3),
-                  width: double.infinity,
-                  height: double.infinity,
-                  child: CustomPaint(
-                    painter: _MapGridPainter(),
-                  ),
-                ),
-                Positioned(
-                  top: 60,
-                  left: 20,
-                  right: 20,
-                  child: Center(
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 24, vertical: 12),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(24),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.12),
-                            blurRadius: 16,
-                            offset: const Offset(0, 4),
-                          ),
-                        ],
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Container(
-                            width: 12,
-                            height: 12,
-                            decoration: const BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: AppColors.accent,
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Text(
-                            _createError != null
-                                ? 'تعذر إرسال الطلب'
-                                : 'بانتظار كابتن...',
-                            style: const TextStyle(
-                              fontFamily: 'Cairo',
-                              fontSize: 18,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-                if (_createError == null && !_hasTimedOut)
-                  Positioned(
-                    top: 130,
-                    left: 0,
-                    right: 0,
-                    child: Center(
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 20, vertical: 8),
+        if (_submitError) {
+          return PopScope(
+            canPop: true,
+            child: Scaffold(
+              backgroundColor: isDark ? const Color(0xFF0F0F0F) : const Color(0xFFF8FAFC),
+              body: Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(32),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: 80, height: 80,
                         decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(20),
+                          shape: BoxShape.circle,
+                          color: Colors.red.withValues(alpha: 0.1),
                         ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(Icons.timer_outlined,
-                                size: 20, color: AppColors.textSecondary),
-                            const SizedBox(width: 8),
-                            Text(
-                              _formattedTime,
-                              style: const TextStyle(
-                                fontFamily: 'Cairo',
-                                fontSize: 18,
-                                fontWeight: FontWeight.w700,
-                                color: AppColors.primary,
-                              ),
-                            ),
-                          ],
-                        ),
+                        child: const Icon(Icons.error_outline, size: 40, color: Colors.red),
+                      ),
+                      const SizedBox(height: 24),
+                      Text(
+                        _errorMessage,
+                        style: TextStyle(fontFamily: 'Cairo', fontSize: 16, color: isDark ? Colors.white70 : Colors.black87),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 24),
+                      ElevatedButton.icon(
+                        onPressed: _submitRequest,
+                        icon: const Icon(Icons.refresh),
+                        label: const Text('إعادة المحاولة', style: TextStyle(fontFamily: 'Cairo')),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          );
+        }
+
+        return Scaffold(
+          backgroundColor: isDark ? const Color(0xFF0F0F0F) : const Color(0xFFF8FAFC),
+          body: SafeArea(
+            child: Stack(
+              children: [
+                // ── Premium blurred gradient background ──
+                Positioned.fill(
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 600),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: isDark
+                            ? [const Color(0xFF0F0F0F), const Color(0xFF0A1628)]
+                            : [const Color(0xFFF0F9FF), const Color(0xFFE0F2FE)],
                       ),
                     ),
                   ),
+                ),
+
+                // ── Decorative blur bubbles ──
+                Positioned(top: -60, right: -40,
+                  child: Container(width: 180, height: 180,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: const Color(0xFF0EA5E9).withValues(alpha: 0.07),
+                    ),
+                  ),
+                ),
+                Positioned(bottom: 80, left: -50,
+                  child: Container(width: 140, height: 140,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: const Color(0xFF0EA5E9).withValues(alpha: 0.05),
+                    ),
+                  ),
+                ),
+
+                // ── Back button ──
+                Positioned(
+                  top: 8, left: 8,
+                  child: GestureDetector(
+                    onTap: () => _onBack(provider),
+                    child: Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: (isDark ? Colors.white : Colors.black).withValues(alpha: 0.06),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Icon(Icons.arrow_back_ios_new_rounded,
+                        size: 18,
+                        color: isDark ? Colors.white70 : Colors.black54,
+                      ),
+                    ),
+                  ),
+                ),
+
+                // ── Main content ──
                 Center(
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      TaxiTypeImage(
-                        type: waitingType,
-                        width: 88,
-                        height: 88,
-                      ),
-                      const SizedBox(height: 20),
-                      const SizedBox(
-                        width: 48,
-                        height: 48,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 3,
-                          color: AppColors.primary,
+                      const SizedBox(height: 40),
+
+                      // ── Animated car icon with orbit ──
+                      SizedBox(
+                        width: 200,
+                        height: 200,
+                        child: Stack(
+                          alignment: Alignment.center,
+                          children: [
+                            _buildOrbitDots(const Size(200, 200)),
+                            _buildAnimatedCar(size),
+                          ],
                         ),
                       ),
-                      const SizedBox(height: 16),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 24),
-                        child: Text(
-                          statusText,
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontFamily: 'Cairo',
-                            fontSize: 16,
-                            color: _createError != null
-                                ? Colors.red.shade700
-                                : AppColors.textSecondary,
-                          ),
-                        ),
-                      ),
-                      if (_createError != null) ...[
-                        const SizedBox(height: 16),
-                        TextButton(
-                          onPressed: _submitRequest,
-                          child: const Text(
-                            'إعادة المحاولة',
+
+                      const SizedBox(height: 32),
+
+                      // ── Status text ──
+                      AnimatedBuilder(
+                        animation: _dotController,
+                        builder: (context, _) {
+                          final dots = (_dotController.value * 3).floor() + 1;
+                          return Text(
+                            '$_status${'.' * dots}',
                             style: TextStyle(
                               fontFamily: 'Cairo',
+                              fontSize: 18,
                               fontWeight: FontWeight.w700,
+                              color: isDark ? Colors.white : const Color(0xFF1E293B),
                             ),
-                          ),
+                            textAlign: TextAlign.center,
+                          );
+                        },
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        'نبحث عن كابتن قريب منك',
+                        style: TextStyle(
+                          fontFamily: 'Cairo',
+                          fontSize: 13,
+                          color: isDark ? Colors.white38 : Colors.grey.shade500,
                         ),
+                      ),
+
+                      const SizedBox(height: 40),
+
+                      // ── Trip info card ──
+                      if (widget.createParams != null) ...[
+                        _buildTripInfoCard(isDark),
+                        const SizedBox(height: 32),
                       ],
+
+                      // ── Timer ──
+                      _buildTimer(isDark),
+
+                      const SizedBox(height: 24),
+
+                      // ── Cancel button ──
+                      TextButton.icon(
+                        onPressed: () => _onBack(provider),
+                        icon: const Icon(Icons.close, size: 18),
+                        label: const Text(
+                          'إلغاء الطلب',
+                          style: TextStyle(fontFamily: 'Cairo', fontSize: 14, fontWeight: FontWeight.w600),
+                        ),
+                        style: TextButton.styleFrom(
+                          foregroundColor: Colors.red.shade400,
+                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                        ),
+                      ),
                     ],
                   ),
                 ),
-                if (!_isCreating &&
-                    _createError == null &&
-                    request != null &&
-                    request.canCustomerCancel)
-                  Positioned(
-                    bottom: 40,
-                    left: 20,
-                    right: 20,
-                    child: SizedBox(
-                      width: double.infinity,
-                      height: 50,
-                      child: OutlinedButton(
-                        onPressed: _onCancelTrip,
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: Colors.red,
-                          side: const BorderSide(color: Colors.red),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                        ),
-                        child: const Text(
-                          'إلغاء الرحلة',
-                          style: TextStyle(
-                            fontFamily: 'Cairo',
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
               ],
-            );
-          },
-        ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildTripInfoCard(bool isDark) {
+    final p = widget.createParams!;
+    final fare = TaxiFareCalculator.fareForTypeWithRoundTrip(
+      p.distanceKm,
+      TaxiTypeX.fromApiName(p.taxiType),
+      p.isRoundTrip,
+    );
+    final eta = TaxiDistanceCalculator.estimateDrivingDurationSeconds(p.distanceKm);
+    final etaLabel = TaxiDistanceCalculator.formatDrivingDurationAr(eta);
+    final tripLabel = p.isRoundTrip ? 'ذهاب وعودة' : 'ذهاب فقط';
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 24),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF1E293B).withValues(alpha: 0.6) : Colors.white.withValues(alpha: 0.85),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: isDark ? Colors.white10 : Colors.white.withValues(alpha: 0.5)),
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF0EA5E9).withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  tripLabel,
+                  style: const TextStyle(fontFamily: 'Cairo', fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF0EA5E9)),
+                ),
+              ),
+              const Spacer(),
+              if (p.isRoundTrip && p.waitingMinutes != null)
+                Text(
+                  'انتظار ${p.waitingMinutes} دقيقة',
+                  style: TextStyle(fontFamily: 'Cairo', fontSize: 11, color: isDark ? Colors.white38 : Colors.grey),
+                ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          _infoRow(Icons.trip_origin, p.pickupAddress, isDark),
+          const SizedBox(height: 6),
+          Padding(
+            padding: const EdgeInsets.only(right: 22),
+            child: Column(
+              children: [
+                Container(width: 1, height: 8, color: isDark ? Colors.white24 : Colors.grey.shade300),
+                Icon(Icons.arrow_downward, size: 12, color: isDark ? Colors.white24 : Colors.grey.shade400),
+                Container(width: 1, height: 8, color: isDark ? Colors.white24 : Colors.grey.shade300),
+              ],
+            ),
+          ),
+          const SizedBox(height: 6),
+          _infoRow(Icons.location_on, p.dropoffAddress, isDark),
+          if (p.isRoundTrip) ...[
+            const SizedBox(height: 6),
+            Padding(
+              padding: const EdgeInsets.only(right: 22),
+              child: Column(
+                children: [
+                  Container(width: 1, height: 8, color: isDark ? Colors.white24 : Colors.grey.shade300),
+                  const Icon(Icons.replay, size: 12, color: Color(0xFF0EA5E9)),
+                  Container(width: 1, height: 8, color: isDark ? Colors.white24 : Colors.grey.shade300),
+                ],
+              ),
+            ),
+            const SizedBox(height: 6),
+            _infoRow(Icons.flag_rounded, p.pickupAddress, isDark),
+            const SizedBox(height: 8),
+          ],
+          Divider(color: isDark ? Colors.white10 : Colors.grey.shade200, height: 1),
+          const SizedBox(height: 10),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.access_time, size: 14, color: isDark ? Colors.white54 : Colors.grey),
+                  const SizedBox(width: 4),
+                  Text(etaLabel, style: TextStyle(fontFamily: 'Cairo', fontSize: 12, color: isDark ? Colors.white54 : Colors.grey)),
+                ],
+              ),
+              Text(
+                '${fare.toLocaleString()} د.ع',
+                style: const TextStyle(fontFamily: 'Cairo', fontSize: 16, fontWeight: FontWeight.w800, color: Color(0xFF0EA5E9)),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
+
+  Widget _infoRow(IconData icon, String text, bool isDark) {
+    return Row(
+      children: [
+        Icon(icon, size: 16, color: icon == Icons.trip_origin
+            ? const Color(0xFF0EA5E9)
+            : icon == Icons.flag_rounded
+                ? const Color(0xFF0EA5E9)
+                : const Color(0xFFEF4444)),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            text,
+            style: TextStyle(fontFamily: 'Cairo', fontSize: 12, color: isDark ? Colors.white70 : Colors.black87),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTimer(bool isDark) {
+    return Column(
+      children: [
+        SizedBox(
+          width: 64, height: 64,
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              CircularProgressIndicator(
+                value: _progress,
+                strokeWidth: 4,
+                backgroundColor: isDark ? Colors.white10 : Colors.grey.shade200,
+                valueColor: AlwaysStoppedAnimation(_progressColor),
+                strokeCap: StrokeCap.round,
+              ),
+              Text(
+                _etaLabel,
+                style: TextStyle(
+                  fontFamily: 'Cairo',
+                  fontSize: 16,
+                  fontWeight: FontWeight.w800,
+                  color: isDark ? Colors.white : const Color(0xFF1E293B),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          'الوقت المتبقي',
+          style: TextStyle(fontFamily: 'Cairo', fontSize: 11, color: isDark ? Colors.white38 : Colors.grey.shade400),
+        ),
+      ],
+    );
+  }
+
+  void _onBack(dynamic provider) {
+    _timer?.cancel();
+    if (provider.currentRequest?.isPending ?? false) {
+      provider.cancelRequest(provider.currentRequest!.id);
+    }
+    Navigator.of(context).pop();
+  }
 }
 
-class _MapGridPainter extends CustomPainter {
+class _OrbitPainter extends CustomPainter {
+  final double progress;
+  final double dotProgress;
+
+  _OrbitPainter({required this.progress, required this.dotProgress});
+
   @override
   void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = size.width / 2 - 28;
     final paint = Paint()
-      ..color = const Color(0xFFE8E8E8)
-      ..strokeWidth = 1;
+      ..color = const Color(0xFF0EA5E9).withValues(alpha: 0.12)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.5;
 
-    const spacing = 30.0;
-    for (double x = 0; x < size.width; x += spacing) {
-      canvas.drawLine(Offset(x, 0), Offset(x, size.height), paint);
-    }
-    for (double y = 0; y < size.height; y += spacing) {
-      canvas.drawLine(Offset(0, y), Offset(size.width, y), paint);
+    canvas.drawCircle(center, radius, paint);
+
+    for (var i = 0; i < 3; i++) {
+      final angle = (progress * math.pi * 2) + (i * math.pi * 2 / 3);
+      final dotX = center.dx + radius * math.cos(angle);
+      final dotY = center.dy + radius * math.sin(angle);
+      final alpha = ((dotProgress + i * 0.3) % 1.0);
+      final dotPaint = Paint()
+        ..color = const Color(0xFF0EA5E9).withValues(alpha: 0.15 + alpha * 0.6)
+        ..style = PaintingStyle.fill;
+      canvas.drawCircle(Offset(dotX, dotY), 4, dotPaint);
     }
   }
 
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+  bool shouldRepaint(_OrbitPainter old) => old.progress != progress || old.dotProgress != dotProgress;
 }
