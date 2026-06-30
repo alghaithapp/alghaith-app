@@ -90,6 +90,58 @@ export interface DriverPreRegisterResponse {
   driverProfileComplete: boolean;
 }
 
+export interface ProfessionalPreRegisterPayload {
+  professionalPhone: string;
+  fullName: string;
+  professionId: string;
+  description?: string;
+  address?: string;
+  contactPhone?: string;
+  whatsapp?: string;
+  openTime?: string;
+  closeTime?: string;
+  profileImageUrl?: string;
+  workSampleUrls?: string[];
+  showPhoneToCustomers?: boolean;
+  showWhatsAppToCustomers?: boolean;
+}
+
+export interface ProfessionalPreRegisterResponse {
+  success: boolean;
+  phone: string;
+  fullName: string;
+  professionId: string;
+  storeName: string;
+  isApproved: boolean;
+  approvalStatus: string;
+  merchantProfileComplete: boolean;
+}
+
+export interface AdminPermissions {
+  canRegister: boolean;
+  canApprove: boolean;
+  canDelete: boolean;
+  canSuspend: boolean;
+  canManageAdmins: boolean;
+}
+
+export const DEFAULT_ADMIN_PERMISSIONS: AdminPermissions = {
+  canRegister: true,
+  canApprove: true,
+  canDelete: true,
+  canSuspend: true,
+  canManageAdmins: false,
+};
+
+export interface AdminSummary {
+  phone: string;
+  fullName: string;
+  role: string;
+  permissions: AdminPermissions;
+  isProtected: boolean;
+  updatedAt: string | null;
+}
+
 export type AdminView =
   | 'dashboard'
   | 'accounts'
@@ -100,7 +152,8 @@ export type AdminView =
   | 'homeCategories'
   | 'appUpdate'
   | 'notifications'
-  | 'maintenance';
+  | 'maintenance'
+  | 'admins';
 
 export interface AdminTaxiTrip {
   id: string;
@@ -342,4 +395,20 @@ export const COURIER_REJECTION_REASONS: Array<{
   { key: 'phone', label: 'رقم الهاتف غير صحيح — يرجى إدخال رقم مفعّل على واتساب' },
   { key: 'address', label: 'عنوان السكن غير صحيح أو غير واضح' },
   { key: 'vehicleImage', label: 'صورة الدراجة غير واضحة أو غير مقبولة' },
+];
+
+export const PROFESSIONAL_CATEGORIES: Array<{ id: string; label: string }> = [
+  { id: 'plumber', label: 'سباك' },
+  { id: 'electrician', label: 'كهربائي' },
+  { id: 'ac_tech', label: 'فني تكييف' },
+  { id: 'carpenter', label: 'نجار' },
+  { id: 'cleaner', label: 'تنظيف منازل' },
+  { id: 'blacksmith', label: 'حداد' },
+  { id: 'painter', label: 'صباغ' },
+  { id: 'builder', label: 'بناء' },
+  { id: 'cctv_tech', label: 'فني كاميرات مراقبة' },
+  { id: 'network_tech', label: 'فني إنترنت وشبكات' },
+  { id: 'loading_worker', label: 'عامل تحميل وتنزيل' },
+  { id: 'gardener', label: 'عامل حدائق' },
+  { id: 'aluminum_glass', label: 'فني ألمنيوم وزجاج' },
 ];

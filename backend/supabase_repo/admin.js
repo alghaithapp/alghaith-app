@@ -1853,6 +1853,198 @@ async function preRegisterDriverAccount(adminPhone, payload = {}) {
   };
 }
 
+const PROFESSIONAL_CATEGORIES = new Set([
+  'plumber', 'electrician', 'ac_tech', 'carpenter', 'cleaner',
+  'blacksmith', 'painter', 'builder', 'cctv_tech', 'network_tech',
+  'loading_worker', 'gardener', 'aluminum_glass',
+]);
+
+const PROFESSIONAL_CATEGORY_NAMES = {
+  plumber: { ar: 'سباك', en: 'Plumber' },
+  electrician: { ar: 'كهربائي', en: 'Electrician' },
+  ac_tech: { ar: 'فني تكييف', en: 'AC Technician' },
+  carpenter: { ar: 'نجار', en: 'Carpenter' },
+  cleaner: { ar: 'تنظيف منازل', en: 'Home Cleaner' },
+  blacksmith: { ar: 'حداد', en: 'Blacksmith' },
+  painter: { ar: 'صباغ', en: 'Painter' },
+  builder: { ar: 'بناء', en: 'Builder' },
+  cctv_tech: { ar: 'فني كاميرات مراقبة', en: 'CCTV Technician' },
+  network_tech: { ar: 'فني إنترنت وشبكات', en: 'Network Technician' },
+  loading_worker: { ar: 'عامل تحميل وتنزيل', en: 'Loading Worker' },
+  gardener: { ar: 'عامل حدائق', en: 'Gardener' },
+  aluminum_glass: { ar: 'فني ألمنيوم وزجاج', en: 'Aluminum & Glass' },
+};
+
+async function preRegisterProfessionalAccount(adminPhone, payload = {}) {
+  await assertAdminAccess(adminPhone);
+
+  const rawPhone = String(payload.professionalPhone ?? payload.phone ?? '').trim();
+  if (!rawPhone) {
+    throw new Error('رقم الهاتف مطلوب.');
+  }
+
+  const phoneKey = await resolvePhoneKey(rawPhone);
+  const fullName = String(payload.fullName ?? payload.full_name ?? '').trim();
+  if (!fullName) {
+    throw new Error('اسم المهني مطلوب.');
+  }
+
+  const professionId = String(payload.professionId ?? payload.profession_id ?? '').trim();
+  if (!professionId || !PROFESSIONAL_CATEGORIES.has(professionId)) {
+    throw new Error('يرجى اختيار تخصص مهني صحيح.');
+  }
+
+  const catNames = PROFESSIONAL_CATEGORY_NAMES[professionId] || { ar: '', en: '' };
+  const description = String(payload.description ?? '').trim();
+  const address = String(payload.address ?? '').trim();
+  const phone = String(payload.phone ?? payload.contactPhone ?? '').trim();
+  const whatsapp = String(payload.whatsapp ?? '').trim();
+  const openTime = String(payload.openTime ?? payload.open_time ?? '').trim();
+  const closeTime = String(payload.closeTime ?? payload.close_time ?? '').trim();
+  const profileImageUrl = String(payload.profileImageUrl ?? payload.profile_image_url ?? '').trim();
+  const workSampleUrls = normalizeArray(payload.workSampleUrls ?? payload.work_sample_urls);
+
+  const showPhone = payload.showPhoneToCustomers !== false;
+  const showWhatsapp = payload.showWhatsAppToCustomers !== false;
+
+  const existingUser = await getAppUser(phoneKey);
+  if (existingUser && String(existingUser.role ?? '').trim() === 'admin') {
+    throw new Error('لا يمكن تسجيل رقم المشرف كمهني.');
+  }
+
+  const existingProfileCheck = await getMerchantProfile(phoneKey);
+  if (existingProfileCheck) {
+    const existingState = (await getUserState(phoneKey)) || {};
+    if (existingState.merchantProfileComplete === true) {
+      throw new Error('يوجد ملف تاجر مكتمل لهذا الرقم بالفعل.');
+    }
+  }
+
+  if (!existingUser) {
+    await saveAppUser(phoneKey, {
+      role: 'merchant',
+      account_type: 'marketplace',
+      full_name: fullName,
+    });
+  } else {
+    const patch = {};
+    const existingName = String(existingUser.full_name ?? '').trim();
+    if (!existingName) patch.full_name = fullName;
+    if (!String(existingUser.account_type ?? '').trim()) {
+      patch.account_type = 'marketplace';
+    }
+    if (Object.keys(patch).length > 0) {
+      await saveAppUser(phoneKey, patch);
+    }
+  }
+
+  const professionalInfo = {
+    name: fullName,
+    address,
+    phone,
+    whatsapp,
+    openTime,
+    closeTime,
+    professionId,
+    professionNameAr: catNames.ar,
+    professionNameEn: catNames.en,
+    profileImageBase64: profileImageUrl,
+    workSampleImagesBase64: workSampleUrls,
+    contact_visibility: {
+      show_phone_to_customers: showPhone,
+      show_whatsapp_to_customers: showWhatsapp,
+      showPhoneToCustomers: showPhone,
+      showWhatsAppToCustomers: showWhatsapp,
+    },
+    contactVisibility: {
+      showPhoneToCustomers: showPhone,
+      showWhatsAppToCustomers: showWhatsapp,
+    },
+  };
+
+  const existingProfile = await getMerchantProfile(phoneKey);
+  const profilePayload = {
+    store_name: fullName,
+    primary_service_id: 'professionals',
+    service_ids: ['professionals'],
+    active_service_id: 'professionals',
+    description: description || undefined,
+    is_approved: true,
+    approval_status: 'approved',
+    is_open: true,
+    professional_info: professionalInfo,
+    professional_category_id: professionId,
+    // profile_image_base64 محذوفة عمداً — صورة المهني تخزن داخل professional_info فقط
+  };
+
+  if (existingProfile) {
+    await saveMerchantProfile(phoneKey, profilePayload);
+  } else {
+    const supabase = assertSupabaseAdmin();
+
+    // نحتاج user_id لأن merchant_profiles في الإنتاج عنده user_id NOT NULL
+    const { data: appUser } = await supabase
+      .from('app_users')
+      .select('id')
+      .eq('phone', phoneKey)
+      .maybeSingle();
+
+    const upsertPayload = { phone: phoneKey, ...profilePayload, updated_at: nowIso() };
+    if (appUser?.id) upsertPayload.user_id = appUser.id;
+
+    const { error: upsertErr } = await supabase
+      .from('merchant_profiles')
+      .upsert(upsertPayload, { onConflict: 'phone' })
+      .select();
+
+    if (upsertErr) throw upsertErr;
+  }
+
+  const merchantStoreStub = {
+    category: 'professionals',
+    serviceIds: ['professionals'],
+    service_ids: ['professionals'],
+    activeServiceId: 'professionals',
+    active_service_id: 'professionals',
+    primary_service_id: 'professionals',
+    isApproved: true,
+    approvalStatus: 'approved',
+    adminPreRegistered: true,
+    name: fullName,
+    store_name: fullName,
+    isProfessional: true,
+    professionalCategoryId: professionId,
+    professionalInfo,
+  };
+
+  const merchantState = (await getUserState(phoneKey)) || {};
+  await saveUserState(phoneKey, {
+    ...merchantState,
+    userRole: merchantState.userRole || merchantState.user_role || 'merchant',
+    user_role: merchantState.user_role || merchantState.userRole || 'merchant',
+    merchantProfileComplete: false,
+    merchantStore: merchantStoreStub,
+    adminPreRegisteredMerchant: true,
+    adminPreRegisteredAt: nowIso(),
+    adminPreRegisteredBy: adminPhone,
+    multiRoleAccount: true,
+  });
+
+  const refreshed = await getMerchantProfile(phoneKey);
+  const user = await getAppUser(phoneKey);
+
+  return {
+    success: true,
+    phone: phoneKey,
+    fullName: String(user?.full_name ?? fullName).trim(),
+    professionId,
+    storeName: String(refreshed?.store_name ?? fullName).trim(),
+    isApproved: true,
+    approvalStatus: 'approved',
+    merchantProfileComplete: false,
+  };
+}
+
 const DEFAULT_APP_UPDATE_POLICY = Object.freeze({
   minBuildNumber: 1,
   minVersionName: '1.0.0',
@@ -2118,6 +2310,9 @@ module.exports = {
   ensurePlatformAdminAccess,
   preRegisterMerchantAccount,
   preRegisterDriverAccount,
+  preRegisterProfessionalAccount,
+  PROFESSIONAL_CATEGORIES,
+  PROFESSIONAL_CATEGORY_NAMES,
   getHomeCategoriesConfig,
   saveAdminHomeCategoriesConfig,
   getAppUpdatePolicy,

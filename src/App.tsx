@@ -7,12 +7,16 @@ import {
   loadAdminReports,
   loadAdminTaxiComplaints,
   loadAdminTaxiTrips,
+  loadAdminNotifications,
+  loadAllAdmins,
   loadAppUpdatePolicy,
   loadMaintenancePolicy,
   loadCouriers,
   loadHomeCategoriesConfig,
   loadMerchantDetails,
   loadMerchants,
+  loadMyAdminRole,
+  markAdminNotificationsRead,
   saveAppUpdatePolicy,
   saveMaintenancePolicy,
   saveHomeCategoriesConfig,
@@ -31,14 +35,18 @@ import {
   toggleMerchantBazaar,
   toggleMerchantFreeze,
   verifyCode,
-  loadAdminNotifications,
-  markAdminNotificationsRead,
+  inviteAdmin,
+  updateAdminPermissions,
+  removeAdmin,
+  preRegisterProfessional,
 } from './admin-api';
 import type {
   AdminAccountKind,
   AdminAccountSummary,
   AdminNotification,
+  AdminPermissions,
   AdminReports,
+  AdminSummary,
   AdminTaxiTrip,
   AdminView,
   AppUpdatePolicy,
@@ -47,6 +55,7 @@ import type {
   HomeCategoriesConfig,
   MerchantPreRegisterPayload,
   DriverPreRegisterPayload,
+  ProfessionalPreRegisterPayload,
   MerchantDetails,
   MerchantSummary,
 } from './admin-types';
@@ -71,6 +80,7 @@ const HomeCategoriesView = lazy(() => import('./components/views/HomeCategoriesV
 const AppUpdateView = lazy(() => import('./components/views/AppUpdateView'));
 const NotificationsView = lazy(() => import('./components/views/NotificationsView'));
 const MaintenanceView = lazy(() => import('./components/views/MaintenanceView'));
+const AdminsView = lazy(() => import('./components/views/AdminsView'));
 
 function ViewLoadingFallback() {
   return (
@@ -149,6 +159,12 @@ const VIEW_META: Record<
     eyebrow: 'وضع الصيانة',
     title: 'تفعيل الصيانة',
     subtitle: 'أوقف التطبيق مؤقتاً وأظهر رسالة الصيانة لجميع المستخدمين.',
+    showSearch: false,
+  },
+  admins: {
+    eyebrow: 'المشرفون',
+    title: 'إدارة المشرفين',
+    subtitle: 'أضف مشرفين جدد وحدد صلاحياتهم (تسجيل، موافقة، حذف، تعليق).',
     showSearch: false,
   },
   notifications: {
@@ -286,6 +302,10 @@ export default function App() {
   const [homeCategoriesConfig, setHomeCategoriesConfig] = useState<HomeCategoriesConfig | null>(null);
   const [homeCategorySavingKey, setHomeCategorySavingKey] = useState('');
   const [isLoadingHomeCategories, setIsLoadingHomeCategories] = useState(false);
+  const [admins, setAdmins] = useState<AdminSummary[]>([]);
+  const [myPermissions, setMyPermissions] = useState<AdminPermissions>({
+    canRegister: true, canApprove: true, canDelete: true, canSuspend: true, canManageAdmins: true,
+  });
   const [taxiTrips, setTaxiTrips] = useState<AdminTaxiTrip[]>([]);
   const [taxiComplaints, setTaxiComplaints] = useState<AdminTaxiTrip[]>([]);
   const [taxiStatusFilter, setTaxiStatusFilter] = useState('');
@@ -327,6 +347,9 @@ export default function App() {
   useEffect(() => {
     if (!token) return;
     refreshCoreData(token).catch(() => undefined);
+    loadMyAdminRole(token).then((data) => {
+      if (data.permissions) setMyPermissions(data.permissions);
+    }).catch(() => undefined);
   }, [token]);
 
   // Poll for admin notifications every 15 seconds
@@ -404,6 +427,11 @@ export default function App() {
     if (!token || view !== 'taxi') return;
     refreshTaxiAdminData(token).catch(() => undefined);
   }, [token, view, taxiStatusFilter]);
+
+  useEffect(() => {
+    if (!token || view !== 'admins') return;
+    handleLoadAdmins();
+  }, [token, view]);
 
   useEffect(() => {
     if (!token || view !== 'homeCategories') return;
@@ -580,6 +608,10 @@ export default function App() {
     setDeleteTarget(null);
     setHomeCategoriesConfig(null);
     setSelectedMerchantPhone('');
+    setAdmins([]);
+    setMyPermissions({
+      canRegister: true, canApprove: true, canDelete: true, canSuspend: true, canManageAdmins: true,
+    });
     setSuccessMessage('');
     setActionError('');
     setBootError('');
@@ -632,6 +664,26 @@ export default function App() {
       setSearch(result.phone);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'تعذر تسجيل السائق.';
+      setActionError(message);
+      throw error;
+    }
+  }
+
+  async function handlePreRegisterProfessional(payload: ProfessionalPreRegisterPayload) {
+    if (!token) return;
+    setActionError('');
+    setSuccessMessage('');
+    try {
+      const result = await preRegisterProfessional(token, payload);
+      setSuccessMessage(
+        `تم تسجيل المهني ${result.fullName || result.phone}. عند تسجيل الدخول سيجد ملفه المهني جاهزاً.`,
+      );
+      await refreshCoreData(token, result.phone);
+      setMerchantFilter('professionals');
+      setSelectedMerchantPhone(result.phone);
+      setView('merchants');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'تعذر تسجيل المهني.';
       setActionError(message);
       throw error;
     }
@@ -770,6 +822,59 @@ export default function App() {
   }
 
   // Toggle driver approval on/off (for DriversView activate/deactivate button)
+  async function handleLoadAdmins() {
+    if (!token) return;
+    try {
+      const data = await loadAllAdmins(token);
+      setAdmins(data.admins);
+      setMyPermissions(data.myPermissions);
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : 'تعذر تحميل قائمة المشرفين.');
+    }
+  }
+
+  async function handleInviteAdmin(phone: string, permissions: AdminPermissions) {
+    if (!token) return;
+    setActionError('');
+    setSuccessMessage('');
+    try {
+      await inviteAdmin(token, phone, permissions);
+      setSuccessMessage(`تمت إضافة المشرف ${phone}. يمكنه تسجيل الدخول الآن بالرقم نفسه.`);
+      await handleLoadAdmins();
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : 'تعذر إضافة المشرف.');
+      throw error;
+    }
+  }
+
+  async function handleUpdatePermissions(phone: string, permissions: AdminPermissions) {
+    if (!token) return;
+    setActiveActionKey(`admin-update:${phone}`);
+    setActionError('');
+    setSuccessMessage('');
+    try {
+      await updateAdminPermissions(token, phone, permissions);
+      setSuccessMessage(`تم تحديث صلاحيات المشرف ${phone}.`);
+      await handleLoadAdmins();
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : 'تعذر تحديث الصلاحيات.');
+    } finally { setActiveActionKey(''); }
+  }
+
+  async function handleRemoveAdmin(phone: string) {
+    if (!token) return;
+    setActiveActionKey(`admin-remove:${phone}`);
+    setActionError('');
+    setSuccessMessage('');
+    try {
+      await removeAdmin(token, phone);
+      setSuccessMessage(`تم إزالة المشرف ${phone}.`);
+      await handleLoadAdmins();
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : 'تعذر إزالة المشرف.');
+    } finally { setActiveActionKey(''); }
+  }
+
   async function handleToggleDriverApproval(account: AdminAccountSummary) {
     if (!token) return;
     const nextApproved = !driverApprovalFor(account).isApproved;
@@ -922,6 +1027,7 @@ export default function App() {
           pendingCourierQueue={pendingCourierQueue}
           approvalQueue={approvalQueue}
           pendingDriverCount={pendingDriverQueue.length}
+          myPermissions={myPermissions}
           sidebarOpen={sidebarOpen}
           onSwitchView={switchView}
           onLogout={handleLogout}
@@ -1170,6 +1276,7 @@ export default function App() {
                       merchantDetails={merchantDetails}
                       isLoadingDetails={isLoadingDetails}
                       activeActionKey={activeActionKey}
+                      token={token}
                       accounts={accounts}
                       formatMoney={formatMoney}
                       formatDate={formatDate}
@@ -1182,6 +1289,7 @@ export default function App() {
                       onOpenReject={(target) => openRejectConfirm({ phone: target.phone, displayName: target.displayName, kind: 'merchant' })}
                       onOpenDelete={openDeleteConfirm}
                       onPreRegisterMerchant={handlePreRegisterMerchant}
+                      onPreRegisterProfessional={handlePreRegisterProfessional}
                       pendingMerchantQueue={pendingMerchantQueue}
                       approvalQueue={approvalQueue}
                     />
@@ -1324,11 +1432,22 @@ export default function App() {
                 />
               ) : null}
 
+              {view === 'admins' ? (
+                <AdminsView
+                  admins={admins}
+                  myPermissions={myPermissions}
+                  activeActionKey={activeActionKey}
+                  onInviteAdmin={handleInviteAdmin}
+                  onUpdatePermissions={handleUpdatePermissions}
+                  onRemoveAdmin={handleRemoveAdmin}
+                />
+              ) : null}
+
               {view === 'notifications' ? (
                 <NotificationsView
                   token={token}
                   onError={(msg) => setActionError(msg)}
-                  onSuccess={(msg) => setActionSuccess(msg)}
+                  onSuccess={(msg) => setSuccessMessage(msg)}
                 />
               ) : null}
             </>

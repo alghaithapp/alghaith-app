@@ -31,6 +31,7 @@ const {
   ensurePlatformAdminAccess,
   preRegisterMerchantAccount,
   preRegisterDriverAccount,
+  preRegisterProfessionalAccount,
 } = require('../supabase_repo');
 const logger = require('../lib/logger');
 const {
@@ -38,6 +39,8 @@ const {
   requireOptionalAuthorizedPhone,
   parseQueryValue,
 } = require('./_middleware');
+
+const { assertAdminPermission } = require('../supabase_repo');
 
 // ── Reports ─────────────────────────────────────────────────────────────
 
@@ -138,6 +141,7 @@ router.delete('/admin/driver', async (req, res) => {
   try {
     const adminPhone = requireOptionalAuthorizedPhone(req, res);
     if (!adminPhone) return;
+    await assertAdminPermission(adminPhone, 'canDelete');
     const driverPhone = String(parseQueryValue(req.query.driverPhone) || '').trim();
     if (!driverPhone) {
       return res.status(400).json({ message: 'Driver phone is required.' });
@@ -181,6 +185,7 @@ router.put('/admin/merchant-approval', async (req, res) => {
   try {
     const phone = requireOptionalAuthorizedPhone(req, res);
     if (!phone) return;
+    await assertAdminPermission(phone, 'canApprove');
     const merchantPhone = String(req.body?.merchantPhone || '').trim();
     const isApproved = req.body?.isApproved === true;
     if (!merchantPhone) {
@@ -204,6 +209,7 @@ router.put('/admin/merchant-rejection', async (req, res) => {
   try {
     const phone = requireOptionalAuthorizedPhone(req, res);
     if (!phone) return;
+    await assertAdminPermission(phone, 'canApprove');
     const merchantPhone = String(req.body?.merchantPhone || '').trim();
     const reasonKey = String(req.body?.reasonKey || '').trim();
     const rejectionMessageAr = String(
@@ -294,6 +300,7 @@ router.post('/admin/merchant-pre-register', async (req, res) => {
   try {
     const phone = requireOptionalAuthorizedPhone(req, res);
     if (!phone) return;
+    await assertAdminPermission(phone, 'canRegister');
     const result = await preRegisterMerchantAccount(phone, req.body || {});
     return res.json(result);
   } catch (error) {
@@ -315,6 +322,7 @@ router.post('/admin/driver-pre-register', async (req, res) => {
   try {
     const phone = requireOptionalAuthorizedPhone(req, res);
     if (!phone) return;
+    await assertAdminPermission(phone, 'canRegister');
     const result = await preRegisterDriverAccount(phone, req.body || {});
     return res.json(result);
   } catch (error) {
@@ -332,12 +340,36 @@ router.post('/admin/driver-pre-register', async (req, res) => {
   }
 });
 
+router.post('/admin/professional-pre-register', async (req, res) => {
+  try {
+    const phone = requireOptionalAuthorizedPhone(req, res);
+    if (!phone) return;
+    await assertAdminPermission(phone, 'canRegister');
+    const result = await preRegisterProfessionalAccount(phone, req.body || {});
+    return res.json(result);
+  } catch (error) {
+    console.error('professional pre-register error:', error);
+    const message = error?.message || 'Failed to pre-register professional.';
+    const status = message.includes('Admin access')
+      ? 403
+      : message.includes('بالفعل') ||
+          message.includes('لا يمكن') ||
+          message.includes('مطلوب') ||
+          message.includes('غير صالح') ||
+          message.includes('تخصص')
+        ? 400
+        : 500;
+    return res.status(status).json({ message });
+  }
+});
+
 // ── Couriers/Drivers Approvals ──────────────────────────────────────────
 
 router.put('/admin/courier-approval', async (req, res) => {
   try {
     const phone = requireOptionalAuthorizedPhone(req, res);
     if (!phone) return;
+    await assertAdminPermission(phone, 'canApprove');
     const courierPhone = String(req.body?.courierPhone || '').trim();
     const isApproved = req.body?.isApproved === true;
     if (!courierPhone) {
@@ -361,6 +393,7 @@ router.put('/admin/courier-rejection', async (req, res) => {
   try {
     const phone = requireOptionalAuthorizedPhone(req, res);
     if (!phone) return;
+    await assertAdminPermission(phone, 'canApprove');
     const courierPhone = String(req.body?.courierPhone || '').trim();
     const reasonKey = String(req.body?.reasonKey || '').trim();
     const rejectionMessageAr = String(
@@ -395,6 +428,7 @@ router.put('/admin/driver-approval', async (req, res) => {
   try {
     const phone = requireOptionalAuthorizedPhone(req, res);
     if (!phone) return;
+    await assertAdminPermission(phone, 'canApprove');
     const driverPhone = String(req.body?.driverPhone || '').trim();
     const isApproved = req.body?.isApproved === true;
     if (!driverPhone) {
@@ -418,6 +452,7 @@ router.put('/admin/driver-rejection', async (req, res) => {
   try {
     const phone = requireOptionalAuthorizedPhone(req, res);
     if (!phone) return;
+    await assertAdminPermission(phone, 'canApprove');
     const driverPhone = String(req.body?.driverPhone || '').trim();
     const reasonKey = String(req.body?.reasonKey || '').trim();
     const rejectionMessageAr = String(
@@ -468,6 +503,7 @@ router.delete('/admin/account', async (req, res) => {
   try {
     const phone = requireOptionalAuthorizedPhone(req, res);
     if (!phone) return;
+    await assertAdminPermission(phone, 'canDelete');
     const accountPhone = String(
       req.body?.accountPhone || req.query?.accountPhone || ''
     ).trim();
@@ -492,6 +528,7 @@ router.put('/admin/account-suspend', async (req, res) => {
   try {
     const phone = requireOptionalAuthorizedPhone(req, res);
     if (!phone) return;
+    await assertAdminPermission(phone, 'canSuspend');
     const accountPhone = String(req.body?.accountPhone || '').trim();
     const isSuspended = req.body?.isSuspended === true;
     if (!accountPhone) {
@@ -649,12 +686,12 @@ router.get('/admin/roles', async (req, res) => {
   try {
     const phone = requireOptionalAuthorizedPhone(req, res);
     if (!phone) return;
-    const { getAdminRole, listAdminAccounts } = require('../supabase_repo');
-    const [role, accounts] = await Promise.all([
-      getAdminRole(phone),
+    const { getAdminRoleWithPermissions, listAdminAccounts } = require('../supabase_repo');
+    const [roleData, accounts] = await Promise.all([
+      getAdminRoleWithPermissions(phone),
       listAdminAccounts(phone),
     ]);
-    return res.json({ role, accounts });
+    return res.json({ role: roleData.role, permissions: roleData.permissions, accounts });
   } catch (error) {
     logger.error('admin roles list error', { error: error.message });
     const status = error.message.includes('Admin access') ? 403 : 500;
@@ -681,6 +718,83 @@ router.put('/admin/roles', async (req, res) => {
       : error.message.includes('Invalid role')
         ? 400
         : 500;
+    return res.status(status).json({ message: error.message });
+  }
+});
+
+// ── Admin Permissions ────────────────────────────────────────────────────
+
+router.get('/admin/admins', async (req, res) => {
+  try {
+    const phone = requireOptionalAuthorizedPhone(req, res);
+    if (!phone) return;
+    const { listAllAdmins, getAdminPermissions } = require('../supabase_repo');
+    const [admins, myPermissions] = await Promise.all([
+      listAllAdmins(phone),
+      getAdminPermissions(phone),
+    ]);
+    return res.json({ admins, myPermissions });
+  } catch (error) {
+    logger.error('admin list admins error', { error: error.message });
+    const status = error.message.includes('Super admin') ? 403 : 500;
+    return res.status(status).json({ message: error.message });
+  }
+});
+
+router.post('/admin/admin-invite', async (req, res) => {
+  try {
+    const phone = requireOptionalAuthorizedPhone(req, res);
+    if (!phone) return;
+    const targetPhone = String(req.body?.targetPhone || '').trim();
+    const permissions = req.body?.permissions || {};
+    if (!targetPhone) {
+      return res.status(400).json({ message: 'رقم الهاتف مطلوب.' });
+    }
+    const { setAdminPermissions } = require('../supabase_repo');
+    const result = await setAdminPermissions(phone, targetPhone, permissions);
+    return res.json(result);
+  } catch (error) {
+    logger.error('admin invite error', { error: error.message });
+    const status = error.message.includes('Super admin') ? 403 : 500;
+    return res.status(status).json({ message: error.message });
+  }
+});
+
+router.put('/admin/admin-permissions', async (req, res) => {
+  try {
+    const phone = requireOptionalAuthorizedPhone(req, res);
+    if (!phone) return;
+    const targetPhone = String(req.body?.targetPhone || '').trim();
+    const permissions = req.body?.permissions || {};
+    if (!targetPhone) {
+      return res.status(400).json({ message: 'رقم الهاتف مطلوب.' });
+    }
+    const { setAdminPermissions } = require('../supabase_repo');
+    const result = await setAdminPermissions(phone, targetPhone, permissions);
+    return res.json(result);
+  } catch (error) {
+    logger.error('admin permissions update error', { error: error.message });
+    const status = error.message.includes('Super admin') ? 403 : 500;
+    return res.status(status).json({ message: error.message });
+  }
+});
+
+router.delete('/admin/admin-remove', async (req, res) => {
+  try {
+    const phone = requireOptionalAuthorizedPhone(req, res);
+    if (!phone) return;
+    const targetPhone = String(req.body?.targetPhone || req.query?.targetPhone || '').trim();
+    if (!targetPhone) {
+      return res.status(400).json({ message: 'رقم الهاتف مطلوب.' });
+    }
+    const { removeAdmin } = require('../supabase_repo');
+    const result = await removeAdmin(phone, targetPhone);
+    return res.json(result);
+  } catch (error) {
+    logger.error('admin remove error', { error: error.message });
+    const status = error.message.includes('Super admin') || error.message.includes('protected')
+      ? 403
+      : 500;
     return res.status(status).json({ message: error.message });
   }
 });

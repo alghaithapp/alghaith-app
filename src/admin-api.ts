@@ -1,7 +1,10 @@
 import type {
   AdminAccountSummary,
+  AdminNotifications,
+  AdminPermissions,
   AdminReports,
   AdminSession,
+  AdminSummary,
   AdminTaxiTrip,
   AppUpdatePolicy,
   MaintenancePolicy,
@@ -14,6 +17,8 @@ import type {
   MerchantPreRegisterPayload,
   MerchantPreRegisterResponse,
   MerchantSummary,
+  ProfessionalPreRegisterPayload,
+  ProfessionalPreRegisterResponse,
   ToggleBazaarResponse,
 } from './admin-types';
 
@@ -294,6 +299,21 @@ export async function preRegisterDriver(
   );
 }
 
+export async function preRegisterProfessional(
+  token: string,
+  payload: ProfessionalPreRegisterPayload,
+) {
+  return request<ProfessionalPreRegisterResponse>(
+    DATABASE_API_BASE_URL,
+    '/db/admin/professional-pre-register',
+    {
+      method: 'POST',
+      token,
+      body: JSON.stringify(payload),
+    },
+  );
+}
+
 export async function loadAppUpdatePolicy(token: string): Promise<AppUpdatePolicy> {
   return request<AppUpdatePolicy>(DATABASE_API_BASE_URL, '/db/admin/app-update-policy', { token });
 }
@@ -374,4 +394,69 @@ export async function loadAdminTaxiComplaints(token: string) {
     '/db/admin/taxi/complaints',
     { token },
   );
+}
+
+// ── Admin Management ────────────────────────────────────────────────────
+
+export interface AdminListResponse {
+  admins: AdminSummary[];
+  myPermissions: AdminPermissions;
+}
+
+export async function loadAllAdmins(token: string): Promise<AdminListResponse> {
+  return request<AdminListResponse>(DATABASE_API_BASE_URL, '/db/admin/admins', { token });
+}
+
+export async function inviteAdmin(token: string, targetPhone: string, permissions: AdminPermissions) {
+  return request<{ success: boolean; phone: string; permissions: AdminPermissions }>(
+    DATABASE_API_BASE_URL,
+    '/db/admin/admin-invite',
+    { method: 'POST', token, body: JSON.stringify({ targetPhone, permissions }) },
+  );
+}
+
+export async function updateAdminPermissions(token: string, targetPhone: string, permissions: AdminPermissions) {
+  return request<{ success: boolean; phone: string; permissions: AdminPermissions }>(
+    DATABASE_API_BASE_URL,
+    '/db/admin/admin-permissions',
+    { method: 'PUT', token, body: JSON.stringify({ targetPhone, permissions }) },
+  );
+}
+
+export async function removeAdmin(token: string, targetPhone: string) {
+  return request<{ success: boolean; phone: string }>(
+    DATABASE_API_BASE_URL,
+    '/db/admin/admin-remove',
+    { method: 'DELETE', token, body: JSON.stringify({ targetPhone }) },
+  );
+}
+
+export async function loadMyAdminRole(token: string): Promise<{ role: string; permissions: AdminPermissions | null; accounts: unknown[] }> {
+  return request(DATABASE_API_BASE_URL, '/db/admin/roles', { token });
+}
+
+export async function uploadImage(token: string, file: File): Promise<string> {
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('bucket', 'uploads');
+
+  const url = `${PHONE_AUTH_BASE_URL}/upload`;
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: formData,
+  });
+
+  const text = await response.text();
+  if (!response.ok) {
+    let msg = 'فشل رفع الصورة';
+    try { const p = JSON.parse(text); msg = p.message || msg; } catch { msg = text || msg; }
+    throw new Error(msg);
+  }
+
+  const payload = JSON.parse(text);
+  if (!payload.url) throw new Error('لم يتم استلام رابط الصورة من الخادم.');
+  return payload.url;
 }

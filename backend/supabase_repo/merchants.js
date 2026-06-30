@@ -1033,9 +1033,9 @@ function enrichProfessionalProfileRow(row) {
     open_time: openTime || row.open_time,
     close_time: closeTime || row.close_time,
     profile_image_base64:
+      info.profileImageBase64 ||
       row.profile_image_base64 ||
       row.profile_image_url ||
-      info.profileImageBase64 ||
       '',
   };
 }

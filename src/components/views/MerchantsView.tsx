@@ -1,15 +1,17 @@
 import React, { useState, useMemo } from 'react';
-import { LoaderCircle, Package2, Store, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
+import { LoaderCircle, Package2, Store, ArrowUpDown, ArrowUp, ArrowDown, Wrench } from 'lucide-react';
 import type {
   AdminAccountSummary,
   MerchantDetails,
   MerchantFilter,
   MerchantPreRegisterPayload,
   MerchantSummary,
+  ProfessionalPreRegisterPayload,
 } from '../../admin-types';
 import MerchantCard from '../MerchantCard';
 import MerchantDetailPanel from './MerchantDetailPanel';
 import PreRegisterMerchantModal from '../PreRegisterMerchantModal';
+import PreRegisterProfessionalModal from '../PreRegisterProfessionalModal';
 
 interface MerchantsViewProps {
   merchants: MerchantSummary[];
@@ -19,6 +21,7 @@ interface MerchantsViewProps {
   merchantDetails: MerchantDetails | null;
   isLoadingDetails: boolean;
   activeActionKey: string;
+  token: string;
   accounts: AdminAccountSummary[];
   formatMoney: (value: number) => string;
   formatDate: (value: string | null | undefined) => string;
@@ -38,6 +41,7 @@ interface MerchantsViewProps {
   }) => void;
   onOpenDelete: (account: AdminAccountSummary) => void;
   onPreRegisterMerchant: (payload: MerchantPreRegisterPayload) => Promise<void>;
+  onPreRegisterProfessional: (payload: ProfessionalPreRegisterPayload) => Promise<void>;
   pendingMerchantQueue: MerchantSummary[];
   approvalQueue: MerchantSummary[];
 }
@@ -78,6 +82,7 @@ export default function MerchantsView({
   merchantDetails,
   isLoadingDetails,
   activeActionKey,
+  token,
   accounts,
   formatMoney,
   formatDate,
@@ -90,12 +95,15 @@ export default function MerchantsView({
   onOpenReject,
   onOpenDelete,
   onPreRegisterMerchant,
+  onPreRegisterProfessional,
   pendingMerchantQueue,
   approvalQueue,
 }: MerchantsViewProps) {
 
   const [showPreRegister, setShowPreRegister] = useState(false);
   const [isPreRegisterBusy, setIsPreRegisterBusy] = useState(false);
+  const [showProfessionalRegister, setShowProfessionalRegister] = useState(false);
+  const [isProfessionalBusy, setIsProfessionalBusy] = useState(false);
 
   const [sortField, setSortField] = useState<MerchantSortField | null>(null);
   const [sortDir, setSortDir] = useState<SortDir>('desc');
@@ -133,7 +141,15 @@ export default function MerchantsView({
 
   return (
     <>
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12, gap: 8 }}>
+        <button
+          type="button"
+          className="primary-button"
+          onClick={() => setShowProfessionalRegister(true)}
+        >
+          <Wrench size={16} style={{ marginLeft: 6 }} />
+          إضافة مهني
+        </button>
         <button
           type="button"
           className="primary-button"
@@ -142,6 +158,25 @@ export default function MerchantsView({
           + تسجيل تاجر برقم
         </button>
       </div>
+
+      {showProfessionalRegister ? (
+        <PreRegisterProfessionalModal
+          token={token}
+          isBusy={isProfessionalBusy}
+          onPreRegister={async (payload) => {
+            setIsProfessionalBusy(true);
+            try {
+              await onPreRegisterProfessional(payload);
+              setShowProfessionalRegister(false);
+            } finally {
+              setIsProfessionalBusy(false);
+            }
+          }}
+          onClose={() => {
+            if (!isProfessionalBusy) setShowProfessionalRegister(false);
+          }}
+        />
+      ) : null}
 
       <PreRegisterMerchantModal
         open={showPreRegister}

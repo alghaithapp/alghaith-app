@@ -3,6 +3,7 @@ const {
   getPhoneVariants,
   resolvePhoneKey,
   nowIso,
+  PLATFORM_ADMIN_PHONES,
 } = require('./common');
 const { getAppUser } = require('./users');
 
@@ -36,7 +37,7 @@ async function readAdminRoleRow(phoneKey) {
   const supabase = assertSupabaseAdmin();
   const { data, error } = await supabase
     .from('admin_roles')
-    .select('phone, role, updated_at')
+    .select('phone, role, permissions, updated_at')
     .eq('phone', phoneKey)
     .maybeSingle();
   if (error && !/does not exist/i.test(error.message || '')) {
@@ -45,8 +46,29 @@ async function readAdminRoleRow(phoneKey) {
   return data || null;
 }
 
+async function getAdminRoleWithPermissions(phone) {
+  const phoneKey = await resolvePhoneKey(phone);
+  const row = await readAdminRoleRow(phoneKey);
+  const role = row?.role
+    ? String(row.role).trim()
+    : (await getAppUser(phoneKey))?.role === 'admin'
+      ? 'admin'
+      : null;
+  const permissions = row?.permissions && typeof row.permissions === 'object'
+    ? row.permissions
+    : null;
+  return { role, permissions, phone: phoneKey };
+}
+
 async function getAdminRole(phone) {
   const phoneKey = await resolvePhoneKey(phone);
+  const variants = getPhoneVariants(phoneKey);
+
+  const isHardcoded = PLATFORM_ADMIN_PHONES.some((p) =>
+    getPhoneVariants(p).some((v) => variants.includes(v))
+  );
+  if (isHardcoded) return 'super_admin';
+
   const row = await readAdminRoleRow(phoneKey);
   if (row?.role) return String(row.role).trim();
 
@@ -107,7 +129,7 @@ async function listAdminAccounts(adminPhone) {
   const supabase = assertSupabaseAdmin();
   const [users, adminRows] = await Promise.all([
     supabase.from('app_users').select().order('updated_at', { ascending: false }),
-    supabase.from('admin_roles').select(),
+    supabase.from('admin_roles').select('phone, role, permissions, updated_at'),
   ]);
 
   if (users.error) throw new Error(users.error.message);
@@ -132,6 +154,7 @@ async function listAdminAccounts(adminPhone) {
         fullName: String(user.full_name || '').trim(),
         role: role || 'admin',
         adminAccess: true,
+        permissions: roleRow?.permissions || null,
         updatedAt: roleRow?.updated_at || user.updated_at || null,
       });
     }
@@ -150,6 +173,7 @@ module.exports = {
   roleLevel,
   hasMinRole,
   getAdminRole,
+  getAdminRoleWithPermissions,
   setAdminRole,
   listAdminAccounts,
 };

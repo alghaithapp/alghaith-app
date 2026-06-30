@@ -1,12 +1,14 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
+import '../core/theme/app_colors.dart';
 import '../models/app_models.dart';
+import '../modules/chat/utils/chat_navigation.dart';
 import '../services/supabase_service.dart';
 import '../utils/guest_gate.dart';
 import '../utils/merchant_profile_fields.dart';
 import '../widgets/app_image.dart';
-import '../widgets/internal_contact_buttons.dart';
 import '../widgets/service_navigation_buttons.dart';
 
 class ProfessionalsDirectoryScreen extends StatefulWidget {
@@ -176,7 +178,6 @@ class _ProfessionalsDirectoryScreenState
                         address: profile['address']?.toString() ?? '',
                         openTime: profile['open_time']?.toString() ?? '',
                         closeTime: profile['close_time']?.toString() ?? '',
-                        rating: (profile['rating'] as num?)?.toDouble() ?? 4.8,
                         profileImageBase64:
                             profile['profile_image_base64']?.toString(),
                         workSamples: _extractWorkSamples(profile),
@@ -234,7 +235,6 @@ class _ProfessionalCard extends StatelessWidget {
   final String address;
   final String openTime;
   final String closeTime;
-  final double rating;
   final String? profileImageBase64;
   final List<String> workSamples;
 
@@ -246,10 +246,38 @@ class _ProfessionalCard extends StatelessWidget {
     required this.address,
     required this.openTime,
     required this.closeTime,
-    required this.rating,
     required this.profileImageBase64,
     required this.workSamples,
   });
+
+  void _openChat(BuildContext context) {
+    if (!GuestGate.requireAccount(
+      context,
+      message: 'سجّل دخولك لاستخدام المحادثة الداخلية.',
+    )) {
+      return;
+    }
+    ChatNavigation.open(
+      context,
+      threadType: 'store',
+      threadId: phone.trim(),
+      otherPartyName: name,
+      receiverPhone: phone.trim(),
+    );
+  }
+
+  Future<void> _startCall(BuildContext context) async {
+    final tel = 'tel:${phone.trim()}';
+    final uri = Uri.parse(tel);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri);
+    } else {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('تعذر إجراء المكالمة')),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -305,20 +333,6 @@ class _ProfessionalCard extends StatelessWidget {
                   ],
                 ),
               ),
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(Icons.star_rounded, color: Colors.amber, size: 18),
-                  const SizedBox(width: 4),
-                  Text(
-                    rating.toStringAsFixed(1),
-                    style: const TextStyle(
-                      fontFamily: 'Cairo',
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ],
-              ),
             ],
           ),
           if (address.trim().isNotEmpty) ...[
@@ -357,7 +371,7 @@ class _ProfessionalCard extends StatelessWidget {
             ),
           ],
           const SizedBox(height: 14),
-          if (phone.trim().isEmpty)
+          if (phone.trim().isEmpty && whatsapp.trim().isEmpty)
             const Text(
               'لا يتوفر تواصل مع مزوّد الخدمة حالياً.',
               style: TextStyle(
@@ -367,16 +381,55 @@ class _ProfessionalCard extends StatelessWidget {
               ),
             )
           else
-            InternalContactButtons.store(
-              merchantPhone: phone.trim(),
-              storeName: name,
-              merchantProfile: {
-                'open_time': openTime,
-                'close_time': closeTime,
-                'is_open': true,
-              },
-              chatLabel: 'مراسلة',
-              callLabel: 'اتصال',
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () => _openChat(context),
+                    icon: const Icon(Icons.chat_bubble_outline, size: 16),
+                    label: const Text(
+                      'مراسلة',
+                      style: TextStyle(
+                        fontFamily: 'Cairo',
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.primary,
+                      side: const BorderSide(color: AppColors.primary),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                    ),
+                  ),
+                ),
+                if (phone.trim().isNotEmpty) ...[
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: FilledButton.icon(
+                      onPressed: () => _startCall(context),
+                      icon: const Icon(Icons.phone, size: 16),
+                      label: const Text(
+                        'اتصال',
+                        style: TextStyle(
+                          fontFamily: 'Cairo',
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                      ),
+                    ),
+                  ),
+                ],
+              ],
             ),
         ],
       ),

@@ -13,8 +13,10 @@ import {
   UserCheck,
   ChevronRight,
   Wrench,
+  UserCog,
 } from 'lucide-react';
 import type {
+  AdminPermissions,
   AdminView,
   CourierSummary,
   MerchantSummary,
@@ -27,6 +29,7 @@ interface SidebarProps {
   pendingCourierQueue: CourierSummary[];
   approvalQueue: MerchantSummary[];
   pendingDriverCount: number;
+  myPermissions: AdminPermissions;
   sidebarOpen: boolean;
   onSwitchView: (view: AdminView) => void;
   onLogout: () => void;
@@ -65,6 +68,7 @@ export default function Sidebar({
   pendingCourierQueue,
   approvalQueue,
   pendingDriverCount,
+  myPermissions,
   sidebarOpen,
   onSwitchView,
   onLogout,
@@ -164,9 +168,19 @@ export default function Sidebar({
         <div className="sidebar-divider" />
 
         {/* SETTINGS */}
+        <div className="sidebar-divider" />
         <div className="sidebar-nav-section">
           <span className="sidebar-nav-label">الإعدادات</span>
           <nav className="sidebar-nav">
+            {myPermissions.canManageAdmins ? (
+              <NavButton
+                isActive={view === 'admins'}
+                onClick={() => onSwitchView('admins')}
+                iconClass="nav-icon-settings"
+                icon={<UserCog size={16} />}
+                label="المشرفون"
+              />
+            ) : null}
             <NavButton
               isActive={view === 'homeCategories'}
               onClick={() => onSwitchView('homeCategories')}

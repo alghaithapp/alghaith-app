@@ -15,6 +15,7 @@ const admin = require('./admin');
 const push_notifications = require('./push_notifications');
 const taxi = require('./taxi');
 const admin_roles = require('./admin_roles');
+const admin_permissions = require('./admin_permissions');
 const chat = require('./chat');
 const call_logs = require('./call_logs');
 const operator_profiles = require('./operator_profiles');
@@ -51,6 +52,9 @@ module.exports = {
 
   // Admin Roles
   ...admin_roles,
+
+  // Admin Permissions
+  ...admin_permissions,
 
   // Chat
   ...chat,
