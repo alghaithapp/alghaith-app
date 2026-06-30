@@ -3,6 +3,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../../core/theme/app_colors.dart';
 import '../../../core/ui/app_bottom_nav_style.dart';
 import '../../../providers/app_provider.dart';
 import '../../../models/app_models.dart';
@@ -608,6 +609,25 @@ class _OrdersScreenState extends State<OrdersScreen> {
         order.statusKey == 'rejected' || order.statusKey == 'cancelled';
     final isCompleted = order.statusKey == 'completed';
 
+    final typeLabel = order.isRestaurantOrder ? 'مطعم' : 'متجر';
+    final typeColor = order.isRestaurantOrder
+        ? Colors.orange.shade700
+        : AppColors.primary;
+
+    final items = order.lineItems.isNotEmpty
+        ? order.lineItems
+        : order.itemsNameAr.isNotEmpty
+            ? order.itemsNameAr
+                .split(',')
+                .map((name) => OrderLineItem(
+                      nameAr: name.trim(),
+                      nameEn: name.trim(),
+                      quantity: 1,
+                      price: 0,
+                    ))
+                .toList()
+            : <OrderLineItem>[];
+
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
@@ -615,31 +635,168 @@ class _OrdersScreenState extends State<OrdersScreen> {
           color: CupertinoColors.white,
           borderRadius: BorderRadius.circular(15)),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // ── الرقم + النوع + الحالة ──
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(appProvider.displayOrderNumber(order),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      appProvider.displayOrderNumber(order),
                       style: const TextStyle(
-                          fontWeight: FontWeight.bold, fontSize: 14)),
-                  Text(order.dateAr,
-                      style: const TextStyle(
-                          color: CupertinoColors.systemGrey, fontSize: 11)),
-                ],
+                          fontWeight: FontWeight.bold, fontSize: 15),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(order.dateAr,
+                        style: const TextStyle(
+                            color: CupertinoColors.systemGrey, fontSize: 11)),
+                  ],
+                ),
               ),
-              Text("${order.price.toPrice()} د.ع",
+              if (order.merchantStoreName != null) ...[
+                Text(order.merchantStoreName!,
+                    style: const TextStyle(
+                        fontSize: 12, color: CupertinoColors.systemGrey)),
+                const SizedBox(width: 8),
+              ],
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: typeColor.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  typeLabel,
                   style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 14,
-                      color: isRejected
-                          ? Colors.red
-                          : CupertinoColors.systemGreen)),
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                    color: typeColor,
+                    fontFamily: 'Cairo',
+                  ),
+                ),
+              ),
             ],
           ),
+          const SizedBox(height: 8),
+          // ── حالة الطلب ──
+          Row(
+            children: [
+              Icon(
+                isCompleted
+                    ? CupertinoIcons.check_mark_circled_solid
+                    : CupertinoIcons.xmark_circle_fill,
+                size: 14,
+                color: isCompleted
+                    ? CupertinoColors.systemGreen
+                    : Colors.red,
+              ),
+              const SizedBox(width: 4),
+              Text(
+                isCompleted ? order.statusAr : order.statusAr,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: isCompleted
+                      ? CupertinoColors.systemGreen
+                      : Colors.red,
+                  fontFamily: 'Cairo',
+                ),
+              ),
+            ],
+          ),
+          // ── محتويات الطلب ──
+          if (items.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            const Divider(height: 1, color: Color(0xFFF2F2F7)),
+            const SizedBox(height: 8),
+            ...items.take(5).map((item) => Padding(
+                  padding: const EdgeInsets.only(bottom: 6),
+                  child: Row(
+                    children: [
+                      if (item.image != null && item.image!.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(left: 8),
+                          child: AppImage(
+                            imageData: item.image!,
+                            width: 36,
+                            height: 36,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                      Expanded(
+                        child: Text(
+                          item.nameAr,
+                          style: const TextStyle(
+                              fontSize: 13, fontWeight: FontWeight.w500),
+                          maxLines: 1,
+                        ),
+                      ),
+                      Text(
+                        'x${item.quantity}',
+                        style: const TextStyle(
+                            fontSize: 12,
+                            color: CupertinoColors.systemGrey),
+                      ),
+                      if (item.price > 0) ...[
+                        const SizedBox(width: 8),
+                        Text(
+                          '${(item.price * item.quantity).toPrice()} د.ع',
+                          style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600),
+                        ),
+                      ],
+                    ],
+                  ),
+                )),
+            if (items.length > 5)
+              Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: Text(
+                  '+${items.length - 5} عناصر أخرى',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: CupertinoColors.systemGrey,
+                    fontFamily: 'Cairo',
+                  ),
+                ),
+              ),
+          ] else if (order.itemsNameAr.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text(order.itemsNameAr,
+                style: const TextStyle(
+                    fontSize: 13, fontWeight: FontWeight.w500),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis),
+          ],
+          const SizedBox(height: 8),
+          const Divider(height: 1, color: Color(0xFFF2F2F7)),
+          const SizedBox(height: 8),
+          // ── تفاصيل السعر ──
+          if (order.itemsSubtotalIqd != null && order.itemsSubtotalIqd! > 0)
+            _priceRow('المجموع الفرعي', order.itemsSubtotalIqd!, null),
+          if (order.deliveryFeeIqd != null && order.deliveryFeeIqd! > 0)
+            _priceRow('التوصيل', order.deliveryFeeIqd!, null),
+          if (order.promoDiscountIqd != null && order.promoDiscountIqd! > 0)
+            _priceRow('الخصم', -order.promoDiscountIqd!,
+                CupertinoColors.systemGreen),
+          if (order.originalPrice != null &&
+              order.originalPrice! > 0 &&
+              order.originalPrice != order.price)
+            _priceRow('السعر الأصلي', order.originalPrice!,
+                CupertinoColors.systemGrey),
+          _priceRow(
+            'المجموع الكلي',
+            order.price,
+            isRejected ? Colors.red : CupertinoColors.systemGreen,
+            bold: true,
+          ),
           const SizedBox(height: 12),
+          // ── أزرار الإجراءات ──
           Row(
             children: [
               Expanded(
@@ -663,7 +820,8 @@ class _OrdersScreenState extends State<OrdersScreen> {
                   padding: const EdgeInsets.symmetric(vertical: 8),
                   child: const Text(
                     'إعادة الطلب',
-                    style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12),
+                    style:
+                        TextStyle(fontWeight: FontWeight.w700, fontSize: 12),
                   ),
                 ),
               ),
@@ -710,6 +868,36 @@ class _OrdersScreenState extends State<OrdersScreen> {
                 ),
               ],
             ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _priceRow(String label, int amount, Color? color,
+      {bool bold = false}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 1),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label,
+              style: TextStyle(
+                fontSize: 12,
+                fontFamily: 'Cairo',
+                fontWeight: bold ? FontWeight.bold : FontWeight.normal,
+                color: bold ? Colors.black : CupertinoColors.systemGrey,
+              )),
+          Text(
+            '${amount.abs().toPrice()} د.ع',
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: bold ? FontWeight.bold : FontWeight.w600,
+              color: color ??
+                  (amount < 0
+                      ? CupertinoColors.systemGreen
+                      : Colors.black),
+            ),
           ),
         ],
       ),

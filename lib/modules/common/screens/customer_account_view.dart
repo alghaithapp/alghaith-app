@@ -8,8 +8,8 @@ import '../../../core/ui/account_ui.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../providers/app_provider.dart';
 import '../../../utils/account_role_switch.dart';
-import '../../../utils/app_update_checker.dart';
 import '../../../utils/helpers.dart';
+import '../../chat/services/chat_service.dart';
 import '../widgets/account/account_page_header.dart';
 import '../widgets/account/account_server_loading_view.dart';
 import '../../../widgets/app_image.dart';
@@ -72,7 +72,7 @@ class CustomerAccountView extends StatelessWidget {
                     _NavigationCard(
                       icon: Icons.swap_horiz_rounded,
                       iconColor: const Color(0xFFE040FB),
-                      title: 'تبديل الحساب (الدور)',
+                      title: 'تبديل بين الحسابات',
                       subtitle: 'الانتقال إلى واجهة التاجر أو المندوب أو الزبون',
                       onTap: () => showRoleSwitcher(context, provider),
                     ),
@@ -354,12 +354,38 @@ class _SettingsListCard extends StatelessWidget {
         onTap: () => Navigator.of(context, rootNavigator: true).push(
           CupertinoPageRoute(builder: (_) => const ChatInboxScreen()),
         ),
-      ),
-      _SettingsItemData(
-        icon: CupertinoIcons.arrow_2_circlepath,
-        color: const Color(0xFFE84A3A),
-        title: 'التحقق من تحديث التطبيق',
-        onTap: () => AppUpdateChecker.checkAndPrompt(context),
+        trailingBadge: FutureBuilder<int>(
+          future: ChatService.fetchUnreadCount(),
+          builder: (context, snapshot) {
+            final count = snapshot.data ?? 0;
+            if (count <= 0) {
+              return Icon(CupertinoIcons.chevron_left, size: 16, color: Colors.grey.shade300);
+            }
+            return Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: Colors.red,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text(
+                    count > 99 ? '99+' : '$count',
+                    style: const TextStyle(
+                      fontFamily: 'Cairo',
+                      fontSize: 11,
+                      fontWeight: FontWeight.w800,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 4),
+                Icon(CupertinoIcons.chevron_left, size: 16, color: Colors.grey.shade300),
+              ],
+            );
+          },
+        ),
       ),
       _SettingsItemData(
         icon: CupertinoIcons.settings,
@@ -398,6 +424,7 @@ class _SettingsItemData {
   final String title;
   final VoidCallback onTap;
   final bool showDivider;
+  final Widget? trailingBadge;
 
   const _SettingsItemData({
     required this.icon,
@@ -405,6 +432,7 @@ class _SettingsItemData {
     required this.title,
     required this.onTap,
     this.showDivider = true,
+    this.trailingBadge,
   });
 }
 
@@ -445,11 +473,14 @@ class _SettingsRow extends StatelessWidget {
                   ),
                 ),
               ),
-              Icon(
-                CupertinoIcons.chevron_left,
-                size: 16,
-                color: Colors.grey.shade300,
-              ),
+              if (item.trailingBadge != null)
+                item.trailingBadge!
+              else
+                Icon(
+                  CupertinoIcons.chevron_left,
+                  size: 16,
+                  color: Colors.grey.shade300,
+                ),
             ],
           ),
         ),

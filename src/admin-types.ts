@@ -90,6 +90,21 @@ export interface DriverPreRegisterResponse {
   driverProfileComplete: boolean;
 }
 
+export interface CourierPreRegisterPayload {
+  courierPhone: string;
+  fullName: string;
+  note?: string;
+}
+
+export interface CourierPreRegisterResponse {
+  success: boolean;
+  phone: string;
+  fullName: string;
+  isApproved: boolean;
+  approvalStatus: string;
+  courierProfileComplete: boolean;
+}
+
 export interface ProfessionalPreRegisterPayload {
   professionalPhone: string;
   fullName: string;
@@ -148,7 +163,6 @@ export type AdminView =
   | 'merchants'
   | 'couriers'
   | 'drivers'
-  | 'taxi'
   | 'homeCategories'
   | 'appUpdate'
   | 'notifications'

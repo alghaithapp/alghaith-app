@@ -10,6 +10,7 @@ import '../../../providers/app_provider.dart';
 import '../../../utils/account_role_switch.dart';
 import '../../common/screens/notifications_screen.dart';
 import '../../merchant/screens/merchant_chat_inbox_screen.dart';
+import '../../chat/services/chat_service.dart';
 import '../../../widgets/app_image.dart';
 import 'driver_shared_widgets.dart';
 
@@ -140,145 +141,26 @@ class _DriverAccountScreenState extends State<DriverAccountScreen> {
           ),
         ),
         const SizedBox(height: 12),
+        // ── المحادثات والإشعارات (أسفل بطاقة التوفر وفوق الاسم) ──
         ListTile(
           tileColor: Colors.white,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
           ),
-          leading:
-              const Icon(Icons.notifications_outlined, color: AppColors.accent),
+          leading: const Icon(Icons.chat_bubble_outline, color: AppColors.primary),
           title: const Text(
-            'الإشعارات',
+            'المحادثات',
             style: TextStyle(
               fontFamily: 'Cairo',
               fontWeight: FontWeight.w800,
             ),
           ),
-          trailing: provider.unreadNotificationCount > 0
-              ? CircleAvatar(
-                  radius: 12,
-                  backgroundColor: const Color(0xFFF5A01D),
-                  child: Text(
-                    '${provider.unreadNotificationCount}',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 10,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                )
-              : null,
+          subtitle: const Text(
+            'محادثات الزبائن والرحلات',
+            style: TextStyle(fontFamily: 'Cairo', fontSize: 12),
+          ),
           onTap: () => Navigator.of(context).push(
-            MaterialPageRoute(builder: (_) => const NotificationsScreen()),
-          ),
-        ),
-        const SizedBox(height: 12),
-        Container(
-          padding: const EdgeInsets.all(18),
-          decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              colors: [Color(0xFF111111), Color(0xFF2E2E2E)],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-            borderRadius: BorderRadius.circular(28),
-          ),
-          child: Row(
-            children: [
-              DrvAvatar(
-                imageRef: profile['profileImage'] as String?,
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'حساب السائق',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 18,
-                        fontWeight: FontWeight.w900,
-                        fontFamily: 'Cairo',
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'توصيل الطلبات والمطاعم',
-                      style: const TextStyle(
-                        color: Colors.white70,
-                        fontSize: 12,
-                        fontFamily: 'Cairo',
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 5),
-                      decoration: BoxDecoration(
-                        color: isAvailable
-                            ? Colors.green.withValues(alpha: 0.16)
-                            : Colors.red.withValues(alpha: 0.16),
-                        borderRadius: BorderRadius.circular(999),
-                      ),
-                      child: Text(
-                        isAvailable ? 'متاح' : 'غير متاح',
-                        style: TextStyle(
-                          color: isAvailable
-                              ? Colors.greenAccent
-                              : Colors.redAccent,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w800,
-                          fontFamily: 'Cairo',
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 16),
-        Row(
-          children: [
-            Expanded(
-              child: DrvImageCard(
-                title: 'الصورة الشخصية',
-                imageRef: profile['profileImage'] as String?,
-                icon: Icons.person,
-                onTap: () => _showEditProfileSheet(context),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: DrvImageCard(
-                title: 'صورة السيارة',
-                imageRef: profile['carImage'] as String?,
-                icon: Icons.directions_car,
-                onTap: () => _showEditProfileSheet(context),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 16),
-        SwitchListTile(
-          value: isAvailable,
-          onChanged: (value) => provider.setDriverAvailability(value),
-          activeThumbColor: AppColors.accent,
-          tileColor: Colors.white,
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-          title: Text(
-            'التوفر',
-            style: const TextStyle(
-                fontFamily: 'Cairo', fontWeight: FontWeight.w900),
-          ),
-          subtitle: Text(
-            isAvailable
-                ? 'تستقبل الطلبات الآن'
-                : 'مؤقتًا لا تستقبل الطلبات',
-            style: const TextStyle(fontFamily: 'Cairo'),
+            MaterialPageRoute(builder: (_) => const ChatInboxScreen()),
           ),
         ),
         const SizedBox(height: 12),
@@ -298,6 +180,29 @@ class _DriverAccountScreenState extends State<DriverAccountScreen> {
           subtitle: const Text(
             'محادثات الزبائن والرحلات',
             style: TextStyle(fontFamily: 'Cairo', fontSize: 12),
+          ),
+          trailing: FutureBuilder<int>(
+            future: ChatService.fetchUnreadCount(),
+            builder: (context, snapshot) {
+              final count = snapshot.data ?? 0;
+              if (count <= 0) return const SizedBox.shrink();
+              return Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: Colors.red,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  count > 99 ? '99+' : '$count',
+                  style: const TextStyle(
+                    fontFamily: 'Cairo',
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                    color: Colors.white,
+                  ),
+                ),
+              );
+            },
           ),
           onTap: () => Navigator.of(context).push(
             MaterialPageRoute(builder: (_) => const ChatInboxScreen()),
@@ -369,7 +274,7 @@ class _DriverAccountScreenState extends State<DriverAccountScreen> {
             borderRadius: BorderRadius.circular(18),
             onPressed: () => showRoleSwitcher(context, provider),
             child: const Text(
-              'تبديل الحساب (الدور)',
+              'تبديل بين الحسابات',
               style: TextStyle(
                   fontFamily: 'Cairo', fontWeight: FontWeight.w900, color: Colors.white),
             ),

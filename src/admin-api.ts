@@ -19,6 +19,8 @@ import type {
   MerchantSummary,
   ProfessionalPreRegisterPayload,
   ProfessionalPreRegisterResponse,
+  CourierPreRegisterPayload,
+  CourierPreRegisterResponse,
   ToggleBazaarResponse,
 } from './admin-types';
 
@@ -291,6 +293,21 @@ export async function preRegisterDriver(
   return request<DriverPreRegisterResponse>(
     DATABASE_API_BASE_URL,
     '/db/admin/driver-pre-register',
+    {
+      method: 'POST',
+      token,
+      body: JSON.stringify(payload),
+    },
+  );
+}
+
+export async function preRegisterCourier(
+  token: string,
+  payload: CourierPreRegisterPayload,
+) {
+  return request<CourierPreRegisterResponse>(
+    DATABASE_API_BASE_URL,
+    '/db/admin/courier-pre-register',
     {
       method: 'POST',
       token,

@@ -51,6 +51,18 @@ class ChatService {
     );
   }
 
+  static Future<void> markAllThreadsRead() async {
+    await ApiClient.instance.post('/db/chat/inbox/read-all');
+  }
+
+  static Future<int> fetchUnreadCount() async {
+    final data = await ApiClient.instance.get('/db/chat/inbox/unread-count');
+    if (data is Map) {
+      return (data['totalUnread'] as num?)?.toInt() ?? 0;
+    }
+    return 0;
+  }
+
   static Future<void> markThreadRead({
     required String threadType,
     required String threadId,

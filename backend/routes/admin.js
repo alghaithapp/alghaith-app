@@ -31,6 +31,7 @@ const {
   ensurePlatformAdminAccess,
   preRegisterMerchantAccount,
   preRegisterDriverAccount,
+  preRegisterCourierAccount,
   preRegisterProfessionalAccount,
 } = require('../supabase_repo');
 const logger = require('../lib/logger');
@@ -357,6 +358,27 @@ router.post('/admin/professional-pre-register', async (req, res) => {
           message.includes('مطلوب') ||
           message.includes('غير صالح') ||
           message.includes('تخصص')
+        ? 400
+        : 500;
+    return res.status(status).json({ message });
+  }
+});
+
+router.post('/admin/courier-pre-register', async (req, res) => {
+  try {
+    const phone = requireOptionalAuthorizedPhone(req, res);
+    if (!phone) return;
+    await assertAdminPermission(phone, 'canRegister');
+    const result = await preRegisterCourierAccount(phone, req.body || {});
+    return res.json(result);
+  } catch (error) {
+    console.error('courier pre-register error:', error);
+    const message = error?.message || 'Failed to pre-register courier.';
+    const status = message.includes('Admin access')
+      ? 403
+      : message.includes('بالفعل') ||
+          message.includes('لا يمكن') ||
+          message.includes('مطلوب')
         ? 400
         : 500;
     return res.status(status).json({ message });

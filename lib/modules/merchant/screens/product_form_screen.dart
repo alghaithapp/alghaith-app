@@ -705,6 +705,7 @@ class _ProductFormScreenState extends State<ProductFormScreen> {
                           style: const TextStyle(
                             fontWeight: FontWeight.bold,
                             fontFamily: 'Cairo',
+                            color: Colors.white,
                           ),
                         ),
                       ),

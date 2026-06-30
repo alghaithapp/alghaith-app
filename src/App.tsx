@@ -24,6 +24,7 @@ import {
   rejectDriverApplication,
   preRegisterMerchant,
   preRegisterDriver,
+  preRegisterCourier,
   rejectMerchantApplication,
   sendCode,
   suspendAdminAccount,
@@ -55,6 +56,7 @@ import type {
   HomeCategoriesConfig,
   MerchantPreRegisterPayload,
   DriverPreRegisterPayload,
+  CourierPreRegisterPayload,
   ProfessionalPreRegisterPayload,
   MerchantDetails,
   MerchantSummary,
@@ -74,7 +76,6 @@ const DashboardView = lazy(() => import('./components/views/DashboardView'));
 const MerchantsView = lazy(() => import('./components/views/MerchantsView'));
 const CouriersView = lazy(() => import('./components/views/CouriersView'));
 const DriversView = lazy(() => import('./components/views/DriversView'));
-const TaxiAdminView = lazy(() => import('./components/views/TaxiAdminView'));
 const AccountsView = lazy(() => import('./components/views/AccountsView'));
 const HomeCategoriesView = lazy(() => import('./components/views/HomeCategoriesView'));
 const AppUpdateView = lazy(() => import('./components/views/AppUpdateView'));
@@ -591,7 +592,16 @@ export default function App() {
     setView(nextView);
     setSearch('');
     setSidebarOpen(false);
+    window.location.hash = nextView;
   }
+
+  useEffect(() => {
+    const hash = window.location.hash.replace('#', '') as AdminView;
+    const validViews: AdminView[] = ['dashboard', 'accounts', 'merchants', 'couriers', 'drivers', 'homeCategories', 'appUpdate', 'notifications', 'maintenance', 'admins'];
+    if (hash && validViews.includes(hash)) {
+      setView(hash);
+    }
+  }, []);
 
   function handleLogout() {
     window.localStorage.removeItem(SESSION_STORAGE_KEY);
@@ -664,6 +674,25 @@ export default function App() {
       setSearch(result.phone);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'تعذر تسجيل السائق.';
+      setActionError(message);
+      throw error;
+    }
+  }
+
+  async function handlePreRegisterCourier(payload: CourierPreRegisterPayload) {
+    if (!token) return;
+    setActionError('');
+    setSuccessMessage('');
+    try {
+      const result = await preRegisterCourier(token, payload);
+      setSuccessMessage(
+        `تم تسجيل المندوب ${result.fullName || result.phone}. عند تسجيل الدخول سيجد حسابه جاهزاً لإضافة الصور فقط.`,
+      );
+      await refreshCoreData(token, result.phone);
+      setView('couriers');
+      setSearch(result.phone);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'تعذر تسجيل المندوب.';
       setActionError(message);
       throw error;
     }
@@ -1318,6 +1347,7 @@ export default function App() {
                       onOpenReject={(target) => openRejectConfirm(target)}
                       onSuspend={handleSuspendAccount}
                       onOpenDelete={openDeleteConfirm}
+                      onPreRegisterCourier={handlePreRegisterCourier}
                     />
                   </div>
                 </section>
@@ -1345,28 +1375,6 @@ export default function App() {
                       onSuspend={handleSuspendAccount}
                       onOpenDelete={openDeleteConfirm}
                       onPreRegisterDriver={handlePreRegisterDriver}
-                    />
-                  </div>
-                </section>
-              ) : null}
-
-              {view === 'taxi' ? (
-                <section className="main-grid couriers-only">
-                  <div className="panel wide">
-                    <div className="panel-header">
-                      <div>
-                        <h3>عمليات التكسي</h3>
-                        <p>راقب الرحلات النشطة والشكاوى والتقييمات المنخفضة.</p>
-                      </div>
-                      <span className="panel-chip">{taxiTrips.length}</span>
-                    </div>
-                    <TaxiAdminView
-                      trips={taxiTrips}
-                      complaints={taxiComplaints}
-                      loading={isLoadingTaxiData}
-                      statusFilter={taxiStatusFilter}
-                      onStatusFilterChange={setTaxiStatusFilter}
-                      onRefresh={() => refreshTaxiAdminData(token!)}
                     />
                   </div>
                 </section>

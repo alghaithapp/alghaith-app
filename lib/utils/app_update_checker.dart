@@ -29,7 +29,12 @@ class AppUpdateChecker {
     }
 
     if (result.requiresUpdate) {
-      await _promptUpdate(context, result);
+      final url = result.storeUrl?.trim();
+      if (url != null && url.isNotEmpty) {
+        await _openStore(url);
+      } else {
+        await _promptUpdate(context, result);
+      }
       return;
     }
 

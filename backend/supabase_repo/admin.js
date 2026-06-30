@@ -74,6 +74,8 @@ const {
   saveDriverProfile,
   getCourierProfile,
   saveCourierProfile,
+  deleteCourierProfile,
+  deleteDriverProfile,
   rowToDriverProfileMap,
   rowToCourierProfileMap,
 } = require('./operator_profiles');
@@ -336,7 +338,7 @@ async function getAllMerchants(adminPhone) {
 async function getAllCouriers(adminPhone) {
   await assertAdminAccess(adminPhone);
 
-  const [users, states] = await Promise.all([
+  const [users, states, courierRows] = await Promise.all([
     selectMany('app_users', [], { column: 'updated_at', ascending: false }, 3000),
     selectManyColumns(
       'app_state',
@@ -345,6 +347,7 @@ async function getAllCouriers(adminPhone) {
       { column: 'updated_at', ascending: false },
       2500
     ),
+    selectMany('courier_profiles', [], { column: 'updated_at', ascending: false }, 2500),
   ]);
 
   const stateByPhone = {};
@@ -354,24 +357,42 @@ async function getAllCouriers(adminPhone) {
     stateByPhone[phone] = row.state || {};
   }
 
+  const courierProfileByPhone = {};
+  for (const row of courierRows) {
+    const phone = String(row.phone || '').trim();
+    if (!phone) continue;
+    courierProfileByPhone[phone] = rowToCourierProfileMap(row);
+  }
+
+  const userByPhone = {};
+  for (const user of users) {
+    const phone = String(user.phone || '').trim();
+    if (!phone) continue;
+    userByPhone[phone] = user;
+  }
+
   const couriers = [];
   const seen = new Set();
 
+  // First pass: collect from courier_profiles table
+  for (const [phone, dbProfile] of Object.entries(courierProfileByPhone)) {
+    if (seen.has(phone)) continue;
+    if (!dbProfile) continue;
+
+    const user = userByPhone[phone] || null;
+    seen.add(phone);
+    couriers.push(mapCourierForAdmin(phone, user, dbProfile));
+  }
+
+  // Second pass: collect from app_state (legacy profiles not in courier_profiles)
   for (const user of users) {
     const phone = String(user.phone || '').trim();
     if (!phone || seen.has(phone)) continue;
 
     const state = stateByPhone[phone] || {};
     const profile = readCourierProfileFromState(state);
-    if (!profile || !isCourierProfileComplete(profile)) continue;
-
-    const name = String(profile.name ?? '').trim();
-    const role = String(user.role ?? '').trim();
-    const accountType = String(user.account_type ?? '').trim();
-    const isCourierAccount =
-      role === 'delivery' || accountType === 'delivery' || name.length > 0;
-
-    if (!isCourierAccount) continue;
+    const isPreRegistered = state.adminPreRegisteredCourier === true;
+    if (!profile || (!isCourierProfileComplete(profile) && !isPreRegistered)) continue;
 
     seen.add(phone);
     couriers.push(mapCourierForAdmin(phone, user, profile));
@@ -385,7 +406,10 @@ async function getAllCouriers(adminPhone) {
     };
     const rankDiff = rank(a) - rank(b);
     if (rankDiff !== 0) return rankDiff;
-    return String(a.name || '').localeCompare(String(b.name || ''), 'ar');
+
+    const aName = String(a.name || '').trim().toLowerCase();
+    const bName = String(b.name || '').trim().toLowerCase();
+    return aName.localeCompare(bName);
   });
 }
 
@@ -1445,6 +1469,22 @@ async function purgeAccountData(phone) {
   }
 
   try {
+    await deleteCourierProfile(phoneKey);
+  } catch (error) {
+    if (!/not found|No rows/i.test(String(error?.message || ''))) {
+      console.warn('purgeAccountData courier profile:', error?.message || error);
+    }
+  }
+
+  try {
+    await deleteDriverProfile(phoneKey);
+  } catch (error) {
+    if (!/not found|No rows/i.test(String(error?.message || ''))) {
+      console.warn('purgeAccountData driver profile:', error?.message || error);
+    }
+  }
+
+  try {
     await deleteUserState(phoneKey);
   } catch (error) {
     console.warn('purgeAccountData user state:', error?.message || error);
@@ -1850,6 +1890,83 @@ async function preRegisterDriverAccount(adminPhone, payload = {}) {
     isApproved: true,
     approvalStatus: 'approved',
     driverProfileComplete: false,
+  };
+}
+
+async function preRegisterCourierAccount(adminPhone, payload = {}) {
+  await assertAdminAccess(adminPhone);
+
+  const rawPhone = String(payload.courierPhone ?? payload.phone ?? '').trim();
+  if (!rawPhone) {
+    throw new Error('رقم الهاتف مطلوب.');
+  }
+
+  const fullName = String(payload.fullName ?? payload.full_name ?? '').trim();
+  if (!fullName) {
+    throw new Error('اسم المندوب مطلوب.');
+  }
+
+  const note = String(payload.note ?? payload.notes ?? '').trim();
+  const phoneKey = await resolvePhoneKey(rawPhone);
+
+  const existingUser = await getAppUser(phoneKey);
+  if (existingUser && String(existingUser.role ?? '').trim() === 'admin') {
+    throw new Error('لا يمكن تسجيل رقم المشرف كمندوب.');
+  }
+
+  const existingState = (await getUserState(phoneKey)) || {};
+  const existingCourier = await getCourierProfile(phoneKey);
+  if (
+    existingCourier &&
+    isCourierProfileComplete(existingCourier) &&
+    existingState.courierProfileComplete === true &&
+    !existingState.adminPreRegisteredCourier
+  ) {
+    throw new Error('يوجد ملف مندوب مكتمل لهذا الرقم بالفعل.');
+  }
+
+  if (!existingUser) {
+    await saveAppUser(phoneKey, {
+      role: 'customer',
+      account_type: 'marketplace',
+      full_name: fullName,
+    });
+  } else {
+    const existingName = String(existingUser.full_name ?? '').trim();
+    if (!existingName && fullName) {
+      await saveAppUser(phoneKey, { full_name: fullName });
+    }
+  }
+
+  const savedProfile = await saveCourierProfile(phoneKey, {
+    name: fullName,
+    phone: phoneKey,
+    isApproved: true,
+    approvalStatus: 'approved',
+    available: false,
+    adminPreRegistered: true,
+    adminNote: note || undefined,
+  });
+
+  await saveUserState(phoneKey, {
+    ...existingState,
+    courierProfile: savedProfile,
+    courierProfileComplete: false,
+    adminPreRegisteredCourier: true,
+    adminPreRegisteredAt: nowIso(),
+    adminPreRegisteredBy: adminPhone,
+    multiRoleAccount: true,
+  });
+
+  const user = await getAppUser(phoneKey);
+
+  return {
+    success: true,
+    phone: phoneKey,
+    fullName: String(user?.full_name ?? fullName).trim(),
+    isApproved: true,
+    approvalStatus: 'approved',
+    courierProfileComplete: false,
   };
 }
 
@@ -2310,6 +2427,7 @@ module.exports = {
   ensurePlatformAdminAccess,
   preRegisterMerchantAccount,
   preRegisterDriverAccount,
+  preRegisterCourierAccount,
   preRegisterProfessionalAccount,
   PROFESSIONAL_CATEGORIES,
   PROFESSIONAL_CATEGORY_NAMES,

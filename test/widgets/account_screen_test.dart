@@ -55,7 +55,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.byType(CustomerAccountView), findsOneWidget);
-      expect(find.text('تبديل الحساب (الدور)'), findsOneWidget);
+      expect(find.text('تبديل بين الحسابات'), findsOneWidget);
     });
 
     testWidgets('shows role switch button', (tester) async {
@@ -88,7 +88,7 @@ void main() {
       await tester.pumpWidget(buildWidget());
       await tester.pumpAndSettle();
 
-      expect(find.text('تبديل الحساب (الدور)'), findsOneWidget);
+      expect(find.text('تبديل بين الحسابات'), findsOneWidget);
     });
   });
 }

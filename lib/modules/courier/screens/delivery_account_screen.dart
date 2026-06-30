@@ -220,7 +220,7 @@ class DeliveryAccountScreen extends StatelessWidget {
                   DeliveryNavigationCard(
                     icon: Icons.swap_horiz_rounded,
                     iconColor: const Color(0xFFE040FB),
-                    title: 'تبديل الحساب (الدور)',
+                    title: 'تبديل بين الحسابات',
                     subtitle: 'الانتقال إلى واجهة الزبون أو التاجر أو المندوب',
                     onTap: () => showRoleSwitcher(context, appProvider),
                   ),

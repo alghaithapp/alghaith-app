@@ -730,12 +730,47 @@ async function deleteChatThread(threadType, threadId, requestPhone, otherPartyPh
   };
 }
 
+async function markAllThreadsAsRead(requestPhone) {
+  const phone = await resolvePhoneKey(requestPhone);
+  const receiverVariants = getPhoneVariants(phone);
+  if (receiverVariants.length === 0) return { success: true, updated: 0 };
+
+  const supabase = assertSupabaseAdmin();
+  const { data, error } = await supabase
+    .from('chat_messages')
+    .update({ read_at: new Date().toISOString() })
+    .in('receiver_phone', receiverVariants)
+    .is('read_at', null)
+    .select('id');
+
+  if (error) throw new Error(mapChatDbError(error));
+  return { success: true, updated: data ? data.length : 0 };
+}
+
+async function getUnreadCount(requestPhone) {
+  const phone = await resolvePhoneKey(requestPhone);
+  const receiverVariants = getPhoneVariants(phone);
+  if (receiverVariants.length === 0) return { totalUnread: 0 };
+
+  const supabase = assertSupabaseAdmin();
+  const { count, error } = await supabase
+    .from('chat_messages')
+    .select('id', { count: 'exact', head: true })
+    .in('receiver_phone', receiverVariants)
+    .is('read_at', null);
+
+  if (error) throw new Error(mapChatDbError(error));
+  return { totalUnread: count ?? 0 };
+}
+
 module.exports = {
   getChatMessages,
   getChatInbox,
   saveChatMessage,
   appendCallChatEvent,
   markThreadAsRead,
+  markAllThreadsAsRead,
+  getUnreadCount,
   deleteChatThread,
   resolveReceiverPhone,
   assertCanAccessThread,

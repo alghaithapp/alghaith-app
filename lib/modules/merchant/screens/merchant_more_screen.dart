@@ -7,6 +7,7 @@ import '../../../utils/sync_error_message.dart';
 import '../../../utils/account_role_switch.dart';
 import '../../../widgets/app_image.dart';
 import '../../../widgets/app_logo.dart';
+import '../../chat/services/chat_service.dart';
 import 'merchant_chat_inbox_screen.dart';
 import 'merchant_notifications_screen.dart';
 import 'merchant_offers_screen.dart';
@@ -158,6 +159,40 @@ class MerchantMoreScreen extends StatelessWidget {
           onTap: () => Navigator.of(context).push(
             MaterialPageRoute(builder: (_) => const MerchantChatInboxScreen()),
           ),
+          trailingBadge: FutureBuilder<int>(
+            future: ChatService.fetchUnreadCount(),
+            builder: (context, snapshot) {
+              final count = snapshot.data ?? 0;
+              if (count <= 0) {
+                return const Icon(Icons.arrow_forward_ios_rounded,
+                    size: 16, color: Colors.grey);
+              }
+              return Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: Colors.red,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text(
+                      count > 99 ? '99+' : '$count',
+                      style: const TextStyle(
+                        fontFamily: 'Cairo',
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  const Icon(Icons.arrow_forward_ios_rounded,
+                      size: 16, color: Colors.grey),
+                ],
+              );
+            },
+          ),
         ),
         _MoreTile(
           cardColor: cardColor,
@@ -178,7 +213,7 @@ class MerchantMoreScreen extends StatelessWidget {
         ),
         _MoreTile(
           cardColor: cardColor,
-          title: 'تبديل الحساب (الدور)',
+          title: 'تبديل بين الحسابات',
           subtitle: 'الانتقال إلى واجهة الزبون أو المندوب أو التاجر',
           icon: Icons.swap_horiz_rounded,
           onTap: () => showRoleSwitcher(context, provider),
@@ -377,6 +412,7 @@ class _MoreTile extends StatelessWidget {
   final String subtitle;
   final IconData icon;
   final VoidCallback onTap;
+  final Widget? trailingBadge;
 
   const _MoreTile({
     required this.cardColor,
@@ -384,6 +420,7 @@ class _MoreTile extends StatelessWidget {
     required this.subtitle,
     required this.icon,
     required this.onTap,
+    this.trailingBadge,
   });
 
   @override
@@ -433,8 +470,11 @@ class _MoreTile extends StatelessWidget {
                     ],
                   ),
                 ),
-                const Icon(Icons.arrow_forward_ios_rounded,
-                    size: 16, color: Colors.grey),
+                if (trailingBadge != null)
+                  trailingBadge!
+                else
+                  const Icon(Icons.arrow_forward_ios_rounded,
+                      size: 16, color: Colors.grey),
               ],
             ),
           ),

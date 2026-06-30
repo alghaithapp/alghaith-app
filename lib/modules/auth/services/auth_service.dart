@@ -23,8 +23,12 @@ class AuthService extends ChangeNotifier {
   bool _hasAdminAccess = false;
   bool _isLoggingIn = false;
   bool _isRestoring = false;
-  bool _isHydrating = false;
+
   bool _isReady = true;
+
+  bool _isHydrating = false;
+
+  bool _hasLocalBackup = false;
   String? _userRole;
   String? _accountType;
   Map<String, dynamic>? _appUserRecord;
@@ -161,16 +165,26 @@ class AuthService extends ChangeNotifier {
       _notificationHub.onLoginSuccess();
       _notificationHub.onAppBootWelcome(_customerName);
 
-      // إظهار شاشة التحميل قبل تحميل البيانات من السيرفر
-      _isRestoring = true;
-      _isReady = false;
-      notifyListeners();
+      // stale-while-revalidate: إذا كان هناك كاش محلي نعرضه فوراً ونحدّث في الخلفية
+      final hasLocalCache = _hasLocalBackup;
 
-      await _completeLoginRemoteRestore(normalized);
-
-      _isRestoring = false;
-      _isReady = true;
-      notifyListeners();
+      if (hasLocalCache) {
+        // الكاش المحلي موجود → اعرض البيانات فوراً، حدّث في الخلفية
+        _isReady = true;
+        _isRestoring = false;
+        notifyListeners();
+        await _completeLoginRemoteRestore(normalized);
+        notifyListeners();
+      } else {
+        // لا يوجد كاش → أظهر شاشة التحميل ثم اسأل السيرفر
+        _isRestoring = true;
+        _isReady = false;
+        notifyListeners();
+        await _completeLoginRemoteRestore(normalized);
+        _isRestoring = false;
+        _isReady = true;
+        notifyListeners();
+      }
 
       unawaited(PushNotificationService.instance.ensureUserBinding(normalized));
     }
@@ -700,7 +714,12 @@ class AuthService extends ChangeNotifier {
     try {
       final snapshot =
           await AccountRepository.instance.readLocalSnapshot(phone);
-      if (snapshot == null) return;
+      if (snapshot == null) {
+        _hasLocalBackup = false;
+        return;
+      }
+      _hasLocalBackup = snapshot.customerName.isNotEmpty &&
+          snapshot.customerPhone.isNotEmpty;
 
       _userRole = snapshot.userRole ?? _userRole;
       _hasAdminAccess = snapshot.hasAdminAccess;

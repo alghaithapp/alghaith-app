@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { Bike, BadgeCheck, XCircle, UserX, Trash2, LoaderCircle, ExternalLink, Images } from 'lucide-react';
-import type { CourierSummary, AdminAccountSummary } from '../../admin-types';
+import { Bike, BadgeCheck, XCircle, UserX, UserPlus, Trash2, LoaderCircle, ExternalLink, Images } from 'lucide-react';
+import type { CourierSummary, AdminAccountSummary, CourierPreRegisterPayload } from '../../admin-types';
 import DocumentsModal from '../DocumentsModal';
+import PreRegisterCourierModal from '../PreRegisterCourierModal';
 
 interface CouriersViewProps {
   couriers: CourierSummary[];
@@ -18,6 +19,7 @@ interface CouriersViewProps {
   }) => void;
   onSuspend: (account: AdminAccountSummary) => Promise<void>;
   onOpenDelete: (account: AdminAccountSummary) => void;
+  onPreRegisterCourier?: (payload: CourierPreRegisterPayload) => Promise<void>;
 }
 
 export default function CouriersView({
@@ -31,14 +33,28 @@ export default function CouriersView({
   onOpenReject,
   onSuspend,
   onOpenDelete,
+  onPreRegisterCourier,
 }: CouriersViewProps) {
   const [selectedDocumentsTarget, setSelectedDocumentsTarget] = useState<{
     displayName: string;
     documents: Record<string, string>;
   } | null>(null);
+  const [showPreRegister, setShowPreRegister] = useState(false);
+  const [isPreRegisterBusy, setIsPreRegisterBusy] = useState(false);
 
   return (
     <div className="merchant-list">
+      <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
+        {onPreRegisterCourier && (
+          <button
+            className="button primary"
+            onClick={() => setShowPreRegister(true)}
+          >
+            <UserPlus size={18} />
+            <span>تسجيل مندوب برقم</span>
+          </button>
+        )}
+      </div>
       {(() => {
         const pendingCouriersList = filteredCouriers.filter(
           (c) => !c.isApproved && c.approvalStatus === 'pending',
@@ -324,6 +340,23 @@ export default function CouriersView({
           displayName={selectedDocumentsTarget.displayName}
           documents={selectedDocumentsTarget.documents}
           onClose={() => setSelectedDocumentsTarget(null)}
+        />
+      )}
+
+      {onPreRegisterCourier && (
+        <PreRegisterCourierModal
+          open={showPreRegister}
+          isBusy={isPreRegisterBusy}
+          onClose={() => setShowPreRegister(false)}
+          onSubmit={async (payload) => {
+            setIsPreRegisterBusy(true);
+            try {
+              await onPreRegisterCourier(payload);
+              setShowPreRegister(false);
+            } finally {
+              setIsPreRegisterBusy(false);
+            }
+          }}
         />
       )}
     </div>

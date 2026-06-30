@@ -112,7 +112,8 @@ async function sendPushToPhone(phone, payload, options = {}) {
   const showSystemBanner =
     options.showSystemBanner === true ||
     String(payload?.data?.category ?? '').trim() === 'account' ||
-    String(payload?.data?.category ?? '').trim() === 'call';
+    String(payload?.data?.category ?? '').trim() === 'call' ||
+    String(payload?.data?.audience ?? '').trim() === 'merchant';
 
   if (options.immediate === true) {
     const result = await sendPushToTokensDirect(tokens, {

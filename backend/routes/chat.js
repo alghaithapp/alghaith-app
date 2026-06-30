@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { getChatMessages, getChatInbox, saveChatMessage, markThreadAsRead, deleteChatThread, mapChatAccessError } = require('../supabase_repo');
+const { getChatMessages, getChatInbox, saveChatMessage, markThreadAsRead, markAllThreadsAsRead, getUnreadCount, deleteChatThread, mapChatAccessError } = require('../supabase_repo');
 const { requireOptionalAuthorizedPhone } = require('./_middleware');
 const { notifyChatMessage } = require('../push_events');
 
@@ -28,6 +28,32 @@ router.get('/inbox/threads', async (req, res) => {
     return res.json(threads);
   } catch (error) {
     console.error('get chat inbox error:', error);
+    const message = chatErrorMessage(error);
+    return res.status(chatErrorStatus(message)).json({ message });
+  }
+});
+
+router.post('/inbox/read-all', async (req, res) => {
+  try {
+    const phone = requireOptionalAuthorizedPhone(req, res);
+    if (!phone) return;
+    const result = await markAllThreadsAsRead(phone);
+    return res.json(result);
+  } catch (error) {
+    console.error('mark all read error:', error);
+    const message = chatErrorMessage(error);
+    return res.status(chatErrorStatus(message)).json({ message });
+  }
+});
+
+router.get('/inbox/unread-count', async (req, res) => {
+  try {
+    const phone = requireOptionalAuthorizedPhone(req, res);
+    if (!phone) return;
+    const result = await getUnreadCount(phone);
+    return res.json(result);
+  } catch (error) {
+    console.error('get unread count error:', error);
     const message = chatErrorMessage(error);
     return res.status(chatErrorStatus(message)).json({ message });
   }

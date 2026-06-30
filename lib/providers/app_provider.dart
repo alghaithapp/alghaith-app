@@ -1176,9 +1176,18 @@ class AppProvider extends ChangeNotifier {
     if (raw.isNotEmpty && raw.length <= 14) return raw;
     final idSeed = order.id.split('-').first;
     final seed = int.tryParse(idSeed);
-    if (seed == null) return raw.isNotEmpty ? raw : order.id;
-    final short = (seed % 1000000).toString().padLeft(6, '0');
-    return '#$short';
+    if (seed != null) {
+      final short = (seed % 1000000).toString().padLeft(6, '0');
+      return '#$short';
+    }
+    final hexSeed = int.tryParse(idSeed, radix: 16);
+    if (hexSeed != null) {
+      final short = (hexSeed % 1000000).toString().padLeft(6, '0');
+      return '#$short';
+    }
+    final tail = order.id.replaceAll('-', '');
+    if (tail.length >= 6) return '#${tail.substring(tail.length - 6)}';
+    return raw.isNotEmpty ? raw : '#${order.id.substring(0, 8)}';
   }
 
   String orderElapsedLabelAr(ActiveOrder order) {

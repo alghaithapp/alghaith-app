@@ -5,7 +5,6 @@ import 'package:provider/provider.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../providers/app_provider.dart';
 import '../../../utils/account_role_switch.dart';
-import '../../../utils/app_update_checker.dart';
 import '../../../utils/extensions.dart';
 import '../../../utils/helpers.dart';
 import '../../../utils/merchant_service_labels.dart';
@@ -182,7 +181,7 @@ class _MerchantAccountView extends StatelessWidget {
             ),
             const SizedBox(height: 14),
             _RoleSwitchCard(
-              title: 'تبديل الحساب (الدور)',
+              title: 'تبديل بين الحسابات',
               subtitle: 'الانتقال إلى واجهة الزبون أو المندوب أو التاجر',
               icon: Icons.swap_horiz_rounded,
               color: const Color(0xFFE040FB),
@@ -371,13 +370,6 @@ class _MerchantAccountView extends StatelessWidget {
                     subtitle: 'تبديل جاهزية الاستقبال',
                     color: isOpen ? Colors.red : Colors.green,
                     onTap: appProvider.toggleMerchantOpenStatus,
-                  ),
-                  _MerchantActionTile(
-                    icon: CupertinoIcons.arrow_2_circlepath,
-                    title: 'التحقق من تحديث التطبيق',
-                    subtitle: 'تأكد من أنك تستخدم أحدث إصدار',
-                    color: const Color(0xFFE84A3A),
-                    onTap: () => AppUpdateChecker.checkAndPrompt(context),
                   ),
                 ],
               ),

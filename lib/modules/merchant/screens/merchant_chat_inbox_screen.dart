@@ -99,6 +99,7 @@ typedef MerchantChatInboxScreen = ChatInboxScreen;
 class _ChatInboxScreenState extends State<ChatInboxScreen> {
   List<ChatThreadSummary> _threads = [];
   bool _isLoading = true;
+  bool _isMarkingAll = false;
   String? _error;
   _ThreadFilter _selectedFilter = _ThreadFilter.all;
 
@@ -111,6 +112,9 @@ class _ChatInboxScreenState extends State<ChatInboxScreen> {
     super.initState();
     _loadInbox();
   }
+
+  int get _totalUnread =>
+      _threads.fold(0, (sum, t) => sum + t.unreadCount);
 
   Future<void> _loadInbox() async {
     setState(() {
@@ -130,6 +134,35 @@ class _ChatInboxScreenState extends State<ChatInboxScreen> {
         _isLoading = false;
         _error = error.toString().replaceFirst('ApiException: ', '');
       });
+    }
+  }
+
+  Future<void> _markAllAsRead() async {
+    setState(() => _isMarkingAll = true);
+    try {
+      await ChatService.markAllThreadsRead();
+      if (!mounted) return;
+      setState(() {
+        _threads = _threads.map((t) => ChatThreadSummary(
+          threadType: t.threadType,
+          threadId: t.threadId,
+          otherPartyPhone: t.otherPartyPhone,
+          otherPartyName: t.otherPartyName,
+          threadTitle: t.threadTitle,
+          contextLabel: t.contextLabel,
+          lastMessage: t.lastMessage,
+          lastAt: t.lastAt,
+          unreadCount: 0,
+          hasUnread: false,
+        )).toList();
+        _isMarkingAll = false;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _isMarkingAll = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(error.toString().replaceFirst('ApiException: ', ''))),
+      );
     }
   }
 
@@ -249,15 +282,65 @@ class _ChatInboxScreenState extends State<ChatInboxScreen> {
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
-        appBar: AppBar(
-          title: const Text(
-            'المحادثات',
-            style: TextStyle(fontFamily: 'Cairo', fontSize: 16),
+          appBar: AppBar(
+            title: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'المحادثات',
+                  style: TextStyle(fontFamily: 'Cairo', fontSize: 16),
+                ),
+                if (_totalUnread > 0)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 6),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Text(
+                        _totalUnread > 99 ? '99+' : '$_totalUnread',
+                        style: const TextStyle(
+                          fontFamily: 'Cairo',
+                          fontSize: 11,
+                          fontWeight: FontWeight.w800,
+                          color: AppColors.primary,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            backgroundColor: AppColors.primary,
+            foregroundColor: Colors.white,
+            actions: [
+              if (_totalUnread > 0 && !_isMarkingAll)
+                TextButton.icon(
+                  onPressed: _markAllAsRead,
+                  icon: const Icon(Icons.done_all, size: 18, color: Colors.white),
+                  label: const Text(
+                    'قراءة الكل',
+                    style: TextStyle(
+                      fontFamily: 'Cairo',
+                      fontSize: 13,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              if (_isMarkingAll)
+                const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 16),
+                  child: SizedBox(
+                    width: 20, height: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+            ],
           ),
-          backgroundColor: AppColors.primary,
-          foregroundColor: Colors.white,
-          actions: const [],
-        ),
         body: Column(
           children: [
             _buildFilterBar(),

@@ -271,6 +271,12 @@ class _TaxiRequestScreenState extends State<TaxiRequestScreen> {
     final query = controller.text.trim();
     _isPickupField = isPickup;
     _searchDebounce?.cancel();
+
+    if (_pickupController.text.trim().isNotEmpty &&
+        _dropoffController.text.trim().isNotEmpty) {
+      FocusScope.of(context).unfocus();
+    }
+
     if (query.length < 2) {
       if (_suggestions.isNotEmpty) setState(() => _suggestions = []);
       return;
@@ -612,6 +618,7 @@ class _TaxiRequestScreenState extends State<TaxiRequestScreen> {
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
+        resizeToAvoidBottomInset: false,
         appBar: AppBar(
           title: const Text('طلب تكسي'),
           centerTitle: true,
@@ -686,27 +693,6 @@ class _TaxiRequestScreenState extends State<TaxiRequestScreen> {
                       _editingStopIndex = null;
                       _isPickupField = true;
                     },
-                    trailing: GestureDetector(
-                      onTap: _isGettingLocation
-                          ? null
-                          : () => _getCurrentLocation(),
-                      child: Container(
-                        width: 36, height: 36,
-                        decoration: BoxDecoration(
-                          color: AppColors.primary.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: _isGettingLocation
-                            ? const SizedBox(
-                                width: 18, height: 18,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: AppColors.primary,
-                                ),
-                              )
-                            : const Icon(Icons.gps_fixed, size: 18, color: AppColors.primary),
-                      ),
-                    ),
                   ),
                   const SizedBox(height: 8),
                   // حقل "إلى أين؟"
@@ -721,7 +707,30 @@ class _TaxiRequestScreenState extends State<TaxiRequestScreen> {
                       _isPickupField = false;
                     },
                   ),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 8),
+                  // زر تحديد موقعي الحالي
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton.icon(
+                      onPressed: _isGettingLocation
+                          ? null
+                          : () => _getCurrentLocation(),
+                      icon: _isGettingLocation
+                          ? const SizedBox(
+                              width: 16, height: 16,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: AppColors.primary,
+                              ),
+                            )
+                          : const Icon(Icons.my_location, size: 18, color: AppColors.primary),
+                      label: const Text(
+                        'تحديد موقعي',
+                        style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
                   TaxiFavoritePlacesRow(
                     onSelected: (place) => _promptAndApplySavedPlace(place),
                   ),

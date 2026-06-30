@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../../providers/app_provider.dart';
+import '../../../utils/app_update_checker.dart';
 import '../../../utils/helpers.dart';
 import '../../../widgets/whatsapp_icon.dart';
 
@@ -100,6 +101,14 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
                 );
               },
             ),
+            const SizedBox(height: 12),
+            _buildActionCard(
+              title: 'التحقق من تحديث التطبيق',
+              subtitle: 'تأكد من أنك تستخدم أحدث إصدار متاح',
+              icon: CupertinoIcons.arrow_2_circlepath,
+              color: const Color(0xFFE84A3A),
+              onTap: () => AppUpdateChecker.checkAndPrompt(context),
+            ),
             const SizedBox(height: 24),
             _buildSupportCard(isDark: isDark),
           ],
@@ -173,12 +182,13 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
     required Color color,
     required VoidCallback onTap,
   }) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return GestureDetector(
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
           borderRadius: BorderRadius.circular(18),
         ),
         child: Row(

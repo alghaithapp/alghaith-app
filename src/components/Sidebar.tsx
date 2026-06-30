@@ -155,13 +155,6 @@ export default function Sidebar({
               label="سائقو التكسي"
               badge={pendingDriverCount || undefined}
             />
-            <NavButton
-              isActive={view === 'taxi'}
-              onClick={() => onSwitchView('taxi')}
-              iconClass="nav-icon-driver"
-              icon={<Car size={16} />}
-              label="عمليات التكسي"
-            />
           </nav>
         </div>
 
