@@ -389,6 +389,10 @@ class _ChatScreenState extends State<ChatScreen>
     if (provider.userRole == 'merchant' && merchantName.isNotEmpty) {
       return merchantName;
     }
+    final courierName = provider.deliveryCourierName.trim();
+    if (provider.userRole == 'delivery' && courierName.isNotEmpty) {
+      return courierName;
+    }
     final customerName = provider.customerName.trim();
     if (customerName.isNotEmpty) return customerName;
     return 'مستخدم';
