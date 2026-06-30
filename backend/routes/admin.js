@@ -730,11 +730,7 @@ router.post('/admin/push/send', async (req, res) => {
     const phone = requireOptionalAuthorizedPhone(req, res);
     if (!phone) return;
 
-    const { title, body, audience, storeUpdate } = req.body;
-    if (!title?.trim() || !body?.trim()) {
-      return res.status(400).json({ message: 'العنوان والنص مطلوبان.' });
-    }
-
+    const { assertSupabaseAdmin } = require('../supabase_repo/common');
     const supabase = assertSupabaseAdmin();
     let query = supabase.from('device_tokens').select('token, platform');
 
@@ -803,6 +799,7 @@ router.get('/admin/notifications', async (req, res) => {
     const phone = requireOptionalAuthorizedPhone(req, res);
     if (!phone) return;
 
+    const { assertSupabaseAdmin } = require('../supabase_repo/common');
     const supabase = assertSupabaseAdmin();
     const limit = Math.min(Number(req.query.limit) || 50, 200);
     const unreadOnly = req.query.unreadOnly === 'true';
@@ -830,6 +827,7 @@ router.put('/admin/notifications/read', async (req, res) => {
     const phone = requireOptionalAuthorizedPhone(req, res);
     if (!phone) return;
 
+    const { assertSupabaseAdmin } = require('../supabase_repo/common');
     const supabase = assertSupabaseAdmin();
     const { ids } = req.body;
 
@@ -849,6 +847,7 @@ router.put('/admin/notifications/read', async (req, res) => {
 /// إضافة إشعار للأدمن
 async function insertAdminNotification(type, title, body, data = {}) {
   try {
+    const { assertSupabaseAdmin } = require('../supabase_repo/common');
     const supabase = assertSupabaseAdmin();
     await supabase.from('admin_notifications').insert({
       type,
