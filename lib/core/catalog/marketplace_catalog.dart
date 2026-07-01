@@ -1,3 +1,4 @@
+import '../../services/app_config_service.dart';
 import '../../models/app_models.dart';
 import '../../models/home_category_platform_override.dart';
 
@@ -327,9 +328,8 @@ class MarketplaceCatalog {
   }
 
   /// أقسام لا يختارها التاجر عند التسجيل (إدارية أو مُدارة من المنصة).
-  static const Set<String> merchantExcludedCategoryIds = {
-    'bazar_ghaith',
-  };
+  static Set<String> get merchantExcludedCategoryIds =>
+      Set<String>.from(AppConfigService.instance.professionalExcludedCategoryIds)..add('bazar_ghaith');
 
   /// الأقسام المتاحة للتجار للتسجيل فيها (باستثناء الأقسام الإدارية أو الخاصة).
   static List<ServiceCategory> get merchantAvailableCategories => categories
@@ -497,11 +497,7 @@ class MarketplaceCatalog {
   ];
 
   /// الخدمات التي تدعم الطلب عبر السلة (مطاعم + تسوق فقط).
-  static const Set<String> cartEnabledCategoryIds = {
-    'restaurant',
-    'product',
-    'bazar_ghaith',
-  };
+  static Set<String> get cartEnabledCategoryIds => Set<String>.from(AppConfigService.instance.cartEnabledCategoryIds);
 
   static bool usesShoppingCart(String? categoryId) {
     final id = categoryId?.trim();

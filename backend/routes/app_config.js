@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 
-const { getAllConfigs, updateConfig, getTaxiPricing, getTaxiConfig, getMapDefaults, getHomeCategories, getSubCategories, getNeighborhoods, getNotificationTexts, getAppTheme } = require('../services/app_config_service');
+const { getAllConfigs, updateConfig, getTaxiPricing, getTaxiConfig, getMapDefaults, getHomeCategories, getSubCategories, getNeighborhoods, getNotificationTexts, getAppTheme, getCartConfig, getCategoryConfig, getDeliveryConfig, getErrorMessages } = require('../services/app_config_service');
 
 // ── Public: قراءة إعدادات محددة ────────────────────────────────────
 
@@ -75,6 +75,26 @@ router.get('/app-theme', async (_req, res) => {
   } catch (error) {
     return res.status(500).json({ message: error.message });
   }
+});
+
+router.get('/cart-config', async (_req, res) => {
+  try { const data = await getCartConfig(); return res.json(data); }
+  catch (error) { return res.status(500).json({ message: error.message }); }
+});
+
+router.get('/category-config', async (_req, res) => {
+  try { const data = await getCategoryConfig(); return res.json(data); }
+  catch (error) { return res.status(500).json({ message: error.message }); }
+});
+
+router.get('/delivery-config', async (_req, res) => {
+  try { const data = await getDeliveryConfig(); return res.json(data); }
+  catch (error) { return res.status(500).json({ message: error.message }); }
+});
+
+router.get('/error-messages', async (_req, res) => {
+  try { const data = await getErrorMessages(); return res.json(data); }
+  catch (error) { return res.status(500).json({ message: error.message }); }
 });
 
 // ── Admin: قراءة/تعديل كل الإعدادات ──────────────────────────────────

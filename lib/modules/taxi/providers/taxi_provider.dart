@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' show PostgresChangeEvent, RealtimeChannel;
 
+import '../../../services/app_config_service.dart';
 import '../../../services/supabase_service.dart';
 import '../models/taxi_request.dart';
 import '../models/taxi_favorite_place.dart';
@@ -610,8 +611,9 @@ class TaxiProvider extends ChangeNotifier {
 
   void startPolling({bool isDriver = false, String? phone}) {
     stopPolling();
-    // Realtime هو المصدر الأساسي؛ الاستطلاع الاحتياطي كل 30 ثانية فقط.
-    _pollTimer = Timer.periodic(const Duration(seconds: 30), (_) async {
+    // Realtime هو المصدر الأساسي؛ الاستطلاع الاحتياطي من config.
+    final interval = AppConfigService.instance.pollingIntervalSeconds;
+    _pollTimer = Timer.periodic(Duration(seconds: interval), (_) async {
       if (isDriver) {
         await loadDriverActiveRequest();
       } else {

@@ -100,6 +100,39 @@ async function getNotificationTexts() {
   return configs['notification_texts'] || {};
 }
 
+async function getCartConfig() {
+  const configs = await _getConfigs();
+  return _mergeWithDefaults('cart_config', configs['cart_config'], {
+    minAmount: 1000,
+    maxAmount: 500000,
+    enabledCategoryIds: ['restaurant', 'product', 'bazar_ghaith'],
+  });
+}
+
+async function getCategoryConfig() {
+  const configs = await _getConfigs();
+  return _mergeWithDefaults('category_config', configs['category_config'], {
+    professionalExcludedIds: [],
+  });
+}
+
+async function getDeliveryConfig() {
+  const configs = await _getConfigs();
+  return _mergeWithDefaults('delivery_config', configs['delivery_config'], {
+    defaultFee: 3000,
+    processingTimeoutMinutes: 30,
+  });
+}
+
+async function getErrorMessages() {
+  const configs = await _getConfigs();
+  return _mergeWithDefaults('error_messages', configs['error_messages'], {
+    network: 'خطأ في الاتصال. تحقق من الإنترنت وحاول مجدداً.',
+    server: 'الخدمة غير متاحة حالياً. حاول لاحقاً.',
+    generic: 'تعذر إكمال الطلب حالياً. حاول مرة أخرى.',
+  });
+}
+
 // ── App Theme ─────────────────────────────────────────────────────
 async function getAppTheme() {
   const configs = await _getConfigs();
@@ -131,6 +164,10 @@ module.exports = {
   getNeighborhoods,
   getNotificationTexts,
   getAppTheme,
+  getCartConfig,
+  getCategoryConfig,
+  getDeliveryConfig,
+  getErrorMessages,
   updateConfig,
   getAllConfigs,
 };

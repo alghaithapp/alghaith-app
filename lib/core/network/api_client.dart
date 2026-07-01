@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
+import '../../services/app_config_service.dart';
 import '../config/app_config.dart';
 import 'api_exception.dart';
 
@@ -52,7 +53,7 @@ class ApiClient {
   }) async {
     final baseUrl = AppConfig.normalizedDatabaseUrl;
     if (baseUrl.isEmpty) {
-      throw ApiException('الخدمة غير متاحة حالياً. حاول لاحقاً.');
+      throw ApiException(AppConfigService.instance.serverErrorMessage);
     }
 
     final uri = Uri.parse('$baseUrl$path')
@@ -100,7 +101,7 @@ class ApiClient {
         if (error is ApiException) rethrow;
         debugPrint('ApiClient network error (attempt $attempt): $error');
         if (attempt >= maxAttempts) {
-          throw ApiException('خطأ في الاتصال. تحقق من الإنترنت وحاول مجدداً.');
+          throw ApiException(AppConfigService.instance.networkErrorMessage);
         }
         // مهلة تصاعدية بسيطة قبل إعادة المحاولة (1ث، 2ث).
         await Future<void>.delayed(Duration(seconds: attempt));
@@ -114,17 +115,13 @@ class ApiClient {
       } catch (_) {
         final preview = response.body.trim();
         if (preview.length > 80) {
-          throw ApiException('تعذر قراءة الاستجابة. حاول مرة أخرى.');
+          throw ApiException(AppConfigService.instance.genericErrorMessage);
         }
-        throw ApiException(
-          preview.isNotEmpty
-              ? 'تعذر قراءة الاستجابة. حاول مرة أخرى.'
-              : 'تعذر قراءة الاستجابة. حاول مرة أخرى.',
-        );
+        throw ApiException(AppConfigService.instance.genericErrorMessage);
       }
     }
 
-    var message = 'تعذر إكمال الطلب حالياً. حاول مرة أخرى.';
+    var message = AppConfigService.instance.genericErrorMessage;
     try {
       final decoded = jsonDecode(response.body);
       if (decoded is Map && decoded['message'] is String) {
