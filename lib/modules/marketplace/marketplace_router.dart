@@ -83,6 +83,18 @@ class MarketplaceRouter {
       return;
     }
 
+    if (category.id == 'tourism' && (sub.id == 'hotels' || sub.id == 'flights')) {
+      Navigator.of(context).push(
+        CupertinoPageRoute(
+          builder: (_) => _ComingSoonFeatureScreen(
+            title: sub.titleAr,
+            subtitle: 'خدمة ${sub.titleAr} قيد التطوير وستكون متاحة قريباً.',
+          ),
+        ),
+      );
+      return;
+    }
+
     if (category.id == 'eden_printing' && sub.id == 'jannat_aden') {
       Navigator.of(context).push(
         CupertinoPageRoute(
