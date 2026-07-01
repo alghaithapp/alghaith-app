@@ -45,6 +45,27 @@ router.post('/create', async (req, res) => {
   }
 });
 
+// GET /db/taxi/estimate-fare?distance=7&types=tuktuk,wazz,economic&tripType=one_way
+router.get('/estimate-fare', async (req, res) => {
+  try {
+    const phone = requireOptionalAuthorizedPhone(req, res);
+    if (!phone) return;
+    const distance = Number(req.query.distance) || 0;
+    if (distance <= 0) return res.status(400).json({ message: 'Invalid distance.' });
+    const types = String(req.query.types || 'economic').split(',').filter(Boolean).map((t) => t.trim().toLowerCase());
+    const tripType = String(req.query.tripType || 'one_way').trim();
+    const { calculateFare } = require('../../services/taxi_pricing_service');
+    const results = {};
+    for (const type of types) {
+      const { fare, fareEconomic, fareSuper } = await calculateFare(distance, type, tripType);
+      results[type] = { fare, fareEconomic, fareSuper };
+    }
+    return res.json({ distance, tripType, results });
+  } catch (error) {
+    return res.status(500).json({ message: error?.message || 'Failed to estimate fare.' });
+  }
+});
+
 // POST /db/taxi/accept - قبول السائق
 router.post('/accept', async (req, res) => {
   try {

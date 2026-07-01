@@ -295,6 +295,7 @@ async function createTaxiRequest(customerPhone, data = {}) {
 
   // حساب السعر تلقائياً (×2 للذهاب والعودة)
   const { fareEconomic, fareSuper, fare } = await calculateFare(distanceKm, taxiType, tripType);
+  console.log(`[TAXI_CREATE] distance=${distanceKm} type=${taxiType} trip=${tripType} fare=${fare} eco=${fareEconomic} super=${fareSuper}`);
 
   const requestPayload = {
     id: requestId,

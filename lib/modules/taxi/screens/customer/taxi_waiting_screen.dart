@@ -6,7 +6,7 @@ import 'package:provider/provider.dart';
 
 import '../../providers/taxi_provider.dart';
 import '../../models/taxi_request.dart';
-import '../../utils/taxi_fare_calculator.dart';
+import '../../services/taxi_api_service.dart';
 import '../../utils/taxi_distance_calculator.dart';
 import '../../utils/taxi_labels.dart';
 import '../../utils/taxi_rating_navigation.dart';
@@ -484,11 +484,6 @@ class _TaxiWaitingScreenState extends State<TaxiWaitingScreen>
 
   Widget _buildTripInfoCard(bool isDark) {
     final p = widget.createParams!;
-    final fare = TaxiFareCalculator.fareForTypeWithRoundTrip(
-      p.distanceKm,
-      TaxiTypeX.fromApiName(p.taxiType),
-      p.isRoundTrip,
-    );
     final eta = TaxiDistanceCalculator.estimateDrivingDurationSeconds(p.distanceKm);
     final etaLabel = TaxiDistanceCalculator.formatDrivingDurationAr(eta);
     final tripLabel = p.isRoundTrip ? 'ذهاب وعودة' : 'ذهاب فقط';
@@ -567,9 +562,15 @@ class _TaxiWaitingScreenState extends State<TaxiWaitingScreen>
                   Text(etaLabel, style: TextStyle(fontFamily: 'Cairo', fontSize: 12, color: isDark ? Colors.white54 : Colors.grey)),
                 ],
               ),
-              Text(
-                '${fare.toLocaleString()} د.ع',
-                style: const TextStyle(fontFamily: 'Cairo', fontSize: 16, fontWeight: FontWeight.w800, color: Color(0xFF0EA5E9)),
+              FutureBuilder<Map<String, int>>(
+                future: TaxiApiService.estimateFares(distanceKm: p.distanceKm, isRoundTrip: p.isRoundTrip),
+                builder: (context, snapshot) {
+                  final fare = snapshot.data?[p.taxiType] ?? 0;
+                  return Text(
+                    '${fare.toLocaleString()} د.ع',
+                    style: const TextStyle(fontFamily: 'Cairo', fontSize: 16, fontWeight: FontWeight.w800, color: Color(0xFF0EA5E9)),
+                  );
+                },
               ),
             ],
           ),

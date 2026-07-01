@@ -220,6 +220,34 @@ class TaxiApiService {
     return Map<String, dynamic>.from(result);
   }
 
+  /// تقدير الأسعار من الـ Backend (المصدر الوحيد)
+  static Future<Map<String, int>> estimateFares({
+    required double distanceKm,
+    required bool isRoundTrip,
+  }) async {
+    final tripType = isRoundTrip ? 'round_trip' : 'one_way';
+    final result = await ApiClient.instance.get(
+      '$_basePath/estimate-fare',
+      queryParameters: {
+        'distance': distanceKm.toStringAsFixed(2),
+        'types': ['tuktuk', 'wazz', 'economic'].join(','),
+        'tripType': tripType,
+      },
+    );
+    if (result is! Map) return {};
+    final results = result['results'];
+    if (results is! Map) return {};
+    final map = <String, int>{};
+    for (final entry in results.entries) {
+      if (entry.value is Map) {
+        final fare = (entry.value as Map)['fare'];
+        if (fare is int) map[entry.key] = fare;
+        if (fare is double) map[entry.key] = fare.round();
+      }
+    }
+    return map;
+  }
+
   /// جلب السائقين القريبين
   static Future<List<DriverModel>> getNearbyDrivers(
     double lat,

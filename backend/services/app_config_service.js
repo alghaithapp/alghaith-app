@@ -5,7 +5,7 @@
 
 const { assertSupabaseAdmin } = require('../supabase_repo/common');
 
-const _cache = {};
+let _cache = {};
 let _cacheTimestamp = 0;
 const CACHE_TTL_MS = 60_000; // دقيقة واحدة
 

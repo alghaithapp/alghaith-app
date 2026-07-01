@@ -12,7 +12,7 @@ import '../../models/taxi_favorite_place.dart';
 import '../../models/taxi_saved_place_use.dart';
 import '../../providers/taxi_provider.dart';
 import '../../utils/taxi_distance_calculator.dart';
-import '../../utils/taxi_fare_calculator.dart';
+import '../../services/taxi_api_service.dart';
 import 'taxi_waiting_screen.dart';
 import 'taxi_live_tracking_screen.dart';
 import '../../../../core/data/iraq_neighborhoods.dart';
@@ -510,10 +510,16 @@ class _TaxiRequestScreenState extends State<TaxiRequestScreen> {
     });
   }
 
-  void _updateFares() {
-    _fareTuktuk = TaxiFareCalculator.fareForTypeWithRoundTrip(_distanceKm, TaxiType.tuktuk, _isRoundTrip);
-    _fareWazz = TaxiFareCalculator.fareForTypeWithRoundTrip(_distanceKm, TaxiType.wazz, _isRoundTrip);
-    _fareEconomic = TaxiFareCalculator.fareForTypeWithRoundTrip(_distanceKm, TaxiType.economic, _isRoundTrip);
+  Future<void> _updateFares() async {
+    try {
+      final fares = await TaxiApiService.estimateFares(distanceKm: _distanceKm, isRoundTrip: _isRoundTrip);
+      if (!mounted) return;
+      setState(() {
+        _fareTuktuk = fares['tuktuk'] ?? _fareTuktuk;
+        _fareWazz = fares['wazz'] ?? _fareWazz;
+        _fareEconomic = fares['economic'] ?? _fareEconomic;
+      });
+    } catch (_) {}
   }
 
   Future<void> _fitMapToLocations() async {
@@ -558,14 +564,18 @@ class _TaxiRequestScreenState extends State<TaxiRequestScreen> {
     } catch (_) {}
   }
 
-  void _calculateFares() {
-    _fareTuktuk = TaxiFareCalculator.fareForTypeWithRoundTrip(
-        _distanceKm, TaxiType.tuktuk, _isRoundTrip);
-    _fareWazz = TaxiFareCalculator.fareForTypeWithRoundTrip(
-        _distanceKm, TaxiType.wazz, _isRoundTrip);
-    _fareEconomic = TaxiFareCalculator.fareForTypeWithRoundTrip(
-        _distanceKm, TaxiType.economic, _isRoundTrip);
-    setState(() {});
+  Future<void> _calculateFares() async {
+    try {
+      final fares = await TaxiApiService.estimateFares(distanceKm: _distanceKm, isRoundTrip: _isRoundTrip);
+      if (!mounted) return;
+      setState(() {
+        _fareTuktuk = fares['tuktuk'] ?? _fareTuktuk;
+        _fareWazz = fares['wazz'] ?? _fareWazz;
+        _fareEconomic = fares['economic'] ?? _fareEconomic;
+      });
+    } catch (_) {
+      // إذا فشل API الأسعار، تبقى الأسعار على آخر قيمة محسوبة أو صفر
+    }
   }
 
   Future<void> _onRequestTrip() async {
