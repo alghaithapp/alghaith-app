@@ -109,20 +109,6 @@ class MarketplaceCatalog {
       showCuisineFilters: true,
     ),
     MarketplaceCategoryDefinition(
-      id: 'pharmacy',
-      titleAr: 'صيدليات',
-      titleEn: 'Pharmacies',
-      image: 'assets/images/cat_pharmacy.png',
-      entryMode: CategoryEntryMode.subCategoryHub,
-      apiServiceId: 'product',
-      apiProductCategory: 'pharmacy',
-      hubTitleAr: 'صيدليات',
-      hubSubtitleAr: 'اطلب أدويتك من الصيدليات الموثوقة',
-      storeTitleAr: 'صيدلية',
-      storeSubtitleAr: 'تصفح الصيدليات واطلب بسهولة',
-      subCategories: _pharmacySubCategories,
-    ),
-    MarketplaceCategoryDefinition(
       id: 'restaurant',
       titleAr: '\u0627\u0644\u0645\u0637\u0627\u0639\u0645',
       titleEn: 'Restaurants',
@@ -293,7 +279,6 @@ class MarketplaceCatalog {
   /// الأقسام الظاهرة للزبون في الصفحة الرئيسية (شبكة الأقسام).
   /// البازار يُعرض عبر البانر العلوي وليس ضمن هذه القائمة.
   static const Set<String> customerHomeCategoryIds = {
-    'pharmacy',
     'restaurant',
     'cars',
     'product',
@@ -462,13 +447,6 @@ class MarketplaceCatalog {
     MarketplaceSubCategory(id: 'صيدلية', titleAr: 'صيدلية', titleEn: 'Pharmacy', image: 'assets/images/health_pharmacies.png', browseMode: SubCategoryBrowseMode.stores),
   ];
 
-  static const List<MarketplaceSubCategory> _pharmacySubCategories = [
-    MarketplaceSubCategory(id: 'medicine', titleAr: 'أدوية ومستلزمات طبية', titleEn: 'Medicine & Supplies', image: 'assets/images/cat_pharmacy.png'),
-    MarketplaceSubCategory(id: 'baby', titleAr: 'مستلزمات الأطفال', titleEn: 'Baby Products', image: 'assets/images/cat_pharmacy.png'),
-    MarketplaceSubCategory(id: 'vitamins', titleAr: 'فيتامينات ومكملات', titleEn: 'Vitamins & Supplements', image: 'assets/images/cat_pharmacy.png'),
-    MarketplaceSubCategory(id: 'skincare', titleAr: 'عناية بالبشرة', titleEn: 'Skincare', image: 'assets/images/cat_pharmacy.png'),
-  ];
-
   static const List<MarketplaceSubCategory> _realEstateSubCategories = [
     MarketplaceSubCategory(id: 'house', titleAr: 'دار', titleEn: 'House', image: 'assets/images/re_house.png', browseMode: SubCategoryBrowseMode.catalog),
     MarketplaceSubCategory(id: 'land', titleAr: 'أرض', titleEn: 'Land', image: 'assets/images/re_land.png', browseMode: SubCategoryBrowseMode.catalog),
@@ -523,7 +501,6 @@ class MarketplaceCatalog {
   static const Set<String> cartEnabledCategoryIds = {
     'restaurant',
     'product',
-    'pharmacy',
     'bazar_ghaith',
   };
 
