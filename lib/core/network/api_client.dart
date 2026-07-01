@@ -63,9 +63,8 @@ class ApiClient {
       headers['Authorization'] = 'Bearer $token';
     }
 
-    // إعادة المحاولة عند أخطاء الشبكة/المهلة (بما فيها POST الحرجة مثل طلب التكسي).
-    final maxAttempts =
-        method == 'GET' || path.startsWith('/db/taxi/') ? 3 : 1;
+    // إعادة المحاولة عند أخطاء الشبكة/المهلة — فقط GET (الطلبات غير المتحولة).
+    final maxAttempts = method == 'GET' ? 3 : 1;
 
     late http.Response response;
     var attempt = 0;

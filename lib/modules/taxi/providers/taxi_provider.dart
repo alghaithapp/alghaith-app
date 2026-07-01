@@ -203,6 +203,15 @@ class TaxiProvider extends ChangeNotifier {
     }
   }
 
+  /// إلغاء أي طلب نشط قديم (في حال فشل الرد من المحاولة السابقة).
+  Future<void> _cancelActiveRequestIfAny() async {
+    if (_currentRequest != null && _currentRequest!.canCustomerCancel) {
+      try {
+        await TaxiApiService.cancelRequest(_currentRequest!.id);
+      } catch (_) {}
+    }
+  }
+
   // ── إنشاء طلب ──
 
   Future<TaxiRequest?> createTaxiRequest({
@@ -221,6 +230,11 @@ class TaxiProvider extends ChangeNotifier {
     _isLoading = true;
     _error = null;
     notifyListeners();
+
+    // إلغاء أي طلب نشط قديم (في حال فشل الرد من المحاولة السابقة)
+    try {
+      await _cancelActiveRequestIfAny();
+    } catch (_) {}
 
     try {
       final request = await TaxiApiService.createRequest(

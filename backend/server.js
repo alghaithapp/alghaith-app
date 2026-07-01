@@ -170,6 +170,9 @@ app.use('/app', require('./routes/features'));
 // ── Dynamic app config ─────────────────────────────────────────────
 app.use('/app/config', require('./routes/app_config'));
 
+// ── Travel (Flights & Hotels via Travelpayouts) ───────────────────
+app.use('/api/travel', require('./routes/travel'));
+
 // ── Emergency / debug routes (disabled unless ENABLE_EMERGENCY_ROUTES=true + key) ──
 app.use(require('./routes/emergency'));
 

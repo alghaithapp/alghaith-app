@@ -190,7 +190,7 @@ class MarketplaceCatalog {
       apiServiceId: 'tourism',
       apiProductCategory: 'tourism',
       hubTitleAr: 'السياحة والسفر',
-      hubSubtitleAr: 'كروبات، فنادق، وتذاكر',
+      hubSubtitleAr: 'فنادق، طيران، وكروبات سياحية',
       storeTitleAr: 'السياحة والسفر',
       storeSubtitleAr: 'استكشف العروض السياحية',
       defaultSubBrowseMode: SubCategoryBrowseMode.catalog,
@@ -243,15 +243,14 @@ class MarketplaceCatalog {
       titleAr: 'طباعة وإعلانات',
       titleEn: 'Printing & Advertising',
       image: 'assets/images/cat_eden_printing.png',
-      entryMode: CategoryEntryMode.subCategoryHub,
+      entryMode: CategoryEntryMode.directStores,
       apiServiceId: 'eden_printing',
       apiProductCategory: 'eden_printing',
       hubTitleAr: 'طباعة وإعلانات',
-      hubSubtitleAr: 'تصفح متاجر الطباعة والإعلانات',
-      storeTitleAr: 'المتاجر',
-      storeSubtitleAr: 'اختر متجر الطباعة واطلب بسهولة',
-      defaultSubBrowseMode: SubCategoryBrowseMode.stores,
-      subCategories: _edenPrintingSubCategories,
+      hubSubtitleAr: 'اختر متجر الطباعة والإعلانات',
+      storeTitleAr: 'متاجر الطباعة',
+      storeSubtitleAr: 'تصفح متاجر الطباعة والإعلانات',
+      subCategories: [],
     ),
     MarketplaceCategoryDefinition(
       id: 'global_shopping',
@@ -282,6 +281,7 @@ class MarketplaceCatalog {
     'restaurant',
     'cars',
     'product',
+    'tourism',
     'eden_printing',
     'global_shopping',
   };
@@ -458,7 +458,6 @@ class MarketplaceCatalog {
 
   static const List<MarketplaceSubCategory> _edenPrintingSubCategories = [
     MarketplaceSubCategory(id: 'printing', titleAr: 'طباعة', titleEn: 'Printing', image: 'assets/images/cat_eden_printing1.png'),
-    MarketplaceSubCategory(id: 'advertising', titleAr: 'إعلانات', titleEn: 'Advertising', image: 'assets/images/cat_eden_printing1.png'),
   ];
 
   static const List<MarketplaceSubCategory> _globalShoppingSubCategories = [

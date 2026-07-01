@@ -132,9 +132,10 @@ class _TaxiWaitingScreenState extends State<TaxiWaitingScreen>
     if (request != null) {
       _startCountdown();
     } else {
+      final errorMsg = provider.error?.replaceFirst('ApiException: ', '') ?? 'تعذّر إنشاء الطلب. حاول مجدداً.';
       setState(() {
         _submitError = true;
-        _errorMessage = 'تعذّر إنشاء الطلب. حاول مجدداً.';
+        _errorMessage = errorMsg;
         _status = 'فشل إنشاء الطلب';
       });
     }
