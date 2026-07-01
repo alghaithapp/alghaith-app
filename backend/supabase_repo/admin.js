@@ -2194,6 +2194,9 @@ async function preRegisterBeautyAccount(adminPhone, payload = {}) {
   const address = String(payload.address ?? '').trim();
   const phone = String(payload.phone ?? payload.contactPhone ?? '').trim();
   const whatsapp = String(payload.whatsapp ?? '').trim();
+  const specialty = String(payload.specialty ?? '').trim();
+  const openTime = String(payload.openTime ?? payload.open_time ?? '').trim();
+  const closeTime = String(payload.closeTime ?? payload.close_time ?? '').trim();
 
   const existingUser = await getAppUser(phoneKey);
   if (existingUser && String(existingUser.role ?? '').trim() === 'admin') {
@@ -2253,6 +2256,17 @@ async function preRegisterBeautyAccount(adminPhone, payload = {}) {
       address: address || undefined,
       phone: phone || undefined,
       whatsapp: whatsapp || undefined,
+      ...(subCategoryId === 'أطباء وعيادات' ? {
+        specialty,
+        openTime: openTime || undefined,
+        closeTime: closeTime || undefined,
+        professionalInfo: {
+          specialty,
+          description: description || fullName,
+          openTime: openTime || undefined,
+          closeTime: closeTime || undefined,
+        },
+      } : {}),
     },
     adminPreRegisteredMerchant: true,
     adminPreRegisteredAt: nowIso(),

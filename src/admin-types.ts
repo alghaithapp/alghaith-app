@@ -114,6 +114,9 @@ export interface DoctorPharmacyPreRegisterPayload {
   address?: string;
   contactPhone?: string;
   whatsapp?: string;
+  specialty?: string;
+  openTime?: string;
+  closeTime?: string;
 }
 
 export interface DoctorPharmacyPreRegisterResponse {
