@@ -1,62 +1,67 @@
 /**
  * Taxi Pricing Service
  *
- * تكتك: حتى 2 كم = 1,000 د.ع، ثم +250 لكل كم إضافي
- * واز: حتى 2 كم = 1,500 د.ع، ثم +300 لكل كم إضافي
- * تكسي اقتصادي: حتى 2 كم = 1,500 د.ع، ثم +500 لكل كم إضافي
- * الحد الأقصى: 50,000 د.ع
+ * الأسعار تُقرأ من app_configs (قابلة للتعديل بدون تحديث).
+ * القيم الافتراضية:
+ *   تكتك: حتى 2 كم = 1,000 د.ع، ثم +250 لكل كم إضافي
+ *   واز: حتى 2 كم = 1,500 د.ع، ثم +300 لكل كم إضافي
+ *   تكسي اقتصادي: حتى 2 كم = 1,500 د.ع، ثم +500 لكل كم إضافي
+ *   الحد الأقصى: 50,000 د.ع
  */
 
-const MAX_FARE = 50000;
-const INCLUDED_KM = 2.0;
-const FARE_ROUNDING_STEP = 250;
+const { getTaxiPricing } = require('./app_config_service');
 
-/** تقريب لأقرب 250 د.ع (1430→1500، 1700→1700، 1680→1750) */
-function roundFareToNearestStep(raw) {
-  const safe = Math.max(0, Math.round(Number(raw) || 0));
-  if (safe <= 0) return FARE_ROUNDING_STEP;
-  return Math.round(safe / FARE_ROUNDING_STEP) * FARE_ROUNDING_STEP;
+let _cachedPricing = null;
+let _cachePromise = null;
+
+async function _loadPricing() {
+  const cp = await getTaxiPricing();
+  _cachedPricing = cp;
+  return cp;
 }
 
-const PRICING = {
-  tuktuk: { base: 1000, extraKm: 250, min: 1000 },
-  wazz: { base: 1500, extraKm: 300, min: 1500 },
-  economic: { base: 1500, extraKm: 500, min: 1500 },
-};
+async function _pricing() {
+  if (_cachedPricing) return _cachedPricing;
+  if (!_cachePromise) _cachePromise = _loadPricing();
+  return await _cachePromise;
+}
 
 function normalizeTaxiType(value) {
   const type = String(value || 'economic').trim().toLowerCase();
   if (type === 'tuktuk' || type === 'tuk_tuk') return 'tuktuk';
   if (type === 'wazz') return 'wazz';
   if (type === 'super') return 'economic';
-  if (PRICING[type]) return type;
-  return 'economic';
+  return type in { tuktuk:1, wazz:1, economic:1 } ? type : 'economic';
 }
 
-function fareForType(distanceKm, taxiType) {
+async function fareForType(distanceKm, taxiType) {
+  const pricing = await _pricing();
   const type = normalizeTaxiType(taxiType);
-  const { base, extraKm, min } = PRICING[type];
+  const config = pricing[type] || { base: 1500, extraKm: 500, min: 1500 };
+  const { base, extraKm, min } = config;
+  const maxFare = Number(pricing.maxFare) || 50000;
+  const includedKm = Number(pricing.includedKm) || 2.0;
+  const roundingStep = Number(pricing.roundingStep) || 250;
+
   const safeDistance = Number.isFinite(distanceKm) && distanceKm > 0 ? distanceKm : 0;
-
-  const raw = safeDistance <= INCLUDED_KM
+  const raw = safeDistance <= includedKm
     ? base
-    : base + Math.round((safeDistance - INCLUDED_KM) * extraKm);
-
-  const bounded = Math.min(Math.max(raw, min), MAX_FARE);
-  return roundFareToNearestStep(bounded);
+    : base + Math.round((safeDistance - includedKm) * extraKm);
+  const bounded = Math.min(Math.max(raw, min), maxFare);
+  return roundFareToNearestStep(bounded, roundingStep);
 }
 
-/**
- * @param {number} distanceKm
- * @param {string} [taxiType]
- * @returns {{ fareEconomic: number, fareSuper: number, fare: number }}
- */
-function calculateFare(distanceKm, taxiType = 'economic', tripType = 'one_way') {
+function roundFareToNearestStep(raw, step = 250) {
+  const safe = Math.max(0, Math.round(Number(raw) || 0));
+  if (safe <= 0) return step;
+  return Math.round(safe / step) * step;
+}
+
+async function calculateFare(distanceKm, taxiType = 'economic', tripType = 'one_way') {
   const type = normalizeTaxiType(taxiType);
   const effectiveDistance = tripType === 'round_trip' ? distanceKm * 2 : distanceKm;
-  const fare = fareForType(effectiveDistance, type);
-  const fareEconomic = fareForType(effectiveDistance, 'economic');
-
+  const fare = await fareForType(effectiveDistance, type);
+  const fareEconomic = await fareForType(effectiveDistance, 'economic');
   return { fareEconomic, fareSuper: fare, fare };
 }
 
@@ -65,5 +70,4 @@ module.exports = {
   normalizeTaxiType,
   fareForType,
   roundFareToNearestStep,
-  FARE_ROUNDING_STEP,
 };

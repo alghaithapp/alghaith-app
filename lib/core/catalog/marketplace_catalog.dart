@@ -109,6 +109,20 @@ class MarketplaceCatalog {
       showCuisineFilters: true,
     ),
     MarketplaceCategoryDefinition(
+      id: 'pharmacy',
+      titleAr: 'صيدليات',
+      titleEn: 'Pharmacies',
+      image: 'assets/images/cat_pharmacy.png',
+      entryMode: CategoryEntryMode.subCategoryHub,
+      apiServiceId: 'product',
+      apiProductCategory: 'pharmacy',
+      hubTitleAr: 'صيدليات',
+      hubSubtitleAr: 'اطلب أدويتك من الصيدليات الموثوقة',
+      storeTitleAr: 'صيدلية',
+      storeSubtitleAr: 'تصفح الصيدليات واطلب بسهولة',
+      subCategories: _pharmacySubCategories,
+    ),
+    MarketplaceCategoryDefinition(
       id: 'restaurant',
       titleAr: '\u0627\u0644\u0645\u0637\u0627\u0639\u0645',
       titleEn: 'Restaurants',
@@ -247,9 +261,10 @@ class MarketplaceCatalog {
       apiServiceId: 'eden_printing',
       apiProductCategory: 'eden_printing',
       hubTitleAr: 'طباعة وإعلانات',
-      hubSubtitleAr: 'اختر المطبعة أو مزود الخدمة',
-      storeTitleAr: 'مطبعة جنة عدن',
-      storeSubtitleAr: 'خدمات طباعة احترافية',
+      hubSubtitleAr: 'تصفح متاجر الطباعة والإعلانات',
+      storeTitleAr: 'المتاجر',
+      storeSubtitleAr: 'اختر متجر الطباعة واطلب بسهولة',
+      defaultSubBrowseMode: SubCategoryBrowseMode.stores,
       subCategories: _edenPrintingSubCategories,
     ),
     MarketplaceCategoryDefinition(
@@ -278,6 +293,7 @@ class MarketplaceCatalog {
   /// الأقسام الظاهرة للزبون في الصفحة الرئيسية (شبكة الأقسام).
   /// البازار يُعرض عبر البانر العلوي وليس ضمن هذه القائمة.
   static const Set<String> customerHomeCategoryIds = {
+    'pharmacy',
     'restaurant',
     'cars',
     'product',
@@ -328,7 +344,6 @@ class MarketplaceCatalog {
   /// أقسام لا يختارها التاجر عند التسجيل (إدارية أو مُدارة من المنصة).
   static const Set<String> merchantExcludedCategoryIds = {
     'bazar_ghaith',
-    'eden_printing',
   };
 
   /// الأقسام المتاحة للتجار للتسجيل فيها (باستثناء الأقسام الإدارية أو الخاصة).
@@ -443,8 +458,15 @@ class MarketplaceCatalog {
   static const List<MarketplaceSubCategory> _healthSubCategories = [
     MarketplaceSubCategory(id: 'صالون رجالي', titleAr: 'صالون رجالي', titleEn: 'Male Salon', image: 'assets/images/health_salon.png', browseMode: SubCategoryBrowseMode.stores),
     MarketplaceSubCategory(id: 'صالون نسائي', titleAr: 'صالون نسائي', titleEn: 'Female Salon', image: 'assets/images/health_salon.png', browseMode: SubCategoryBrowseMode.stores),
-    MarketplaceSubCategory(id: 'عيادة تجميل', titleAr: 'عيادة تجميل', titleEn: 'Beauty Clinic', image: 'assets/images/health_doctors.png', browseMode: SubCategoryBrowseMode.stores),
+    MarketplaceSubCategory(id: 'أطباء وعيادات', titleAr: 'أطباء وعيادات', titleEn: 'Doctors & Clinics', image: 'assets/images/health_doctors.png', browseMode: SubCategoryBrowseMode.stores),
     MarketplaceSubCategory(id: 'صيدلية', titleAr: 'صيدلية', titleEn: 'Pharmacy', image: 'assets/images/health_pharmacies.png', browseMode: SubCategoryBrowseMode.stores),
+  ];
+
+  static const List<MarketplaceSubCategory> _pharmacySubCategories = [
+    MarketplaceSubCategory(id: 'medicine', titleAr: 'أدوية ومستلزمات طبية', titleEn: 'Medicine & Supplies', image: 'assets/images/cat_pharmacy.png'),
+    MarketplaceSubCategory(id: 'baby', titleAr: 'مستلزمات الأطفال', titleEn: 'Baby Products', image: 'assets/images/cat_pharmacy.png'),
+    MarketplaceSubCategory(id: 'vitamins', titleAr: 'فيتامينات ومكملات', titleEn: 'Vitamins & Supplements', image: 'assets/images/cat_pharmacy.png'),
+    MarketplaceSubCategory(id: 'skincare', titleAr: 'عناية بالبشرة', titleEn: 'Skincare', image: 'assets/images/cat_pharmacy.png'),
   ];
 
   static const List<MarketplaceSubCategory> _realEstateSubCategories = [
@@ -457,12 +479,8 @@ class MarketplaceCatalog {
   ];
 
   static const List<MarketplaceSubCategory> _edenPrintingSubCategories = [
-    MarketplaceSubCategory(
-      id: 'jannat_aden',
-      titleAr: 'مطبعة جنة عدن',
-      titleEn: 'Jannat Aden Printing',
-      image: 'assets/images/cat_eden_printing1.png',
-    ),
+    MarketplaceSubCategory(id: 'printing', titleAr: 'طباعة', titleEn: 'Printing', image: 'assets/images/cat_eden_printing1.png'),
+    MarketplaceSubCategory(id: 'advertising', titleAr: 'إعلانات', titleEn: 'Advertising', image: 'assets/images/cat_eden_printing1.png'),
   ];
 
   static const List<MarketplaceSubCategory> _globalShoppingSubCategories = [
@@ -505,6 +523,7 @@ class MarketplaceCatalog {
   static const Set<String> cartEnabledCategoryIds = {
     'restaurant',
     'product',
+    'pharmacy',
     'bazar_ghaith',
   };
 

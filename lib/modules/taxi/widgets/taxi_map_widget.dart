@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:latlong2/latlong.dart' as latlong2;
 import 'package:google_maps_flutter/google_maps_flutter.dart' as gmaps;
@@ -66,6 +67,38 @@ class _TaxiMapWidgetState extends State<TaxiMapWidget> {
   gmaps.LatLng? _lastDropoffCoord;
   List<gmaps.LatLng>? _lastRoutePoints;
 
+  gmaps.BitmapDescriptor? _driverCarIcon;
+  double _driverHeading = 0;
+  latlong2.LatLng? _lastDriverLocation;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadCarIcon();
+    _rebuildMarkersAndPolylines();
+  }
+
+  Future<void> _loadCarIcon() async {
+    try {
+      final icon = await gmaps.BitmapDescriptor.fromAssetImage(
+        const ImageConfiguration(size: Size(48, 48)),
+        'assets/images/car_taxi.png',
+      );
+      if (mounted) setState(() => _driverCarIcon = icon);
+    } catch (_) {}
+  }
+
+  double _calculateHeading(latlong2.LatLng from, latlong2.LatLng to) {
+    const deg2rad = 0.0174532925;
+    const rad2deg = 57.295779513;
+    final dLng = (to.longitude - from.longitude) * deg2rad;
+    final lat1 = from.latitude * deg2rad;
+    final lat2 = to.latitude * deg2rad;
+    final y = math.sin(dLng) * math.cos(lat2);
+    final x = math.cos(lat1) * math.sin(lat2) - math.sin(lat1) * math.cos(lat2) * math.cos(dLng);
+    return math.atan2(y, x) * rad2deg;
+  }
+
   gmaps.LatLng _toGmaps(latlong2.LatLng ll) =>
       gmaps.LatLng(ll.latitude, ll.longitude);
 
@@ -77,12 +110,6 @@ class _TaxiMapWidgetState extends State<TaxiMapWidget> {
           : const gmaps.LatLng(32.9256, 44.7766);
 
   @override
-  void initState() {
-    super.initState();
-    _rebuildMarkersAndPolylines();
-  }
-
-  @override
   void didUpdateWidget(TaxiMapWidget oldWidget) {
     super.didUpdateWidget(oldWidget);
     final pickupChanged = widget.pickupLocation != oldWidget.pickupLocation;
@@ -90,6 +117,12 @@ class _TaxiMapWidgetState extends State<TaxiMapWidget> {
     final routeChanged = widget.routePoints != oldWidget.routePoints;
     final driverChanged =
         !_sameLatLng(widget.driverLocation, oldWidget.driverLocation);
+    if (driverChanged && widget.driverLocation != null && _lastDriverLocation != null) {
+      _driverHeading = _calculateHeading(_lastDriverLocation!, widget.driverLocation!);
+    }
+    if (driverChanged && widget.driverLocation != null) {
+      _lastDriverLocation = widget.driverLocation;
+    }
     if (pickupChanged || dropoffChanged || routeChanged || driverChanged) {
       _rebuildMarkersAndPolylines();
     }
@@ -156,9 +189,10 @@ class _TaxiMapWidgetState extends State<TaxiMapWidget> {
         gmaps.Marker(
           markerId: gmaps.MarkerId('driver_${markerIdCounter++}'),
           position: _toGmaps(widget.driverLocation!),
-          icon: gmaps.BitmapDescriptor.defaultMarkerWithHue(
-            gmaps.BitmapDescriptor.hueGreen,
-          ),
+          icon: _driverCarIcon ?? gmaps.BitmapDescriptor.defaultMarkerWithHue(gmaps.BitmapDescriptor.hueGreen),
+          anchor: const Offset(0.5, 0.5),
+          rotation: _driverHeading,
+          flat: true,
           infoWindow: const gmaps.InfoWindow(title: 'الكابتن'),
         ),
       );

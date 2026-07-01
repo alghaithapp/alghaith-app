@@ -31,19 +31,20 @@ class _MerchantSetupScreenState extends State<MerchantSetupScreen> {
   final TextEditingController _phoneController = TextEditingController();
   final TextEditingController _whatsappController = TextEditingController();
   final TextEditingController _addressController = TextEditingController();
+  final TextEditingController _doctorNameController = TextEditingController();
   String _openTime = '';
   String _closeTime = '';
   final TextEditingController _deliveryFeeController = TextEditingController();
 
   bool _isSaving = false;
-  final List<String> _selectedServiceIds = []; // تبدأ فارغة ليقوم التاجر بالاختيار أولاً
+  final List<String> _selectedServiceIds = [];
   String? _coverImageBase64;
   String? _logoImageBase64;
   String? _profileImageBase64;
   final List<String> _workSampleImagesBase64 = [];
   String? _selectedProfessionalCategoryId;
   String? _selectedRestaurantCategory;
-  String? _selectedServiceSubCategory; // للخدمات: جمال، سيارات، عقارات، سياحة
+  String? _selectedServiceSubCategory;
   double? _storeLatitude;
   double? _storeLongitude;
 
@@ -63,6 +64,7 @@ class _MerchantSetupScreenState extends State<MerchantSetupScreen> {
     _phoneController.dispose();
     _whatsappController.dispose();
     _addressController.dispose();
+    _doctorNameController.dispose();
     _deliveryFeeController.dispose();
     super.dispose();
   }
@@ -86,7 +88,7 @@ class _MerchantSetupScreenState extends State<MerchantSetupScreen> {
   List<String> get _serviceSubCategories {
     switch (_primaryServiceId) {
       case 'beauty':
-        return ['صالون رجالي', 'صالون نسائي', 'عيادة تجميل', 'صيدلية'];
+        return ['صالون رجالي', 'صالون نسائي', 'أطباء وعيادات', 'صيدلية'];
       case 'cars':
         return ['بيع وشراء', 'تأجير', 'قطع غيار', 'صيانة'];
       case 'real_estate':
@@ -428,6 +430,14 @@ class _MerchantSetupScreenState extends State<MerchantSetupScreen> {
                             keyboardType: TextInputType.phone,
                           ),
                           const SizedBox(height: 14),
+                          if (_primaryServiceId == 'pharmacy') ...[
+                            _buildField(
+                              'اسم الدكتور (اختياري)',
+                              _doctorNameController,
+                              hintText: 'الدكتور المسؤول عن الصيدلية',
+                            ),
+                            const SizedBox(height: 14),
+                          ],
                           if (_isProfessionalSetup) ...[
                             _sectionTitle('تخصصك المهني'),
                             const SizedBox(height: 10),
@@ -914,6 +924,8 @@ class _MerchantSetupScreenState extends State<MerchantSetupScreen> {
                                             0,
                                     'isOpen': true,
                                     'rating': 0,
+                                    if (_primaryServiceId == 'pharmacy')
+                                      'doctorName': _doctorNameController.text.trim(),
                                     if (!_isRestaurantSetup)
                                       'workSampleImagesBase64':
                                           List<String>.from(
@@ -1190,6 +1202,7 @@ class _MerchantSetupScreenState extends State<MerchantSetupScreen> {
     // الخيارات الأخرى — قائمة مدمجة أصغر
     final otherOptions = [
       _BusinessTypeOption(id: 'beauty', icon: Icons.spa_rounded, titleAr: 'الصحة والجمال', color: const Color(0xFFE91E8C)),
+      _BusinessTypeOption(id: 'pharmacy', icon: Icons.medical_services_rounded, titleAr: 'صيدليات', color: const Color(0xFF00BCD4)),
       _BusinessTypeOption(id: 'cars', icon: Icons.directions_car_rounded, titleAr: 'معرض سيارات', color: const Color(0xFF1565C0)),
       _BusinessTypeOption(id: 'real_estate', icon: Icons.home_work_rounded, titleAr: 'العقارات', color: const Color(0xFF43A047)),
       _BusinessTypeOption(id: 'tourism', icon: Icons.travel_explore_rounded, titleAr: 'السياحة والسفر', color: const Color(0xFF00897B)),

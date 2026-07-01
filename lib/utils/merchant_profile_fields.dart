@@ -386,4 +386,13 @@ class MerchantProfileFields {
   static Map<String, dynamic> serviceEnabledPayload(Map<String, bool> map) {
     return map.map((key, value) => MapEntry(key, value));
   }
+
+  static String doctorName(Map<String, dynamic>? map) {
+    if (map == null) return '';
+    for (final key in ['doctorName', 'doctor_name', 'pharmacyDoctorName']) {
+      final value = map[key];
+      if (value is String && value.trim().isNotEmpty) return value.trim();
+    }
+    return '';
+  }
 }

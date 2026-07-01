@@ -52,4 +52,5 @@ class MerchantStoreView {
       MerchantProfileFields.showWhatsAppToCustomers(_map);
 
   String get address => MerchantProfileFields.addressFromMap(_map);
+  String get doctorName => MerchantProfileFields.doctorName(_map);
 }

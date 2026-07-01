@@ -101,6 +101,8 @@ String merchantChatLabelAr(String serviceId) {
       return 'مراسلة متجر العروض';
     case 'used':
       return 'مراسلة البائع';
+    case 'pharmacy':
+      return 'تواصل مع الصيدلية';
     case 'beauty':
       return 'مراسلة المتجر';
     default:
@@ -409,6 +411,49 @@ MerchantServiceLabels merchantServiceLabels(String categoryId) {
         deliveryFeeLabelEn: 'Service fee',
         businessDescriptionAr: 'سياحة وسفر',
         businessDescriptionEn: 'Tourism',
+      );
+    case 'pharmacy':
+      return const MerchantServiceLabels(
+        storeLabelAr: 'صيدلية',
+        storeLabelEn: 'Pharmacy',
+        accountTitleAr: 'حساب الصيدلية',
+        accountTitleEn: 'Pharmacy Account',
+        dashboardGreetingAr: 'هذه لوحة الصيدلية على الغيث',
+        dashboardGreetingEn: 'Your pharmacy dashboard on Al-Ghaith',
+        dashboardIntroAr: 'أدر منتجات الصيدلية واستقبل طلبات الزبائن.',
+        dashboardIntroEn: 'Manage your pharmacy products and receive orders.',
+        productsTitleAr: 'المنتجات',
+        productsTitleEn: 'Products',
+        addItemAr: 'إضافة منتج',
+        addItemEn: 'Add Product',
+        editItemAr: 'تعديل منتج',
+        editItemEn: 'Edit Product',
+        itemSingularAr: 'منتج',
+        itemSingularEn: 'Product',
+        itemPluralAr: 'منتجات',
+        itemPluralEn: 'Products',
+        actionLabelAr: 'أضف للسلة',
+        actionLabelEn: 'Add to Cart',
+        searchPlaceholderAr: 'ابحث في الصيدلية',
+        searchPlaceholderEn: 'Search pharmacy',
+        storeSettingsTitleAr: 'إعدادات الصيدلية',
+        storeSettingsTitleEn: 'Pharmacy Settings',
+        storeNameLabelAr: 'اسم الصيدلية',
+        storeNameLabelEn: 'Pharmacy name',
+        descriptionLabelAr: 'وصف الصيدلية',
+        descriptionLabelEn: 'Pharmacy description',
+        coverLabelAr: 'صورة الصيدلية',
+        coverLabelEn: 'Pharmacy cover',
+        logoLabelAr: 'شعار الصيدلية',
+        logoLabelEn: 'Pharmacy logo',
+        workingHoursLabelAr: 'أوقات الدوام',
+        workingHoursLabelEn: 'Working hours',
+        deliveryAreasLabelAr: 'مناطق التوصيل',
+        deliveryAreasLabelEn: 'Delivery areas',
+        deliveryFeeLabelAr: 'رسوم التوصيل',
+        deliveryFeeLabelEn: 'Delivery fee',
+        businessDescriptionAr: 'صيدلية',
+        businessDescriptionEn: 'Pharmacy',
       );
     case 'used':
       return const MerchantServiceLabels(

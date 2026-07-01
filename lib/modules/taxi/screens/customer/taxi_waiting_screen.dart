@@ -12,6 +12,7 @@ import '../../utils/taxi_labels.dart';
 import '../../utils/taxi_rating_navigation.dart';
 import 'taxi_live_tracking_screen.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../services/app_config_service.dart';
 import '../../widgets/taxi_cancel_dialog.dart';
 import '../../../../providers/app_provider.dart';
 import '../../../../utils/extensions.dart';
@@ -56,6 +57,7 @@ class TaxiWaitingScreen extends StatefulWidget {
 class _TaxiWaitingScreenState extends State<TaxiWaitingScreen>
     with TickerProviderStateMixin {
   Timer? _timer;
+  int get _searchTimeoutSeconds => AppConfigService.instance.searchTimeoutSeconds;
   int _secondsLeft = 300;
   bool _submitted = false;
   bool _submitError = false;
@@ -139,6 +141,8 @@ class _TaxiWaitingScreenState extends State<TaxiWaitingScreen>
   }
 
   void _startCountdown() {
+    final total = _searchTimeoutSeconds;
+    _secondsLeft = total;
     _timer?.cancel();
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (!mounted) {
@@ -146,7 +150,7 @@ class _TaxiWaitingScreenState extends State<TaxiWaitingScreen>
         return;
       }
       setState(() {
-        _secondsLeft = 300 - timer.tick;
+        _secondsLeft = total - timer.tick;
         if (_secondsLeft <= 0) {
           timer.cancel();
           _status = 'انتهت مهلة البحث';
@@ -162,7 +166,7 @@ class _TaxiWaitingScreenState extends State<TaxiWaitingScreen>
     return '$min:${sec.toString().padLeft(2, '0')}';
   }
 
-  double get _progress => _secondsLeft > 0 ? _secondsLeft / 300 : 0.0;
+  double get _progress => _secondsLeft > 0 ? _secondsLeft / _searchTimeoutSeconds : 0.0;
 
   Color get _progressColor {
     if (_secondsLeft > 120) return const Color(0xFF0EA5E9);
