@@ -15,7 +15,6 @@ import '../widgets/account/account_server_loading_view.dart';
 import '../../../widgets/app_image.dart';
 import 'account_deletion_screen.dart';
 import 'account_full_screen.dart';
-import '../../admin/screens/admin_dashboard_screen.dart';
 import 'addresses_screen.dart';
 import 'app_settings_screen.dart';
 import '../../merchant/screens/merchant_chat_inbox_screen.dart';
@@ -47,27 +46,6 @@ class CustomerAccountView extends StatelessWidget {
                 child: Column(
                   children: [
                     _ProfileCard(provider: provider),
-                    if (provider.hasAdminAccess) ...[
-                      const SizedBox(height: 14),
-                      _NavigationCard(
-                        icon: CupertinoIcons.shield_fill,
-                        iconColor: Colors.redAccent,
-                        title: 'لوحة الإدارة (Super Admin)',
-                        subtitle: 'إحصائيات المنصة وإدارة البازار',
-                        onTap: () async {
-                          if (!provider.isAdmin) {
-                            final ok = await provider.setUserRole('admin');
-                            if (!context.mounted || !ok) return;
-                          }
-                          if (!context.mounted) return;
-                          Navigator.of(context).push(
-                            CupertinoPageRoute(
-                              builder: (_) => const AdminDashboardScreen(),
-                            ),
-                          );
-                        },
-                      ),
-                    ],
                     const SizedBox(height: 14),
                     _NavigationCard(
                       icon: Icons.swap_horiz_rounded,

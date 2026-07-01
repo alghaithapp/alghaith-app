@@ -1,8 +1,6 @@
-/// In-app admin dashboard module.
+/// Admin services — لوحة الإدارة موحّدة عبر https://www.alghaithst.com/admin
 library admin_module;
 
 export 'services/admin_service.dart';
-export 'screens/admin_dashboard_screen.dart';
-export 'screens/models/admin_role.dart';
-export 'screens/widgets/admin_sidebar.dart';
-export 'screens/widgets/permission_gate.dart';
+/// Models used by app_provider
+export 'services/admin_service.dart';

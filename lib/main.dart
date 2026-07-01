@@ -23,7 +23,6 @@ import 'modules/merchant/screens/merchant_setup_screen.dart';
 import 'modules/merchant/screens/merchant_pending_approval_screen.dart';
 import 'modules/merchant/screens/merchant_profile_sync_screen.dart';
 import 'modules/merchant/screens/merchant_shell.dart';
-import 'modules/admin/screens/admin_dashboard_screen.dart';
 import 'modules/courier/screens/delivery_pending_approval_screen.dart';
 import 'modules/courier/screens/delivery_shell.dart';
 import 'modules/driver/screens/driver_pending_approval_screen.dart';
@@ -282,10 +281,6 @@ class _AlGhaithAppState extends State<AlGhaithApp> {
       // أثناء تحميل البيانات من السيرفر، اظهر شاشة تحميل بدلاً من الشاشات الفارغة
       if (appProvider.isRestoring && !appProvider.isReady) {
         return const ExitConfirmScope(child: _LoadingOverlay());
-      }
-
-      if (appProvider.isAdmin) {
-        return const ExitConfirmScope(child: AdminDashboardScreen());
       }
 
       if (appProvider.userRole == 'merchant') {

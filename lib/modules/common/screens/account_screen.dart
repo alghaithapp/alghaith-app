@@ -11,7 +11,6 @@ import '../../../utils/merchant_service_labels.dart';
 import '../../merchant/widgets/quick_publish_panel.dart';
 import '../../../widgets/app_image.dart';
 import '../../../widgets/app_logo.dart';
-import '../../admin/screens/admin_dashboard_screen.dart';
 import 'notifications_screen.dart';
 import '../../merchant/screens/merchant_dashboard_screen.dart';
 import '../../merchant/screens/merchant_orders_screen.dart';
@@ -146,27 +145,6 @@ class _MerchantAccountView extends StatelessWidget {
                 ],
               ),
             ),
-            if (appProvider.hasAdminAccess) ...[
-              const SizedBox(height: 14),
-              _RoleSwitchCard(
-                title: 'لوحة الإدارة (Super Admin)',
-                subtitle: 'التحكم الكامل في المنصة والتجار',
-                icon: CupertinoIcons.shield_fill,
-                color: Colors.redAccent,
-                onTap: () async {
-                  if (!appProvider.isAdmin) {
-                    final ok = await appProvider.setUserRole('admin');
-                    if (!context.mounted || !ok) return;
-                  }
-                  if (!context.mounted) return;
-                  Navigator.of(context).push(
-                    CupertinoPageRoute(
-                      builder: (_) => const AdminDashboardScreen(),
-                    ),
-                  );
-                },
-              ),
-            ],
             const SizedBox(height: 14),
             _RoleSwitchCard(
               title: 'بيانات الحساب الكامل',
