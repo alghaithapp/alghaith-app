@@ -13,6 +13,9 @@ enum AdminNavItem {
   homeCategories,
   appUpdate,
   pushNotifications,
+  admins,
+  maintenance,
+  adminNotifications,
   reports,
   auditLog,
   settings,
@@ -36,7 +39,13 @@ extension AdminNavItemLabel on AdminNavItem {
       case AdminNavItem.appUpdate:
         return 'تحديث التطبيق';
       case AdminNavItem.pushNotifications:
-        return 'الإشعارات';
+        return 'إرسال إشعارات';
+      case AdminNavItem.admins:
+        return 'المشرفون';
+      case AdminNavItem.maintenance:
+        return 'وضع الصيانة';
+      case AdminNavItem.adminNotifications:
+        return 'الإشعارات الواردة';
       case AdminNavItem.reports:
         return 'التقارير';
       case AdminNavItem.auditLog:
@@ -63,6 +72,12 @@ extension AdminNavItemLabel on AdminNavItem {
       case AdminNavItem.appUpdate:
         return Icons.system_update_rounded;
       case AdminNavItem.pushNotifications:
+        return Icons.send_rounded;
+      case AdminNavItem.admins:
+        return Icons.shield_rounded;
+      case AdminNavItem.maintenance:
+        return Icons.build_rounded;
+      case AdminNavItem.adminNotifications:
         return Icons.notifications_active_rounded;
       case AdminNavItem.reports:
         return Icons.bar_chart_rounded;
@@ -131,6 +146,9 @@ class AdminSidebar extends StatelessWidget {
       AdminNavItem.homeCategories,
       AdminNavItem.appUpdate,
       AdminNavItem.pushNotifications,
+      AdminNavItem.admins,
+      AdminNavItem.maintenance,
+      AdminNavItem.adminNotifications,
     ];
 
     final systemItems = <AdminNavItem>[

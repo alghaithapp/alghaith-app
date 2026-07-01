@@ -167,7 +167,8 @@ export type AdminView =
   | 'appUpdate'
   | 'notifications'
   | 'maintenance'
-  | 'admins';
+  | 'admins'
+  | 'appConfig';
 
 export interface AdminTaxiTrip {
   id: string;

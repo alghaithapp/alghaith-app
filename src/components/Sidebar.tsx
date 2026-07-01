@@ -6,6 +6,7 @@ import {
   Grid3x3,
   LogOut,
   Shield,
+  Settings2,
   Smartphone,
   Store,
   Users,
@@ -201,6 +202,13 @@ export default function Sidebar({
               iconClass="nav-icon-settings"
               icon={<Wrench size={16} />}
               label="وضع الصيانة"
+            />
+            <NavButton
+              isActive={view === 'appConfig'}
+              onClick={() => onSwitchView('appConfig')}
+              iconClass="nav-icon-settings"
+              icon={<Settings2 size={16} />}
+              label="إعدادات التطبيق"
             />
           </nav>
         </div>

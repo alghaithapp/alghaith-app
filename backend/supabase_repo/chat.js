@@ -272,9 +272,9 @@ async function assertCanAccessThread(threadType, threadId, requestPhone) {
     case 'order': {
       const row = await selectSingle('customer_orders', 'id', trimmedId);
       if (!row) throw new Error('Order not found.');
-      const payload = normalizeObject(row.payload);
+      const payload = normalizeObject(row.order_payload || row.payload);
       const customerPhone =
-        row.customer_phone || payload.customerPhone || payload.customer_phone || '';
+        row.phone || row.customer_phone || payload.customerPhone || payload.customer_phone || '';
       const merchantPhone =
         row.merchant_phone || payload.merchantPhone || payload.merchant_phone || '';
       const courierPhone =

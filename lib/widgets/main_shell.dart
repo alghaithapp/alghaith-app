@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show SystemNavigator;
 import 'package:provider/provider.dart';
 import 'package:animate_do/animate_do.dart';
+import 'package:audioplayers/audioplayers.dart';
 import '../core/theme/app_colors.dart';
 import '../core/ui/app_bottom_nav_style.dart';
 import '../models/app_models.dart';
@@ -140,8 +141,15 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
     _showCustomerBanner(data);
   }
 
+  void _playBannerSound() {
+    try {
+      unawaited(AudioPlayer().play(AssetSource('sounds/alghaith_notify.wav')));
+    } catch (_) {}
+  }
+
   void _showCustomerBanner(CustomerBannerData data) {
     if (!context.read<AppProvider>().inAppAlertsEnabled) return;
+    _playBannerSound();
     _notificationEntry?.remove();
     _notificationEntry = null;
 

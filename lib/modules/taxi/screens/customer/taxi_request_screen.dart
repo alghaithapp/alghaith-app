@@ -664,6 +664,26 @@ class _TaxiRequestScreenState extends State<TaxiRequestScreen> {
           elevation: 0,
           automaticallyImplyLeading: false,
           leading: const _TaxiBackButton(),
+          actions: [
+            GestureDetector(
+              onTap: _isGettingLocation ? null : () => _getCurrentLocation(),
+              child: Container(
+                margin: const EdgeInsets.all(8),
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: AppColors.primary,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: _isGettingLocation
+                    ? const Padding(
+                        padding: EdgeInsets.all(10),
+                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                      )
+                    : const Icon(Icons.my_location, size: 20, color: Colors.white),
+              ),
+            ),
+          ],
         ),
         body: Stack(
           children: [
@@ -743,29 +763,6 @@ class _TaxiRequestScreenState extends State<TaxiRequestScreen> {
                       _editingStopIndex = null;
                       _isPickupField = false;
                     },
-                  ),
-                  const SizedBox(height: 8),
-                  // زر تحديد موقعي الحالي
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: TextButton.icon(
-                      onPressed: _isGettingLocation
-                          ? null
-                          : () => _getCurrentLocation(),
-                      icon: _isGettingLocation
-                          ? const SizedBox(
-                              width: 16, height: 16,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: AppColors.primary,
-                              ),
-                            )
-                          : const Icon(Icons.my_location, size: 18, color: AppColors.primary),
-                      label: const Text(
-                        'تحديد موقعي',
-                        style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w600),
-                      ),
-                    ),
                   ),
                   const SizedBox(height: 8),
                   TaxiFavoritePlacesRow(

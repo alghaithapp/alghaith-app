@@ -6,7 +6,12 @@ import 'tabs/overview_tab.dart';
 import 'tabs/merchants_tab.dart';
 import 'tabs/couriers_tab.dart';
 import 'tabs/drivers_tab.dart';
+import 'tabs/accounts_tab.dart';
+import 'tabs/admins_tab.dart';
 import 'tabs/home_categories_tab.dart';
+import 'tabs/app_update_tab.dart';
+import 'tabs/maintenance_tab.dart';
+import 'tabs/admin_notifications_tab.dart';
 import 'tabs/push_notifications_tab.dart';
 import 'widgets/admin_sidebar.dart';
 
@@ -108,13 +113,19 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       case AdminNavItem.drivers:
         return const DriverManagementTab();
       case AdminNavItem.accounts:
-        return _ComingSoon(label: 'إدارة الحسابات');
+        return const AccountsTab();
       case AdminNavItem.homeCategories:
         return const HomeCategoriesTab();
       case AdminNavItem.appUpdate:
-        return _ComingSoon(label: 'تحديث التطبيق');
+        return const AppUpdateTab();
       case AdminNavItem.pushNotifications:
         return const PushNotificationsTab();
+      case AdminNavItem.admins:
+        return const AdminsTab();
+      case AdminNavItem.maintenance:
+        return const MaintenanceTab();
+      case AdminNavItem.adminNotifications:
+        return const AdminNotificationsTab();
       case AdminNavItem.reports:
         return _ComingSoon(label: 'التقارير');
       case AdminNavItem.auditLog:

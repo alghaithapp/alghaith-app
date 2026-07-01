@@ -13,7 +13,12 @@ class AdminService extends ChangeNotifier {
   List<Map<String, dynamic>> _allMerchants = [];
   List<Map<String, dynamic>> _allCouriers = [];
   List<Map<String, dynamic>> _allDrivers = [];
+  List<Map<String, dynamic>> _allAccounts = [];
+  List<Map<String, dynamic>> _allAdmins = [];
+  List<Map<String, dynamic>> _adminNotifications = [];
   Map<String, dynamic>? _adminReports;
+  Map<String, dynamic>? _appUpdatePolicy;
+  Map<String, dynamic>? _maintenancePolicy;
   String? _adminReportsError;
 
   // ── Home categories state ─────────────────────────────────────
@@ -32,7 +37,15 @@ class AdminService extends ChangeNotifier {
       List<Map<String, dynamic>>.unmodifiable(_allCouriers);
   List<Map<String, dynamic>> get allDrivers =>
       List<Map<String, dynamic>>.unmodifiable(_allDrivers);
+  List<Map<String, dynamic>> get allAccounts =>
+      List<Map<String, dynamic>>.unmodifiable(_allAccounts);
+  List<Map<String, dynamic>> get allAdmins =>
+      List<Map<String, dynamic>>.unmodifiable(_allAdmins);
+  List<Map<String, dynamic>> get adminNotifications =>
+      List<Map<String, dynamic>>.unmodifiable(_adminNotifications);
   Map<String, dynamic>? get adminReports => _adminReports;
+  Map<String, dynamic>? get appUpdatePolicy => _appUpdatePolicy;
+  Map<String, dynamic>? get maintenancePolicy => _maintenancePolicy;
   String? get adminReportsError => _adminReportsError;
 
   bool get isAdmin => _userRole == 'admin';
@@ -63,6 +76,187 @@ class AdminService extends ChangeNotifier {
       if (value != null) return value;
     }
     return true;
+  }
+
+  // ── Accounts ─────────────────────────────────────────────────
+  Future<void> refreshAllAccounts() async {
+    if (!SupabaseService.isConfigured) return;
+    try {
+      _allAccounts = await SupabaseService.loadAllAdminAccounts();
+      notifyListeners();
+    } catch (error) {
+      debugPrint('ADMIN_ACCOUNTS_ERROR: $error');
+    }
+  }
+
+  Future<void> deleteAccount(String targetPhone) async {
+    if (!SupabaseService.isConfigured) return;
+    try {
+      await SupabaseService.adminDeleteAccount(targetPhone);
+      _allAccounts.removeWhere((a) => a['phone']?.toString() == targetPhone);
+      notifyListeners();
+    } catch (error) {
+      debugPrint('ADMIN_DELETE_ACCOUNT_ERROR: $error');
+      rethrow;
+    }
+  }
+
+  Future<void> suspendAccount(String targetPhone, bool isSuspended) async {
+    if (!SupabaseService.isConfigured) return;
+    try {
+      await SupabaseService.adminSuspendAccount(targetPhone, isSuspended);
+      final idx = _allAccounts.indexWhere((a) => a['phone']?.toString() == targetPhone);
+      if (idx != -1) {
+        _allAccounts[idx] = Map<String, dynamic>.from(_allAccounts[idx]);
+        _allAccounts[idx]['isSuspended'] = isSuspended;
+      }
+      notifyListeners();
+    } catch (error) {
+      debugPrint('ADMIN_SUSPEND_ACCOUNT_ERROR: $error');
+      rethrow;
+    }
+  }
+
+  // ── App Update Policy ───────────────────────────────────────
+  Future<void> refreshAppUpdatePolicy() async {
+    if (!SupabaseService.isConfigured) return;
+    try {
+      _appUpdatePolicy = await SupabaseService.loadAdminAppUpdatePolicy();
+      notifyListeners();
+    } catch (error) {
+      debugPrint('ADMIN_APP_UPDATE_ERROR: $error');
+    }
+  }
+
+  Future<void> saveAppUpdatePolicy(Map<String, dynamic> policy) async {
+    if (!SupabaseService.isConfigured) return;
+    try {
+      _appUpdatePolicy = await SupabaseService.saveAdminAppUpdatePolicy(policy);
+      notifyListeners();
+    } catch (error) {
+      debugPrint('ADMIN_APP_UPDATE_SAVE_ERROR: $error');
+      rethrow;
+    }
+  }
+
+  // ── Maintenance Policy ───────────────────────────────────────
+  Future<void> refreshMaintenancePolicy() async {
+    if (!SupabaseService.isConfigured) return;
+    try {
+      _maintenancePolicy = await SupabaseService.loadAdminMaintenancePolicy();
+      notifyListeners();
+    } catch (error) {
+      debugPrint('ADMIN_MAINTENANCE_ERROR: $error');
+    }
+  }
+
+  Future<void> saveMaintenancePolicy(Map<String, dynamic> policy) async {
+    if (!SupabaseService.isConfigured) return;
+    try {
+      _maintenancePolicy = await SupabaseService.saveAdminMaintenancePolicy(policy);
+      notifyListeners();
+    } catch (error) {
+      debugPrint('ADMIN_MAINTENANCE_SAVE_ERROR: $error');
+      rethrow;
+    }
+  }
+
+  // ── Admins ───────────────────────────────────────────────────
+  Future<void> refreshAllAdmins() async {
+    if (!SupabaseService.isConfigured) return;
+    try {
+      _allAdmins = await SupabaseService.loadAllAdmins();
+      notifyListeners();
+    } catch (error) {
+      debugPrint('ADMIN_ADMINS_ERROR: $error');
+    }
+  }
+
+  Future<void> inviteAdmin(String targetPhone, {String? role, Map<String, dynamic>? permissions}) async {
+    if (!SupabaseService.isConfigured) return;
+    try {
+      await SupabaseService.inviteAdmin(targetPhone, role: role, permissions: permissions);
+      await refreshAllAdmins();
+      notifyListeners();
+    } catch (error) {
+      debugPrint('ADMIN_INVITE_ERROR: $error');
+      rethrow;
+    }
+  }
+
+  Future<void> updateAdminPermissions(String targetPhone, Map<String, dynamic> permissions) async {
+    if (!SupabaseService.isConfigured) return;
+    try {
+      await SupabaseService.updateAdminPermissions(targetPhone, permissions);
+      await refreshAllAdmins();
+      notifyListeners();
+    } catch (error) {
+      debugPrint('ADMIN_PERMISSIONS_ERROR: $error');
+      rethrow;
+    }
+  }
+
+  Future<void> removeAdmin(String targetPhone) async {
+    if (!SupabaseService.isConfigured) return;
+    try {
+      await SupabaseService.removeAdmin(targetPhone);
+      _allAdmins.removeWhere((a) => a['phone']?.toString() == targetPhone);
+      notifyListeners();
+    } catch (error) {
+      debugPrint('ADMIN_REMOVE_ERROR: $error');
+      rethrow;
+    }
+  }
+
+  // ── Admin Notifications ──────────────────────────────────────
+  Future<void> refreshAdminNotifications({bool unreadOnly = true}) async {
+    if (!SupabaseService.isConfigured) return;
+    try {
+      _adminNotifications = await SupabaseService.loadAdminNotifications(unreadOnly);
+      notifyListeners();
+    } catch (error) {
+      debugPrint('ADMIN_NOTIFICATIONS_ERROR: $error');
+    }
+  }
+
+  Future<void> markNotificationsRead({List<String>? ids}) async {
+    if (!SupabaseService.isConfigured) return;
+    try {
+      await SupabaseService.markAdminNotificationsRead(ids: ids);
+      if (ids != null) {
+        _adminNotifications.removeWhere((n) => ids.contains(n['id']?.toString()));
+      } else {
+        _adminNotifications.clear();
+      }
+      notifyListeners();
+    } catch (error) {
+      debugPrint('ADMIN_MARK_READ_ERROR: $error');
+    }
+  }
+
+  // ── Pre-register methods ─────────────────────────────────────
+  Future<Map<String, dynamic>> preRegisterMerchant(Map<String, dynamic> payload) async {
+    final result = await SupabaseService.preRegisterMerchant(payload);
+    await refreshAllMerchants();
+    return result;
+  }
+
+  Future<Map<String, dynamic>> preRegisterDriver(Map<String, dynamic> payload) async {
+    final result = await SupabaseService.preRegisterDriver(payload);
+    await refreshAllDrivers();
+    return result;
+  }
+
+  Future<Map<String, dynamic>> preRegisterCourier(Map<String, dynamic> payload) async {
+    final result = await SupabaseService.preRegisterCourier(payload);
+    await refreshAllCouriers();
+    return result;
+  }
+
+  Future<Map<String, dynamic>> preRegisterProfessional(Map<String, dynamic> payload) async {
+    final result = await SupabaseService.preRegisterProfessional(payload);
+    await refreshAllMerchants();
+    return result;
   }
 
   // ── Cross-domain setters ──────────────────────────────────────
@@ -437,18 +631,24 @@ class AdminService extends ChangeNotifier {
     List<Map<String, dynamic>>? allMerchants,
     List<Map<String, dynamic>>? allCouriers,
     List<Map<String, dynamic>>? allDrivers,
+    List<Map<String, dynamic>>? allAccounts,
+    List<Map<String, dynamic>>? allAdmins,
+    List<Map<String, dynamic>>? adminNotifications,
     Map<String, dynamic>? adminReports,
+    Map<String, dynamic>? appUpdatePolicy,
+    Map<String, dynamic>? maintenancePolicy,
     Map<String, HomeCategoryPlatformOverride>? homeCategoryOverrides,
   }) {
     if (allMerchants != null) _allMerchants = allMerchants;
     if (allCouriers != null) _allCouriers = allCouriers;
     if (allDrivers != null) _allDrivers = allDrivers;
-    if (adminReports != null || adminReports == null) {
-      _adminReports = adminReports;
-    }
-    if (homeCategoryOverrides != null) {
-      _homeCategoryOverrides = homeCategoryOverrides;
-    }
+    if (allAccounts != null) _allAccounts = allAccounts;
+    if (allAdmins != null) _allAdmins = allAdmins;
+    if (adminNotifications != null) _adminNotifications = adminNotifications;
+    if (adminReports != null || adminReports == null) _adminReports = adminReports;
+    if (appUpdatePolicy != null) _appUpdatePolicy = appUpdatePolicy;
+    if (maintenancePolicy != null) _maintenancePolicy = maintenancePolicy;
+    if (homeCategoryOverrides != null) _homeCategoryOverrides = homeCategoryOverrides;
   }
 
   // ── Utility methods ─────────────────────────────────────────────

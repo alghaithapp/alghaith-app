@@ -82,6 +82,7 @@ const AppUpdateView = lazy(() => import('./components/views/AppUpdateView'));
 const NotificationsView = lazy(() => import('./components/views/NotificationsView'));
 const MaintenanceView = lazy(() => import('./components/views/MaintenanceView'));
 const AdminsView = lazy(() => import('./components/views/AdminsView'));
+import AppConfigView from './components/views/AppConfigView';
 
 function ViewLoadingFallback() {
   return (
@@ -597,7 +598,7 @@ export default function App() {
 
   useEffect(() => {
     const hash = window.location.hash.replace('#', '') as AdminView;
-    const validViews: AdminView[] = ['dashboard', 'accounts', 'merchants', 'couriers', 'drivers', 'homeCategories', 'appUpdate', 'notifications', 'maintenance', 'admins'];
+    const validViews: AdminView[] = ['dashboard', 'accounts', 'merchants', 'couriers', 'drivers', 'homeCategories', 'appUpdate', 'notifications', 'maintenance', 'admins', 'appConfig'];
     if (hash && validViews.includes(hash)) {
       setView(hash);
     }
@@ -1440,6 +1441,16 @@ export default function App() {
                 />
               ) : null}
 
+              {view === 'appConfig' ? (
+                <section className="main-grid">
+                  <div className="panel wide">
+                    <ErrorBoundary fallback={<div style={{ padding: 40, textAlign: 'center' }}><p>حدث خطأ في تحميل الإعدادات.</p><button className="button primary" onClick={() => setView('dashboard')}>العودة للرئيسية</button></div>}>
+                      <AppConfigView token={token} />
+                    </ErrorBoundary>
+                  </div>
+                </section>
+              ) : null}
+
               {view === 'admins' ? (
                 <AdminsView
                   admins={admins}
@@ -1480,4 +1491,13 @@ export default function App() {
       />
     </main>
   );
+}
+
+class ErrorBoundary extends React.Component<{ children: React.ReactNode; fallback: React.ReactNode }> {
+  state = { hasError: false };
+  static getDerivedStateFromError() { return { hasError: true }; }
+  render() {
+    if (this.state.hasError) return this.props.fallback;
+    return this.props.children;
+  }
 }

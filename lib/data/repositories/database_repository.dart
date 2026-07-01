@@ -882,6 +882,129 @@ class DatabaseRepository {
       },
     );
   }
+  // ── Admin: Accounts ──────────────────────────────────────────
+  Future<List<Map<String, dynamic>>> loadAllAdminAccounts() async {
+    final result = await ApiClient.instance.get('/db/admin/accounts');
+    if (result is! List) return const [];
+    return result.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
+  }
+
+  Future<void> adminDeleteAccount(String targetPhone) async {
+    await ApiClient.instance.delete(
+      '/db/admin/account',
+      queryParameters: {'accountPhone': _phone(targetPhone)},
+    );
+  }
+
+  Future<void> adminSuspendAccount(String targetPhone, bool isSuspended) async {
+    await ApiClient.instance.put(
+      '/db/admin/account-suspend',
+      body: {'accountPhone': _phone(targetPhone), 'isSuspended': isSuspended},
+    );
+  }
+
+  // ── Admin: App Update Policy ─────────────────────────────────
+  Future<Map<String, dynamic>> loadAdminAppUpdatePolicy() async {
+    final result = await ApiClient.instance.get('/db/admin/app-update-policy');
+    if (result is Map) return Map<String, dynamic>.from(result);
+    return {};
+  }
+
+  Future<Map<String, dynamic>> saveAdminAppUpdatePolicy(Map<String, dynamic> policy) async {
+    final result = await ApiClient.instance.put(
+      '/db/admin/app-update-policy',
+      body: policy,
+    );
+    if (result is Map) return Map<String, dynamic>.from(result);
+    return {};
+  }
+
+  // ── Admin: Maintenance ───────────────────────────────────────
+  Future<Map<String, dynamic>> loadAdminMaintenancePolicy() async {
+    final result = await ApiClient.instance.get('/db/admin/maintenance');
+    if (result is Map) return Map<String, dynamic>.from(result);
+    return {};
+  }
+
+  Future<Map<String, dynamic>> saveAdminMaintenancePolicy(Map<String, dynamic> policy) async {
+    final result = await ApiClient.instance.put(
+      '/db/admin/maintenance',
+      body: policy,
+    );
+    if (result is Map) return Map<String, dynamic>.from(result);
+    return {};
+  }
+
+  // ── Admin: Admin management ──────────────────────────────────
+  Future<List<Map<String, dynamic>>> loadAllAdmins() async {
+    final result = await ApiClient.instance.get('/db/admin/admins');
+    if (result is! List) return const [];
+    return result.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
+  }
+
+  Future<Map<String, dynamic>> inviteAdmin(String targetPhone, {String? role, Map<String, dynamic>? permissions}) async {
+    final body = <String, dynamic>{'targetPhone': _phone(targetPhone)};
+    if (role != null) body['role'] = role;
+    if (permissions != null) body['permissions'] = permissions;
+    final result = await ApiClient.instance.post('/db/admin/admin-invite', body: body);
+    if (result is Map) return Map<String, dynamic>.from(result);
+    return {};
+  }
+
+  Future<void> updateAdminPermissions(String targetPhone, Map<String, dynamic> permissions) async {
+    await ApiClient.instance.put(
+      '/db/admin/admin-permissions',
+      body: {'targetPhone': _phone(targetPhone), 'permissions': permissions},
+    );
+  }
+
+  Future<void> removeAdmin(String targetPhone) async {
+    await ApiClient.instance.delete(
+      '/db/admin/admin-remove',
+      queryParameters: {'targetPhone': _phone(targetPhone)},
+    );
+  }
+
+  // ── Admin: Notifications ─────────────────────────────────────
+  Future<List<Map<String, dynamic>>> loadAdminNotifications(bool unreadOnly) async {
+    final qs = unreadOnly ? '?unreadOnly=true' : '';
+    final result = await ApiClient.instance.get('/db/admin/notifications$qs');
+    if (result is! List) return const [];
+    return result.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
+  }
+
+  Future<void> markAdminNotificationsRead({List<String>? ids}) async {
+    await ApiClient.instance.put(
+      '/db/admin/notifications/read',
+      body: ids != null ? {'ids': ids} : {},
+    );
+  }
+
+  // ── Admin: Pre-register ──────────────────────────────────────
+  Future<Map<String, dynamic>> preRegisterMerchant(Map<String, dynamic> payload) async {
+    final result = await ApiClient.instance.post('/db/admin/merchant-pre-register', body: payload);
+    if (result is Map) return Map<String, dynamic>.from(result);
+    return {};
+  }
+
+  Future<Map<String, dynamic>> preRegisterDriver(Map<String, dynamic> payload) async {
+    final result = await ApiClient.instance.post('/db/admin/driver-pre-register', body: payload);
+    if (result is Map) return Map<String, dynamic>.from(result);
+    return {};
+  }
+
+  Future<Map<String, dynamic>> preRegisterCourier(Map<String, dynamic> payload) async {
+    final result = await ApiClient.instance.post('/db/admin/courier-pre-register', body: payload);
+    if (result is Map) return Map<String, dynamic>.from(result);
+    return {};
+  }
+
+  Future<Map<String, dynamic>> preRegisterProfessional(Map<String, dynamic> payload) async {
+    final result = await ApiClient.instance.post('/db/admin/professional-pre-register', body: payload);
+    if (result is Map) return Map<String, dynamic>.from(result);
+    return {};
+  }
+
   Future<void> deleteAccount(String phone) async {
     await ApiClient.instance.delete(
       '/db/app-user',

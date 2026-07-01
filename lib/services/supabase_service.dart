@@ -476,6 +476,52 @@ class SupabaseService {
   static Future<void> rejectTaxiRequest(String phone, String requestId) =>
       _db.rejectTaxiRequest(phone, requestId);
 
+  // ── Admin: Accounts ──────────────────────────────────────────
+  static Future<List<Map<String, dynamic>>> loadAllAdminAccounts() =>
+      _db.loadAllAdminAccounts();
+  static Future<void> adminDeleteAccount(String targetPhone) =>
+      _db.adminDeleteAccount(targetPhone);
+  static Future<void> adminSuspendAccount(String targetPhone, bool isSuspended) =>
+      _db.adminSuspendAccount(targetPhone, isSuspended);
+
+  // ── Admin: App Update Policy ─────────────────────────────────
+  static Future<Map<String, dynamic>> loadAdminAppUpdatePolicy() =>
+      _db.loadAdminAppUpdatePolicy();
+  static Future<Map<String, dynamic>> saveAdminAppUpdatePolicy(Map<String, dynamic> policy) =>
+      _db.saveAdminAppUpdatePolicy(policy);
+
+  // ── Admin: Maintenance ───────────────────────────────────────
+  static Future<Map<String, dynamic>> loadAdminMaintenancePolicy() =>
+      _db.loadAdminMaintenancePolicy();
+  static Future<Map<String, dynamic>> saveAdminMaintenancePolicy(Map<String, dynamic> policy) =>
+      _db.saveAdminMaintenancePolicy(policy);
+
+  // ── Admin: Admins ────────────────────────────────────────────
+  static Future<List<Map<String, dynamic>>> loadAllAdmins() =>
+      _db.loadAllAdmins();
+  static Future<Map<String, dynamic>> inviteAdmin(String targetPhone, {String? role, Map<String, dynamic>? permissions}) =>
+      _db.inviteAdmin(targetPhone, role: role, permissions: permissions);
+  static Future<void> updateAdminPermissions(String targetPhone, Map<String, dynamic> permissions) =>
+      _db.updateAdminPermissions(targetPhone, permissions);
+  static Future<void> removeAdmin(String targetPhone) =>
+      _db.removeAdmin(targetPhone);
+
+  // ── Admin: Notifications ─────────────────────────────────────
+  static Future<List<Map<String, dynamic>>> loadAdminNotifications(bool unreadOnly) =>
+      _db.loadAdminNotifications(unreadOnly);
+  static Future<void> markAdminNotificationsRead({List<String>? ids}) =>
+      _db.markAdminNotificationsRead(ids: ids);
+
+  // ── Admin: Pre-register ──────────────────────────────────────
+  static Future<Map<String, dynamic>> preRegisterMerchant(Map<String, dynamic> payload) =>
+      _db.preRegisterMerchant(payload);
+  static Future<Map<String, dynamic>> preRegisterDriver(Map<String, dynamic> payload) =>
+      _db.preRegisterDriver(payload);
+  static Future<Map<String, dynamic>> preRegisterCourier(Map<String, dynamic> payload) =>
+      _db.preRegisterCourier(payload);
+  static Future<Map<String, dynamic>> preRegisterProfessional(Map<String, dynamic> payload) =>
+      _db.preRegisterProfessional(payload);
+
   static Future<void> updateTaxiRequestStatus(
     String phone,
     String requestId, {

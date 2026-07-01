@@ -129,9 +129,18 @@ function setCacheHeader(res, cacheHit, cacheSource) {
   }
 }
 
+function invalidateCache(key) {
+  memoryStore.delete(key);
+  const client = getRedisClient();
+  if (client) {
+    client.del(`rc:${key}`).catch(() => {});
+  }
+}
+
 module.exports = {
   DEFAULT_TTLS,
   remember,
   cacheStats,
   setCacheHeader,
+  invalidateCache,
 };

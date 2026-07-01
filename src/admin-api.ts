@@ -452,6 +452,76 @@ export async function loadMyAdminRole(token: string): Promise<{ role: string; pe
   return request(DATABASE_API_BASE_URL, '/db/admin/roles', { token });
 }
 
+// ── Dynamic App Config (Read) ──────────────────────────────────
+async function loadAppConfig<T>(token: string, path: string): Promise<T> {
+  return request<T>(DATABASE_API_BASE_URL, `/db/app/config/${path}`, { method: 'GET', token });
+}
+
+// ── Dynamic App Config (Write - Admin) ─────────────────────────
+export async function saveAppConfig(token: string, key: string, value: unknown) {
+  return request(DATABASE_API_BASE_URL, '/db/app/config/admin/configs', {
+    method: 'PUT',
+    token,
+    body: JSON.stringify({ key, value }),
+  });
+}
+
+export async function loadTaxiPricing(token: string) {
+  return loadAppConfig<Record<string, unknown>>(token, 'taxi-pricing');
+}
+export async function saveTaxiPricing(token: string, value: Record<string, unknown>) {
+  return saveAppConfig(token, 'taxi_pricing', value);
+}
+
+export async function loadTaxiConfig(token: string) {
+  return loadAppConfig<Record<string, unknown>>(token, 'taxi-config');
+}
+export async function saveTaxiConfig(token: string, value: Record<string, unknown>) {
+  return saveAppConfig(token, 'taxi_config', value);
+}
+
+export async function loadMapDefaults(token: string) {
+  return loadAppConfig<Record<string, unknown>>(token, 'map-defaults');
+}
+export async function saveMapDefaults(token: string, value: Record<string, unknown>) {
+  return saveAppConfig(token, 'map_defaults', value);
+}
+
+export async function loadHomeCategories(token: string) {
+  return loadAppConfig<{ order: string[]; categories: Record<string, { titleAr: string; enabled: boolean }> }>(token, 'home-categories');
+}
+export async function saveHomeCategories(token: string, value: Record<string, unknown>) {
+  return saveAppConfig(token, 'home_categories', value);
+}
+
+export async function loadSubCategories(token: string) {
+  return loadAppConfig<Record<string, Array<{ id: string; titleAr: string; titleEn: string }>>>(token, 'sub-categories');
+}
+export async function saveSubCategories(token: string, value: Record<string, unknown>) {
+  return saveAppConfig(token, 'sub_categories', value);
+}
+
+export async function loadNeighborhoods(token: string) {
+  return loadAppConfig<Record<string, unknown>>(token, 'neighborhoods');
+}
+export async function saveNeighborhoods(token: string, value: Record<string, unknown>) {
+  return saveAppConfig(token, 'neighborhoods', value);
+}
+
+export async function loadNotificationTexts(token: string) {
+  return loadAppConfig<Record<string, unknown>>(token, 'notification-texts');
+}
+export async function saveNotificationTexts(token: string, value: Record<string, unknown>) {
+  return saveAppConfig(token, 'notification_texts', value);
+}
+
+export async function loadAppTheme(token: string) {
+  return loadAppConfig<Record<string, unknown>>(token, 'app-theme');
+}
+export async function saveAppTheme(token: string, value: Record<string, unknown>) {
+  return saveAppConfig(token, 'app_theme', value);
+}
+
 export async function uploadImage(token: string, file: File): Promise<string> {
   const formData = new FormData();
   formData.append('file', file);

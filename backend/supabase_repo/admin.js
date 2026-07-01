@@ -2296,6 +2296,10 @@ async function saveAdminHomeCategoriesConfig(phone, overrides) {
     },
     homeCategoriesUpdatedAt: updatedAt,
   });
+  try {
+    const { invalidateCache } = require('../lib/response_cache');
+    if (typeof invalidateCache === 'function') invalidateCache('app:home-categories');
+  } catch (_) {}
   return { overrides: normalized, updatedAt };
 }
 
