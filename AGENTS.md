@@ -32,6 +32,7 @@ This is a **multi-platform e-commerce app** (Flutter mobile + web dashboard + No
 - `test/` — Flutter widget tests (`widget_test.dart`)
 - `web/` — Flutter web target assets (`index.html`, `manifest.json`)
 - `.refact/` — Refact AI coding assistant configuration (`project_information.yaml`)
+- `.kilo/` — Kilo AI workspace management config (worktrees, sessions, plugin)
 
 ## Getting started
 

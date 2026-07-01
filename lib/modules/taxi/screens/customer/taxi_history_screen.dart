@@ -26,7 +26,7 @@ class _TaxiHistoryScreenState extends State<TaxiHistoryScreen> {
 
   String _formatDate(DateTime? date) {
     if (date == null) return '--';
-    return '${date.year}/${date.month.toString().padLeft(2, '0')}/${date.day.toString().padLeft(2, '0')}';
+    return '${date.year}/${date.month.toString().padLeft(2, '0')}/${date.day.toString().padLeft(2, '0')} ${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
   }
 
   String _statusLabel(String statusKey) {
@@ -190,7 +190,7 @@ class _TripCard extends StatelessWidget {
                 ),
                 const Spacer(),
                 Text(
-                  formatDate(request.completedAt),
+                  formatDate(request.createdAt ?? request.completedAt),
                   style: TextStyle(
                     fontFamily: 'Cairo',
                     fontSize: 12,

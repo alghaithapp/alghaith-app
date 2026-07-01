@@ -13,6 +13,7 @@ import '../../utils/taxi_rating_navigation.dart';
 import 'taxi_live_tracking_screen.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../services/app_config_service.dart';
+import '../../../../widgets/app_image.dart';
 import '../../widgets/taxi_cancel_dialog.dart';
 import '../../../../providers/app_provider.dart';
 import '../../../../utils/extensions.dart';
@@ -61,6 +62,7 @@ class _TaxiWaitingScreenState extends State<TaxiWaitingScreen>
   int _secondsLeft = 300;
   bool _submitted = false;
   bool _submitError = false;
+  bool _driverFound = false;
   String _errorMessage = '';
   String _status = 'جار البحث عن كابتن...';
 
@@ -205,6 +207,33 @@ class _TaxiWaitingScreenState extends State<TaxiWaitingScreen>
     );
   }
 
+  Widget _buildDriverPhoto(String? photo) {
+    return Container(
+      width: 120,
+      height: 120,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: const Color(0xFF0EA5E9),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF0EA5E9).withValues(alpha: 0.35),
+            blurRadius: 30,
+            spreadRadius: 4,
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(60),
+        child: AppImage(
+          imageData: photo,
+          width: 120,
+          height: 120,
+          fit: BoxFit.cover,
+        ),
+      ),
+    );
+  }
+
   Widget _buildOrbitDots(Size size) {
     const dotCount = 3;
     return AnimatedBuilder(
@@ -230,24 +259,41 @@ class _TaxiWaitingScreenState extends State<TaxiWaitingScreen>
       builder: (context, provider, _) {
         final activeRequest = provider.currentRequest;
 
-        if (activeRequest != null && activeRequest.hasAssignedDriver) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (!mounted) return;
-            Navigator.of(context).pushReplacement(
-              MaterialPageRoute(
-                builder: (_) => const TaxiLiveTrackingScreen(),
-              ),
-            );
+        if (activeRequest != null && activeRequest.hasAssignedDriver && !_driverFound) {
+          _driverFound = true;
+          _status = 'تم العثور على كابتن';
+          setState(() {});
+          Future.delayed(const Duration(seconds: 2), () {
+            if (mounted) {
+              Navigator.of(context).pushReplacement(
+                MaterialPageRoute(builder: (_) => const TaxiLiveTrackingScreen()),
+              );
+            }
           });
         }
 
         if (_submitError) {
-          return PopScope(
-            canPop: true,
-            child: Scaffold(
-              backgroundColor: isDark ? const Color(0xFF0F0F0F) : const Color(0xFFF8FAFC),
-              body: Center(
-                child: Padding(
+          return Scaffold(
+            backgroundColor: isDark ? const Color(0xFF0F0F0F) : const Color(0xFFF8FAFC),
+            appBar: AppBar(
+              backgroundColor: Colors.transparent,
+              elevation: 0,
+              leading: GestureDetector(
+                onTap: () => _onBack(provider),
+                child: Container(
+                  margin: const EdgeInsets.all(8),
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: (isDark ? Colors.white : Colors.black).withValues(alpha: 0.06),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(Icons.arrow_back_ios_new_rounded, size: 18, color: isDark ? Colors.white70 : Colors.black54),
+                ),
+              ),
+            ),
+            body: SafeArea(
+              child: Center(
+                child: SingleChildScrollView(
                   padding: const EdgeInsets.all(32),
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
@@ -266,11 +312,20 @@ class _TaxiWaitingScreenState extends State<TaxiWaitingScreen>
                         style: TextStyle(fontFamily: 'Cairo', fontSize: 16, color: isDark ? Colors.white70 : Colors.black87),
                         textAlign: TextAlign.center,
                       ),
+                      if (widget.createParams != null) ...[
+                        const SizedBox(height: 24),
+                        _buildTripInfoCard(isDark),
+                      ],
                       const SizedBox(height: 24),
                       ElevatedButton.icon(
                         onPressed: _submitRequest,
                         icon: const Icon(Icons.refresh),
                         label: const Text('إعادة المحاولة', style: TextStyle(fontFamily: 'Cairo')),
+                      ),
+                      const SizedBox(height: 12),
+                      TextButton(
+                        onPressed: () => _onBack(provider),
+                        child: Text('إلغاء والعودة', style: TextStyle(fontFamily: 'Cairo', color: Colors.red.shade400)),
                       ),
                     ],
                   ),
@@ -345,15 +400,18 @@ class _TaxiWaitingScreenState extends State<TaxiWaitingScreen>
                     children: [
                       const SizedBox(height: 40),
 
-                      // ── Animated car icon with orbit ──
+                      // ── Animated car icon (or driver photo when found) ──
                       SizedBox(
                         width: 200,
                         height: 200,
                         child: Stack(
                           alignment: Alignment.center,
                           children: [
-                            _buildOrbitDots(const Size(200, 200)),
-                            _buildAnimatedCar(size),
+                            if (!_driverFound) _buildOrbitDots(const Size(200, 200)),
+                            if (_driverFound)
+                              _buildDriverPhoto(activeRequest?.driverPhoto)
+                            else
+                              _buildAnimatedCar(size),
                           ],
                         ),
                       ),

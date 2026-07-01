@@ -559,7 +559,7 @@ export default function App() {
   const totalCustomers = useMemo(() => accounts.filter((a) => a.kind === 'customer').length, [accounts]);
   const totalMerchantsCount = useMemo(() => accounts.filter((a) => a.kind === 'merchant').length, [accounts]);
   const totalCouriersCount = useMemo(() => accounts.filter((a) => a.kind === 'courier').length, [accounts]);
-  const totalDriversCount = useMemo(() => accounts.filter((a) => a.kind === 'driver').length, [accounts]);
+  const totalDriversCount = useMemo(() => driverAccounts.length, [driverAccounts]);
 
   // Handlers
   async function handleSendCode(event: FormEvent) {

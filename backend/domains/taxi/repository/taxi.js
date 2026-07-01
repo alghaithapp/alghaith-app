@@ -44,6 +44,7 @@ function readTaxiMeta(row) {
     fareSuper: Number(payload.fareSuper ?? 0),
     tripType: String(payload.tripType || 'one_way').trim(),
     waitingMinutes: payload.waitingMinutes ? Number(payload.waitingMinutes) : null,
+    createdAt: row.created_at ?? payload.createdAt ?? null,
   };
 }
 
@@ -101,6 +102,7 @@ function formatTaxiRequestForClient(row) {
     cancelRequestReason: payload.cancelRequestReason ?? null,
     isRoundTrip: payload.tripType === 'round_trip',
     waitingMinutes: payload.waitingMinutes ? Number(payload.waitingMinutes) : null,
+    createdAt: meta.createdAt ?? null,
   };
 }
 
@@ -292,7 +294,7 @@ async function createTaxiRequest(customerPhone, data = {}) {
   );
 
   // حساب السعر تلقائياً (×2 للذهاب والعودة)
-  const { fareEconomic, fareSuper, fare } = calculateFare(distanceKm, taxiType, tripType);
+  const { fareEconomic, fareSuper, fare } = await calculateFare(distanceKm, taxiType, tripType);
 
   const requestPayload = {
     id: requestId,
