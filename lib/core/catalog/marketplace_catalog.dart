@@ -154,6 +154,20 @@ class MarketplaceCatalog {
       subCategories: _shoppingSubCategories,
     ),
     MarketplaceCategoryDefinition(
+      id: 'gen_services',
+      titleAr: 'خدمات عامة',
+      titleEn: 'General Services',
+      image: 'assets/images/cat_gen_services.png',
+      entryMode: CategoryEntryMode.professionals,
+      apiServiceId: 'professionals',
+      apiProductCategory: 'professionals',
+      hubTitleAr: 'خدمات عامة',
+      hubSubtitleAr: 'تصفح الخدمات العامة',
+      storeTitleAr: 'خدمات عامة',
+      storeSubtitleAr: 'اختر الخدمة التي تحتاجها',
+      subCategories: _genServicesSubCategories,
+    ),
+    MarketplaceCategoryDefinition(
       id: 'professionals',
       titleAr: 'المهنيين',
       titleEn: 'Professionals',
@@ -282,6 +296,7 @@ class MarketplaceCatalog {
     'restaurant',
     'cars',
     'product',
+    'gen_services',
     'professionals',
     'beauty',
     'tourism',
@@ -474,6 +489,11 @@ class MarketplaceCatalog {
   static List<MarketplaceSubCategory> get professionalsSubCategories =>
       _professionalsSubCategories;
 
+  static const List<MarketplaceSubCategory> _genServicesSubCategories = [
+    MarketplaceSubCategory(id: 'photography', titleAr: 'استوديوهات تصوير', titleEn: 'Photography Studio', image: 'assets/images/prof_photography.png', browseMode: SubCategoryBrowseMode.catalog),
+    MarketplaceSubCategory(id: 'wedding', titleAr: 'تجهيز الأعراس والمناسبات', titleEn: 'Wedding & Events', image: 'assets/images/prof_wedding.png', browseMode: SubCategoryBrowseMode.catalog),
+  ];
+
   static const List<MarketplaceSubCategory> _professionalsSubCategories = [
     MarketplaceSubCategory(id: 'plumber', titleAr: 'سباك', titleEn: 'Plumber', image: 'assets/images/prof_plumber.png', browseMode: SubCategoryBrowseMode.catalog),
     MarketplaceSubCategory(id: 'electrician', titleAr: 'كهربائي', titleEn: 'Electrician', image: 'assets/images/prof_electrician.png', browseMode: SubCategoryBrowseMode.catalog),
@@ -488,7 +508,6 @@ class MarketplaceCatalog {
     MarketplaceSubCategory(id: 'loading_worker', titleAr: 'عامل تحميل وتنزيل', titleEn: 'Loading Worker', image: 'assets/images/prof_loading.png', browseMode: SubCategoryBrowseMode.catalog),
     MarketplaceSubCategory(id: 'gardener', titleAr: 'عامل حدائق', titleEn: 'Gardener', image: 'assets/images/prof_gardener.png', browseMode: SubCategoryBrowseMode.catalog),
     MarketplaceSubCategory(id: 'aluminum_glass', titleAr: 'فني ألمنيوم وزجاج', titleEn: 'Aluminum & Glass', image: 'assets/images/prof_aluminum_glass.png', browseMode: SubCategoryBrowseMode.catalog),
-    MarketplaceSubCategory(id: 'photography', titleAr: 'استوديوهات تصوير', titleEn: 'Photography Studio', image: 'assets/images/prof_photography.png', browseMode: SubCategoryBrowseMode.catalog),
   ];
 
   static const List<MarketplaceSubCategory> _usedSubCategories = [
