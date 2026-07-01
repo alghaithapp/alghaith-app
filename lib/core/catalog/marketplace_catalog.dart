@@ -464,7 +464,7 @@ class MarketplaceCatalog {
     MarketplaceSubCategory(id: 'صالون رجالي', titleAr: 'صالون رجالي', titleEn: 'Male Salon', image: 'assets/images/cat_pharmacy.png', browseMode: SubCategoryBrowseMode.stores),
     MarketplaceSubCategory(id: 'صالون نسائي', titleAr: 'صالون نسائي', titleEn: 'Female Salon', image: 'assets/images/health_salon.png', browseMode: SubCategoryBrowseMode.stores),
     MarketplaceSubCategory(id: 'أطباء وعيادات', titleAr: 'أطباء وعيادات', titleEn: 'Doctors & Clinics', image: 'assets/images/health_doctors.png', browseMode: SubCategoryBrowseMode.stores),
-    MarketplaceSubCategory(id: 'صيدلية', titleAr: 'صيدلية', titleEn: 'Pharmacy', image: 'assets/images/cat_pharmacy.png', browseMode: SubCategoryBrowseMode.catalog),
+    MarketplaceSubCategory(id: 'صيدلية', titleAr: 'صيدلية', titleEn: 'Pharmacy', image: 'assets/images/health_pharmacies.png', browseMode: SubCategoryBrowseMode.stores),
   ];
 
   static const List<MarketplaceSubCategory> _realEstateSubCategories = [

@@ -1,10 +1,9 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:url_launcher/url_launcher.dart';
-
 import '../core/theme/app_colors.dart';
 import '../models/app_models.dart';
 import '../modules/chat/utils/chat_navigation.dart';
+import '../utils/call_navigation.dart';
 import '../services/supabase_service.dart';
 import '../utils/guest_gate.dart';
 import '../utils/merchant_profile_fields.dart';
@@ -227,6 +226,37 @@ class _ProfessionalDisclaimer extends StatelessWidget {
   }
 }
 
+void _openImageFullscreen(BuildContext context, String imageBase64, {String? tag}) {
+  Navigator.of(context).push(
+    PageRouteBuilder(
+      opaque: false,
+      barrierDismissible: true,
+      barrierLabel: '',
+      pageBuilder: (context, _, __) => Scaffold(
+        backgroundColor: Colors.black.withValues(alpha: 0.92),
+        appBar: AppBar(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          leading: IconButton(
+            icon: const Icon(Icons.close, color: Colors.white, size: 26),
+            onPressed: () => Navigator.of(context).pop(),
+          ),
+        ),
+        body: Center(
+          child: InteractiveViewer(
+            maxScale: 5,
+            minScale: 1,
+            child: AppImage(
+              imageData: imageBase64,
+              fit: BoxFit.contain,
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
 class _ProfessionalCard extends StatelessWidget {
   final String name;
   final String description;
@@ -267,16 +297,11 @@ class _ProfessionalCard extends StatelessWidget {
   }
 
   Future<void> _startCall(BuildContext context) async {
-    final tel = 'tel:${phone.trim()}';
-    final uri = Uri.parse(tel);
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri);
-    } else {
-      if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('تعذر إجراء المكالمة')),
-      );
-    }
+    await CallNavigation.openStoreCall(
+      context,
+      merchantPhone: phone.trim(),
+      storeName: name,
+    );
   }
 
   @override
@@ -300,12 +325,17 @@ class _ProfessionalCard extends StatelessWidget {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              CircleAvatar(
-                radius: 28,
-                backgroundColor: const Color(0xFFF3F3F5),
-                child: AppImage(
-                  imageData: profileImageBase64,
-                  borderRadius: BorderRadius.circular(28),
+              GestureDetector(
+                onTap: (profileImageBase64 ?? '').isNotEmpty
+                    ? () => _openImageFullscreen(context, profileImageBase64 ?? '')
+                    : null,
+                child: CircleAvatar(
+                  radius: 28,
+                  backgroundColor: const Color(0xFFF3F3F5),
+                  child: AppImage(
+                    imageData: profileImageBase64,
+                    borderRadius: BorderRadius.circular(28),
+                  ),
                 ),
               ),
               const SizedBox(width: 12),
@@ -352,18 +382,22 @@ class _ProfessionalCard extends StatelessWidget {
           if (workSamples.isNotEmpty) ...[
             const SizedBox(height: 14),
             SizedBox(
-              height: 82,
+              height: 100,
               child: ListView.separated(
                 scrollDirection: Axis.horizontal,
-                itemCount: workSamples.length,
+                itemCount: workSamples.length > 4 ? 4 : workSamples.length,
                 separatorBuilder: (_, __) => const SizedBox(width: 8),
                 itemBuilder: (context, index) {
-                  return ClipRRect(
-                    borderRadius: BorderRadius.circular(14),
-                    child: AppImage(
-                      imageData: workSamples[index],
-                      width: 82,
-                      height: 82,
+                  return GestureDetector(
+                    onTap: () => _openImageFullscreen(context, workSamples[index]),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: AppImage(
+                        imageData: workSamples[index],
+                        width: 100,
+                        height: 100,
+                        fit: BoxFit.cover,
+                      ),
                     ),
                   );
                 },

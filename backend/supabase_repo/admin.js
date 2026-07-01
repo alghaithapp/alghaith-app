@@ -133,10 +133,10 @@ async function getAdminReports(phone) {
   let courierCount = 0;
   let driverCount = 0;
   for (const row of courierRows) {
-    if (String(row.display_name || '').trim()) courierCount += 1;
+    if (String(row.display_name || '').trim() || String(row.phone || '').trim()) courierCount += 1;
   }
   for (const row of driverRows) {
-    if (String(row.display_name || '').trim()) driverCount += 1;
+    if (String(row.display_name || '').trim() || String(row.phone || '').trim()) driverCount += 1;
   }
 
   const pendingMerchants = merchants.filter((m) => {
@@ -2222,46 +2222,12 @@ async function preRegisterBeautyAccount(adminPhone, payload = {}) {
     if (Object.keys(patch).length > 0) await saveAppUser(phoneKey, patch);
   }
 
-  const profilePayload = {
-    store_name: fullName,
-    primary_service_id: 'beauty',
-    service_ids: ['beauty'],
-    active_service_id: 'beauty',
-    category: 'beauty',
-    sub_category_id: subCategoryId,
-    subCategoryId,
-    description: description || undefined,
-    address: address || undefined,
-    phone: phone || undefined,
-    whatsapp: whatsapp || undefined,
-    is_approved: true,
-    approval_status: 'approved',
-    is_open: true,
-    adminPreRegistered: true,
-  };
-
   const supabase = assertSupabaseAdmin();
-
-  if (existingProfile) {
-    const { error } = await supabase
-      .from('merchant_profiles')
-      .update({ ...profilePayload, updated_at: nowIso() })
-      .eq('phone', phoneKey);
-    if (error) throw error;
-  } else {
-    const { data: appUser } = await supabase
-      .from('app_users')
-      .select('id')
-      .eq('phone', phoneKey)
-      .maybeSingle();
-    const upsertPayload = { phone: phoneKey, ...profilePayload, updated_at: nowIso() };
-    if (appUser?.id) upsertPayload.user_id = appUser.id;
-    const { error: upsertErr } = await supabase
-      .from('merchant_profiles')
-      .upsert(upsertPayload, { onConflict: 'phone' })
-      .select();
-    if (upsertErr) throw upsertErr;
-  }
+  const { data: appUser } = await supabase.from('app_users').select('id').eq('phone', phoneKey).maybeSingle();
+  const upsertRow = { phone: phoneKey, store_name: fullName, is_approved: true, approval_status: 'approved', updated_at: nowIso() };
+  if (appUser?.id) upsertRow.user_id = appUser.id;
+  const { error: upsertErr } = await supabase.from('merchant_profiles').upsert(upsertRow, { onConflict: 'phone' }).select();
+  if (upsertErr) throw upsertErr;
 
   const merchantState = (await getUserState(phoneKey)) || {};
   await saveUserState(phoneKey, {
