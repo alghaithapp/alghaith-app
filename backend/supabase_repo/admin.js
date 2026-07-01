@@ -1976,7 +1976,7 @@ async function preRegisterCourierAccount(adminPhone, payload = {}) {
 const PROFESSIONAL_CATEGORIES = new Set([
   'plumber', 'electrician', 'ac_tech', 'carpenter', 'cleaner',
   'blacksmith', 'painter', 'builder', 'cctv_tech', 'network_tech',
-  'loading_worker', 'gardener', 'aluminum_glass', 'photography',
+  'loading_worker', 'gardener', 'aluminum_glass', 'photography', 'wedding',
 ]);
 
 const PROFESSIONAL_CATEGORY_NAMES = {
@@ -1994,6 +1994,7 @@ const PROFESSIONAL_CATEGORY_NAMES = {
   gardener: { ar: 'عامل حدائق', en: 'Gardener' },
   aluminum_glass: { ar: 'فني ألمنيوم وزجاج', en: 'Aluminum & Glass' },
   photography: { ar: 'استوديوهات تصوير', en: 'Photography Studio' },
+  wedding: { ar: 'تجهيز الأعراس والمناسبات', en: 'Wedding & Events' },
 };
 
 async function preRegisterProfessionalAccount(adminPhone, payload = {}) {

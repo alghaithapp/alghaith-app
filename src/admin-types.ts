@@ -34,12 +34,13 @@ export interface HomeCategoriesConfig {
   updatedAt: string | null;
 }
 
-export const DEFAULT_HOME_CATEGORY_IDS = new Set(['restaurant', 'cars', 'product', 'professionals', 'beauty', 'tourism', 'real_estate', 'offers', 'used', 'eden_printing', 'global_shopping']);
+export const DEFAULT_HOME_CATEGORY_IDS = new Set(['restaurant', 'cars', 'product', 'gen_services', 'professionals', 'beauty', 'tourism', 'real_estate', 'offers', 'used', 'eden_printing', 'global_shopping']);
 
 export const TOGGLEABLE_HOME_CATEGORIES = [
   { id: 'restaurant', titleAr: 'المطاعم' },
   { id: 'product', titleAr: 'التسوق' },
   { id: 'cars', titleAr: 'السيارات' },
+  { id: 'gen_services', titleAr: 'خدمات عامة' },
   { id: 'global_shopping', titleAr: 'التسوق من الخارج' },
   { id: 'professionals', titleAr: 'المهنيين' },
   { id: 'beauty', titleAr: 'الصحة والجمال' },
@@ -448,4 +449,5 @@ export const PROFESSIONAL_CATEGORIES: Array<{ id: string; label: string }> = [
   { id: 'gardener', label: 'عامل حدائق' },
   { id: 'aluminum_glass', label: 'فني ألمنيوم وزجاج' },
   { id: 'photography', label: 'استوديوهات تصوير' },
+  { id: 'wedding', label: 'تجهيز الأعراس والمناسبات' },
 ];
