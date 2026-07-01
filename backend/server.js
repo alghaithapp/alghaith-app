@@ -115,6 +115,7 @@ function createLimiter(maxReqs, windowMs = minute) {
     max: Number.parseInt(process.env[`RATE_LIMIT_${maxReqs}`] || String(maxReqs), 10),
     standardHeaders: true,
     legacyHeaders: false,
+    validate: { xForwardedForHeader: false },
     message: { message: 'Too many requests. Try again later.' },
     keyGenerator: (req) => {
       // إذا كان الطلب يحتوي على توكن تسجيل دخول، نقوم بتحديد المعدل بناءً على التوكن لمنع تعارض المستخدمين المشتركين في نفس الـ IP (شبكات الهاتف)
@@ -169,9 +170,6 @@ app.use('/app', require('./routes/features'));
 
 // ── Dynamic app config ─────────────────────────────────────────────
 app.use('/app/config', require('./routes/app_config'));
-
-// ── Travel (Flights & Hotels via Travelpayouts) ───────────────────
-app.use('/api/travel', require('./routes/travel'));
 
 // ── Emergency / debug routes (disabled unless ENABLE_EMERGENCY_ROUTES=true + key) ──
 app.use(require('./routes/emergency'));
