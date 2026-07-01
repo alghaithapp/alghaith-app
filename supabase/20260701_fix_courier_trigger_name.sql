@@ -46,7 +46,7 @@ BEGIN
   VALUES (
     'new_merchant',
     'تاجر جديد',
-    'تاجر جديد سجل في المنصة: ' || COALESCE(NEW.store_name, NEW.display_name, 'غير معروف'),
+    'تاجر جديد سجل في المنصة: ' || COALESCE(NEW.store_name, 'غير معروف'),
     jsonb_build_object('phone', NEW.phone, 'merchantPhone', NEW.phone)
   );
   RETURN NEW;

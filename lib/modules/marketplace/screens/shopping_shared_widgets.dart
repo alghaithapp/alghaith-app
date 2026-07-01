@@ -680,13 +680,7 @@ class ShopErrorState extends StatelessWidget {
             style: const TextStyle(
                 fontFamily: 'Cairo', fontWeight: FontWeight.bold),
           ),
-          const SizedBox(height: 4),
-          const Text(
-            'قد يحتاج الخادم لحظات للاستيقاظ، حاول مجددًا.',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-                fontFamily: 'Cairo', fontSize: 12, color: Colors.grey),
-          ),
+          const SizedBox(height: 12),
           TextButton(onPressed: onRetry, child: const Text('إعادة المحاولة')),
         ],
       ),

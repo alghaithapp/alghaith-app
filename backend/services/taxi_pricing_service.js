@@ -14,10 +14,26 @@ const { getTaxiPricing } = require('./app_config_service');
 let _cachedPricing = null;
 let _cachePromise = null;
 
+const _DEFAULTS = {
+  tuktuk: { base: 1000, extraKm: 250, min: 1000 },
+  wazz: { base: 1500, extraKm: 300, min: 1500 },
+  economic: { base: 1500, extraKm: 500, min: 1500 },
+  maxFare: 50000,
+  includedKm: 2.0,
+  roundingStep: 250,
+};
+
 async function _loadPricing() {
-  const cp = await getTaxiPricing();
-  _cachedPricing = cp;
-  return cp;
+  try {
+    const cp = await getTaxiPricing();
+    _cachedPricing = cp;
+    return cp;
+  } catch (error) {
+    const msg = String(error?.message || '');
+    console.error('taxi_pricing_service: fallback to defaults:', msg.substring(0, 120));
+    _cachedPricing = { ..._DEFAULTS };
+    return _cachedPricing;
+  }
 }
 
 async function _pricing() {
