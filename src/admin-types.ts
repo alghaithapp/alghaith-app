@@ -447,4 +447,5 @@ export const PROFESSIONAL_CATEGORIES: Array<{ id: string; label: string }> = [
   { id: 'loading_worker', label: 'عامل تحميل وتنزيل' },
   { id: 'gardener', label: 'عامل حدائق' },
   { id: 'aluminum_glass', label: 'فني ألمنيوم وزجاج' },
+  { id: 'photography', label: 'استوديوهات تصوير' },
 ];

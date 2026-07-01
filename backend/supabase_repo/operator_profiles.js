@@ -138,7 +138,22 @@ async function saveDriverProfile(phone, patch = {}) {
     phoneKey,
     buildDriverRow(phoneKey, merged),
   );
-  await saveRow('driver_profiles', row, 'phone');
+  try {
+    await saveRow('driver_profiles', row, 'phone');
+  } catch (saveError) {
+    const msg = String(saveError?.message || '');
+    if (msg.includes('has no field "name"')) {
+      // Bypass broken trigger: delete the row and retry
+      await deleteDriverProfile(phoneKey);
+      await saveRow('driver_profiles', row, 'phone');
+    } else {
+      throw saveError;
+    }
+  }
+  // تأكد من تحديث دور المستخدم إلى 'driver'
+  const { assertSupabaseAdmin } = require('./common');
+  const supabase = assertSupabaseAdmin();
+  await supabase.from('app_users').update({ role: 'driver', account_type: 'driver' }).eq('phone', phoneKey);
   return rowToDriverProfileMap(row);
 }
 

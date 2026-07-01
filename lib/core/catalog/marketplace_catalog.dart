@@ -248,9 +248,9 @@ class MarketplaceCatalog {
       apiServiceId: 'eden_printing',
       apiProductCategory: 'eden_printing',
       hubTitleAr: 'طباعة وإعلانات',
-      hubSubtitleAr: 'اختر متجر الطباعة والإعلانات',
-      storeTitleAr: 'متاجر الطباعة',
-      storeSubtitleAr: 'تصفح متاجر الطباعة والإعلانات',
+      hubSubtitleAr: 'محلات الطباعة والإعلانات',
+      storeTitleAr: 'طباعة وإعلانات',
+      storeSubtitleAr: 'محلات الطباعة والإعلانات',
       subCategories: [],
     ),
     MarketplaceCategoryDefinition(
@@ -329,7 +329,7 @@ class MarketplaceCatalog {
       final platformValue = override.isEnabledOn(platform);
       if (platformValue != null) return platformValue;
     }
-    return customerHomeCategoryIds.contains(categoryId);
+    return true;
   }
 
   /// أقسام لا يختارها التاجر عند التسجيل (إدارية أو مُدارة من المنصة).
@@ -488,6 +488,7 @@ class MarketplaceCatalog {
     MarketplaceSubCategory(id: 'loading_worker', titleAr: 'عامل تحميل وتنزيل', titleEn: 'Loading Worker', image: 'assets/images/prof_loading.png', browseMode: SubCategoryBrowseMode.catalog),
     MarketplaceSubCategory(id: 'gardener', titleAr: 'عامل حدائق', titleEn: 'Gardener', image: 'assets/images/prof_gardener.png', browseMode: SubCategoryBrowseMode.catalog),
     MarketplaceSubCategory(id: 'aluminum_glass', titleAr: 'فني ألمنيوم وزجاج', titleEn: 'Aluminum & Glass', image: 'assets/images/prof_aluminum_glass.png', browseMode: SubCategoryBrowseMode.catalog),
+    MarketplaceSubCategory(id: 'photography', titleAr: 'استوديوهات تصوير', titleEn: 'Photography Studio', image: 'assets/images/prof_photography.png', browseMode: SubCategoryBrowseMode.catalog),
   ];
 
   static const List<MarketplaceSubCategory> _usedSubCategories = [

@@ -451,11 +451,14 @@ async function getAllDrivers(adminPhone) {
 
     const state = stateByPhone[phone] || {};
     const profile = driverProfileByPhone[phone] ?? readDriverProfileFromState(state);
-    if (!profile || !isDriverProfileComplete(profile)) continue;
+    if (!profile) continue;
+
+    const name = String(profile.name ?? '').trim();
+    const hasProfileData = isDriverProfileComplete(profile);
+    if (!hasProfileData && !name) continue;
 
     const role = String(user.role ?? '').trim();
     const accountType = String(user.account_type ?? '').trim();
-    const name = String(profile.name ?? '').trim();
     const isDriverAccount =
       role === 'driver' || accountType === 'driver' || name.length > 0;
 
@@ -1973,7 +1976,7 @@ async function preRegisterCourierAccount(adminPhone, payload = {}) {
 const PROFESSIONAL_CATEGORIES = new Set([
   'plumber', 'electrician', 'ac_tech', 'carpenter', 'cleaner',
   'blacksmith', 'painter', 'builder', 'cctv_tech', 'network_tech',
-  'loading_worker', 'gardener', 'aluminum_glass',
+  'loading_worker', 'gardener', 'aluminum_glass', 'photography',
 ]);
 
 const PROFESSIONAL_CATEGORY_NAMES = {
@@ -1990,6 +1993,7 @@ const PROFESSIONAL_CATEGORY_NAMES = {
   loading_worker: { ar: 'عامل تحميل وتنزيل', en: 'Loading Worker' },
   gardener: { ar: 'عامل حدائق', en: 'Gardener' },
   aluminum_glass: { ar: 'فني ألمنيوم وزجاج', en: 'Aluminum & Glass' },
+  photography: { ar: 'استوديوهات تصوير', en: 'Photography Studio' },
 };
 
 async function preRegisterProfessionalAccount(adminPhone, payload = {}) {
