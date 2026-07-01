@@ -21,6 +21,8 @@ import type {
   ProfessionalPreRegisterResponse,
   CourierPreRegisterPayload,
   CourierPreRegisterResponse,
+  DoctorPharmacyPreRegisterPayload,
+  DoctorPharmacyPreRegisterResponse,
   ToggleBazaarResponse,
 } from './admin-types';
 
@@ -308,6 +310,21 @@ export async function preRegisterCourier(
   return request<CourierPreRegisterResponse>(
     DATABASE_API_BASE_URL,
     '/db/admin/courier-pre-register',
+    {
+      method: 'POST',
+      token,
+      body: JSON.stringify(payload),
+    },
+  );
+}
+
+export async function preRegisterDoctorPharmacy(
+  token: string,
+  payload: DoctorPharmacyPreRegisterPayload,
+) {
+  return request<DoctorPharmacyPreRegisterResponse>(
+    DATABASE_API_BASE_URL,
+    '/db/admin/beauty-pre-register',
     {
       method: 'POST',
       token,

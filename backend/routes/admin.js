@@ -33,6 +33,7 @@ const {
   preRegisterDriverAccount,
   preRegisterCourierAccount,
   preRegisterProfessionalAccount,
+  preRegisterBeautyAccount,
 } = require('../supabase_repo');
 const logger = require('../lib/logger');
 const {
@@ -358,6 +359,25 @@ router.post('/admin/professional-pre-register', async (req, res) => {
           message.includes('مطلوب') ||
           message.includes('غير صالح') ||
           message.includes('تخصص')
+        ? 400
+        : 500;
+    return res.status(status).json({ message });
+  }
+});
+
+router.post('/admin/beauty-pre-register', async (req, res) => {
+  try {
+    const phone = requireOptionalAuthorizedPhone(req, res);
+    if (!phone) return;
+    await assertAdminPermission(phone, 'canRegister');
+    const result = await preRegisterBeautyAccount(phone, req.body || {});
+    return res.json(result);
+  } catch (error) {
+    console.error('beauty pre-register error:', error);
+    const message = error?.message || 'Failed to pre-register.';
+    const status = message.includes('Admin access')
+      ? 403
+      : message.includes('بالفعل') || message.includes('لا يمكن') || message.includes('مطلوب') || message.includes('تصنيف')
         ? 400
         : 500;
     return res.status(status).json({ message });

@@ -34,7 +34,7 @@ export interface HomeCategoriesConfig {
   updatedAt: string | null;
 }
 
-export const DEFAULT_HOME_CATEGORY_IDS = new Set(['restaurant', 'product', 'cars', 'eden_printing', 'global_shopping']);
+export const DEFAULT_HOME_CATEGORY_IDS = new Set(['restaurant', 'cars', 'product', 'professionals', 'beauty', 'tourism', 'real_estate', 'offers', 'used', 'eden_printing', 'global_shopping']);
 
 export const TOGGLEABLE_HOME_CATEGORIES = [
   { id: 'restaurant', titleAr: 'المطاعم' },
@@ -103,6 +103,27 @@ export interface CourierPreRegisterResponse {
   isApproved: boolean;
   approvalStatus: string;
   courierProfileComplete: boolean;
+}
+
+export interface DoctorPharmacyPreRegisterPayload {
+  subscriberPhone: string;
+  fullName: string;
+  subCategoryId: 'أطباء وعيادات' | 'صيدلية';
+  description?: string;
+  address?: string;
+  contactPhone?: string;
+  whatsapp?: string;
+}
+
+export interface DoctorPharmacyPreRegisterResponse {
+  success: boolean;
+  phone: string;
+  fullName: string;
+  subCategoryId: string;
+  storeName: string;
+  isApproved: boolean;
+  approvalStatus: string;
+  merchantProfileComplete: boolean;
 }
 
 export interface ProfessionalPreRegisterPayload {

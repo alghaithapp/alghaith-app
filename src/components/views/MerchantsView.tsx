@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { LoaderCircle, Package2, Store, ArrowUpDown, ArrowUp, ArrowDown, Wrench } from 'lucide-react';
+import { LoaderCircle, Package2, Store, ArrowUpDown, ArrowUp, ArrowDown, Wrench, Stethoscope, Pill } from 'lucide-react';
 import type {
   AdminAccountSummary,
   MerchantDetails,
@@ -7,11 +7,13 @@ import type {
   MerchantPreRegisterPayload,
   MerchantSummary,
   ProfessionalPreRegisterPayload,
+  DoctorPharmacyPreRegisterPayload,
 } from '../../admin-types';
 import MerchantCard from '../MerchantCard';
 import MerchantDetailPanel from './MerchantDetailPanel';
 import PreRegisterMerchantModal from '../PreRegisterMerchantModal';
 import PreRegisterProfessionalModal from '../PreRegisterProfessionalModal';
+import PreRegisterDoctorPharmacyModal from '../PreRegisterDoctorPharmacyModal';
 
 interface MerchantsViewProps {
   merchants: MerchantSummary[];
@@ -42,6 +44,7 @@ interface MerchantsViewProps {
   onOpenDelete: (account: AdminAccountSummary) => void;
   onPreRegisterMerchant: (payload: MerchantPreRegisterPayload) => Promise<void>;
   onPreRegisterProfessional: (payload: ProfessionalPreRegisterPayload) => Promise<void>;
+  onPreRegisterDoctorPharmacy?: (payload: DoctorPharmacyPreRegisterPayload) => Promise<void>;
   pendingMerchantQueue: MerchantSummary[];
   approvalQueue: MerchantSummary[];
 }
@@ -96,6 +99,7 @@ export default function MerchantsView({
   onOpenDelete,
   onPreRegisterMerchant,
   onPreRegisterProfessional,
+  onPreRegisterDoctorPharmacy,
   pendingMerchantQueue,
   approvalQueue,
 }: MerchantsViewProps) {
@@ -104,6 +108,8 @@ export default function MerchantsView({
   const [isPreRegisterBusy, setIsPreRegisterBusy] = useState(false);
   const [showProfessionalRegister, setShowProfessionalRegister] = useState(false);
   const [isProfessionalBusy, setIsProfessionalBusy] = useState(false);
+  const [showDoctorPharmacyRegister, setShowDoctorPharmacyRegister] = useState(false);
+  const [isDoctorPharmacyBusy, setIsDoctorPharmacyBusy] = useState(false);
 
   const [sortField, setSortField] = useState<MerchantSortField | null>(null);
   const [sortDir, setSortDir] = useState<SortDir>('desc');
@@ -150,6 +156,16 @@ export default function MerchantsView({
           <Wrench size={16} style={{ marginLeft: 6 }} />
           إضافة مهني
         </button>
+        {onPreRegisterDoctorPharmacy && (
+          <button
+            type="button"
+            className="primary-button"
+            onClick={() => setShowDoctorPharmacyRegister(true)}
+          >
+            <Stethoscope size={16} style={{ marginLeft: 6 }} />
+            إضافة طبيب / صيدلية
+          </button>
+        )}
         <button
           type="button"
           className="primary-button"
@@ -194,6 +210,23 @@ export default function MerchantsView({
           }
         }}
       />
+
+      {onPreRegisterDoctorPharmacy && (
+        <PreRegisterDoctorPharmacyModal
+          open={showDoctorPharmacyRegister}
+          isBusy={isDoctorPharmacyBusy}
+          onClose={() => { if (!isDoctorPharmacyBusy) setShowDoctorPharmacyRegister(false); }}
+          onSubmit={async (payload) => {
+            setIsDoctorPharmacyBusy(true);
+            try {
+              await onPreRegisterDoctorPharmacy(payload);
+              setShowDoctorPharmacyRegister(false);
+            } finally {
+              setIsDoctorPharmacyBusy(false);
+            }
+          }}
+        />
+      )}
 
       {/* Filter chips */}
       <div className="account-filter-row">

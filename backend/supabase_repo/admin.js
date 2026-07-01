@@ -2162,6 +2162,145 @@ async function preRegisterProfessionalAccount(adminPhone, payload = {}) {
   };
 }
 
+const BEAUTY_SUB_CATEGORIES = new Set(['أطباء وعيادات', 'صيدلية']);
+
+const BEAUTY_SUB_CATEGORY_NAMES = {
+  'أطباء وعيادات': { ar: 'أطباء وعيادات', en: 'Doctors & Clinics' },
+  'صيدلية': { ar: 'صيدلية', en: 'Pharmacy' },
+};
+
+async function preRegisterBeautyAccount(adminPhone, payload = {}) {
+  await assertAdminAccess(adminPhone);
+
+  const rawPhone = String(payload.subscriberPhone ?? payload.phone ?? '').trim();
+  if (!rawPhone) throw new Error('رقم الهاتف مطلوب.');
+
+  const phoneKey = await resolvePhoneKey(rawPhone);
+  const fullName = String(payload.fullName ?? payload.full_name ?? '').trim();
+  if (!fullName) throw new Error('الاسم مطلوب.');
+
+  const subCategoryId = String(payload.subCategoryId ?? payload.sub_category_id ?? '').trim();
+  if (!subCategoryId || !BEAUTY_SUB_CATEGORIES.has(subCategoryId)) {
+    throw new Error('يرجى اختيار تصنيف صحيح (طبيب/صيدلية).');
+  }
+
+  const catNames = BEAUTY_SUB_CATEGORY_NAMES[subCategoryId] || { ar: '', en: '' };
+  const description = String(payload.description ?? '').trim();
+  const address = String(payload.address ?? '').trim();
+  const phone = String(payload.phone ?? payload.contactPhone ?? '').trim();
+  const whatsapp = String(payload.whatsapp ?? '').trim();
+
+  const existingUser = await getAppUser(phoneKey);
+  if (existingUser && String(existingUser.role ?? '').trim() === 'admin') {
+    throw new Error('لا يمكن تسجيل رقم المشرف.');
+  }
+
+  const existingProfile = await getMerchantProfile(phoneKey);
+  if (existingProfile) {
+    const existingState = (await getUserState(phoneKey)) || {};
+    if (existingState.merchantProfileComplete === true) {
+      throw new Error('يوجد ملف مكتمل لهذا الرقم بالفعل.');
+    }
+  }
+
+  if (!existingUser) {
+    await saveAppUser(phoneKey, {
+      role: 'merchant',
+      account_type: 'marketplace',
+      full_name: fullName,
+    });
+  } else {
+    const patch = {};
+    const existingName = String(existingUser.full_name ?? '').trim();
+    if (!existingName) patch.full_name = fullName;
+    if (!String(existingUser.account_type ?? '').trim()) patch.account_type = 'marketplace';
+    if (Object.keys(patch).length > 0) await saveAppUser(phoneKey, patch);
+  }
+
+  const profilePayload = {
+    store_name: fullName,
+    primary_service_id: 'beauty',
+    service_ids: ['beauty'],
+    active_service_id: 'beauty',
+    category: 'beauty',
+    sub_category_id: subCategoryId,
+    subCategoryId,
+    description: description || undefined,
+    address: address || undefined,
+    phone: phone || undefined,
+    whatsapp: whatsapp || undefined,
+    is_approved: true,
+    approval_status: 'approved',
+    is_open: true,
+    adminPreRegistered: true,
+  };
+
+  const supabase = assertSupabaseAdmin();
+
+  if (existingProfile) {
+    const { error } = await supabase
+      .from('merchant_profiles')
+      .update({ ...profilePayload, updated_at: nowIso() })
+      .eq('phone', phoneKey);
+    if (error) throw error;
+  } else {
+    const { data: appUser } = await supabase
+      .from('app_users')
+      .select('id')
+      .eq('phone', phoneKey)
+      .maybeSingle();
+    const upsertPayload = { phone: phoneKey, ...profilePayload, updated_at: nowIso() };
+    if (appUser?.id) upsertPayload.user_id = appUser.id;
+    const { error: upsertErr } = await supabase
+      .from('merchant_profiles')
+      .upsert(upsertPayload, { onConflict: 'phone' })
+      .select();
+    if (upsertErr) throw upsertErr;
+  }
+
+  const merchantState = (await getUserState(phoneKey)) || {};
+  await saveUserState(phoneKey, {
+    ...merchantState,
+    userRole: merchantState.userRole || merchantState.user_role || 'merchant',
+    user_role: merchantState.user_role || merchantState.userRole || 'merchant',
+    merchantProfileComplete: false,
+    merchantStore: {
+      category: 'beauty',
+      serviceIds: ['beauty'],
+      service_ids: ['beauty'],
+      activeServiceId: 'beauty',
+      active_service_id: 'beauty',
+      primary_service_id: 'beauty',
+      subCategoryId,
+      sub_category_id: subCategoryId,
+      isApproved: true,
+      approvalStatus: 'approved',
+      adminPreRegistered: true,
+      name: fullName,
+      store_name: fullName,
+      description: description || undefined,
+      address: address || undefined,
+      phone: phone || undefined,
+      whatsapp: whatsapp || undefined,
+    },
+    adminPreRegisteredMerchant: true,
+    adminPreRegisteredAt: nowIso(),
+    adminPreRegisteredBy: adminPhone,
+    multiRoleAccount: true,
+  });
+
+  return {
+    success: true,
+    phone: phoneKey,
+    fullName,
+    subCategoryId,
+    storeName: fullName,
+    isApproved: true,
+    approvalStatus: 'approved',
+    merchantProfileComplete: false,
+  };
+}
+
 const DEFAULT_APP_UPDATE_POLICY = Object.freeze({
   minBuildNumber: 1,
   minVersionName: '1.0.0',
@@ -2433,6 +2572,7 @@ module.exports = {
   preRegisterDriverAccount,
   preRegisterCourierAccount,
   preRegisterProfessionalAccount,
+  preRegisterBeautyAccount,
   PROFESSIONAL_CATEGORIES,
   PROFESSIONAL_CATEGORY_NAMES,
   getHomeCategoriesConfig,

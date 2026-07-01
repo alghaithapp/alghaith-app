@@ -282,7 +282,12 @@ class MarketplaceCatalog {
     'restaurant',
     'cars',
     'product',
+    'professionals',
+    'beauty',
     'tourism',
+    'real_estate',
+    'offers',
+    'used',
     'eden_printing',
     'global_shopping',
   };

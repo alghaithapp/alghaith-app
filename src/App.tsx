@@ -40,6 +40,7 @@ import {
   updateAdminPermissions,
   removeAdmin,
   preRegisterProfessional,
+  preRegisterDoctorPharmacy,
 } from './admin-api';
 import type {
   AdminAccountKind,
@@ -57,6 +58,7 @@ import type {
   MerchantPreRegisterPayload,
   DriverPreRegisterPayload,
   CourierPreRegisterPayload,
+  DoctorPharmacyPreRegisterPayload,
   ProfessionalPreRegisterPayload,
   MerchantDetails,
   MerchantSummary,
@@ -719,6 +721,26 @@ export default function App() {
     }
   }
 
+  async function handlePreRegisterDoctorPharmacy(payload: DoctorPharmacyPreRegisterPayload) {
+    if (!token) return;
+    setActionError('');
+    setSuccessMessage('');
+    try {
+      const result = await preRegisterDoctorPharmacy(token, payload);
+      setSuccessMessage(
+        `تم تسجيل ${result.fullName || result.phone}. عند تسجيل الدخول سيجد ملفه جاهزاً.`,
+      );
+      await refreshCoreData(token, result.phone);
+      setMerchantFilter('merchants');
+      setSelectedMerchantPhone(result.phone);
+      setView('merchants');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'تعذر التسجيل.';
+      setActionError(message);
+      throw error;
+    }
+  }
+
   async function handleMerchantAction(merchant: MerchantSummary, kind: 'freeze' | 'bazaar') {
     if (!token) return;
     setActiveActionKey(`${kind}:${merchant.phone}`);
@@ -1320,6 +1342,7 @@ export default function App() {
                       onOpenDelete={openDeleteConfirm}
                       onPreRegisterMerchant={handlePreRegisterMerchant}
                       onPreRegisterProfessional={handlePreRegisterProfessional}
+                      onPreRegisterDoctorPharmacy={handlePreRegisterDoctorPharmacy}
                       pendingMerchantQueue={pendingMerchantQueue}
                       approvalQueue={approvalQueue}
                     />
