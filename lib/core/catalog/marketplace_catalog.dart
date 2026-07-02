@@ -10,6 +10,9 @@ enum SubCategoryBrowseMode {
   /// منتجات من API catalog
   catalog,
 
+  /// بروفايلات مهنيين / مزودي خدمة → ProfessionalsDirectoryScreen
+  professionals,
+
   /// لوازم مكتبية ومدرسية → شبكة فئات فرعية
   schoolHub,
 }
@@ -168,20 +171,6 @@ class MarketplaceCatalog {
       subCategories: _professionalsSubCategories,
     ),
     MarketplaceCategoryDefinition(
-      id: 'gen_services',
-      titleAr: 'خدمات عامة',
-      titleEn: 'General Services',
-      image: 'assets/images/cat_gen_services.png',
-      entryMode: CategoryEntryMode.professionals,
-      apiServiceId: 'professionals',
-      apiProductCategory: 'professionals',
-      hubTitleAr: 'خدمات عامة',
-      hubSubtitleAr: 'تصفح الخدمات العامة',
-      storeTitleAr: 'خدمات عامة',
-      storeSubtitleAr: 'اختر الخدمة التي تحتاجها',
-      subCategories: _genServicesSubCategories,
-    ),
-    MarketplaceCategoryDefinition(
       id: 'beauty',
       titleAr: 'الصحة والجمال',
       titleEn: 'Health & Beauty',
@@ -281,6 +270,20 @@ class MarketplaceCatalog {
       storeSubtitleAr: 'اختر متجرك المفضل',
       subCategories: _globalShoppingSubCategories,
     ),
+    MarketplaceCategoryDefinition(
+      id: 'gen_services',
+      titleAr: 'خدمات عامة',
+      titleEn: 'General Services',
+      image: 'assets/images/cat_gen_services.png',
+      entryMode: CategoryEntryMode.professionals,
+      apiServiceId: 'professionals',
+      apiProductCategory: 'professionals',
+      hubTitleAr: 'خدمات عامة',
+      hubSubtitleAr: 'تصفح الخدمات العامة',
+      storeTitleAr: 'خدمات عامة',
+      storeSubtitleAr: 'اختر الخدمة التي تحتاجها',
+      subCategories: _genServicesSubCategories,
+    ),
   ];
 
   static MarketplaceCategoryDefinition? find(String id) {
@@ -296,7 +299,6 @@ class MarketplaceCatalog {
     'restaurant',
     'cars',
     'product',
-    'gen_services',
     'professionals',
     'beauty',
     'tourism',
@@ -305,6 +307,7 @@ class MarketplaceCatalog {
     'used',
     'eden_printing',
     'global_shopping',
+    'gen_services',
   };
 
   /// الأقسام القابلة للتحكّم من لوحة الأدمن (تُستثنى البازار لأنه بانر علوي).
@@ -467,6 +470,19 @@ class MarketplaceCatalog {
     MarketplaceSubCategory(id: 'صيدلية', titleAr: 'صيدلية', titleEn: 'Pharmacy', image: 'assets/images/health_pharmacies.png', browseMode: SubCategoryBrowseMode.stores),
   ];
 
+  static const List<String> doctorSpecialties = [
+    'طب القلب',
+    'طب الأطفال',
+    'الطب الباطني',
+    'الجراحة العامة',
+    'طب النساء والتوليد',
+    'طب العيون',
+    'طب الأنف والأذن والحنجرة',
+    'طب الأسنان',
+    'الأمراض الجلدية',
+    'جراحة العظام',
+  ];
+
   static const List<MarketplaceSubCategory> _realEstateSubCategories = [
     MarketplaceSubCategory(id: 'house', titleAr: 'دار', titleEn: 'House', image: 'assets/images/re_house.png', browseMode: SubCategoryBrowseMode.catalog),
     MarketplaceSubCategory(id: 'land', titleAr: 'أرض', titleEn: 'Land', image: 'assets/images/re_land.png', browseMode: SubCategoryBrowseMode.catalog),
@@ -490,8 +506,8 @@ class MarketplaceCatalog {
       _professionalsSubCategories;
 
   static const List<MarketplaceSubCategory> _genServicesSubCategories = [
-    MarketplaceSubCategory(id: 'photography', titleAr: 'استوديوهات تصوير', titleEn: 'Photography Studio', image: 'assets/images/prof_photography.png', browseMode: SubCategoryBrowseMode.catalog),
-    MarketplaceSubCategory(id: 'wedding', titleAr: 'تجهيز الأعراس والمناسبات', titleEn: 'Wedding & Events', image: 'assets/images/prof_wedding.png', browseMode: SubCategoryBrowseMode.catalog),
+    MarketplaceSubCategory(id: 'photography', titleAr: 'استوديوهات تصوير', titleEn: 'Photography Studio', image: 'assets/images/prof_photography.png', browseMode: SubCategoryBrowseMode.professionals),
+    MarketplaceSubCategory(id: 'wedding', titleAr: 'تجهيز الأعراس والمناسبات', titleEn: 'Wedding & Events', image: 'assets/images/prof_wedding.png', browseMode: SubCategoryBrowseMode.professionals),
   ];
 
   static const List<MarketplaceSubCategory> _professionalsSubCategories = [
@@ -547,4 +563,49 @@ class MarketplaceCatalog {
     const MarketplaceSubCategory(id: 'car_sell', titleAr: 'بيع سيارة', titleEn: 'Sell Car', image: 'assets/images/car_sell.png', browseMode: SubCategoryBrowseMode.catalog),
     const MarketplaceSubCategory(id: 'car_buy', titleAr: 'شراء سيارة', titleEn: 'Buy Car', image: 'assets/images/car_buy.png', browseMode: SubCategoryBrowseMode.catalog),
   ];
+
+  /// رسالة فارغة مناسبة لكل قسم (بدل «متاجر» في الصيدليات والعيادات وغيرها).
+  static String emptyStoresMessage({
+    String? serviceId,
+    String? subCategoryId,
+    String? subCategoryTitleAr,
+    bool isRestaurant = false,
+  }) {
+    final subId = subCategoryId?.trim() ?? '';
+    switch (subId) {
+      case 'صيدلية':
+        return 'لا توجد صيدليات متاحة حالياً';
+      case 'أطباء وعيادات':
+        return 'لا يوجد أطباء أو عيادات متاحة حالياً';
+      case 'صالون رجالي':
+      case 'صالون نسائي':
+        return 'لا توجد صالونات متاحة حالياً';
+      case 'photography':
+        return 'لا توجد استوديوهات تصوير متاحة حالياً';
+      case 'wedding':
+        return 'لا يوجد مزودو تجهيز أعراس ومناسبات حالياً';
+    }
+
+    final title = subCategoryTitleAr?.trim() ?? '';
+    if (title.isNotEmpty) {
+      return 'لا توجد نتائج في $title حالياً';
+    }
+
+    if (isRestaurant) return 'لا توجد مطاعم متاحة حالياً';
+
+    switch (serviceId?.trim() ?? '') {
+      case 'beauty':
+        return 'لا توجد خدمات متاحة في الصحة والجمال حالياً';
+      case 'tourism':
+        return 'لا توجد عروض سياحية متاحة حالياً';
+      case 'professionals':
+        return 'لا توجد خدمات مهنية متاحة حالياً';
+      case 'restaurant':
+        return 'لا توجد مطاعم متاحة حالياً';
+      case 'product':
+        return 'لا توجد متاجر متاحة حالياً';
+      default:
+        return 'لا توجد نتائج متاحة حالياً';
+    }
+  }
 }

@@ -698,6 +698,43 @@ async function onMerchantFrozen(merchantPhone, isFrozen) {
   );
 }
 
+async function onProductApproved(merchantPhone, productName = '') {
+  const phone = String(merchantPhone || '').trim();
+  if (!phone) return;
+  const label = String(productName || 'محتواك').trim();
+
+  await sendPushToPhone(
+    phone,
+    buildPushPayload({
+      title: 'تمت الموافقة على المحتوى',
+      body: `وافقت الإدارة على «${label}». أصبح ظاهراً للزبائن الآن.`,
+      audience: 'merchant',
+      orderId: '',
+      eventKey: `product:${phone}:approved`,
+      category: 'account',
+    })
+  );
+}
+
+async function onProductRejected(merchantPhone, message, productName = '') {
+  const phone = String(merchantPhone || '').trim();
+  const body = String(message || '').trim();
+  if (!phone || !body) return;
+  const label = String(productName || 'المحتوى').trim();
+
+  await sendPushToPhone(
+    phone,
+    buildPushPayload({
+      title: `رفض: ${label}`,
+      body,
+      audience: 'merchant',
+      orderId: '',
+      eventKey: `product:${phone}:rejected`,
+      category: 'account',
+    })
+  );
+}
+
 async function notifyChatMessage(receiverPhone, customerMessage) {
   const messageType = String(
     customerMessage?.messageType || customerMessage?.message_type || 'text',
@@ -734,6 +771,53 @@ async function notifyChatMessage(receiverPhone, customerMessage) {
     },
     { showSystemBanner: true }
   );
+}
+
+async function notifyAdminsSupportMessage(customerMessage) {
+  const { PLATFORM_ADMIN_PHONES } = require('./supabase_repo/common');
+  const envPhones = String(process.env.ADMIN_PHONES || '')
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
+  const adminPhones = [
+    ...new Set([...envPhones, ...PLATFORM_ADMIN_PHONES].map((item) => String(item || '').trim()).filter(Boolean)),
+  ];
+  if (!adminPhones.length) return;
+
+  const messageType = String(
+    customerMessage?.messageType || customerMessage?.message_type || 'text',
+  ).trim();
+  const rawContent = String(customerMessage?.content || customerMessage?.text || '').trim();
+  let body = rawContent.substring(0, 100);
+  if (messageType === 'sticker') {
+    body = 'أرسل ملصقاً';
+  } else if (messageType === 'call') {
+    body = 'مكالمة صوتية';
+  } else if (messageType === 'image') {
+    body = 'أرسل صورة';
+  }
+  const customerName = String(
+    customerMessage?.senderName || customerMessage?.sender_name || 'مستخدم',
+  ).trim();
+  const threadId = String(
+    customerMessage?.threadId || customerMessage?.thread_id || '',
+  ).trim();
+
+  await notifyPhones(adminPhones, {
+    title: `رسالة دعم من ${customerName}`,
+    body: body || 'رسالة جديدة في محادثة الدعم',
+    data: {
+      eventKey: 'support:new',
+      threadType: 'support',
+      threadId,
+      senderName: customerName,
+      senderPhone: String(
+        customerMessage?.senderPhone || customerMessage?.sender_phone || threadId,
+      ).trim(),
+      category: 'chat',
+      audience: 'admin',
+    },
+  });
 }
 
 async function notifyIncomingCall(receiverPhone, callInfo) {
@@ -796,11 +880,14 @@ module.exports = {
   onCourierRejected,
   onMerchantApproved,
   onMerchantRejected,
+  onProductApproved,
+  onProductRejected,
   onDriverApproved,
   onDriverRejected,
   onMerchantFrozen,
   sendPushToPhone,
   notifyChatMessage,
+  notifyAdminsSupportMessage,
   notifyIncomingCall,
   notifyActiveCouriers,
   notifyActiveDrivers,

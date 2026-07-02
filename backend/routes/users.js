@@ -18,6 +18,8 @@ const {
   saveDeviceToken,
   deleteDeviceToken,
   markPushInboxOpened,
+  listUserNotifications,
+  markUserNotificationsRead,
 } = require('../supabase_repo');
 const {
   requireAuthorizedPhone,
@@ -129,6 +131,35 @@ router.put('/push-inbox/opened', async (req, res) => {
   } catch (error) {
     console.error('mark push-inbox opened error:', error);
     return res.status(500).json({ message: error?.message || 'Failed to mark inbox opened.' });
+  }
+});
+
+// ── User in-app notifications ───────────────────────────────────────────
+
+router.get('/user-notifications', async (req, res) => {
+  try {
+    const phone = requireAuthorizedPhone(req, res);
+    if (!phone) return;
+    const since = parseQueryValue(req.query.since);
+    const limit = parseQueryValue(req.query.limit);
+    const rows = await listUserNotifications(phone, { since, limit });
+    return res.json(rows);
+  } catch (error) {
+    console.error('list user-notifications error:', error);
+    return res.status(500).json({ message: error?.message || 'Failed to load notifications.' });
+  }
+});
+
+router.put('/user-notifications/read', async (req, res) => {
+  try {
+    const phone = requireAuthorizedPhone(req, res);
+    if (!phone) return;
+    const ids = Array.isArray(req.body?.ids) ? req.body.ids : null;
+    const result = await markUserNotificationsRead(phone, ids);
+    return res.json(result);
+  } catch (error) {
+    console.error('mark user-notifications read error:', error);
+    return res.status(500).json({ message: error?.message || 'Failed to mark notifications read.' });
   }
 });
 

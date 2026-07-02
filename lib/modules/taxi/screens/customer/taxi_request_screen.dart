@@ -627,6 +627,12 @@ class _TaxiRequestScreenState extends State<TaxiRequestScreen> {
             dropoffLng: dropoff.longitude,
             distanceKm: _distanceKm,
             taxiType: _selectedTaxiType.toApiName,
+            // السعر الذي رآه المستخدم — يُقفل في Backend مباشرة
+            confirmedFare: _selectedTaxiType == TaxiType.tuktuk
+                ? _fareTuktuk
+                : _selectedTaxiType == TaxiType.wazz
+                    ? _fareWazz
+                    : _fareEconomic,
             waypoints: _buildWaypoints(),
             isRoundTrip: _isRoundTrip,
             waitingMinutes: _isRoundTrip ? _waitingMinutes : null,

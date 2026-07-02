@@ -39,6 +39,7 @@ import 'modules/notifications/widgets/push_notification_lifecycle_scope.dart';
 import 'widgets/exit_confirm_scope.dart';
 import 'widgets/merchant_order_cross_role_alert.dart';
 import 'widgets/app_update_gate.dart';
+import 'modules/common/screens/notifications_screen.dart';
 import 'utils/role_switch_notifications.dart';
 
 Future<void> main() async {
@@ -236,6 +237,15 @@ class _AlGhaithAppState extends State<AlGhaithApp> {
       }
       if (eventKey == 'admin:manual_push' && data['storeUpdate'] == 'true') {
         _openAppStore();
+        return;
+      }
+      if (eventKey.startsWith('admin:broadcast') ||
+          eventKey == 'admin:manual_push' ||
+          data['category']?.toString() == 'admin') {
+        context.read<AppProvider>().ingestAdminBroadcastPush(data);
+        Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => const NotificationsScreen()),
+        );
         return;
       }
       try {

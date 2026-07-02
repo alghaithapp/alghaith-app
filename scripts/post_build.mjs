@@ -59,6 +59,15 @@ try {
   }
 
   console.log('Post-build completed successfully.');
+
+  const redirectsPath = path.join(distDir, '_redirects');
+  fs.writeFileSync(
+    redirectsPath,
+    ['/admin/assets/*  /admin/assets/:splat  200', '/admin/*  /admin/index.html  200'].join('\n') +
+      '\n',
+    'utf8',
+  );
+  console.log('Wrote SPA _redirects for /admin routes.');
 } catch (err) {
   console.error('Post-build failed:', err);
   process.exit(1);

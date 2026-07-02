@@ -47,7 +47,13 @@ class AppNotificationInboxState {
     NotificationCategory category = NotificationCategory.system,
     NotificationPriority priority = NotificationPriority.normal,
     String? eventKey,
+    String? id,
+    int? createdAtMs,
   }) {
+    if (id != null && id.isNotEmpty) {
+      final byId = items.indexWhere((n) => n.id == id);
+      if (byId >= 0) return items[byId].id;
+    }
     if (eventKey != null) {
       final byKey = items.indexWhere(
         (n) => n.eventKey == eventKey && n.audience == audience,
@@ -64,12 +70,12 @@ class AppNotificationInboxState {
     if (existing >= 0) return items[existing].id;
 
     final item = AppNotificationItem(
-      id: _newId(),
+      id: id ?? _newId(),
       title: title,
       body: body,
       audience: audience,
       read: false,
-      createdAtMs: DateTime.now().millisecondsSinceEpoch,
+      createdAtMs: createdAtMs ?? DateTime.now().millisecondsSinceEpoch,
       orderNumber: orderNumber,
       category: category,
       priority: priority,
@@ -111,6 +117,49 @@ class AppNotificationInboxState {
     );
     if (index < 0) return false;
     return markRead(items[index].id);
+  }
+
+  bool mergeServerItems(List<AppNotificationItem> incoming) {
+    var changed = false;
+    for (final item in incoming) {
+      if (item.id.isEmpty) continue;
+      final existingIndex = items.indexWhere((n) => n.id == item.id);
+      if (existingIndex >= 0) {
+        final existing = items[existingIndex];
+        if (item.read && !existing.read) {
+          items[existingIndex] = existing.copyWith(read: true);
+          changed = true;
+        }
+        continue;
+      }
+      if (item.eventKey != null) {
+        final byKey = items.indexWhere(
+          (n) => n.eventKey == item.eventKey && n.audience == item.audience,
+        );
+        if (byKey >= 0) continue;
+      }
+      items.add(item);
+      changed = true;
+    }
+    if (changed) {
+      items.sort((a, b) => b.createdAtMs.compareTo(a.createdAtMs));
+      if (items.length > 200) {
+        items.removeRange(200, items.length);
+      }
+    }
+    return changed;
+  }
+
+  bool markAllReadForAudience(String audience) {
+    var changed = false;
+    for (var i = 0; i < items.length; i++) {
+      final n = items[i];
+      if (n.audience == audience && !n.read) {
+        items[i] = n.copyWith(read: true);
+        changed = true;
+      }
+    }
+    return changed;
   }
 
   static String _newId() {

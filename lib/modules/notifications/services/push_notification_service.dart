@@ -279,6 +279,12 @@ class PushNotificationService {
       onChatMessage?.call(Map<String, dynamic>.from(message.data));
     }
 
+    if (category == 'admin' ||
+        eventKey.startsWith('admin:broadcast') ||
+        eventKey == 'admin:manual_push') {
+      onAdminMessage?.call(message);
+    }
+
     if (eventKey.contains(':approved') || eventKey.contains(':rejected')) {
       await PushNotificationInbox.onCourierStatusPush?.call();
     }
@@ -334,6 +340,7 @@ class PushNotificationService {
   void Function(Map<String, dynamic> data)? _onNotificationOpened;
   void Function(Map<String, dynamic> data)? onIncomingCall;
   void Function(Map<String, dynamic> data)? onChatMessage;
+  void Function(RemoteMessage message)? onAdminMessage;
 
   void setOnNotificationOpened(void Function(Map<String, dynamic> data) callback) {
     _onNotificationOpened = callback;

@@ -309,8 +309,7 @@ class CustomerService extends ChangeNotifier {
       if (rows.isNotEmpty) {
         final newItems = rows
             .map(_listItemFromCatalogRow)
-            .where((item) =>
-                item.category != 'used' || item.isApproved)
+            .where((item) => item.isApproved)
             .toList();
 
         _catalogItems = newItems;
@@ -501,7 +500,9 @@ class CustomerService extends ChangeNotifier {
       listingMode: row['listing_mode']?.toString(),
       prepMinutes: (row['prep_minutes'] as num?)?.toInt(),
       isAvailable: row['is_available'] as bool? ?? true,
-      isApproved: (row['is_approved'] as bool?) ?? true,
+      isApproved: (row['is_approved'] as bool?) ??
+          (row['isApproved'] as bool?) ??
+          false,
     );
   }
 

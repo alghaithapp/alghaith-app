@@ -29,11 +29,7 @@ class NotificationsScreen extends StatelessWidget {
         trailing: items.any((n) => !n.read)
             ? CupertinoButton(
                 padding: EdgeInsets.zero,
-                onPressed: () {
-                  for (final n in items.where((e) => !e.read)) {
-                    appProvider.markNotificationRead(n.id);
-                  }
-                },
+                onPressed: () => appProvider.markAllNotificationsRead(),
                 child: const Text(
                   'قراءة الكل',
                   style: TextStyle(

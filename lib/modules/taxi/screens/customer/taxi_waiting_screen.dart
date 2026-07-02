@@ -6,7 +6,7 @@ import 'package:provider/provider.dart';
 
 import '../../providers/taxi_provider.dart';
 import '../../models/taxi_request.dart';
-import '../../services/taxi_api_service.dart';
+import '../../utils/taxi_fare_calculator.dart';
 import '../../utils/taxi_distance_calculator.dart';
 import '../../utils/taxi_labels.dart';
 import '../../utils/taxi_rating_navigation.dart';
@@ -28,6 +28,8 @@ class TaxiTripCreateParams {
     required this.dropoffLng,
     required this.distanceKm,
     required this.taxiType,
+    /// السعر المحسوب والمعروض للمستخدم — يُرسل للـ Backend ويُخزَّن مباشرة
+    required this.confirmedFare,
     this.waypoints = const [],
     this.isRoundTrip = false,
     this.waitingMinutes,
@@ -41,6 +43,8 @@ class TaxiTripCreateParams {
   final double dropoffLng;
   final double distanceKm;
   final String taxiType;
+  /// السعر الذي رآه المستخدم وأكده — المصدر الوحيد للحقيقة
+  final int confirmedFare;
   final List<TaxiWaypoint> waypoints;
   final bool isRoundTrip;
   final int? waitingMinutes;
@@ -124,6 +128,7 @@ class _TaxiWaitingScreenState extends State<TaxiWaitingScreen>
       dropoffLat: params.dropoffLat,
       dropoffLng: params.dropoffLng,
       distanceKm: params.distanceKm,
+      confirmedFare: params.confirmedFare,
       taxiType: params.taxiType,
       waypoints: params.waypoints,
       isRoundTrip: params.isRoundTrip,
@@ -258,6 +263,23 @@ class _TaxiWaitingScreenState extends State<TaxiWaitingScreen>
     return Consumer<TaxiProvider>(
       builder: (context, provider, _) {
         final activeRequest = provider.currentRequest;
+        TaxiTripCreateParams? p = widget.createParams;
+        if (p == null && activeRequest != null) {
+          p = TaxiTripCreateParams(
+            pickupAddress: activeRequest.pickupAddress,
+            dropoffAddress: activeRequest.dropoffAddress,
+            pickupLat: activeRequest.pickupLat,
+            pickupLng: activeRequest.pickupLng,
+            dropoffLat: activeRequest.dropoffLat,
+            dropoffLng: activeRequest.dropoffLng,
+            distanceKm: activeRequest.distanceKm,
+            taxiType: activeRequest.taxiType.toApiName,
+            confirmedFare: activeRequest.fare,
+            waypoints: activeRequest.waypoints,
+            isRoundTrip: activeRequest.isRoundTrip,
+            waitingMinutes: activeRequest.waitingMinutes,
+          );
+        }
 
         if (activeRequest != null && activeRequest.hasAssignedDriver && !_driverFound) {
           _driverFound = true;
@@ -312,9 +334,9 @@ class _TaxiWaitingScreenState extends State<TaxiWaitingScreen>
                         style: TextStyle(fontFamily: 'Cairo', fontSize: 16, color: isDark ? Colors.white70 : Colors.black87),
                         textAlign: TextAlign.center,
                       ),
-                      if (widget.createParams != null) ...[
+                      if (p != null) ...[
                         const SizedBox(height: 24),
-                        _buildTripInfoCard(isDark),
+                        _buildTripInfoCard(isDark, p),
                       ],
                       const SizedBox(height: 24),
                       ElevatedButton.icon(
@@ -448,13 +470,13 @@ class _TaxiWaitingScreenState extends State<TaxiWaitingScreen>
                       const SizedBox(height: 40),
 
                       // ── Trip info card ──
-                      if (widget.createParams != null) ...[
-                        _buildTripInfoCard(isDark),
+                      if (p != null) ...[
+                        _buildTripInfoCard(isDark, p),
                         const SizedBox(height: 32),
                       ],
 
                       // ── Timer ──
-                      _buildTimer(isDark),
+                      _buildTimer(isDark, p),
 
                       const SizedBox(height: 24),
 
@@ -482,8 +504,7 @@ class _TaxiWaitingScreenState extends State<TaxiWaitingScreen>
     );
   }
 
-  Widget _buildTripInfoCard(bool isDark) {
-    final p = widget.createParams!;
+  Widget _buildTripInfoCard(bool isDark, TaxiTripCreateParams p) {
     final eta = TaxiDistanceCalculator.estimateDrivingDurationSeconds(p.distanceKm);
     final etaLabel = TaxiDistanceCalculator.formatDrivingDurationAr(eta);
     final tripLabel = p.isRoundTrip ? 'ذهاب وعودة' : 'ذهاب فقط';
@@ -562,15 +583,10 @@ class _TaxiWaitingScreenState extends State<TaxiWaitingScreen>
                   Text(etaLabel, style: TextStyle(fontFamily: 'Cairo', fontSize: 12, color: isDark ? Colors.white54 : Colors.grey)),
                 ],
               ),
-              FutureBuilder<Map<String, int>>(
-                future: TaxiApiService.estimateFares(distanceKm: p.distanceKm, isRoundTrip: p.isRoundTrip),
-                builder: (context, snapshot) {
-                  final fare = snapshot.data?[p.taxiType] ?? 0;
-                  return Text(
-                    '${fare.toLocaleString()} د.ع',
-                    style: const TextStyle(fontFamily: 'Cairo', fontSize: 16, fontWeight: FontWeight.w800, color: Color(0xFF0EA5E9)),
-                  );
-                },
+              // ── السعر المؤكد الذي رآه المستخدم قبل الطلب — لا يتغير أبداً ──
+              Text(
+                '${p.confirmedFare.toLocaleString()} د.ع',
+                style: const TextStyle(fontFamily: 'Cairo', fontSize: 16, fontWeight: FontWeight.w800, color: Color(0xFF0EA5E9)),
               ),
             ],
           ),
@@ -600,7 +616,8 @@ class _TaxiWaitingScreenState extends State<TaxiWaitingScreen>
     );
   }
 
-  Widget _buildTimer(bool isDark) {
+  Widget _buildTimer(bool isDark, TaxiTripCreateParams? p) {
+    if (p == null) return const SizedBox.shrink();
     return Column(
       children: [
         SizedBox(

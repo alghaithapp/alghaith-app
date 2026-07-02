@@ -47,16 +47,10 @@ async function readAdminRoleRow(phoneKey) {
 }
 
 async function getAdminRoleWithPermissions(phone) {
+  const { getAdminPermissions } = require('./admin_permissions');
   const phoneKey = await resolvePhoneKey(phone);
-  const row = await readAdminRoleRow(phoneKey);
-  const role = row?.role
-    ? String(row.role).trim()
-    : (await getAppUser(phoneKey))?.role === 'admin'
-      ? 'admin'
-      : null;
-  const permissions = row?.permissions && typeof row.permissions === 'object'
-    ? row.permissions
-    : null;
+  const role = await getAdminRole(phone);
+  const permissions = await getAdminPermissions(phone);
   return { role, permissions, phone: phoneKey };
 }
 

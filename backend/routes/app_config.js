@@ -101,8 +101,9 @@ router.get('/error-messages', async (_req, res) => {
 
 router.get('/admin/configs', async (req, res) => {
   try {
-    const { requireOptionalAuthorizedPhone, assertAdminPermission } = require('./_middleware');
-    const phone = requireOptionalAuthorizedPhone(req, res);
+    const { authenticateBearerSession } = require('./_middleware');
+    const { assertAdminPermission } = require('../supabase_repo');
+    const phone = authenticateBearerSession(req, res);
     if (!phone) return;
     await assertAdminPermission(phone, 'canRegister');
     const data = await getAllConfigs();
@@ -114,8 +115,9 @@ router.get('/admin/configs', async (req, res) => {
 
 router.put('/admin/configs', async (req, res) => {
   try {
-    const { requireOptionalAuthorizedPhone, assertAdminPermission } = require('./_middleware');
-    const phone = requireOptionalAuthorizedPhone(req, res);
+    const { authenticateBearerSession } = require('./_middleware');
+    const { assertAdminPermission } = require('../supabase_repo');
+    const phone = authenticateBearerSession(req, res);
     if (!phone) return;
     await assertAdminPermission(phone, 'canRegister');
     const { key, value } = req.body || {};

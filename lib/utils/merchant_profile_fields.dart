@@ -280,25 +280,9 @@ class MerchantProfileFields {
     return null;
   }
 
-  /// مصدر واحد غير متكرر لحالة الاعتماد — يمنع التكرار اللانهائي
-  /// (StackOverflow) الذي كان يحدث عند تبادل isApproved/approvalStatus.
-  static String approvalStatus(Map<String, dynamic>? store) {
-    if (store == null) return 'pending';
-
-    final status = store['approvalStatus']?.toString().trim() ??
-        store['approval_status']?.toString().trim() ??
-        '';
-    if (status == 'approved') return 'approved';
-    if (status == 'rejected') return 'rejected';
-    if (status == 'pending') return 'pending';
-
-    if (store['isApproved'] == true || store['is_approved'] == true) {
-      return 'approved';
-    }
-    if (store['isApproved'] == false || store['is_approved'] == false) {
-      return 'pending';
-    }
-
+  /// حسابات المهنيين فقط تحتاج موافقة إدارية؛ باقي التجار تُفعَّل تلقائياً.
+  static bool accountRequiresApproval(Map<String, dynamic>? store) {
+    if (store == null) return false;
     final category = store['category']?.toString().trim() ??
         store['primary_service_id']?.toString().trim() ??
         store['primaryServiceId']?.toString().trim() ??
@@ -314,11 +298,32 @@ class MerchantProfileFields {
                 true ||
             store['professionalCategoryId']?.toString().trim().isNotEmpty ==
                 true);
-    if (hasProfessionalsService || hasProfessionalInfo) {
+    return hasProfessionalsService || hasProfessionalInfo;
+  }
+
+  /// مصدر واحد غير متكرر لحالة الاعتماد — يمنع التكرار اللانهائي
+  /// (StackOverflow) الذي كان يحدث عند تبادل isApproved/approvalStatus.
+  static String approvalStatus(Map<String, dynamic>? store) {
+    if (store == null) return 'pending';
+
+    final status = store['approvalStatus']?.toString().trim() ??
+        store['approval_status']?.toString().trim() ??
+        '';
+    if (status == 'rejected') return 'rejected';
+
+    if (accountRequiresApproval(store)) {
+      if (status == 'approved') return 'approved';
+      if (store['isApproved'] == true || store['is_approved'] == true) {
+        return 'approved';
+      }
       return 'pending';
     }
 
-    // احتياط للبيانات القديمة: متجر باسم فعلي يُعتبر معتمداً.
+    if (status == 'approved') return 'approved';
+    if (store['isApproved'] == true || store['is_approved'] == true) {
+      return 'approved';
+    }
+
     final name = store['name']?.toString().trim() ??
         store['store_name']?.toString().trim() ??
         '';
@@ -392,6 +397,22 @@ class MerchantProfileFields {
     for (final key in ['doctorName', 'doctor_name', 'pharmacyDoctorName']) {
       final value = map[key];
       if (value is String && value.trim().isNotEmpty) return value.trim();
+    }
+    return '';
+  }
+
+  static String specialty(Map<String, dynamic>? map) {
+    if (map == null) return '';
+    for (final key in ['specialty', 'doctor_specialty', 'doctorSpecialty']) {
+      final value = map[key];
+      if (value is String && value.trim().isNotEmpty) return value.trim();
+    }
+    for (final infoKey in ['professional_info', 'professionalInfo']) {
+      final raw = map[infoKey];
+      if (raw is Map) {
+        final nested = raw['specialty']?.toString().trim() ?? '';
+        if (nested.isNotEmpty) return nested;
+      }
     }
     return '';
   }

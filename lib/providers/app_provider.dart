@@ -232,6 +232,7 @@ class AppProvider extends ChangeNotifier {
       unawaited(PushNotificationService.instance.ensureUserBinding(auth.authPhone!));
       unawaited(_preloadAllOperatorProfiles());
       unawaited(_checkMerchantServerProfileIfNeeded());
+      unawaited(syncUserNotificationsFromServer());
     }
     notifyListeners();
   }
@@ -2260,8 +2261,10 @@ class AppProvider extends ChangeNotifier {
     NotificationCategory category = NotificationCategory.system,
     NotificationPriority priority = NotificationPriority.normal,
     String? eventKey,
+    String? id,
+    int? createdAtMs,
   }) {
-    final id = _notificationInbox.add(
+    final notificationId = _notificationInbox.add(
       title,
       body,
       audience: audience,
@@ -2269,14 +2272,72 @@ class AppProvider extends ChangeNotifier {
       category: category,
       priority: priority,
       eventKey: eventKey,
+      id: id,
+      createdAtMs: createdAtMs,
     );
     notifyListeners();
-    return id;
+    return notificationId;
+  }
+
+  Future<void> syncUserNotificationsFromServer() async {
+    final phone = _trimmedOrNull(auth.authPhone);
+    if (phone == null || !SupabaseService.isConfigured) return;
+    try {
+      final rows = await SupabaseService.loadUserNotifications(phone: phone);
+      final items = rows
+          .map((row) => AppNotificationItem.fromServerMap(row))
+          .where((item) => item.id.isNotEmpty)
+          .toList();
+      if (_notificationInbox.mergeServerItems(items)) {
+        notifyListeners();
+      }
+    } catch (error) {
+      debugPrint('SYNC_USER_NOTIFICATIONS_ERROR: $error');
+    }
+  }
+
+  void ingestAdminBroadcastPush(Map<String, dynamic> data) {
+    final audience = notificationAudienceForRole(auth.userRole) ?? 'customer';
+    final title = data['title']?.toString().trim().isNotEmpty == true
+        ? data['title'].toString().trim()
+        : 'رسالة من الإدارة';
+    final body = data['body']?.toString().trim() ?? '';
+    final eventKey = data['eventKey']?.toString().trim();
+    final broadcastId = data['broadcastId']?.toString().trim();
+    addNotification(
+      title,
+      body,
+      audience: audience,
+      category: NotificationCategory.admin,
+      priority: NotificationPriority.normal,
+      eventKey: eventKey?.isNotEmpty == true
+          ? eventKey
+          : (broadcastId?.isNotEmpty == true
+              ? 'admin:broadcast:$broadcastId'
+              : 'admin:broadcast'),
+    );
   }
 
   void markNotificationRead(String id) {
     if (!_notificationInbox.markRead(id)) return;
     notifyListeners();
+    final phone = _trimmedOrNull(auth.authPhone);
+    if (phone != null && id.contains('-')) {
+      unawaited(
+        SupabaseService.markUserNotificationsRead(phone: phone, ids: [id]),
+      );
+    }
+  }
+
+  void markAllNotificationsRead() {
+    final audience = auth.userRole;
+    if (audience == null) return;
+    if (!_notificationInbox.markAllReadForAudience(audience)) return;
+    notifyListeners();
+    final phone = _trimmedOrNull(auth.authPhone);
+    if (phone != null) {
+      unawaited(SupabaseService.markUserNotificationsRead(phone: phone));
+    }
   }
 
   void markNotificationsReadForOrder(String orderNumber, String audience) {

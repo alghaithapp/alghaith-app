@@ -6,9 +6,11 @@ import '../modules/chat/utils/chat_navigation.dart';
 import '../utils/call_navigation.dart';
 import '../services/supabase_service.dart';
 import '../utils/guest_gate.dart';
+import '../utils/helpers.dart';
 import '../utils/merchant_profile_fields.dart';
 import '../widgets/app_image.dart';
 import '../widgets/service_navigation_buttons.dart';
+import '../widgets/whatsapp_icon.dart';
 
 class ProfessionalsDirectoryScreen extends StatefulWidget {
   final ServiceCategory profession;
@@ -93,11 +95,11 @@ class _ProfessionalsDirectoryScreenState
   }
 
   String _profileWhatsapp(Map<String, dynamic> profile) {
-    return MerchantProfileFields.merchantInternalContactPhone(profile).trim();
+    return MerchantProfileFields.customerVisibleWhatsApp(profile).trim();
   }
 
   String _profilePhone(Map<String, dynamic> profile) {
-    return MerchantProfileFields.merchantInternalContactPhone(profile).trim();
+    return MerchantProfileFields.customerVisiblePhone(profile).trim();
   }
 
   @override
@@ -125,7 +127,7 @@ class _ProfessionalsDirectoryScreenState
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
               child: CupertinoSearchTextField(
                 controller: _searchController,
-                placeholder: 'ابحث عن مهني',
+                placeholder: 'ابحث في ${widget.profession.titleAr}',
                 onChanged: (_) => setState(() {}),
               ),
             ),
@@ -137,8 +139,9 @@ class _ProfessionalsDirectoryScreenState
                     return const Center(child: CupertinoActivityIndicator());
                   }
                   if (snapshot.hasError) {
-                    return const _EmptyState(
-                      message: 'تعذر تحميل بيانات المهنيين',
+                    return _EmptyState(
+                      message:
+                          'تعذر تحميل بيانات ${widget.profession.titleAr}',
                     );
                   }
 
@@ -158,7 +161,7 @@ class _ProfessionalsDirectoryScreenState
                   if (filtered.isEmpty) {
                     return _EmptyState(
                       message: query.isEmpty
-                          ? 'لا يوجد مهنيون مسجلون في هذا التخصص بعد'
+                          ? 'لا يوجد مزودو خدمة في ${widget.profession.titleAr} بعد'
                           : 'لا توجد نتائج مطابقة',
                     );
                   }
@@ -304,6 +307,12 @@ class _ProfessionalCard extends StatelessWidget {
     );
   }
 
+  Future<void> _openWhatsApp() async {
+    final target = whatsapp.trim().isNotEmpty ? whatsapp.trim() : phone.trim();
+    if (target.isEmpty) return;
+    await AppHelpers.launchWhatsApp(target, 'مرحباً $name');
+  }
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -415,38 +424,67 @@ class _ProfessionalCard extends StatelessWidget {
               ),
             )
           else
-            Row(
+            Column(
               children: [
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: () => _openChat(context),
-                    icon: const Icon(Icons.chat_bubble_outline, size: 16),
-                    label: const Text(
-                      'مراسلة',
-                      style: TextStyle(
-                        fontFamily: 'Cairo',
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: () => _openChat(context),
+                        icon: const Icon(Icons.chat_bubble_outline, size: 16),
+                        label: const Text(
+                          'مراسلة',
+                          style: TextStyle(
+                            fontFamily: 'Cairo',
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: AppColors.primary,
+                          side: const BorderSide(color: AppColors.primary),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                        ),
                       ),
                     ),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: AppColors.primary,
-                      side: const BorderSide(color: AppColors.primary),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
+                    if (phone.trim().isNotEmpty) ...[
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: FilledButton.icon(
+                          onPressed: () => _startCall(context),
+                          icon: const Icon(Icons.phone, size: 16),
+                          label: const Text(
+                            'اتصال',
+                            style: TextStyle(
+                              fontFamily: 'Cairo',
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          style: FilledButton.styleFrom(
+                            backgroundColor: AppColors.primary,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            padding: const EdgeInsets.symmetric(vertical: 8),
+                          ),
+                        ),
                       ),
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                    ),
-                  ),
+                    ],
+                  ],
                 ),
-                if (phone.trim().isNotEmpty) ...[
-                  const SizedBox(width: 8),
-                  Expanded(
+                if (whatsapp.trim().isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  SizedBox(
+                    width: double.infinity,
                     child: FilledButton.icon(
-                      onPressed: () => _startCall(context),
-                      icon: const Icon(Icons.phone, size: 16),
+                      onPressed: _openWhatsApp,
+                      icon: const WhatsAppIcon(size: 18),
                       label: const Text(
-                        'اتصال',
+                        'واتساب',
                         style: TextStyle(
                           fontFamily: 'Cairo',
                           fontSize: 12,
@@ -454,11 +492,12 @@ class _ProfessionalCard extends StatelessWidget {
                         ),
                       ),
                       style: FilledButton.styleFrom(
-                        backgroundColor: AppColors.primary,
+                        backgroundColor: const Color(0xFF25D366),
+                        foregroundColor: Colors.white,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(10),
                         ),
-                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        padding: const EdgeInsets.symmetric(vertical: 10),
                       ),
                     ),
                   ),

@@ -1,93 +1,48 @@
 import React from 'react';
+import { NavLink } from 'react-router-dom';
 import {
   BarChart3,
   Bike,
-  Bell,
   Grid3x3,
   LogOut,
   Shield,
   Settings2,
-  Smartphone,
   Store,
   Users,
   Car,
-  UserCheck,
-  ChevronRight,
-  Wrench,
-  UserCog,
 } from 'lucide-react';
-import type {
-  AdminPermissions,
-  AdminView,
-  CourierSummary,
-  MerchantSummary,
-} from '../admin-types';
+import './Sidebar.css';
+import { Button } from './ui/Button';
 
 interface SidebarProps {
-  view: AdminView;
-  phoneNumber: string;
-  pendingMerchantQueue: MerchantSummary[];
-  pendingCourierQueue: CourierSummary[];
-  approvalQueue: MerchantSummary[];
-  pendingDriverCount: number;
-  myPermissions: AdminPermissions;
+  currentView: string;
+  adminName: string;
   sidebarOpen: boolean;
-  onSwitchView: (view: AdminView) => void;
+  setSidebarOpen: (v: boolean) => void;
   onLogout: () => void;
-  onCloseSidebar: () => void;
-}
-
-interface NavButtonProps {
-  isActive: boolean;
-  onClick: () => void;
-  iconClass: string;
-  icon: React.ReactNode;
-  label: string;
-  badge?: number;
-}
-
-function NavButton({ isActive, onClick, iconClass, icon, label, badge }: NavButtonProps) {
-  return (
-    <button
-      className={isActive ? 'nav-item active' : 'nav-item'}
-      onClick={onClick}
-      type="button"
-    >
-      <span className={`nav-item-icon ${iconClass}`}>{icon}</span>
-      <span>{label}</span>
-      {badge != null && badge > 0 ? (
-        <span className="nav-badge">{badge}</span>
-      ) : null}
-    </button>
-  );
+  onChangeView: (v: string) => void; // Keep for fallback compatibility
 }
 
 export default function Sidebar({
-  view,
-  phoneNumber,
-  pendingMerchantQueue,
-  pendingCourierQueue,
-  approvalQueue,
-  pendingDriverCount,
-  myPermissions,
   sidebarOpen,
-  onSwitchView,
+  setSidebarOpen,
   onLogout,
-  onCloseSidebar,
 }: SidebarProps) {
-  const totalPending =
-    pendingMerchantQueue.length + pendingCourierQueue.length + pendingDriverCount;
+  
+  // Hardcoded badge counts for now - can be connected to React Query later
+  const badges = {
+    merchants: 0,
+    couriers: 0,
+    drivers: 0,
+  };
+
+  const totalPending = badges.merchants + badges.couriers + badges.drivers;
+
+  const closeMenu = () => setSidebarOpen(false);
 
   return (
     <>
-      <div
-        className={sidebarOpen ? 'sidebar-overlay open' : 'sidebar-overlay'}
-        onClick={onCloseSidebar}
-        role="presentation"
-      />
       <aside className={sidebarOpen ? 'sidebar open' : 'sidebar'}>
-
-        {/* Brand */}
         <div className="sidebar-header">
           <div className="brand-badge small">
             <Shield size={20} />
@@ -98,131 +53,57 @@ export default function Sidebar({
           </div>
         </div>
 
-        {/* Admin identity */}
-        <div className="admin-identity">
-          <span>مسجّل الدخول كمشرف</span>
-          <strong dir="ltr">{phoneNumber}</strong>
+        <div className="nav-group">الرئيسية</div>
+        <NavLink to="/admin" end onClick={closeMenu} className={({ isActive }) => isActive ? 'nav-item active' : 'nav-item'}>
+          <span className="nav-item-icon"><BarChart3 size={18} /></span>
+          <span>الإحصائيات</span>
+        </NavLink>
+
+        <div className="nav-group">
+          إدارة النظام
+          {totalPending > 0 && <span className="nav-badge" style={{ display: 'inline-block', marginRight: '8px' }}>{totalPending}</span>}
         </div>
+        
+        <NavLink to="/admin/accounts" onClick={closeMenu} className={({ isActive }) => isActive ? 'nav-item active' : 'nav-item'}>
+          <span className="nav-item-icon"><Users size={18} /></span>
+          <span>المستخدمون</span>
+        </NavLink>
 
-        {/* MAIN NAV */}
-        <div className="sidebar-nav-section">
-          <span className="sidebar-nav-label">الرئيسية</span>
-          <nav className="sidebar-nav">
-            <NavButton
-              isActive={view === 'dashboard'}
-              onClick={() => onSwitchView('dashboard')}
-              iconClass="nav-icon-dashboard"
-              icon={<BarChart3 size={16} />}
-              label="الملخص العام"
-              badge={totalPending > 0 ? totalPending : undefined}
-            />
-          </nav>
+        <NavLink to="/admin/admins" onClick={closeMenu} className={({ isActive }) => isActive ? 'nav-item active' : 'nav-item'}>
+          <span className="nav-item-icon"><Shield size={18} /></span>
+          <span>إدارة المشرفين</span>
+        </NavLink>
+
+        <NavLink to="/admin/merchants" onClick={closeMenu} className={({ isActive }) => isActive ? 'nav-item active' : 'nav-item'}>
+          <span className="nav-item-icon"><Store size={18} /></span>
+          <span>التجار</span>
+          {badges.merchants > 0 && <span className="nav-badge">{badges.merchants}</span>}
+        </NavLink>
+
+        <NavLink to="/admin/couriers" onClick={closeMenu} className={({ isActive }) => isActive ? 'nav-item active' : 'nav-item'}>
+          <span className="nav-item-icon"><Bike size={18} /></span>
+          <span>مندوبين التوصيل</span>
+          {badges.couriers > 0 && <span className="nav-badge">{badges.couriers}</span>}
+        </NavLink>
+
+        <NavLink to="/admin/drivers" onClick={closeMenu} className={({ isActive }) => isActive ? 'nav-item active' : 'nav-item'}>
+          <span className="nav-item-icon"><Car size={18} /></span>
+          <span>سائقو التكسي</span>
+          {badges.drivers > 0 && <span className="nav-badge">{badges.drivers}</span>}
+        </NavLink>
+
+        <div className="nav-group">التطبيق والإعدادات</div>
+        <NavLink to="/admin/settings" onClick={closeMenu} className={({ isActive }) => isActive ? 'nav-item active' : 'nav-item'}>
+          <span className="nav-item-icon"><Settings2 size={18} /></span>
+          <span>إعدادات النظام</span>
+        </NavLink>
+
+        <div className="sidebar-footer">
+          <Button variant="danger" onClick={onLogout} style={{ width: '100%' }}>
+            <LogOut size={16} />
+            <span>تسجيل الخروج</span>
+          </Button>
         </div>
-
-        <div className="sidebar-divider" />
-
-        {/* USERS */}
-        <div className="sidebar-nav-section">
-          <span className="sidebar-nav-label">إدارة المستخدمين</span>
-          <nav className="sidebar-nav">
-            <NavButton
-              isActive={view === 'accounts'}
-              onClick={() => onSwitchView('accounts')}
-              iconClass="nav-icon-customer"
-              icon={<Users size={16} />}
-              label="جميع الحسابات"
-            />
-            <NavButton
-              isActive={view === 'merchants'}
-              onClick={() => onSwitchView('merchants')}
-              iconClass="nav-icon-merchant"
-              icon={<Store size={16} />}
-              label="التجار والمهنيون"
-              badge={pendingMerchantQueue.length || undefined}
-            />
-            <NavButton
-              isActive={view === 'couriers'}
-              onClick={() => onSwitchView('couriers')}
-              iconClass="nav-icon-courier"
-              icon={<Bike size={16} />}
-              label="مندوبو التوصيل"
-              badge={pendingCourierQueue.length || undefined}
-            />
-            <NavButton
-              isActive={view === 'drivers'}
-              onClick={() => onSwitchView('drivers')}
-              iconClass="nav-icon-driver"
-              icon={<Car size={16} />}
-              label="سائقو التكسي"
-              badge={pendingDriverCount || undefined}
-            />
-          </nav>
-        </div>
-
-        <div className="sidebar-divider" />
-
-        {/* SETTINGS */}
-        <div className="sidebar-divider" />
-        <div className="sidebar-nav-section">
-          <span className="sidebar-nav-label">الإعدادات</span>
-          <nav className="sidebar-nav">
-            {myPermissions.canManageAdmins ? (
-              <NavButton
-                isActive={view === 'admins'}
-                onClick={() => onSwitchView('admins')}
-                iconClass="nav-icon-settings"
-                icon={<UserCog size={16} />}
-                label="المشرفون"
-              />
-            ) : null}
-            <NavButton
-              isActive={view === 'homeCategories'}
-              onClick={() => onSwitchView('homeCategories')}
-              iconClass="nav-icon-settings"
-              icon={<Grid3x3 size={16} />}
-              label="أقسام الرئيسية"
-            />
-            <NavButton
-              isActive={view === 'appUpdate'}
-              onClick={() => onSwitchView('appUpdate')}
-              iconClass="nav-icon-settings"
-              icon={<Smartphone size={16} />}
-              label="تحديث التطبيق"
-            />
-            <NavButton
-              isActive={view === 'notifications'}
-              onClick={() => onSwitchView('notifications')}
-              iconClass="nav-icon-settings"
-              icon={<Bell size={16} />}
-              label="الإشعارات"
-            />
-            <NavButton
-              isActive={view === 'maintenance'}
-              onClick={() => onSwitchView('maintenance')}
-              iconClass="nav-icon-settings"
-              icon={<Wrench size={16} />}
-              label="وضع الصيانة"
-            />
-            <NavButton
-              isActive={view === 'appConfig'}
-              onClick={() => onSwitchView('appConfig')}
-              iconClass="nav-icon-settings"
-              icon={<Settings2 size={16} />}
-              label="إعدادات التطبيق"
-            />
-          </nav>
-        </div>
-
-        {/* Spacer */}
-        <div style={{ flex: 1 }} />
-
-        <div className="sidebar-divider" />
-
-        {/* Logout */}
-        <button className="ghost-button logout" onClick={onLogout} type="button">
-          <LogOut size={16} />
-          <span>تسجيل الخروج</span>
-        </button>
       </aside>
     </>
   );

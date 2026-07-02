@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../../../providers/app_provider.dart';
 import '../../../utils/app_update_checker.dart';
 import '../../../utils/helpers.dart';
+import '../../chat/utils/chat_navigation.dart';
 import '../../../widgets/whatsapp_icon.dart';
 
 class AppSettingsScreen extends StatefulWidget {
@@ -256,6 +257,13 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
               fontWeight: FontWeight.w800,
               fontFamily: 'Cairo',
             ),
+          ),
+          const SizedBox(height: 10),
+          _SupportButton(
+            label: 'محادثة مع الدعم داخل التطبيق',
+            color: const Color(0xFF0F766E),
+            iconWidget: const Icon(Icons.chat_bubble_rounded, size: 34),
+            onTap: () => ChatNavigation.openSupportChat(context),
           ),
           const SizedBox(height: 10),
           _SupportButton(

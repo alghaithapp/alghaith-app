@@ -51,8 +51,8 @@ async function sendOtpViaOtpiq(phoneNumber, verificationCode, channel = 'sms') {
   const otpiqApiKey = getEnv('OTPIQ_API_KEY');
   const otpiqBaseUrl = getEnv('OTPIQ_BASE_URL', 'https://api.otpiq.com').replace(/\/$/, '');
   const smsProvider = getEnv('OTPIQ_SMS_PROVIDER', 'sms');
-  const whatsappProvider = getEnv('OTPIQ_WHATSAPP_PROVIDER', 'whatsapp-telegram-sms');
-  const telegramProvider = getEnv('OTPIQ_TELEGRAM_PROVIDER', 'whatsapp-telegram-sms');
+  const whatsappProvider = getEnv('OTPIQ_WHATSAPP_PROVIDER', 'whatsapp');
+  const telegramProvider = getEnv('OTPIQ_TELEGRAM_PROVIDER', 'telegram');
 
   if (!otpiqApiKey) {
     throw new Error('OTPIQ_API_KEY is not configured.');

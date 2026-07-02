@@ -13,6 +13,7 @@ const orders = require('./orders');
 const couriers_drivers = require('./couriers_drivers');
 const admin = require('./admin');
 const push_notifications = require('./push_notifications');
+const user_notifications = require('./user_notifications');
 const taxi = require('./taxi');
 const admin_roles = require('./admin_roles');
 const admin_permissions = require('./admin_permissions');
@@ -46,6 +47,9 @@ module.exports = {
 
   // Push notifications
   ...push_notifications,
+
+  // User in-app notifications
+  ...user_notifications,
 
   // Taxi
   ...taxi,

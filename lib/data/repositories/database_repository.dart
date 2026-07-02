@@ -169,7 +169,7 @@ class DatabaseRepository {
     String? subCategoryId,
   }) async {
     final result = await ApiClient.instance.get(
-      '/db/catalog',
+      '/db/catalog-products',
       queryParameters: {
         if (category != null && category.trim().isNotEmpty)
           'category': category.trim(),
@@ -335,6 +335,36 @@ class DatabaseRepository {
   Future<void> markPushInboxOpened({required String phone}) async {
     await ApiClient.instance.put('/db/push-inbox/opened', body: {
       'phone': _phone(phone),
+    });
+  }
+
+  Future<List<Map<String, dynamic>>> loadUserNotifications({
+    required String phone,
+    String? since,
+    int limit = 50,
+  }) async {
+    final result = await ApiClient.instance.get(
+      '/db/user-notifications',
+      queryParameters: {
+        'phone': _phone(phone),
+        if (since != null && since.trim().isNotEmpty) 'since': since.trim(),
+        'limit': '$limit',
+      },
+    );
+    if (result is! List) return const [];
+    return result
+        .whereType<Map>()
+        .map((item) => Map<String, dynamic>.from(item))
+        .toList();
+  }
+
+  Future<void> markUserNotificationsRead({
+    required String phone,
+    List<String>? ids,
+  }) async {
+    await ApiClient.instance.put('/db/user-notifications/read', body: {
+      'phone': _phone(phone),
+      if (ids != null) 'ids': ids,
     });
   }
 

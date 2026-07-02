@@ -1,8 +1,8 @@
 const express = require('express');
 const router = express.Router();
-const { getChatMessages, getChatInbox, saveChatMessage, markThreadAsRead, markAllThreadsAsRead, getUnreadCount, deleteChatThread, mapChatAccessError } = require('../supabase_repo');
+const { getChatMessages, getChatInbox, saveChatMessage, markThreadAsRead, markAllThreadsAsRead, getUnreadCount, deleteChatThread, mapChatAccessError, isAdminChatPhone } = require('../supabase_repo');
 const { requireOptionalAuthorizedPhone } = require('./_middleware');
-const { notifyChatMessage } = require('../push_events');
+const { notifyChatMessage, notifyAdminsSupportMessage } = require('../push_events');
 
 function chatErrorStatus(message) {
   const text = String(message || '');
@@ -142,6 +142,18 @@ async function handlePost(req, res, threadType, threadId) {
       threadId,
       orderId: threadType === 'order' ? threadId : '',
     }).catch((err) => console.error('chat push error:', err?.message || err));
+  }
+  if (threadType === 'support') {
+    const senderIsAdmin = await isAdminChatPhone(phone);
+    if (!senderIsAdmin) {
+      notifyAdminsSupportMessage({
+        ...payload,
+        ...savedMessage,
+        senderName: payload.senderName || savedMessage.sender_name || null,
+        threadType,
+        threadId,
+      }).catch((err) => console.error('support admin push error:', err?.message || err));
+    }
   }
   _broadcastViaSocket(threadType, threadId, savedMessage);
   return res.json(savedMessage);

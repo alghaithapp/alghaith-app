@@ -9,6 +9,7 @@ import type {
   AppUpdatePolicy,
   MaintenancePolicy,
   CourierSummary,
+  DriverSummary,
   DriverPreRegisterPayload,
   DriverPreRegisterResponse,
   HomeCategoriesConfig,
@@ -17,12 +18,17 @@ import type {
   MerchantPreRegisterPayload,
   MerchantPreRegisterResponse,
   MerchantSummary,
+  PendingProductSummary,
   ProfessionalPreRegisterPayload,
   ProfessionalPreRegisterResponse,
+  ProfessionalSummary,
+  ProfessionalDetails,
   CourierPreRegisterPayload,
   CourierPreRegisterResponse,
   DoctorPharmacyPreRegisterPayload,
   DoctorPharmacyPreRegisterResponse,
+  CustomerPreRegisterPayload,
+  CustomerPreRegisterResponse,
   ToggleBazaarResponse,
 } from './admin-types';
 
@@ -187,8 +193,24 @@ export async function loadMerchants(token: string): Promise<MerchantSummary[]> {
   return request<MerchantSummary[]>(DATABASE_API_BASE_URL, '/db/admin/merchants', { token });
 }
 
+export async function loadProfessionals(token: string): Promise<ProfessionalSummary[]> {
+  return request<ProfessionalSummary[]>(DATABASE_API_BASE_URL, '/db/admin/professionals', { token });
+}
+
+export async function loadProfessionalDetails(token: string, professionalPhone: string): Promise<ProfessionalDetails> {
+  return request<ProfessionalDetails>(
+    DATABASE_API_BASE_URL,
+    `/db/admin/professional-details?${new URLSearchParams({ professionalPhone })}`,
+    { token },
+  );
+}
+
 export async function loadCouriers(token: string): Promise<CourierSummary[]> {
   return request<CourierSummary[]>(DATABASE_API_BASE_URL, '/db/admin/couriers', { token });
+}
+
+export async function loadDrivers(token: string): Promise<DriverSummary[]> {
+  return request<DriverSummary[]>(DATABASE_API_BASE_URL, '/db/admin/drivers', { token });
 }
 
 export async function loadAdminAccounts(token: string): Promise<AdminAccountSummary[]> {
@@ -210,6 +232,14 @@ export async function updateAdminAccountRole(token: string, accountPhone: string
 export async function deleteAdminAccount(token: string, accountPhone: string) {
   return request(DATABASE_API_BASE_URL, '/db/admin/account', {
     method: 'DELETE', token, body: JSON.stringify({ accountPhone }),
+  });
+}
+
+export async function deleteDriverAccount(token: string, driverPhone: string) {
+  const params = new URLSearchParams({ driverPhone });
+  return request(DATABASE_API_BASE_URL, `/db/admin/driver?${params}`, {
+    method: 'DELETE',
+    token,
   });
 }
 
@@ -245,6 +275,59 @@ export async function toggleMerchantApproval(token: string, merchantPhone: strin
   return request(DATABASE_API_BASE_URL, '/db/admin/merchant-approval', {
     token, method: 'PUT', body: JSON.stringify({ merchantPhone, isApproved }),
   });
+}
+
+// -- Admin Merchant Products Management --
+export async function loadAdminMerchantProducts(token: string, merchantPhone: string) {
+  const q = new URLSearchParams({ merchantPhone });
+  return request(DATABASE_API_BASE_URL, `/db/admin/merchant-products?${q.toString()}`, { token });
+}
+
+export async function saveAdminMerchantProduct(token: string, merchantPhone: string, productData: any) {
+  return request(DATABASE_API_BASE_URL, '/db/admin/merchant-product', {
+    method: 'PUT', token, body: JSON.stringify({ merchantPhone, ...productData }),
+  });
+}
+
+export async function deleteAdminMerchantProduct(token: string, merchantPhone: string, id: string) {
+  const q = new URLSearchParams({ merchantPhone, id });
+  return request(DATABASE_API_BASE_URL, `/db/admin/merchant-product?${q.toString()}`, {
+    method: 'DELETE', token,
+  });
+}
+
+export async function loadPendingProducts(token: string, category?: string): Promise<PendingProductSummary[]> {
+  const q = new URLSearchParams();
+  if (category) q.set('category', category);
+  const suffix = q.toString() ? `?${q.toString()}` : '';
+  return request<PendingProductSummary[]>(DATABASE_API_BASE_URL, `/db/admin/pending-products${suffix}`, { token });
+}
+
+export async function toggleProductApproval(
+  token: string,
+  merchantPhone: string,
+  productId: string,
+  isApproved: boolean,
+  rejectionMessageAr?: string,
+) {
+  return request(DATABASE_API_BASE_URL, '/db/admin/product-approval', {
+    method: 'PUT',
+    token,
+    body: JSON.stringify({ merchantPhone, productId, isApproved, rejectionMessageAr }),
+  });
+}
+
+// -- Admin Media Management --
+export async function loadAdminMediaAssets(token: string, ownerType: string, ownerId: string) {
+  const q = new URLSearchParams({ ownerType, ownerId });
+  // In the legacy code, fetchWithToken might not exist, but request is used here
+  // Wait, the API url is /media/assets, NOT /db/admin/...
+  // Let's use fetch directly with the DATABASE_API_BASE_URL
+  const res = await fetch(`${DATABASE_API_BASE_URL || ''}/media/assets?${q.toString()}`, {
+    headers: { 'Authorization': `Bearer ${token}` }
+  });
+  if (!res.ok) throw new Error('Failed to load media assets');
+  return res.json();
 }
 
 export async function rejectMerchantApplication(token: string, merchantPhone: string, rejectionMessageAr: string, reasonKey = 'custom') {
@@ -288,6 +371,21 @@ export async function preRegisterMerchant(
   );
 }
 
+export async function updateMerchantCategory(
+  token: string,
+  payload: import('./admin-types').MerchantCategoryUpdatePayload,
+) {
+  return request<import('./admin-types').MerchantCategoryUpdateResponse>(
+    DATABASE_API_BASE_URL,
+    '/db/admin/merchant-category',
+    {
+      method: 'PUT',
+      token,
+      body: JSON.stringify(payload),
+    },
+  );
+}
+
 export async function preRegisterDriver(
   token: string,
   payload: DriverPreRegisterPayload,
@@ -315,6 +413,39 @@ export async function preRegisterCourier(
       token,
       body: JSON.stringify(payload),
     },
+  );
+}
+
+export async function preRegisterCustomer(
+  token: string,
+  payload: import('./admin-types').CustomerPreRegisterPayload,
+) {
+  return request<import('./admin-types').CustomerPreRegisterResponse>(
+    DATABASE_API_BASE_URL,
+    '/db/admin/customer-pre-register',
+    { method: 'POST', token, body: JSON.stringify(payload) },
+  );
+}
+
+export async function preRegisterDoctor(
+  token: string,
+  payload: DoctorPharmacyPreRegisterPayload,
+) {
+  return request<DoctorPharmacyPreRegisterResponse>(
+    DATABASE_API_BASE_URL,
+    '/db/admin/doctor-pre-register',
+    { method: 'POST', token, body: JSON.stringify({ ...payload, subscriberPhone: payload.subscriberPhone }) },
+  );
+}
+
+export async function preRegisterPharmacy(
+  token: string,
+  payload: DoctorPharmacyPreRegisterPayload,
+) {
+  return request<DoctorPharmacyPreRegisterResponse>(
+    DATABASE_API_BASE_URL,
+    '/db/admin/pharmacy-pre-register',
+    { method: 'POST', token, body: JSON.stringify({ ...payload, subscriberPhone: payload.subscriberPhone }) },
   );
 }
 
@@ -378,10 +509,20 @@ export async function saveHomeCategoriesConfig(token: string, overrides: Record<
   });
 }
 
-export async function sendPushNotification(token: string, payload: { title: string; body: string; audience: string }) {
-  return request<{ sent: number; failed: number; message: string }>(
+export async function sendPushNotification(
+  token: string,
+  payload: { title: string; body: string; audience: string; platform?: string; storeUpdate?: boolean },
+) {
+  return request<{
+    sent: number;
+    failed: number;
+    message: string;
+    tokenCount?: number;
+    inAppCount?: number;
+    broadcastId?: string;
+  }>(
     DATABASE_API_BASE_URL,
-    '/db/admin/push/send',
+    '/db/admin/messages/broadcast',
     {
       method: 'POST',
       token,
@@ -471,12 +612,12 @@ export async function loadMyAdminRole(token: string): Promise<{ role: string; pe
 
 // ── Dynamic App Config (Read) ──────────────────────────────────
 async function loadAppConfig<T>(token: string, path: string): Promise<T> {
-  return request<T>(DATABASE_API_BASE_URL, `/db/app/config/${path}`, { method: 'GET', token });
+  return request<T>(DATABASE_API_BASE_URL, `/app/config/${path}`, { method: 'GET', token });
 }
 
 // ── Dynamic App Config (Write - Admin) ─────────────────────────
 export async function saveAppConfig(token: string, key: string, value: unknown) {
-  return request(DATABASE_API_BASE_URL, '/db/app/config/admin/configs', {
+  return request(DATABASE_API_BASE_URL, '/app/config/admin/configs', {
     method: 'PUT',
     token,
     body: JSON.stringify({ key, value }),
@@ -563,4 +704,69 @@ export async function uploadImage(token: string, file: File): Promise<string> {
   const payload = JSON.parse(text);
   if (!payload.url) throw new Error('لم يتم استلام رابط الصورة من الخادم.');
   return payload.url;
+}
+
+export interface SupportChatThread {
+  thread_type: 'support';
+  thread_id: string;
+  other_party_phone: string;
+  other_party_name: string | null;
+  thread_title?: string | null;
+  context_label?: string;
+  last_message: string;
+  last_at: string;
+  unread_count: number;
+  has_unread: boolean;
+}
+
+export interface SupportChatMessage {
+  id: string;
+  thread_type: string;
+  thread_id: string;
+  sender_phone: string;
+  receiver_phone: string | null;
+  sender_name: string | null;
+  message_type: string;
+  content: string;
+  created_at: string;
+}
+
+export async function loadSupportThreads(token: string): Promise<SupportChatThread[]> {
+  return request<SupportChatThread[]>(DATABASE_API_BASE_URL, '/db/admin/support-threads', { token });
+}
+
+export async function loadSupportMessages(
+  token: string,
+  userPhone: string,
+): Promise<SupportChatMessage[]> {
+  const encoded = encodeURIComponent(userPhone.trim());
+  const rows = await request<SupportChatMessage[]>(
+    DATABASE_API_BASE_URL,
+    `/db/chat/support/${encoded}`,
+    { token },
+  );
+  return Array.isArray(rows) ? [...rows].reverse() : [];
+}
+
+export async function sendSupportMessage(
+  token: string,
+  userPhone: string,
+  content: string,
+  senderName = 'الإدارة',
+): Promise<SupportChatMessage> {
+  const encoded = encodeURIComponent(userPhone.trim());
+  return request<SupportChatMessage>(DATABASE_API_BASE_URL, `/db/chat/support/${encoded}`, {
+    method: 'POST',
+    token,
+    body: JSON.stringify({ content, senderName }),
+  });
+}
+
+export async function markSupportThreadRead(token: string, userPhone: string) {
+  const encoded = encodeURIComponent(userPhone.trim());
+  return request<{ success: boolean }>(
+    DATABASE_API_BASE_URL,
+    `/db/chat/support/${encoded}/read`,
+    { method: 'POST', token, body: '{}' },
+  );
 }

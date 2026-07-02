@@ -36,6 +36,9 @@ const {
   pickRemoteImageUrl,
 } = require('../services/image_refs');
 
+// خدمات التواصل المباشر دون منتجات (جمال، مهنيون، سياحة)
+const CONTACT_ONLY_SERVICES = new Set(['beauty', 'professionals', 'tourism']);
+
 function resolveMerchantContactVisibility(profile = {}) {
   const info = normalizeObject(profile.professional_info ?? profile.professionalInfo);
   const visibility = normalizeObject(info.contact_visibility ?? info.contactVisibility);
@@ -84,7 +87,172 @@ function profileServiceIds(profile) {
     return parsed;
   }
   const primary = String(profile.primary_service_id || '').trim();
-  return primary ? [primary] : [];
+  if (primary) return [primary];
+  const store = normalizeObject(profile?.store_data);
+  const storeIds = normalizeArray(store.serviceIds ?? store.service_ids)
+    .map((item) => String(item).trim())
+    .filter(Boolean);
+  if (storeIds.length > 0) return storeIds;
+  const category = String(
+    store.category ??
+      store.primary_service_id ??
+      store.primaryServiceId ??
+      store.active_service_id ??
+      store.activeServiceId ??
+      '',
+  ).trim();
+  return category ? [category] : [];
+}
+
+function resolveProfileSubCategory(profile) {
+  const direct = String(profile?.service_sub_category || '').trim();
+  if (direct) return direct;
+  const store = normalizeObject(profile?.store_data);
+  return String(
+    store.serviceSubCategory ||
+      store.service_sub_category ||
+      store.subCategoryId ||
+      store.sub_category_id ||
+      '',
+  ).trim();
+}
+
+function merchantMatchesSubCategoryFilter(profile, subCategoryId) {
+  const target = String(subCategoryId || '').trim();
+  if (!target) return true;
+
+  const profileSubCat = resolveProfileSubCategory(profile);
+  if (profileSubCat === target) return true;
+
+  // تسجيل قديم: صيدلية كخدمة مستقلة (primary_service_id = pharmacy)
+  if (target === 'صيدلية') {
+    const primary = String(profile?.primary_service_id || '').trim();
+    if (primary === 'pharmacy') return true;
+  }
+
+  return false;
+}
+
+function extractSubCategoryFromMerchantStore(store) {
+  const normalized = normalizeObject(store);
+  return String(
+    normalized.serviceSubCategory ||
+      normalized.service_sub_category ||
+      normalized.subCategoryId ||
+      normalized.sub_category_id ||
+      '',
+  ).trim();
+}
+
+/**
+ * يزامن service_sub_category من app_state إلى merchant_profiles
+ * (لوحة الإدارة قد تعرض التصنيف من state بينما التطبيق يقرأ من profiles فقط).
+ */
+async function syncProfileSubCategoriesFromAppState(profiles = []) {
+  const targets = profiles.filter((profile) => {
+    if (resolveProfileSubCategory(profile)) return false;
+    const primary = String(profile?.primary_service_id || '').trim();
+    if (primary === 'beauty' || primary === 'pharmacy') return true;
+    return profileServiceIds(profile).includes('beauty');
+  });
+  if (targets.length === 0) return 0;
+
+  let synced = 0;
+  for (const profile of targets) {
+    const phone = String(profile.phone || '').trim();
+    if (!phone) continue;
+
+    let subCategory = '';
+    const state = await getUserState(phone);
+    if (state) {
+      subCategory = extractSubCategoryFromMerchantStore(state.merchantStore);
+    }
+    const primary = String(profile.primary_service_id || '').trim();
+    if (!subCategory && primary === 'pharmacy') {
+      subCategory = 'صيدلية';
+    }
+    if (!subCategory) continue;
+
+    profile.service_sub_category = subCategory;
+    const storeData = normalizeObject(profile.store_data);
+    storeData.serviceSubCategory = subCategory;
+    storeData.service_sub_category = subCategory;
+    storeData.subCategoryId = subCategory;
+    profile.store_data = storeData;
+
+    await saveMerchantProfile(phone, {
+      service_sub_category: subCategory,
+      store_data: storeData,
+    });
+    synced += 1;
+  }
+
+  return synced;
+}
+
+/**
+ * يصلح ملفات الصيدليات القديمة حتى تظهر في التطبيق مثل لوحة الإدارة.
+ */
+async function repairPharmacyProfilesForListing(profiles = []) {
+  let repaired = 0;
+
+  for (const profile of profiles) {
+    const phone = String(profile.phone || '').trim();
+    if (!phone) continue;
+
+    const state = await getUserState(phone);
+    const stateStore = normalizeObject(state?.merchantStore);
+    const stateSub = extractSubCategoryFromMerchantStore(stateStore);
+    const profileSub = resolveProfileSubCategory(profile);
+    const primary = String(profile.primary_service_id || '').trim();
+    const stateCategory = String(stateStore.category || '').trim();
+
+    const looksLikePharmacy =
+      profileSub === 'صيدلية' ||
+      stateSub === 'صيدلية' ||
+      primary === 'pharmacy' ||
+      stateCategory === 'pharmacy' ||
+      (primary === 'beauty' && stateSub === 'صيدلية');
+
+    if (!looksLikePharmacy) continue;
+
+    const patch = {
+      service_sub_category: 'صيدلية',
+      is_open: true,
+      _adminModerationBypass: true,
+    };
+
+    if (primary !== 'beauty' && primary !== 'pharmacy') {
+      patch.primary_service_id = 'beauty';
+      patch.active_service_id = 'beauty';
+      const ids = profileServiceIds(profile);
+      patch.service_ids = ids.includes('beauty') ? ids : ['beauty', ...ids];
+    } else if (primary === 'pharmacy') {
+      patch.primary_service_id = 'pharmacy';
+      patch.active_service_id = 'pharmacy';
+      const ids = profileServiceIds(profile);
+      patch.service_ids = ids.length > 0 ? ids : ['pharmacy'];
+    }
+
+    const explicitlyRejected =
+      profile.is_approved === false &&
+      String(profile.approval_status || '').trim() === 'rejected';
+    if (
+      !explicitlyRejected &&
+      (profile.is_approved === true ||
+        profile.admin_pre_registered === true ||
+        profile.approval_status === 'approved')
+    ) {
+      patch.is_approved = true;
+      patch.approval_status = 'approved';
+    }
+
+    await saveMerchantProfile(phone, patch);
+    Object.assign(profile, patch);
+    repaired += 1;
+  }
+
+  return repaired;
 }
 
 function isMerchantFrozen(profile) {
@@ -103,6 +271,26 @@ function isProfessionalMerchantProfile(profile) {
   return false;
 }
 
+const ACCOUNT_APPROVAL_SERVICES = new Set([
+  'professionals',
+  'tourism',
+  'beauty',
+  'pharmacy',
+]);
+
+/** حسابات تحتاج موافقة إدارية على التسجيل (مهنيين، سياحة، صحة وجمال). باقي التجار: موافقة على المنتجات فقط. */
+function merchantAccountRequiresApproval(profile) {
+  if (!profile) return false;
+  const primary = String(
+    profile.primary_service_id ?? profile.primaryServiceId ?? ''
+  ).trim();
+  if (ACCOUNT_APPROVAL_SERVICES.has(primary)) return true;
+  const serviceIds = normalizeArray(profile.service_ids ?? profile.serviceIds).map(
+    (item) => String(item).trim()
+  );
+  return serviceIds.some((id) => ACCOUNT_APPROVAL_SERVICES.has(id));
+}
+
 function merchantProfileDisplayName(profile) {
   if (!profile) return '';
   const storeName = String(profile.store_name ?? profile.storeName ?? '').trim();
@@ -113,42 +301,62 @@ function merchantProfileDisplayName(profile) {
 
 function isMerchantApproved(profile) {
   if (!profile) return false;
-  // إذا كان هناك قرار صريح (موافقة أو رفض) نلتزم به
-  if (profile.is_approved === true || profile.isApproved === true) return true;
-  if (profile.is_approved === false || profile.isApproved === false) {
-    const status = String(
-      profile.approval_status ?? profile.approvalStatus ?? ''
-    ).trim();
-    if (status === 'approved') return true;
-    return false;
-  }
 
   const status = String(
     profile.approval_status ?? profile.approvalStatus ?? ''
   ).trim();
+  if (status === 'rejected') return false;
+  if (profile.is_approved === true || profile.isApproved === true) return true;
   if (status === 'approved') return true;
-  if (status === 'pending' || status === 'rejected') return false;
 
-  // المهنيين الجدد يحتاجون موافقة، لكن إذا كان لديهم بيانات قديمة
-  // نعتبرهم مفعّلين فقط إذا كان لديهم موافقة صريحة
-  if (isProfessionalMerchantProfile(profile)) {
-    const info = normalizeObject(profile.professional_info);
-    return Boolean(String(info.name ?? '').trim()) &&
-           (profile.is_approved === true || profile.isApproved === true);
+  if (merchantAccountRequiresApproval(profile)) {
+    if (profile.is_approved === false || profile.isApproved === false) {
+      return status === 'approved';
+    }
+    return false;
   }
 
-  return false;
+  const storeName = String(profile.store_name ?? profile.storeName ?? '').trim();
+  return storeName.length > 0;
 }
 
 function merchantApprovalStatus(profile) {
   if (isMerchantApproved(profile)) return 'approved';
   const status = String(profile.approval_status ?? profile.approvalStatus ?? '').trim();
   if (status === 'rejected') return 'rejected';
-  if (status === 'pending') return 'pending';
-  if (profile.is_approved === false || profile.isApproved === false) return 'pending';
-  if (isProfessionalMerchantProfile(profile)) return 'pending';
-  // إذا لم يُضبط approval_status مطلقاً، فهو معلق للموافقة (pending)
+  if (merchantAccountRequiresApproval(profile)) return 'pending';
+  const storeName = String(profile.store_name ?? profile.storeName ?? '').trim();
+  if (storeName) return 'approved';
   return 'pending';
+}
+
+function isProductApproved(row) {
+  if (!row || typeof row !== 'object') return false;
+  if (row.is_approved === true || row.isApproved === true) return true;
+  const status = String(row.approval_status ?? row.approvalStatus ?? '').trim();
+  if (status === 'approved') return true;
+  if (row.is_approved === false || row.isApproved === false) return false;
+  if (status === 'pending' || status === 'rejected') return false;
+  return true;
+}
+
+function productApprovalStatus(row) {
+  if (isProductApproved(row)) return 'approved';
+  const status = String(row.approval_status ?? row.approvalStatus ?? '').trim();
+  if (status === 'rejected') return 'rejected';
+  return 'pending';
+}
+
+function isAdminPreRegisteredMerchant(profile) {
+  if (!profile) return false;
+  if (profile.admin_pre_registered === true || profile.adminPreRegistered === true) {
+    return true;
+  }
+  const storeData = normalizeObject(profile.store_data ?? profile.storeData);
+  return (
+    storeData.adminPreRegistered === true ||
+    storeData.admin_pre_registered === true
+  );
 }
 
 function merchantRejectionMessage(profile) {
@@ -169,13 +377,28 @@ const MERCHANT_REJECTION_REASONS = {
 };
 
 function mapMerchantApprovalFields(profile) {
+  const accountApprovalRequired = merchantAccountRequiresApproval(profile);
+  const rejectionReasonKey =
+    String(profile?.rejection_reason_key ?? profile?.rejectionReasonKey ?? '').trim() ||
+    null;
+  const rejectionMessageAr = merchantRejectionMessage(profile) || null;
+
+  if (!accountApprovalRequired) {
+    return {
+      isApproved: true,
+      approvalStatus: 'approved',
+      accountApprovalRequired: false,
+      rejectionReasonKey,
+      rejectionMessageAr,
+    };
+  }
+
   return {
     isApproved: isMerchantApproved(profile),
     approvalStatus: merchantApprovalStatus(profile),
-    rejectionReasonKey:
-      String(profile?.rejection_reason_key ?? profile?.rejectionReasonKey ?? '').trim() ||
-      null,
-    rejectionMessageAr: merchantRejectionMessage(profile) || null,
+    accountApprovalRequired: true,
+    rejectionReasonKey,
+    rejectionMessageAr,
   };
 }
 
@@ -310,6 +533,7 @@ function productMatchesStoreListing({
   marketplaceCategory = '',
 }) {
   if (row.is_available === false) return false;
+  if (!isProductApproved(row)) return false;
 
   const productService = resolveListingProductService(row, profile);
   const requestedCategory = String(productCategory || '').trim();
@@ -396,6 +620,10 @@ function merchantQualifiesForServiceListing(profile, serviceId) {
       services.includes('product') &&
       isMerchantServiceEnabled(profile, 'product');
     return hasRestaurant || hasProduct;
+  }
+  if (normalizedServiceId === 'beauty') {
+    const primary = String(profile?.primary_service_id || '').trim();
+    if (primary === 'pharmacy') return true;
   }
   if (!profileHasService(profile, normalizedServiceId)) return false;
   return isMerchantServiceEnabled(profile, normalizedServiceId);
@@ -634,6 +862,31 @@ async function saveMerchantProfile(phone, data = {}) {
   }
   assignIfDefined(basePayload, 'open_time', data.open_time ?? data.openTime);
   assignIfDefined(basePayload, 'close_time', data.close_time ?? data.closeTime);
+  if (await hasColumn('merchant_profiles', 'doctor_phone')) {
+    assignIfDefined(basePayload, 'doctor_phone', data.doctor_phone ?? data.doctorPhone);
+  }
+  if (await hasColumn('merchant_profiles', 'clinic_phone')) {
+    assignIfDefined(basePayload, 'clinic_phone', data.clinic_phone ?? data.clinicPhone);
+  }
+  if (await hasColumn('merchant_profiles', 'service_sub_category')) {
+    assignIfDefined(
+      basePayload,
+      'service_sub_category',
+      data.service_sub_category ?? data.serviceSubCategory ?? data.subCategoryId
+    );
+    const primaryForSub = String(
+      basePayload.primary_service_id ??
+        data.primary_service_id ??
+        data.primaryServiceId ??
+        '',
+    ).trim();
+    if (
+      primaryForSub === 'pharmacy' &&
+      !String(basePayload.service_sub_category ?? '').trim()
+    ) {
+      basePayload.service_sub_category = 'صيدلية';
+    }
+  }
   assignIfDefined(basePayload, 'delivery_areas', data.delivery_areas ?? data.deliveryAreas);
   if (data.delivery_fee !== undefined) {
     basePayload.delivery_fee = Number.parseInt(data.delivery_fee, 10) || 0;
@@ -757,13 +1010,24 @@ async function saveMerchantProfile(phone, data = {}) {
     assignIfDefined(
       basePayload,
       'service_sub_category',
-      data.service_sub_category ?? data.serviceSubCategory
+      data.service_sub_category ?? data.serviceSubCategory ?? data.subCategoryId
     );
+    const subValue = String(basePayload.service_sub_category ?? '').trim();
+    if (subValue && (await hasColumn('merchant_profiles', 'store_data'))) {
+      const storeData = normalizeObject(basePayload.store_data);
+      storeData.serviceSubCategory = subValue;
+      storeData.subCategoryId = subValue;
+      basePayload.store_data = storeData;
+    }
   } else {
     // تخزين serviceSubCategory في store_data كحل بديل إذا لم يكن العمود موجوداً
     const storeData = normalizeObject(basePayload.store_data);
-    if (data.serviceSubCategory || data.service_sub_category) {
-      storeData.serviceSubCategory = data.serviceSubCategory ?? data.service_sub_category;
+    const subValue = String(
+      data.serviceSubCategory ?? data.service_sub_category ?? data.subCategoryId ?? ''
+    ).trim();
+    if (subValue) {
+      storeData.serviceSubCategory = subValue;
+      storeData.subCategoryId = subValue;
       basePayload.store_data = storeData;
     }
   }
@@ -796,12 +1060,51 @@ async function saveMerchantProfile(phone, data = {}) {
   if (await hasColumn('merchant_profiles', 'rejected_at')) {
     assignIfDefined(basePayload, 'rejected_at', data.rejected_at ?? data.rejectedAt);
   }
+  if (await hasColumn('merchant_profiles', 'admin_pre_registered')) {
+    if (data.admin_pre_registered !== undefined || data.adminPreRegistered !== undefined) {
+      basePayload.admin_pre_registered = Boolean(
+        data.admin_pre_registered ?? data.adminPreRegistered
+      );
+    }
+  }
   const phoneKey = await resolvePhoneKey(phone);
   const existingProfile = await getMerchantProfile(phoneKey);
+  const adminBypass = data._adminModerationBypass === true;
+  if (
+    existingProfile &&
+    isMerchantApproved(existingProfile) &&
+    !adminBypass &&
+    data.is_approved === undefined &&
+    data.isApproved === undefined &&
+    data.approval_status === undefined &&
+    data.approvalStatus === undefined
+  ) {
+    const merged = { ...existingProfile, ...basePayload };
+    if (merchantAccountRequiresApproval(merged)) {
+      basePayload.is_approved = false;
+      basePayload.approval_status = 'pending';
+      if (await hasColumn('merchant_profiles', 'rejection_message_ar')) {
+        basePayload.rejection_message_ar = null;
+      }
+      if (await hasColumn('merchant_profiles', 'rejected_at')) {
+        basePayload.rejected_at = null;
+      }
+    }
+  }
   if (!existingProfile) {
+    const draftProfile = {
+      ...data,
+      ...basePayload,
+      primary_service_id:
+        basePayload.primary_service_id ??
+        data.primary_service_id ??
+        data.primaryServiceId,
+      service_ids: basePayload.service_ids ?? data.service_ids ?? data.serviceIds,
+    };
+    const requiresAccountApproval = merchantAccountRequiresApproval(draftProfile);
     if (await hasColumn('merchant_profiles', 'is_approved')) {
       if (basePayload.is_approved === undefined && basePayload.isApproved === undefined) {
-        basePayload.is_approved = false;
+        basePayload.is_approved = requiresAccountApproval ? false : true;
       }
     }
     if (await hasColumn('merchant_profiles', 'approval_status')) {
@@ -809,7 +1112,7 @@ async function saveMerchantProfile(phone, data = {}) {
         data.approval_status ?? data.approvalStatus ?? ''
       ).trim();
       if (!incomingStatus) {
-        basePayload.approval_status = 'pending';
+        basePayload.approval_status = requiresAccountApproval ? 'pending' : 'approved';
       }
     }
     const incomingStoreName = String(
@@ -839,19 +1142,24 @@ async function getMerchantProducts(phone) {
   return rows.map(serializeProductRowForClient);
 }
 
-async function saveMerchantProduct(phone, data = {}) {
+async function saveMerchantProduct(phone, data = {}, options = {}) {
   const phoneKey = await resolvePhoneKey(phone);
   const appUser = await ensureAppUser(phoneKey, data);
   const merchantProfile = await getMerchantProfile(phoneKey);
   if (!merchantProfile) {
     throw new Error('Merchant profile not found.');
   }
+  const productId =
+    data.id && String(data.id).trim().length > 0
+      ? String(data.id).trim()
+      : String(Date.now());
+  let existingProduct = null;
+  if (productId) {
+    existingProduct = await selectSingle('merchant_products', 'id', productId);
+  }
   // إذا لم يعدل التاجر اسم المتجر بعد، نأخذه من البيانات الواردة (للمهنيين بشكل خاص)
   const payload = {
-    id:
-      data.id && String(data.id).trim().length > 0
-        ? String(data.id).trim()
-        : String(Date.now()),
+    id: productId,
     phone: phoneKey,
     updated_at: nowIso(),
   };
@@ -978,6 +1286,57 @@ async function saveMerchantProduct(phone, data = {}) {
   if (data.is_available !== undefined) {
     payload.is_available = Boolean(data.is_available);
   }
+
+  const adminSave = options.adminSave === true || data._adminModerationBypass === true;
+  const explicitApproved =
+    data.is_approved === true ||
+    data.isApproved === true ||
+    String(data.approval_status ?? data.approvalStatus ?? '').trim() === 'approved';
+  const explicitRejected =
+    data.is_approved === false ||
+    data.isApproved === false ||
+    String(data.approval_status ?? data.approvalStatus ?? '').trim() === 'rejected';
+
+  if (await hasColumn('merchant_products', 'is_approved')) {
+    if (adminSave && explicitApproved) {
+      payload.is_approved = true;
+      payload.approval_status = 'approved';
+      if (await hasColumn('merchant_products', 'rejection_message_ar')) {
+        payload.rejection_message_ar = null;
+      }
+      if (await hasColumn('merchant_products', 'rejected_at')) {
+        payload.rejected_at = null;
+      }
+    } else if (adminSave && explicitRejected) {
+      payload.is_approved = false;
+      payload.approval_status = 'rejected';
+      assignIfDefined(
+        payload,
+        'rejection_message_ar',
+        data.rejection_message_ar ?? data.rejectionMessageAr
+      );
+      if (await hasColumn('merchant_products', 'rejected_at')) {
+        payload.rejected_at = nowIso();
+      }
+    } else if (!adminSave) {
+      payload.is_approved = false;
+      payload.approval_status = 'pending';
+      if (await hasColumn('merchant_products', 'rejection_message_ar')) {
+        payload.rejection_message_ar = null;
+      }
+      if (await hasColumn('merchant_products', 'rejected_at')) {
+        payload.rejected_at = null;
+      }
+    } else if (existingProduct) {
+      payload.is_approved = existingProduct.is_approved;
+      payload.approval_status =
+        existingProduct.approval_status ?? productApprovalStatus(existingProduct);
+    } else {
+      payload.is_approved = false;
+      payload.approval_status = 'pending';
+    }
+  }
+
   return saveRow('merchant_products', payload, 'id');
 }
 
@@ -1061,8 +1420,6 @@ async function listProfessionalProfiles(professionId = '') {
     .map((row) => enrichProfessionalProfileRow(row));
 }
 
-// الخدمات التي تعتمد على التواصل المباشر دون منتجات (جمال، مهنيون، إلخ)
-const CONTACT_ONLY_SERVICES = new Set(['beauty', 'professionals', 'tourism']);
 
 async function listMerchantStoresByService({
   serviceId,
@@ -1075,6 +1432,12 @@ async function listMerchantStoresByService({
   const channel = String(marketplaceCategory || '').trim();
   const normalizedSubCategoryId = String(subCategoryId || '').trim();
   const isContactOnly = CONTACT_ONLY_SERVICES.has(normalizedServiceId);
+
+  if (normalizedServiceId === 'beauty' && normalizedSubCategoryId === 'صيدلية') {
+    await syncProfileSubCategoriesFromAppState(profiles);
+    await repairPharmacyProfilesForListing(profiles);
+  }
+
   const result = [];
 
   for (const profile of profiles) {
@@ -1088,12 +1451,9 @@ async function listMerchantStoresByService({
 
     // تصفية حسب serviceSubCategory إذا كان محدداً
     if (normalizedSubCategoryId) {
-      const profileSubCat = String(
-        profile.service_sub_category ||
-        (profile.store_data && profile.store_data.serviceSubCategory) ||
-        ''
-      ).trim();
-      if (profileSubCat && profileSubCat !== normalizedSubCategoryId) continue;
+      if (!merchantMatchesSubCategoryFilter(profile, normalizedSubCategoryId)) {
+        continue;
+      }
     }
 
     // خدمات التواصل المباشر: تظهر بدون منتجات
@@ -1457,6 +1817,7 @@ async function listCatalogProducts(category = '', subCategoryId = '') {
   return products
     .filter((row) => {
       if (row.is_available === false) return false;
+      if (!isProductApproved(row)) return false;
       const productService = String(
         row.category || row.service_id || ''
       ).trim();
@@ -1470,6 +1831,7 @@ async function listCatalogProducts(category = '', subCategoryId = '') {
       const phone = String(row.phone || '').trim();
       const profile = findProfileForPhone(profileByPhone, phone);
       if (!profile) return false;
+      if (!isMerchantApproved(profile)) return false;
 
       if (
         productService &&
@@ -1556,6 +1918,7 @@ async function listRealEstateListings(
 
   const filteredProducts = products.filter((row) => {
     if (row.is_available === false) return false;
+    if (!isProductApproved(row)) return false;
     if (target && String(row.sub_category || '').trim() !== target) {
       return false;
     }
@@ -1592,6 +1955,7 @@ async function listRealEstateListings(
       };
     })
     .filter(({ merchant }) => merchant && merchant.is_open !== false && !isMerchantFrozen(merchant))
+    .filter(({ merchant }) => isMerchantApproved(merchant))
     .filter(({ merchant, product }) => {
       const productService = String(
         product.category || product.service_id || 'real_estate'
@@ -1620,6 +1984,16 @@ function merchantProfilePayloadFromAppState(state, appUser) {
         ''
     ).trim() || (serviceIds[0] || 'product');
 
+  const requiresAccountApproval = merchantAccountRequiresApproval({
+    primary_service_id: category,
+    service_ids: serviceIds.length > 0 ? serviceIds : [category],
+    professional_category_id:
+      merchantStore.professionalCategoryId ??
+      merchantStore.professional_category_id,
+    professional_info:
+      merchantStore.professionalInfo ?? merchantStore.professional_info,
+  });
+
   return {
     store_name: storeName,
     description: merchantStore.description,
@@ -1642,7 +2016,10 @@ function merchantProfilePayloadFromAppState(state, appUser) {
     restaurant_category:
       merchantStore.restaurantCategory ?? merchantStore.restaurant_category,
     service_sub_category:
-      merchantStore.serviceSubCategory ?? merchantStore.service_sub_category,
+      merchantStore.serviceSubCategory ??
+      merchantStore.service_sub_category ??
+      merchantStore.subCategoryId ??
+      merchantStore.sub_category_id,
     professional_category_id:
       merchantStore.professionalCategoryId ??
       merchantStore.professional_category_id,
@@ -1663,8 +2040,8 @@ function merchantProfilePayloadFromAppState(state, appUser) {
       merchantStore.work_sample_images_base64,
     product_sections:
       merchantStore.productSections ?? merchantStore.product_sections,
-    is_approved: false,
-    approval_status: 'pending',
+    is_approved: requiresAccountApproval ? false : true,
+    approval_status: requiresAccountApproval ? 'pending' : 'approved',
   };
 }
 
@@ -1693,8 +2070,6 @@ async function ensureMerchantProfileRecord(phone, options = {}) {
     ...(payload || {}),
     store_name: storeName,
     primary_service_id: payload?.primary_service_id || 'product',
-    is_approved: false,
-    approval_status: 'pending',
     ...options,
   });
 
@@ -1742,8 +2117,8 @@ async function createMerchantProfileIfMissing(phone, state, appUser, existingPho
       store_name:
         String(appUser?.full_name ?? '').trim() || `تاجر ${phoneKey.slice(-4)}`,
       primary_service_id: 'product',
-      is_approved: false,
-      approval_status: 'pending',
+      is_approved: true,
+      approval_status: 'approved',
     });
 
   if (!String(toSave.store_name ?? '').trim()) return false;
@@ -1756,6 +2131,7 @@ async function createMerchantProfileIfMissing(phone, state, appUser, existingPho
 }
 
 async function syncMissingMerchantProfilesFromAppState() {
+  return true; // Disabled inline sync for dashboard performance
   const [users, states, existingMerchants] = await Promise.all([
     selectMany('app_users', [], { column: 'updated_at', ascending: false }, 3000),
     selectManyColumns(
@@ -1844,12 +2220,18 @@ module.exports = {
   merchantProfileDisplayName,
   isMerchantApproved,
   merchantApprovalStatus,
+  isProductApproved,
+  productApprovalStatus,
+  isAdminPreRegisteredMerchant,
   merchantRejectionMessage,
   MERCHANT_REJECTION_REASONS,
+  merchantAccountRequiresApproval,
   mapMerchantApprovalFields,
   syncMerchantApprovalToState,
   updateMerchantApprovalRecord,
   profileHasService,
+  resolveProfileSubCategory,
+  merchantMatchesSubCategoryFilter,
   productMatchesStoreListing,
   buildProfileByPhoneMap,
   canMerchantPublishInBazaar,
@@ -1882,4 +2264,5 @@ module.exports = {
   merchantProfilePayloadFromAppState,
   ensureMerchantProfileRecord,
   syncMissingMerchantProfilesFromAppState,
+  syncProfileSubCategoriesFromAppState,
 };

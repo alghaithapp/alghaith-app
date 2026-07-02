@@ -1,9 +1,12 @@
 ﻿import 'dart:async';
 
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../services/push_notification_service.dart';
 import '../services/push_notification_inbox.dart';
+import '../../common/screens/notifications_screen.dart';
+import '../widgets/in_app_notification_banner.dart';
 import '../../taxi/providers/taxi_provider.dart';
 import '../../taxi/services/driver_presence_service.dart';
 import '../../../providers/app_provider.dart';
@@ -32,6 +35,7 @@ class _PushNotificationLifecycleScopeState
     IncomingCallWatcher.instance.onCallCancelled = _handleCallCancelled;
     PushNotificationInbox.onTaxiIncomingPush = _handleTaxiIncomingPush;
     PushNotificationInbox.onTaxiStatusPush = _handleTaxiStatusPush;
+    PushNotificationService.instance.onAdminMessage = _handleAdminMessage;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       unawaited(_onLifecycleRefresh());
     });
@@ -56,10 +60,39 @@ class _PushNotificationLifecycleScopeState
     }
   }
 
+  Future<void> _handleAdminMessage(RemoteMessage message) async {
+    if (!mounted) return;
+    final provider = context.read<AppProvider>();
+    provider.ingestAdminBroadcastPush(Map<String, dynamic>.from(message.data));
+    if (!provider.inAppAlertsEnabled) return;
+
+    final title = message.data['title']?.toString().trim().isNotEmpty == true
+        ? message.data['title'].toString().trim()
+        : (message.notification?.title?.trim().isNotEmpty == true
+            ? message.notification!.title!.trim()
+            : 'رسالة من الإدارة');
+    final body = message.data['body']?.toString().trim().isNotEmpty == true
+        ? message.data['body'].toString().trim()
+        : (message.notification?.body?.trim() ?? '');
+
+    final tapped = await showInAppNotificationBanner(
+      context: context,
+      title: title,
+      body: body.isNotEmpty ? body : 'لديك رسالة جديدة من إدارة التطبيق',
+      accentColor: const Color(0xFF007A7A),
+      icon: Icons.campaign_rounded,
+    );
+    if (!mounted || !tapped) return;
+    await Navigator.of(context, rootNavigator: true).push(
+      MaterialPageRoute(builder: (_) => const NotificationsScreen()),
+    );
+  }
+
   Future<void> _onLifecycleRefresh() async {
     await PushNotificationService.instance.onAppResumed();
     if (!mounted) return;
     final provider = context.read<AppProvider>();
+    await provider.syncUserNotificationsFromServer();
     await provider.refreshCourierApprovalIfNeeded();
     await _syncIncomingCallWatcher(provider);
   }
@@ -114,6 +147,7 @@ class _PushNotificationLifecycleScopeState
     IncomingCallWatcher.instance.unbind();
     PushNotificationInbox.onTaxiIncomingPush = null;
     PushNotificationInbox.onTaxiStatusPush = null;
+    PushNotificationService.instance.onAdminMessage = null;
     super.dispose();
   }
 

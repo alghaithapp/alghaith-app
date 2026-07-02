@@ -9,6 +9,9 @@ id = "66faee95770a43829610c7c0e40d281f"
 [vars]
 RAILWAY_API_ORIGIN = "https://alghaith-app-production.up.railway.app"
 EDGE_CACHE_TTL_SECONDS = "120"
+OTPIQ_SMS_PROVIDER = "sms"
+OTPIQ_WHATSAPP_PROVIDER = "whatsapp"
+OTPIQ_TELEGRAM_PROVIDER = "telegram"
 
 [[r2_buckets]]
 binding = "IMAGES_BUCKET"

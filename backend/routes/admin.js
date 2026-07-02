@@ -3,9 +3,11 @@ const router = express.Router();
 const {
   getAdminReports,
   getAllMerchants,
+  getAllProfessionals,
   getAllCouriers,
   getAllDrivers,
   getAdminMerchantDetails,
+  getAdminProfessionalDetails,
   toggleMerchantApprovalStatus,
   rejectMerchantApplication,
   toggleBazaarMemberStatus,
@@ -23,6 +25,9 @@ const {
   saveAdminAppUpdatePolicy,
   getMaintenancePolicy,
   saveAdminMaintenancePolicy,
+  getPendingProductsForAdmin,
+  toggleProductApprovalStatus,
+  mapAdminProductRow,
   getHomeCategoriesConfig,
   saveAdminHomeCategoriesConfig,
   getUserState,
@@ -30,10 +35,14 @@ const {
   deleteUserState,
   ensurePlatformAdminAccess,
   preRegisterMerchantAccount,
+  updateMerchantCategoryByAdmin,
+  preRegisterCustomerAccount,
   preRegisterDriverAccount,
   preRegisterCourierAccount,
   preRegisterProfessionalAccount,
   preRegisterBeautyAccount,
+  broadcastAdminUserMessage,
+  getSupportThreadsForAdmin,
 } = require('../supabase_repo');
 const logger = require('../lib/logger');
 const {
@@ -43,6 +52,20 @@ const {
 } = require('./_middleware');
 
 const { assertAdminPermission } = require('../supabase_repo');
+const { getAdminRole, hasMinRole } = require('../supabase_repo/admin_roles');
+
+async function requireMinAdminRole(req, res, adminPhone, minRole) {
+  const role = await getAdminRole(adminPhone);
+  if (!role) {
+    res.status(403).json({ message: 'Admin access required.' });
+    return null;
+  }
+  if (!hasMinRole(role, minRole)) {
+    res.status(403).json({ message: `Requires ${minRole} role or higher.` });
+    return null;
+  }
+  return role;
+}
 
 // ── Reports ─────────────────────────────────────────────────────────────
 
@@ -72,6 +95,44 @@ router.get('/admin/merchants', async (req, res) => {
     console.error('admin merchants error:', error);
     const message = error?.message || 'Failed to load merchants.';
     const status = message.includes('Admin access') ? 403 : 500;
+    return res.status(status).json({ message });
+  }
+});
+
+router.get('/admin/professionals', async (req, res) => {
+  try {
+    const phone = requireOptionalAuthorizedPhone(req, res);
+    if (!phone) return;
+    const professionals = await getAllProfessionals(phone);
+    return res.json(professionals);
+  } catch (error) {
+    console.error('admin professionals error:', error);
+    const message = error?.message || 'Failed to load professionals.';
+    const status = message.includes('Admin access') ? 403 : 500;
+    return res.status(status).json({ message });
+  }
+});
+
+router.get('/admin/professional-details', async (req, res) => {
+  try {
+    const phone = requireOptionalAuthorizedPhone(req, res);
+    if (!phone) return;
+    const professionalPhone = String(parseQueryValue(req.query.professionalPhone) || '').trim();
+    if (!professionalPhone) {
+      return res.status(400).json({ message: 'professionalPhone is required.' });
+    }
+    const details = await getAdminProfessionalDetails(phone, professionalPhone);
+    return res.json(details);
+  } catch (error) {
+    console.error('admin professional-details error:', error);
+    const message = error?.message || 'Failed to load professional details.';
+    const status = message.includes('Admin access')
+      ? 403
+      : message.includes('required')
+        ? 400
+        : message.includes('not found')
+          ? 404
+          : 500;
     return res.status(status).json({ message });
   }
 });
@@ -263,18 +324,21 @@ router.put('/admin/merchant-bazaar', async (req, res) => {
 
 router.post('/admin/merchant-bazaar-sync', async (req, res) => {
   try {
-    const phone = requireOptionalAuthorizedPhone(req, res);
-    if (!phone) return;
-    const merchantPhone = String(req.body?.merchantPhone || '').trim();
+    const adminPhone = requireOptionalAuthorizedPhone(req, res);
+    if (!adminPhone) return;
+    const adminRole = await requireMinAdminRole(req, res, adminPhone, 'moderator');
+    if (!adminRole) return;
+    
+    const merchantPhone = String(req.body?.merchantPhone ?? req.body?.phone ?? '').trim();
     if (!merchantPhone) {
-      return res.status(400).json({ message: 'merchantPhone is required.' });
+      return res.status(400).json({ message: 'merchantPhone is required' });
     }
-    const result = await syncMerchantProductsForBazaar(merchantPhone);
-    return res.json({ success: true, ...result });
+    
+    await syncMerchantProductsForBazaar(merchantPhone);
+    return res.json({ success: true });
   } catch (error) {
     console.error('sync bazaar products error:', error);
     const message = error?.message || 'Failed to sync bazaar products.';
-    const status = message.includes('Admin access') ? 403 : 500;
     return res.status(status).json({ message });
   }
 });
@@ -298,6 +362,134 @@ router.put('/admin/merchant-freeze', async (req, res) => {
   }
 });
 
+const { getMerchantProducts, saveMerchantProduct, deleteMerchantProduct } = require('../supabase_repo/merchants');
+
+router.get('/admin/pending-products', async (req, res) => {
+  try {
+    const adminPhone = requireOptionalAuthorizedPhone(req, res);
+    if (!adminPhone) return;
+    const adminRole = await requireMinAdminRole(req, res, adminPhone, 'moderator');
+    if (!adminRole) return;
+    const category = String(req.query?.category ?? '').trim();
+    const rows = await getPendingProductsForAdmin(adminPhone, { category });
+    return res.json(rows);
+  } catch (error) {
+    console.error('admin pending-products error:', error);
+    const message = error?.message || 'Failed to load pending products.';
+    const status = message.includes('Admin access') ? 403 : 500;
+    return res.status(status).json({ message });
+  }
+});
+
+router.put('/admin/product-approval', async (req, res) => {
+  try {
+    const adminPhone = requireOptionalAuthorizedPhone(req, res);
+    if (!adminPhone) return;
+    const adminRole = await requireMinAdminRole(req, res, adminPhone, 'moderator');
+    if (!adminRole) return;
+    const merchantPhone = String(req.body?.merchantPhone ?? '').trim();
+    const productId = String(req.body?.productId ?? req.body?.id ?? '').trim();
+    const isApproved = Boolean(req.body?.isApproved ?? req.body?.is_approved);
+    const rejectionMessageAr = String(
+      req.body?.rejectionMessageAr ?? req.body?.rejection_message_ar ?? ''
+    ).trim();
+    if (!merchantPhone || !productId) {
+      return res.status(400).json({ message: 'merchantPhone and productId are required.' });
+    }
+    const result = await toggleProductApprovalStatus(
+      adminPhone,
+      merchantPhone,
+      productId,
+      isApproved,
+      rejectionMessageAr
+    );
+    return res.json(result);
+  } catch (error) {
+    console.error('admin product-approval error:', error);
+    const message = error?.message || 'Failed to update product approval.';
+    const status = message.includes('Admin access')
+      ? 403
+      : message.includes('not found')
+        ? 404
+        : 500;
+    return res.status(status).json({ message });
+  }
+});
+
+router.get('/admin/merchant-products', async (req, res) => {
+  try {
+    const adminPhone = requireOptionalAuthorizedPhone(req, res);
+    if (!adminPhone) return;
+    const adminRole = await requireMinAdminRole(req, res, adminPhone, 'moderator');
+    if (!adminRole) return;
+    
+    const merchantPhone = String(req.query?.merchantPhone ?? '').trim();
+    if (!merchantPhone) return res.status(400).json({ message: 'merchantPhone is required' });
+    
+    const rows = await getMerchantProducts(merchantPhone);
+    return res.json(rows.map(mapAdminProductRow));
+  } catch (error) {
+    console.error('admin get merchant products error:', error);
+    return res.status(500).json({ message: error?.message || 'Failed to get products' });
+  }
+});
+
+router.put('/admin/merchant-product', async (req, res) => {
+  try {
+    const adminPhone = requireOptionalAuthorizedPhone(req, res);
+    if (!adminPhone) return;
+    const adminRole = await requireMinAdminRole(req, res, adminPhone, 'moderator');
+    if (!adminRole) return;
+    
+    const merchantPhone = String(req.body?.merchantPhone ?? '').trim();
+    if (!merchantPhone) return res.status(400).json({ message: 'merchantPhone is required' });
+    
+    const row = await saveMerchantProduct(merchantPhone, req.body || {}, { adminSave: true });
+    return res.json(row);
+  } catch (error) {
+    console.error('admin save merchant product error:', error);
+    return res.status(500).json({ message: error?.message || 'Failed to save product' });
+  }
+});
+
+router.delete('/admin/merchant-product', async (req, res) => {
+  try {
+    const adminPhone = requireOptionalAuthorizedPhone(req, res);
+    if (!adminPhone) return;
+    const adminRole = await requireMinAdminRole(req, res, adminPhone, 'moderator');
+    if (!adminRole) return;
+    
+    const merchantPhone = String(req.query?.merchantPhone ?? '').trim();
+    const id = String(req.query?.id ?? '').trim();
+    if (!merchantPhone || !id) return res.status(400).json({ message: 'merchantPhone and id are required' });
+    
+    await deleteMerchantProduct(id, merchantPhone);
+    return res.json({ success: true });
+  } catch (error) {
+    console.error('admin delete merchant product error:', error);
+    return res.status(500).json({ message: error?.message || 'Failed to delete product' });
+  }
+});
+
+router.post('/admin/customer-pre-register', async (req, res) => {
+  try {
+    const phone = requireOptionalAuthorizedPhone(req, res);
+    if (!phone) return;
+    await assertAdminPermission(phone, 'canRegister');
+    const result = await preRegisterCustomerAccount(phone, req.body || {});
+    return res.json(result);
+  } catch (error) {
+    console.error('customer pre-register error:', error);
+    const message = error?.message || 'Failed to pre-register customer.';
+    const status = message.includes('Admin access')
+      ? 403
+      : message.includes('بالفعل') || message.includes('لا يمكن') || message.includes('مطلوب')
+        ? 400
+        : 500;
+    return res.status(status).json({ message });
+  }
+});
+
 router.post('/admin/merchant-pre-register', async (req, res) => {
   try {
     const phone = requireOptionalAuthorizedPhone(req, res);
@@ -312,6 +504,27 @@ router.post('/admin/merchant-pre-register', async (req, res) => {
       ? 403
       : message.includes('بالفعل') ||
           message.includes('لا يمكن') ||
+          message.includes('مطلوب') ||
+          message.includes('غير صالح')
+        ? 400
+        : 500;
+    return res.status(status).json({ message });
+  }
+});
+
+router.put('/admin/merchant-category', async (req, res) => {
+  try {
+    const phone = requireOptionalAuthorizedPhone(req, res);
+    if (!phone) return;
+    await assertAdminPermission(phone, 'canRegister');
+    const result = await updateMerchantCategoryByAdmin(phone, req.body || {});
+    return res.json(result);
+  } catch (error) {
+    console.error('merchant category update error:', error);
+    const message = error?.message || 'Failed to update merchant category.';
+    const status = message.includes('Admin access')
+      ? 403
+      : message.includes('غير موجود') ||
           message.includes('مطلوب') ||
           message.includes('غير صالح')
         ? 400
@@ -380,6 +593,46 @@ router.post('/admin/beauty-pre-register', async (req, res) => {
       : message.includes('بالفعل') || message.includes('لا يمكن') || message.includes('مطلوب') || message.includes('تصنيف')
         ? 400
         : 500;
+    return res.status(status).json({ message });
+  }
+});
+
+router.post('/admin/doctor-pre-register', async (req, res) => {
+  try {
+    const phone = requireOptionalAuthorizedPhone(req, res);
+    if (!phone) return;
+    await assertAdminPermission(phone, 'canRegister');
+    const body = {
+      ...(req.body || {}),
+      subCategoryId: 'أطباء وعيادات',
+      subscriberPhone: req.body?.subscriberPhone ?? req.body?.phone,
+    };
+    const result = await preRegisterBeautyAccount(phone, body);
+    return res.json(result);
+  } catch (error) {
+    console.error('doctor pre-register error:', error);
+    const message = error?.message || 'Failed to pre-register doctor.';
+    const status = message.includes('Admin access') ? 403 : 400;
+    return res.status(status).json({ message });
+  }
+});
+
+router.post('/admin/pharmacy-pre-register', async (req, res) => {
+  try {
+    const phone = requireOptionalAuthorizedPhone(req, res);
+    if (!phone) return;
+    await assertAdminPermission(phone, 'canRegister');
+    const body = {
+      ...(req.body || {}),
+      subCategoryId: 'صيدلية',
+      subscriberPhone: req.body?.subscriberPhone ?? req.body?.phone,
+    };
+    const result = await preRegisterBeautyAccount(phone, body);
+    return res.json(result);
+  } catch (error) {
+    console.error('pharmacy pre-register error:', error);
+    const message = error?.message || 'Failed to pre-register pharmacy.';
+    const status = message.includes('Admin access') ? 403 : 400;
     return res.status(status).json({ message });
   }
 });
@@ -880,74 +1133,47 @@ router.delete('/user-state', async (req, res) => {
   }
 });
 
-/// إرسال إشعار يدوي من لوحة الأدمن
-router.post('/admin/push/send', async (req, res) => {
+/// إرسال رسالة للمستخدمين (إشعار داخلي + push خارجي)
+async function handleAdminBroadcast(req, res) {
   try {
     const phone = requireOptionalAuthorizedPhone(req, res);
     if (!phone) return;
 
-    const { title, body, audience, storeUpdate } = req.body;
-    if (!title?.trim() || !body?.trim()) {
-      return res.status(400).json({ message: 'العنوان والنص مطلوبان.' });
-    }
-
-    const { assertSupabaseAdmin } = require('../supabase_repo/common');
-    const supabase = assertSupabaseAdmin();
-    let query = supabase.from('device_tokens').select('token, platform');
-
-    if (!audience || audience === 'all') {
-      // لا يوجد فلتر — جميع الأجهزة
-    } else if (audience === 'drivers') {
-      const driverPhones = (await supabase.from('driver_profiles').select('phone'))
-        .data?.map(r => r.phone) || [];
-      if (driverPhones.length > 0) query = query.in('phone', driverPhones);
-      else return res.json({ message: 'لا يوجد سائقون.', sent: 0 });
-    } else if (audience === 'merchants') {
-      const merchantPhones = (await supabase.from ('merchant_profiles').select('phone'))
-        .data?.map(r => r.phone) || [];
-      if (merchantPhones.length > 0) query = query.in('phone', merchantPhones);
-      else return res.json({ message: 'لا يوجد تجار.', sent: 0 });
-    } else if (audience === 'customers') {
-      const customerPhones = (await supabase.from('customer_profiles').select('phone'))
-        .data?.map(r => r.phone) || [];
-      if (customerPhones.length > 0) query = query.in('phone', customerPhones);
-      else return res.json({ message: 'لا يوجد زبائن.', sent: 0 });
-    }
-
-    const { data: tokens } = await query;
-    if (!tokens?.length) {
-      return res.json({ message: 'لا توجد أجهزة مسجلة لهذا الجمهور.', sent: 0 });
-    }
-
-    const uniqueTokens = [...new Set(tokens.map(t => t.token).filter(Boolean))];
-    const platforms = [...new Set(tokens.map(t => t.platform).filter(Boolean))];
-
-    const { sendPushToTokensDirect } = require('../services/notification_delivery');
-    const result = await sendPushToTokensDirect(uniqueTokens, {
-      title: title.trim(),
-      body: body.trim(),
-      data: {
-        category: 'admin',
-        audience: audience || 'all',
-        eventKey: 'admin:manual_push',
-        storeUpdate: storeUpdate === true ? 'true' : 'false',
-      },
-      showSystemBanner: true,
+    const { title, body, audience, platform, storeUpdate } = req.body || {};
+    const result = await broadcastAdminUserMessage(phone, {
+      title,
+      body,
+      audience,
+      platform,
+      storeUpdate,
     });
-
-    return res.json({
-      sent: result.sent || 0,
-      failed: result.failed || 0,
-      invalidTokens: result.invalidTokens?.length || 0,
-      tokenCount: uniqueTokens.length,
-      platforms,
-      message: `تم الإرسال إلى ${result.sent} جهاز${result.failed > 0 ? `، فشل: ${result.failed}` : ''}.`,
-    });
+    return res.json(result);
   } catch (error) {
-    console.error('admin push send error:', error);
-    return res.status(500).json({ message: error?.message || 'Failed to send push notification.' });
+    console.error('admin broadcast error:', error);
+    const message = error?.message || 'Failed to broadcast message.';
+    const status = message.includes('Admin access') ? 403 : 500;
+    return res.status(status).json({ message });
+  }
+}
+
+router.post('/admin/messages/broadcast', handleAdminBroadcast);
+
+router.get('/admin/support-threads', async (req, res) => {
+  try {
+    const phone = requireOptionalAuthorizedPhone(req, res);
+    if (!phone) return;
+    const threads = await getSupportThreadsForAdmin(phone);
+    return res.json(threads);
+  } catch (error) {
+    console.error('admin support threads error:', error);
+    const message = error?.message || 'Failed to load support threads.';
+    const status = message.includes('Admin access') ? 403 : 500;
+    return res.status(status).json({ message });
   }
 });
+
+/// إرسال إشعار يدوي من لوحة الأدمن (يتضمن حفظ داخل التطبيق + push)
+router.post('/admin/push/send', handleAdminBroadcast);
 
 /// إشعارات لوحة الأدمن
 router.get('/admin/notifications', async (req, res) => {

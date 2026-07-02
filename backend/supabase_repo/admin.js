@@ -7,6 +7,7 @@ const {
   selectMany,
   selectManyColumns,
   selectSingleByPhone,
+  selectSingle,
   saveRow,
   assertSupabaseAdmin,
   hasColumn,
@@ -31,6 +32,8 @@ const {
   merchantProfileDisplayName,
   isMerchantApproved,
   merchantApprovalStatus,
+  isProductApproved,
+  productApprovalStatus,
   merchantRejectionMessage,
   MERCHANT_REJECTION_REASONS,
   mapMerchantApprovalFields,
@@ -39,8 +42,13 @@ const {
   evaluateBazaarCustomerVisibility,
   ensureMerchantProfileRecord,
   syncMissingMerchantProfilesFromAppState,
+  syncProfileSubCategoriesFromAppState,
   saveMerchantProfile,
+  resolveMerchantContactVisibility,
 } = require('./merchants');
+const {
+  saveCustomerProfile,
+} = require('./customer_data');
 const {
   readCourierProfileFromState,
   isCourierProfileComplete,
@@ -61,8 +69,13 @@ const {
   getMerchantIncomingOrders,
 } = require('./orders');
 const {
+  normalizeProductImagePayload,
+  serializeProductRowForClient,
+} = require('../services/image_refs');
+const {
   getMerchantProducts,
   deleteMerchantProfile,
+  saveMerchantProduct,
 } = require('./merchants');
 const {
   deleteCustomerProfile,
@@ -90,13 +103,13 @@ async function getAdminReports(phone) {
 
   const supabase = assertSupabaseAdmin();
 
-  const [orders, merchants, totalProducts, totalUsers, driverRows, courierRows] = await Promise.all([
+  const [orders, merchants, totalProducts, totalUsers, driverCount, courierCount] = await Promise.all([
     selectMany('customer_orders', [], { column: 'updated_at', ascending: false }, 100),
     selectMany('merchant_profiles', [], { column: 'store_name', ascending: true }, 500),
     supabase.from('merchant_products').select('*', { count: 'exact', head: true }).then((r) => r.count || 0),
     supabase.from('app_users').select('*', { count: 'exact', head: true }).then((r) => r.count || 0),
-    supabase.from('driver_profiles').select('phone, display_name', { count: 'exact' }).then((r) => r.data || []),
-    supabase.from('courier_profiles').select('phone, display_name', { count: 'exact' }).then((r) => r.data || []),
+    supabase.from('driver_profiles').select('*', { count: 'exact', head: true }).then((r) => r.count || 0),
+    supabase.from('courier_profiles').select('*', { count: 'exact', head: true }).then((r) => r.count || 0),
   ]);
 
   let completedOrders = 0, pendingOrders = 0, deliveringOrders = 0, cancelledOrders = 0;
@@ -129,15 +142,6 @@ async function getAdminReports(phone) {
   const avgOrderValue = completedOrders > 0 ? Math.round(totalSales / completedOrders) : 0;
   const recentAvgOrderValue = recentCount > 0 ? Math.round(recentRevenue / recentCount) : avgOrderValue;
   const revenueGrowth = avgOrderValue > 0 ? Math.round(((recentAvgOrderValue - avgOrderValue) / avgOrderValue) * 100) : 0;
-
-  let courierCount = 0;
-  let driverCount = 0;
-  for (const row of courierRows) {
-    if (String(row.display_name || '').trim() || String(row.phone || '').trim()) courierCount += 1;
-  }
-  for (const row of driverRows) {
-    if (String(row.display_name || '').trim() || String(row.phone || '').trim()) driverCount += 1;
-  }
 
   const pendingMerchants = merchants.filter((m) => {
     const st = String(m.approval_status || '').trim();
@@ -185,17 +189,123 @@ async function getAdminReports(phone) {
   };
 }
 
+function resolveMerchantServiceSubCategory(profile) {
+  const direct = String(profile?.service_sub_category || '').trim();
+  if (direct) return direct;
+  const store = normalizeObject(profile?.store_data);
+  return String(
+    store.serviceSubCategory ||
+      store.service_sub_category ||
+      store.subCategoryId ||
+      store.sub_category_id ||
+      '',
+  ).trim();
+}
+
+function resolveMerchantSpecialty(profile, state) {
+  const info = normalizeObject(profile?.professional_info ?? profile?.professionalInfo);
+  const fromInfo = String(info.specialty ?? '').trim();
+  if (fromInfo) return fromInfo;
+
+  const normalizedState = normalizeObject(state);
+  const merchantStore = normalizeObject(normalizedState.merchantStore);
+  const fromStore = String(merchantStore.specialty ?? '').trim();
+  if (fromStore) return fromStore;
+
+  const professionalInfo = normalizeObject(
+    merchantStore.professionalInfo ?? merchantStore.professional_info,
+  );
+  return String(professionalInfo.specialty ?? '').trim();
+}
+
+function enrichMerchantSummaryFromState(summary, state) {
+  const normalizedState = normalizeObject(state);
+  const merchantStore = normalizeObject(normalizedState.merchantStore);
+  const next = { ...summary };
+
+  if (!String(next.primaryServiceId ?? '').trim()) {
+    next.primaryServiceId = String(
+      merchantStore.primary_service_id ??
+        merchantStore.primaryServiceId ??
+        merchantStore.active_service_id ??
+        merchantStore.activeServiceId ??
+        merchantStore.category ??
+        '',
+    ).trim();
+  }
+
+      if (!String(next.serviceSubCategory ?? '').trim()) {
+        next.serviceSubCategory = String(
+          merchantStore.serviceSubCategory ??
+            merchantStore.service_sub_category ??
+            merchantStore.subCategoryId ??
+            merchantStore.sub_category_id ??
+            '',
+        ).trim();
+      }
+
+      if (
+        !String(next.serviceSubCategory ?? '').trim() &&
+        String(next.primaryServiceId ?? '').trim() === 'beauty' &&
+        merchantStore.adminPreRegistered === true
+      ) {
+        const sub = String(
+          merchantStore.subCategoryId ?? merchantStore.sub_category_id ?? '',
+        ).trim();
+        if (sub) next.serviceSubCategory = sub;
+      }
+
+  if (!Array.isArray(next.serviceIds) || next.serviceIds.length === 0) {
+    const ids = normalizeArray(merchantStore.serviceIds ?? merchantStore.service_ids);
+    if (ids.length > 0) next.serviceIds = ids;
+  }
+
+  if (!String(next.specialty ?? '').trim()) {
+    next.specialty = resolveMerchantSpecialty(summary, normalizedState);
+  }
+
+  return next;
+}
+
 async function getAllMerchants(adminPhone) {
   await assertAdminAccess(adminPhone);
   await syncMissingMerchantProfilesFromAppState();
 
-  const [merchants, orders, products] = await Promise.all([
+  const [merchants, orders] = await Promise.all([
     selectMany('merchant_profiles', [], { column: 'store_name', ascending: true }),
-    // تحديث: نحدد عدد الطلبات إلى 500 لتقليل وقت التحميل مع الاحتفاظ بإحصائيات كافية
+    // تحديث: نحدد عدد الطلبات إلى 500 لتقليل وقت التحميل
     selectMany('customer_orders', [], { column: 'updated_at', ascending: false }, 500),
-    selectMany('merchant_products', [], { column: 'created_at', ascending: false }),
   ]);
+  await syncProfileSubCategoriesFromAppState(merchants);
   const userPhones = merchants.map((m) => m.phone).filter(Boolean);
+
+  const allProducts = await selectMany(
+    'merchant_products',
+    [],
+    { column: 'created_at', ascending: false },
+    5000
+  );
+  const productStatsByPhone = new Map();
+  for (const row of allProducts) {
+    const phone = String(row.phone || '').trim();
+    if (!phone) continue;
+    let bucket = productStatsByPhone.get(phone);
+    if (!bucket) {
+      bucket = { total: 0, approved: 0, pending: 0 };
+      productStatsByPhone.set(phone, bucket);
+    }
+    bucket.total += 1;
+    if (isProductApproved(row)) bucket.approved += 1;
+    else bucket.pending += 1;
+  }
+
+  function productStatsForMerchantPhone(phone) {
+    for (const variant of getPhoneVariants(phone)) {
+      const bucket = productStatsByPhone.get(variant);
+      if (bucket) return bucket;
+    }
+    return { total: 0, approved: 0, pending: 0 };
+  }
 
   const users = userPhones.length > 0
     ? await selectMany('app_users', [{ method: 'in', column: 'phone', value: userPhones }])
@@ -204,6 +314,30 @@ async function getAllMerchants(adminPhone) {
   const userByPhone = {};
   for (const u of users) {
     userByPhone[u.phone] = u;
+  }
+
+  const needsStateEnrichment = merchants.filter((m) => {
+    if (!m.phone) return false;
+    const primary = String(m.primary_service_id || '').trim();
+    const sub = resolveMerchantServiceSubCategory(m);
+    return !primary || !sub;
+  });
+  const enrichPhones = [
+    ...new Set(needsStateEnrichment.map((m) => m.phone).filter(Boolean)),
+  ];
+  const stateByPhone = {};
+  if (enrichPhones.length > 0) {
+    const stateRows = await selectMany(
+      'app_state',
+      [{ method: 'in', column: 'phone', value: enrichPhones }],
+      { column: 'updated_at', ascending: false },
+      enrichPhones.length,
+    );
+    for (const row of stateRows) {
+      const phone = String(row.phone || '').trim();
+      if (!phone) continue;
+      stateByPhone[phone] = normalizeObject(row.state);
+    }
   }
 
   const orderStatsByMerchant = new Map();
@@ -251,79 +385,64 @@ async function getAllMerchants(adminPhone) {
     }
   }
 
-  const productStatsByMerchant = new Map();
-  for (const row of products) {
-    const merchantPhone = String(row.phone || '').trim();
-    if (!merchantPhone) continue;
+  const result = [];
+  for (const m of merchants) {
+    if (!m.phone) continue;
 
-    let bucket = null;
-    for (const variant of getPhoneVariants(merchantPhone)) {
-      bucket = productStatsByMerchant.get(variant);
-      if (bucket) break;
-    }
+    const stats = orderStatsByMerchant.get(m.phone) || {
+      completedOrders: 0,
+      deliveringOrders: 0,
+      pendingOrders: 0,
+      totalRevenue: 0,
+      lastOrderAt: null,
+    };
 
-    if (!bucket) {
-      bucket = {
-        totalProducts: 0,
-        availableProducts: 0,
-        rows: [],
-      };
-      for (const variant of getPhoneVariants(merchantPhone)) {
-        productStatsByMerchant.set(variant, bucket);
-      }
-    }
+    const bazaarVisibility = evaluateBazaarCustomerVisibility(m, []);
+    const productStats = productStatsForMerchantPhone(m.phone);
+    const media = extractMerchantMedia(m);
 
-    bucket.totalProducts += 1;
-    bucket.rows.push(row);
-    if (row.is_available !== false) {
-      bucket.availableProducts += 1;
-    }
+    result.push(
+      enrichMerchantSummaryFromState(
+        {
+          ...stats,
+          totalProducts: productStats.total,
+          availableProducts: productStats.approved,
+          pendingProducts: productStats.pending,
+          visibleToCustomers: bazaarVisibility.visibleToCustomers,
+          visibleProductCount: bazaarVisibility.visibleProductCount,
+          visibilityNotes: bazaarVisibility.visibilityNotes,
+          phone: m.phone,
+          storeName:
+            merchantProfileDisplayName(m) ||
+            String(m.store_name || '').trim() ||
+            String(userByPhone[m.phone]?.full_name || '').trim() ||
+            `تاجر ${String(m.phone || '').slice(-4)}`,
+          isProfessional: isProfessionalMerchantProfile(m),
+          description: (m.description || '').slice(0, 80),
+          primaryServiceId: m.primary_service_id || '',
+          serviceSubCategory: resolveMerchantServiceSubCategory(m),
+          specialty: resolveMerchantSpecialty(m, stateByPhone[m.phone]),
+          serviceIds: profileServiceIds(m),
+          isOpen: m.is_open !== false,
+          isFrozen: isMerchantFrozen(m),
+          rating: Number(m.rating || 0),
+          isBazaarMember: m.is_bazaar_member === true,
+          createdAt: m.created_at,
+          fullName: userByPhone[m.phone]?.full_name || '',
+          role: userByPhone[m.phone]?.role || '',
+          profileImageUrl: media.profileImageUrl,
+          logoImageUrl: media.logoImageUrl,
+          coverImageUrl: media.coverImageUrl,
+          clinicImageUrl: media.clinicImageUrl,
+          avatarImageUrl: media.avatarImageUrl,
+          ...mapMerchantApprovalFields(m),
+        },
+        stateByPhone[m.phone],
+      ),
+    );
   }
 
-  return merchants.map((m) => {
-    const productBucket = productStatsByMerchant.get(m.phone) || {
-      totalProducts: 0,
-      availableProducts: 0,
-      rows: [],
-    };
-    const bazaarVisibility = evaluateBazaarCustomerVisibility(
-      m,
-      productBucket.rows
-    );
-
-    return {
-      ...(orderStatsByMerchant.get(m.phone) || {
-        totalOrders: 0,
-        completedOrders: 0,
-        pendingOrders: 0,
-        deliveringOrders: 0,
-        totalRevenue: 0,
-        lastOrderAt: null,
-      }),
-      totalProducts: productBucket.totalProducts,
-      availableProducts: productBucket.availableProducts,
-      visibleToCustomers: bazaarVisibility.visibleToCustomers,
-      visibleProductCount: bazaarVisibility.visibleProductCount,
-      visibilityNotes: bazaarVisibility.visibilityNotes,
-      phone: m.phone,
-      storeName:
-        merchantProfileDisplayName(m) ||
-        String(m.store_name || '').trim() ||
-        String(userByPhone[m.phone]?.full_name || '').trim() ||
-        `تاجر ${String(m.phone || '').slice(-4)}`,
-      isProfessional: isProfessionalMerchantProfile(m),
-      description: (m.description || '').slice(0, 80),
-      primaryServiceId: m.primary_service_id || '',
-      isOpen: m.is_open !== false,
-      isFrozen: isMerchantFrozen(m),
-      rating: Number(m.rating || 0),
-      isBazaarMember: m.is_bazaar_member === true,
-      createdAt: m.created_at,
-      fullName: userByPhone[m.phone]?.full_name || '',
-      role: userByPhone[m.phone]?.role || '',
-      ...mapMerchantApprovalFields(m),
-    };
-  }).sort((a, b) => {
+  return result.sort((a, b) => {
     const rank = (item) => {
       if (item.approvalStatus === 'pending') return 0;
       if (item.approvalStatus === 'rejected') return 1;
@@ -338,24 +457,10 @@ async function getAllMerchants(adminPhone) {
 async function getAllCouriers(adminPhone) {
   await assertAdminAccess(adminPhone);
 
-  const [users, states, courierRows] = await Promise.all([
-    selectMany('app_users', [], { column: 'updated_at', ascending: false }, 3000),
-    selectManyColumns(
-      'app_state',
-      'phone, state',
-      [],
-      { column: 'updated_at', ascending: false },
-      2500
-    ),
-    selectMany('courier_profiles', [], { column: 'updated_at', ascending: false }, 2500),
-  ]);
+  const courierRows = await selectMany('courier_profiles', [], { column: 'updated_at', ascending: false }, 2500);
 
-  const stateByPhone = {};
-  for (const row of states) {
-    const phone = String(row.phone || '').trim();
-    if (!phone) continue;
-    stateByPhone[phone] = row.state || {};
-  }
+  const phones = courierRows.map(r => r.phone).filter(Boolean);
+  const users = phones.length > 0 ? await selectMany('app_users', [{ method: 'in', column: 'phone', value: phones }]) : [];
 
   const courierProfileByPhone = {};
   for (const row of courierRows) {
@@ -374,7 +479,6 @@ async function getAllCouriers(adminPhone) {
   const couriers = [];
   const seen = new Set();
 
-  // First pass: collect from courier_profiles table
   for (const [phone, dbProfile] of Object.entries(courierProfileByPhone)) {
     if (seen.has(phone)) continue;
     if (!dbProfile) continue;
@@ -382,20 +486,6 @@ async function getAllCouriers(adminPhone) {
     const user = userByPhone[phone] || null;
     seen.add(phone);
     couriers.push(mapCourierForAdmin(phone, user, dbProfile));
-  }
-
-  // Second pass: collect from app_state (legacy profiles not in courier_profiles)
-  for (const user of users) {
-    const phone = String(user.phone || '').trim();
-    if (!phone || seen.has(phone)) continue;
-
-    const state = stateByPhone[phone] || {};
-    const profile = readCourierProfileFromState(state);
-    const isPreRegistered = state.adminPreRegisteredCourier === true;
-    if (!profile || (!isCourierProfileComplete(profile) && !isPreRegistered)) continue;
-
-    seen.add(phone);
-    couriers.push(mapCourierForAdmin(phone, user, profile));
   }
 
   return couriers.sort((a, b) => {
@@ -416,24 +506,10 @@ async function getAllCouriers(adminPhone) {
 async function getAllDrivers(adminPhone) {
   await assertAdminAccess(adminPhone);
 
-  const [users, states, driverRows] = await Promise.all([
-    selectMany('app_users', [], { column: 'updated_at', ascending: false }, 3000),
-    selectManyColumns(
-      'app_state',
-      'phone, state',
-      [],
-      { column: 'updated_at', ascending: false },
-      2500
-    ),
-    selectMany('driver_profiles', [], { column: 'updated_at', ascending: false }, 2000),
-  ]);
+  const driverRows = await selectMany('driver_profiles', [], { column: 'updated_at', ascending: false }, 2000);
 
-  const stateByPhone = {};
-  for (const row of states) {
-    const phone = String(row.phone || '').trim();
-    if (!phone) continue;
-    stateByPhone[phone] = row.state || {};
-  }
+  const phones = driverRows.map(r => r.phone).filter(Boolean);
+  const users = phones.length > 0 ? await selectMany('app_users', [{ method: 'in', column: 'phone', value: phones }]) : [];
 
   const driverProfileByPhone = {};
   for (const row of driverRows) {
@@ -442,33 +518,50 @@ async function getAllDrivers(adminPhone) {
     driverProfileByPhone[phone] = rowToDriverProfileMap(row);
   }
 
-  const drivers = [];
-  const seen = new Set();
-
+  const userByPhone = {};
   for (const user of users) {
     const phone = String(user.phone || '').trim();
-    if (!phone || seen.has(phone)) continue;
+    if (!phone) continue;
+    userByPhone[phone] = user;
+  }
 
-    const state = stateByPhone[phone] || {};
-    const profile = driverProfileByPhone[phone] ?? readDriverProfileFromState(state);
-    if (!profile) continue;
+  const drivers = [];
+  const seen = new Set();
+  for (const [phone, dbProfile] of Object.entries(driverProfileByPhone)) {
+    if (seen.has(phone)) continue;
+    if (!dbProfile) continue;
 
-    const name = String(profile.name ?? '').trim();
-    const hasProfileData = isDriverProfileComplete(profile);
-    if (!hasProfileData && !name) continue;
-
-    const role = String(user.role ?? '').trim();
-    const accountType = String(user.account_type ?? '').trim();
-    const isDriverAccount =
-      role === 'driver' || accountType === 'driver' || name.length > 0;
-
+    const user = userByPhone[phone] || null;
+    const name = String(dbProfile.name ?? '').trim();
+    const role = String(user?.role ?? '').trim();
+    const accountType = String(user?.account_type ?? '').trim();
+    
+    // Accept if it's explicitly a driver account or has a non-empty name
+    const isDriverAccount = role === 'driver' || accountType === 'driver' || name.length > 0;
     if (!isDriverAccount) continue;
 
     seen.add(phone);
-    drivers.push(mapDriverForAdmin(phone, user, profile));
+    drivers.push(mapDriverForAdmin(phone, user, dbProfile));
   }
 
   return drivers;
+}
+
+function mapAdminProductRow(product) {
+  const row = product || {};
+  return {
+    id: String(row.id || ''),
+    name: String(row.name || row.name_ar || row.nameAr || row.title_ar || '').trim(),
+    nameAr: String(row.name_ar || row.nameAr || '').trim(),
+    category: String(row.category || '').trim(),
+    subCategory: String(row.sub_category || row.subCategory || '').trim(),
+    price: Number(row.price || 0),
+    isAvailable: row.is_available !== false,
+    image: String(row.image || row.image_url || '').trim(),
+    imageUrl: String(row.image_url || row.image || '').trim(),
+    createdAt: row.created_at || null,
+    isApproved: row.is_approved !== false,
+  };
 }
 
 async function getAdminMerchantDetails(adminPhone, merchantPhone) {
@@ -539,6 +632,7 @@ async function getAdminMerchantDetails(adminPhone, merchantPhone) {
 
   const totalOrders = orders.length;
   const averageOrderValue = completedOrders > 0 ? Math.round(totalRevenue / completedOrders) : 0;
+  const media = extractMerchantMedia(profile);
 
   return {
     merchant: {
@@ -549,6 +643,8 @@ async function getAdminMerchantDetails(adminPhone, merchantPhone) {
       serviceIds: profileServiceIds(profile),
       isOpen: profile.is_open !== false,
       isFrozen: isMerchantFrozen(profile),
+      isApproved: isMerchantApproved(profile),
+      approvalStatus: merchantApprovalStatus(profile),
       isBazaarMember: profile.is_bazaar_member === true,
       rating: Number(profile.rating || 0),
       address: profile.address || '',
@@ -557,6 +653,12 @@ async function getAdminMerchantDetails(adminPhone, merchantPhone) {
       updatedAt: profile.updated_at || null,
       fullName: appUser?.full_name || '',
       role: appUser?.role || '',
+      profileImageUrl: media.profileImageUrl,
+      logoImageUrl: media.logoImageUrl,
+      coverImageUrl: media.coverImageUrl,
+      clinicImageUrl: media.clinicImageUrl,
+      avatarImageUrl: media.avatarImageUrl,
+      workSampleUrls: media.workSamples,
     },
     stats: {
       totalOrders,
@@ -570,15 +672,152 @@ async function getAdminMerchantDetails(adminPhone, merchantPhone) {
       totalProducts: products.length,
     },
     recentOrders: mappedOrders.slice(0, 20),
-    products: products.slice(0, 12).map((product) => ({
-      id: String(product.id || ''),
-      name: product.name || '',
-      category: product.category || '',
-      subCategory: product.sub_category || '',
-      price: Number(product.price || 0),
-      isAvailable: product.is_available !== false,
-      createdAt: product.created_at || null,
-    })),
+    products: products.map(mapAdminProductRow),
+  };
+}
+
+function mapProfessionalCategoryLabel(categoryId) {
+  const id = String(categoryId || '').trim();
+  if (!id) return '—';
+  return PROFESSIONAL_CATEGORY_NAMES[id]?.ar || id;
+}
+
+function extractMerchantMedia(profile) {
+  const info = normalizeObject(profile?.professional_info);
+  const profileImageUrl = String(
+    info.profileImageUrl ||
+      info.profileImageBase64 ||
+      profile?.profile_image_url ||
+      profile?.profile_image_base64 ||
+      profile?.logo_image_url ||
+      '',
+  ).trim();
+  const logoImageUrl = String(
+    profile?.logo_image_url || info.profileImageUrl || profileImageUrl || '',
+  ).trim();
+  const coverImageUrl = String(
+    profile?.cover_image_url || info.coverImageUrl || info.coverImageBase64 || '',
+  ).trim();
+  const clinicImageUrl = String(
+    info.clinicImageUrl || info.clinicImageBase64 || coverImageUrl || '',
+  ).trim();
+  const workSamples = normalizeArray(
+    profile?.work_sample_images_base64 ??
+      info.workSampleImagesBase64 ??
+      info.work_sample_images_base64,
+  )
+    .map((item) => String(item || '').trim())
+    .filter(Boolean);
+  const avatarImageUrl = profileImageUrl || logoImageUrl || coverImageUrl || clinicImageUrl;
+  return {
+    profileImageUrl,
+    logoImageUrl,
+    coverImageUrl,
+    clinicImageUrl,
+    avatarImageUrl,
+    workSamples,
+  };
+}
+
+function extractProfessionalMedia(profile) {
+  const { profileImageUrl, workSamples } = extractMerchantMedia(profile || {});
+  return { profileImage: profileImageUrl, workSamples };
+}
+
+function isAdminProfessionalSummary(merchantSummary, profile) {
+  if (!merchantSummary && !profile) return false;
+  if (merchantSummary?.isProfessional) return true;
+  if (merchantSummary?.primaryServiceId === 'professionals') return true;
+  if (profile && isProfessionalMerchantProfile(profile)) return true;
+  const serviceIds = merchantSummary?.serviceIds || profileServiceIds(profile || {});
+  return serviceIds.includes('professionals');
+}
+
+async function getAllProfessionals(adminPhone) {
+  await assertAdminAccess(adminPhone);
+
+  const [merchants, profiles] = await Promise.all([
+    getAllMerchants(adminPhone),
+    selectMany('merchant_profiles', [], { column: 'updated_at', ascending: false }),
+  ]);
+
+  const profileByPhone = {};
+  for (const profile of profiles) {
+    const phone = String(profile.phone || '').trim();
+    if (!phone) continue;
+    for (const variant of getPhoneVariants(phone)) {
+      profileByPhone[variant] = profile;
+    }
+  }
+
+  const seen = new Set();
+  const result = [];
+
+  for (const merchant of merchants) {
+    const phone = String(merchant.phone || '').trim();
+    if (!phone || seen.has(phone)) continue;
+
+    const profile = profileByPhone[phone] || null;
+    if (!isAdminProfessionalSummary(merchant, profile)) continue;
+
+    seen.add(phone);
+    const categoryId = String(
+      profile?.professional_category_id ||
+        normalizeObject(profile?.professional_info)?.professionId ||
+        '',
+    ).trim();
+    const { profileImage, workSamples } = extractProfessionalMedia(profile || {});
+
+    result.push({
+      ...merchant,
+      professionalCategoryId: categoryId,
+      professionalCategoryLabel: mapProfessionalCategoryLabel(categoryId),
+      profileImageUrl: profileImage,
+      workSampleCount: workSamples.length,
+    });
+  }
+
+  return result.sort((a, b) => {
+    const rank = (item) => {
+      if (item.approvalStatus === 'pending') return 0;
+      if (item.approvalStatus === 'rejected') return 1;
+      return 2;
+    };
+    const rankDiff = rank(a) - rank(b);
+    if (rankDiff !== 0) return rankDiff;
+    return String(a.storeName || '').localeCompare(String(b.storeName || ''), 'ar');
+  });
+}
+
+async function getAdminProfessionalDetails(adminPhone, professionalPhone) {
+  const base = await getAdminMerchantDetails(adminPhone, professionalPhone);
+  const profile = await getMerchantProfile(professionalPhone);
+  if (!profile) {
+    throw new Error('Professional not found.');
+  }
+
+  const info = normalizeObject(profile.professional_info);
+  const visibility = resolveMerchantContactVisibility(profile);
+  const categoryId = String(profile.professional_category_id || info.professionId || '').trim();
+  const { profileImage, workSamples } = extractProfessionalMedia(profile);
+
+  return {
+    ...base,
+    professional: {
+      categoryId,
+      categoryLabel: mapProfessionalCategoryLabel(categoryId),
+      profileImageUrl: profileImage,
+      workSampleUrls: workSamples,
+      description: String(profile.description || info.description || '').trim(),
+      contactPhone: String(info.phone || profile.phone || '').trim(),
+      whatsapp: String(profile.whatsapp || info.whatsapp || '').trim(),
+      openTime: String(profile.open_time || info.openTime || '').trim(),
+      closeTime: String(profile.close_time || info.closeTime || '').trim(),
+      showPhoneToCustomers: visibility.showPhoneToCustomers,
+      showWhatsAppToCustomers: visibility.showWhatsAppToCustomers,
+      rejectionMessageAr: merchantRejectionMessage(profile),
+      professionalInfo: info,
+    },
   };
 }
 
@@ -1528,6 +1767,10 @@ async function adminDeleteAccount(adminPhone, targetPhone) {
   return purgeAccountData(phoneKey);
 }
 
+async function deleteDriverAccount(adminPhone, targetPhone) {
+  return adminDeleteAccount(adminPhone, targetPhone);
+}
+
 async function adminSuspendAccount(adminPhone, targetPhone, isSuspended) {
   await assertAdminAccess(adminPhone);
 
@@ -1689,6 +1932,50 @@ const MERCHANT_SIGNUP_SERVICE_IDS = new Set([
   'used',
 ]);
 
+async function preRegisterCustomerAccount(adminPhone, payload = {}) {
+  await assertAdminAccess(adminPhone);
+
+  const rawPhone = String(payload.phone ?? payload.customerPhone ?? '').trim();
+  if (!rawPhone) {
+    throw new Error('رقم الهاتف مطلوب.');
+  }
+
+  const phoneKey = await resolvePhoneKey(rawPhone);
+  const fullName = String(payload.fullName ?? payload.full_name ?? '').trim();
+  const address = String(payload.address ?? '').trim();
+
+  const existingUser = await getAppUser(phoneKey);
+  if (existingUser && String(existingUser.role ?? '').trim() === 'admin') {
+    throw new Error('لا يمكن تسجيل رقم المشرف كزبون.');
+  }
+
+  await ensureAppUser(phoneKey, {
+    role: 'customer',
+    account_type: 'marketplace',
+    full_name: fullName || undefined,
+  });
+
+  if (fullName || address) {
+    await saveCustomerProfile(phoneKey, {
+      display_name: fullName || undefined,
+      full_name: fullName || undefined,
+      address: address || undefined,
+    });
+  }
+
+  const merchantProfile = await getMerchantProfile(phoneKey);
+  if (merchantProfile) {
+    throw new Error('هذا الرقم مرتبط بحساب تاجر. استخدم رقماً آخر.');
+  }
+
+  return {
+    success: true,
+    phone: phoneKey,
+    fullName: fullName || null,
+    role: 'customer',
+  };
+}
+
 async function preRegisterMerchantAccount(adminPhone, payload = {}) {
   await assertAdminAccess(adminPhone);
 
@@ -1702,6 +1989,12 @@ async function preRegisterMerchantAccount(adminPhone, payload = {}) {
   const phoneKey = await resolvePhoneKey(rawPhone);
   const fullName = String(payload.fullName ?? payload.full_name ?? '').trim();
   const note = String(payload.note ?? payload.notes ?? '').trim();
+  const isBazaarMember = Boolean(
+    payload.isBazaarMember ?? payload.is_bazaar_member ?? false,
+  );
+  const serviceSubCategory = String(
+    payload.serviceSubCategory ?? payload.service_sub_category ?? '',
+  ).trim();
 
   let serviceIds = normalizeArray(payload.serviceIds ?? payload.service_ids);
   const primaryServiceId = String(
@@ -1769,11 +2062,23 @@ async function preRegisterMerchantAccount(adminPhone, payload = {}) {
     primary_service_id: primary,
     service_ids: serviceIds,
     active_service_id: primary,
-    is_approved: false,
-    approval_status: 'pending',
-    is_open: false,
+    is_approved: true,
+    approval_status: 'approved',
+    is_open: true,
+    is_bazaar_member: isBazaarMember,
+    admin_pre_registered: true,
+    _adminModerationBypass: true,
     description: note || undefined,
+    service_sub_category: serviceSubCategory || undefined,
   });
+
+  if (isBazaarMember) {
+    try {
+      await syncMerchantProductsForBazaar(phoneKey);
+    } catch (syncError) {
+      console.error('bazaar sync on pre-register error:', syncError?.message || syncError);
+    }
+  }
 
   const merchantStoreStub = {
     category: primary,
@@ -1782,9 +2087,10 @@ async function preRegisterMerchantAccount(adminPhone, payload = {}) {
     activeServiceId: primary,
     active_service_id: primary,
     primary_service_id: primary,
-    isApproved: false,
-    approvalStatus: 'pending',
+    isApproved: true,
+    approvalStatus: 'approved',
     adminPreRegistered: true,
+    admin_pre_registered: true,
     name: placeholderStoreName,
     store_name: placeholderStoreName,
   };
@@ -1811,9 +2117,119 @@ async function preRegisterMerchantAccount(adminPhone, payload = {}) {
     fullName: String(user?.full_name ?? fullName ?? '').trim(),
     primaryServiceId: primary,
     serviceIds,
-    isApproved: false,
-    approvalStatus: 'pending',
+    isApproved: true,
+    approvalStatus: 'approved',
     merchantProfileComplete: false,
+    storeName: String(refreshed?.store_name ?? '').trim(),
+    isBazaarMember,
+    serviceSubCategory: serviceSubCategory || null,
+  };
+}
+
+async function updateMerchantCategoryByAdmin(adminPhone, payload = {}) {
+  await assertAdminAccess(adminPhone);
+
+  const rawPhone = String(payload.merchantPhone ?? payload.phone ?? '').trim();
+  if (!rawPhone) {
+    throw new Error('رقم الهاتف مطلوب.');
+  }
+
+  const phoneKey = await resolvePhoneKey(rawPhone);
+  const profile = await getMerchantProfile(phoneKey);
+  if (!profile) {
+    throw new Error('التاجر غير موجود.');
+  }
+
+  const primaryServiceId = String(
+    payload.primaryServiceId ?? payload.primary_service_id ?? '',
+  ).trim();
+  if (!primaryServiceId) {
+    throw new Error('يرجى اختيار القسم الجديد.');
+  }
+  if (!MERCHANT_SIGNUP_SERVICE_IDS.has(primaryServiceId)) {
+    throw new Error(`قسم غير صالح: ${primaryServiceId}`);
+  }
+
+  let serviceIds = normalizeArray(payload.serviceIds ?? payload.service_ids);
+  if (serviceIds.length === 0) {
+    serviceIds = [primaryServiceId];
+  }
+  for (const id of serviceIds) {
+    if (!MERCHANT_SIGNUP_SERVICE_IDS.has(String(id).trim())) {
+      throw new Error(`قسم غير صالح: ${id}`);
+    }
+  }
+  if (!serviceIds.includes(primaryServiceId)) {
+    serviceIds = [primaryServiceId, ...serviceIds.filter((id) => id !== primaryServiceId)];
+  }
+
+  const serviceSubCategory = String(
+    payload.serviceSubCategory ?? payload.service_sub_category ?? '',
+  ).trim();
+  const isBazaarMember = payload.isBazaarMember ?? payload.is_bazaar_member;
+
+  const profilePatch = {
+    primary_service_id: primaryServiceId,
+    service_ids: serviceIds,
+    active_service_id: primaryServiceId,
+    _adminModerationBypass: true,
+  };
+  if (serviceSubCategory) {
+    profilePatch.service_sub_category = serviceSubCategory;
+  } else if (primaryServiceId !== 'beauty') {
+    profilePatch.service_sub_category = null;
+  }
+  if (isBazaarMember !== undefined) {
+    profilePatch.is_bazaar_member = Boolean(isBazaarMember);
+  }
+
+  await saveMerchantProfile(phoneKey, profilePatch);
+
+  if (Boolean(isBazaarMember)) {
+    try {
+      await syncMerchantProductsForBazaar(phoneKey);
+    } catch (syncError) {
+      console.error('bazaar sync on category update error:', syncError?.message || syncError);
+    }
+  }
+
+  const merchantState = (await getUserState(phoneKey)) || {};
+  const merchantStore = normalizeObject(merchantState.merchantStore);
+  merchantStore.category = primaryServiceId;
+  merchantStore.primary_service_id = primaryServiceId;
+  merchantStore.primaryServiceId = primaryServiceId;
+  merchantStore.active_service_id = primaryServiceId;
+  merchantStore.activeServiceId = primaryServiceId;
+  merchantStore.service_ids = serviceIds;
+  merchantStore.serviceIds = serviceIds;
+  if (primaryServiceId === 'beauty') {
+    if (serviceSubCategory) {
+      merchantStore.serviceSubCategory = serviceSubCategory;
+      merchantStore.service_sub_category = serviceSubCategory;
+    }
+  } else if (serviceSubCategory) {
+    merchantStore.serviceSubCategory = serviceSubCategory;
+    merchantStore.service_sub_category = serviceSubCategory;
+  } else {
+    delete merchantStore.serviceSubCategory;
+    delete merchantStore.service_sub_category;
+    delete merchantStore.subCategoryId;
+  }
+
+  await saveUserState(phoneKey, {
+    ...merchantState,
+    merchantStore,
+    multiRoleAccount: true,
+  });
+
+  const refreshed = await getMerchantProfile(phoneKey);
+  return {
+    success: true,
+    phone: phoneKey,
+    primaryServiceId,
+    serviceIds,
+    serviceSubCategory: serviceSubCategory || null,
+    isBazaarMember: refreshed?.is_bazaar_member === true,
     storeName: String(refreshed?.store_name ?? '').trim(),
   };
 }
@@ -2094,6 +2510,8 @@ async function preRegisterProfessionalAccount(adminPhone, payload = {}) {
     is_approved: true,
     approval_status: 'approved',
     is_open: true,
+    admin_pre_registered: true,
+    _adminModerationBypass: true,
     professional_info: professionalInfo,
     professional_category_id: professionId,
     // profile_image_base64 محذوفة عمداً — صورة المهني تخزن داخل professional_info فقط
@@ -2169,6 +2587,10 @@ async function preRegisterProfessionalAccount(adminPhone, payload = {}) {
 
 const BEAUTY_SUB_CATEGORIES = new Set(['أطباء وعيادات', 'صيدلية']);
 
+const {
+  isValidDoctorSpecialty,
+} = require('../constants/doctor_specialties');
+
 const BEAUTY_SUB_CATEGORY_NAMES = {
   'أطباء وعيادات': { ar: 'أطباء وعيادات', en: 'Doctors & Clinics' },
   'صيدلية': { ar: 'صيدلية', en: 'Pharmacy' },
@@ -2195,8 +2617,20 @@ async function preRegisterBeautyAccount(adminPhone, payload = {}) {
   const phone = String(payload.phone ?? payload.contactPhone ?? '').trim();
   const whatsapp = String(payload.whatsapp ?? '').trim();
   const specialty = String(payload.specialty ?? '').trim();
+  const doctorPhone = String(payload.doctorPhone ?? payload.doctor_phone ?? '').trim();
+  const clinicPhone = String(payload.clinicPhone ?? payload.clinic_phone ?? '').trim();
+  if (subCategoryId === 'أطباء وعيادات') {
+    if (!specialty) {
+      throw new Error('يرجى اختيار التخصص الطبي.');
+    }
+    if (!isValidDoctorSpecialty(specialty)) {
+      throw new Error('التخصص الطبي غير صالح.');
+    }
+  }
   const openTime = String(payload.openTime ?? payload.open_time ?? '').trim();
   const closeTime = String(payload.closeTime ?? payload.close_time ?? '').trim();
+  const profileImageUrl = String(payload.profileImageUrl ?? payload.profile_image_url ?? '').trim();
+  const clinicImageUrl = String(payload.clinicImageUrl ?? payload.clinic_image_url ?? '').trim();
 
   const existingUser = await getAppUser(phoneKey);
   if (existingUser && String(existingUser.role ?? '').trim() === 'admin') {
@@ -2225,12 +2659,56 @@ async function preRegisterBeautyAccount(adminPhone, payload = {}) {
     if (Object.keys(patch).length > 0) await saveAppUser(phoneKey, patch);
   }
 
-  const supabase = assertSupabaseAdmin();
-  const { data: appUser } = await supabase.from('app_users').select('id').eq('phone', phoneKey).maybeSingle();
-  const upsertRow = { phone: phoneKey, store_name: fullName, is_approved: true, approval_status: 'approved', updated_at: nowIso() };
-  if (appUser?.id) upsertRow.user_id = appUser.id;
-  const { error: upsertErr } = await supabase.from('merchant_profiles').upsert(upsertRow, { onConflict: 'phone' }).select();
-  if (upsertErr) throw upsertErr;
+  await saveMerchantProfile(phoneKey, {
+    store_name: fullName,
+    primary_service_id: 'beauty',
+    service_ids: ['beauty'],
+    active_service_id: 'beauty',
+    is_approved: true,
+    approval_status: 'approved',
+    is_open: true,
+    admin_pre_registered: true,
+    _adminModerationBypass: true,
+    address: address || undefined,
+    whatsapp: whatsapp || undefined,
+    open_time: openTime || undefined,
+    close_time: closeTime || undefined,
+    service_sub_category: subCategoryId,
+    serviceSubCategory: subCategoryId,
+    subCategoryId,
+    doctor_phone: doctorPhone || undefined,
+    clinic_phone: clinicPhone || undefined,
+    profile_image_url: profileImageUrl || undefined,
+    profileImageUrl: profileImageUrl || undefined,
+    cover_image_url: clinicImageUrl || undefined,
+    coverImageUrl: clinicImageUrl || undefined,
+    logo_image_url: profileImageUrl || undefined,
+    logoImageUrl: profileImageUrl || undefined,
+    ...(subCategoryId === 'أطباء وعيادات' ? {
+      professional_info: {
+        specialty,
+        doctorPhone: doctorPhone || undefined,
+        clinicPhone: clinicPhone || undefined,
+        profileImageUrl: profileImageUrl || undefined,
+        clinicImageUrl: clinicImageUrl || undefined,
+        description: description || fullName,
+        openTime: openTime || undefined,
+        closeTime: closeTime || undefined,
+      },
+    } : {}),
+  });
+
+  await saveMerchantProfile(phoneKey, {
+    primary_service_id: 'beauty',
+    service_ids: ['beauty'],
+    active_service_id: 'beauty',
+    service_sub_category: subCategoryId,
+    serviceSubCategory: subCategoryId,
+    subCategoryId,
+    is_approved: true,
+    approval_status: 'approved',
+    is_open: true,
+  });
 
   const merchantState = (await getUserState(phoneKey)) || {};
   await saveUserState(phoneKey, {
@@ -2247,6 +2725,8 @@ async function preRegisterBeautyAccount(adminPhone, payload = {}) {
       primary_service_id: 'beauty',
       subCategoryId,
       sub_category_id: subCategoryId,
+      serviceSubCategory: subCategoryId,
+      service_sub_category: subCategoryId,
       isApproved: true,
       approvalStatus: 'approved',
       adminPreRegistered: true,
@@ -2254,19 +2734,40 @@ async function preRegisterBeautyAccount(adminPhone, payload = {}) {
       store_name: fullName,
       description: description || undefined,
       address: address || undefined,
-      phone: phone || undefined,
+      phone: doctorPhone || phone || undefined,
       whatsapp: whatsapp || undefined,
       ...(subCategoryId === 'أطباء وعيادات' ? {
         specialty,
+        doctorPhone: doctorPhone || undefined,
+        clinicPhone: clinicPhone || undefined,
+        profileImageUrl: profileImageUrl || undefined,
+        clinicImageUrl: clinicImageUrl || undefined,
         openTime: openTime || undefined,
         closeTime: closeTime || undefined,
         professionalInfo: {
           specialty,
+          doctorPhone: doctorPhone || undefined,
+          clinicPhone: clinicPhone || undefined,
+          profileImageUrl: profileImageUrl || undefined,
+          clinicImageUrl: clinicImageUrl || undefined,
           description: description || fullName,
           openTime: openTime || undefined,
           closeTime: closeTime || undefined,
         },
-      } : {}),
+      } : {
+        phone: phone || undefined,
+        profileImageUrl: profileImageUrl || undefined,
+        clinicImageUrl: clinicImageUrl || undefined,
+        openTime: openTime || undefined,
+        closeTime: closeTime || undefined,
+        professionalInfo: {
+          phone: phone || undefined,
+          profileImageUrl: profileImageUrl || undefined,
+          clinicImageUrl: clinicImageUrl || undefined,
+          openTime: openTime || undefined,
+          closeTime: closeTime || undefined,
+        },
+      }),
     },
     adminPreRegisteredMerchant: true,
     adminPreRegisteredAt: nowIso(),
@@ -2525,12 +3026,121 @@ async function saveAdminMaintenancePolicy(phone, patch = {}) {
   return { ...policy, updatedAt };
 }
 
+async function getPendingProductsForAdmin(adminPhone, filters = {}) {
+  await assertAdminAccess(adminPhone);
+
+  const categoryFilter = String(filters.category || '').trim();
+  const products = await selectMany(
+    'merchant_products',
+    [],
+    { column: 'created_at', ascending: false },
+    3000
+  );
+
+  const pending = products.filter((row) => !isProductApproved(row));
+  const scoped = categoryFilter
+    ? pending.filter((row) => String(row.category || '').trim() === categoryFilter)
+    : pending;
+
+  const phones = [...new Set(scoped.map((row) => String(row.phone || '').trim()).filter(Boolean))];
+  const profileByPhone = new Map();
+  for (const phone of phones) {
+    const profile = await getMerchantProfile(phone);
+    if (profile) profileByPhone.set(phone, profile);
+  }
+
+  return scoped.map((row) => {
+    const phone = String(row.phone || '').trim();
+    const profile = profileByPhone.get(phone) || null;
+    const serialized = serializeProductRowForClient(row);
+    return {
+      ...serialized,
+      isApproved: isProductApproved(row),
+      is_approved: isProductApproved(row),
+      approvalStatus: productApprovalStatus(row),
+      approval_status: productApprovalStatus(row),
+      merchantPhone: phone,
+      merchantStoreName: merchantProfileDisplayName(profile),
+      merchantCategory: String(profile?.primary_service_id || profile?.primaryServiceId || '').trim(),
+      rejectionMessageAr: String(row.rejection_message_ar || '').trim(),
+    };
+  });
+}
+
+async function toggleProductApprovalStatus(
+  adminPhone,
+  merchantPhone,
+  productId,
+  isApproved,
+  rejectionMessageAr = ''
+) {
+  await assertAdminAccess(adminPhone);
+
+  const phoneKey = await resolvePhoneKey(merchantPhone);
+  const id = String(productId || '').trim();
+  if (!id) throw new Error('productId is required.');
+
+  const existing = await selectSingle('merchant_products', 'id', id);
+  if (!existing) throw new Error('Product not found.');
+  if (String(existing.phone || '').trim() !== phoneKey) {
+    throw new Error('Product does not belong to this merchant.');
+  }
+
+  const approved = Boolean(isApproved);
+  const patch = {
+    id,
+    phone: phoneKey,
+    updated_at: nowIso(),
+  };
+
+  if (await hasColumn('merchant_products', 'is_approved')) {
+    patch.is_approved = approved;
+  }
+  if (await hasColumn('merchant_products', 'approval_status')) {
+    patch.approval_status = approved ? 'approved' : 'rejected';
+  }
+  if (await hasColumn('merchant_products', 'rejection_message_ar')) {
+    patch.rejection_message_ar = approved
+      ? null
+      : String(rejectionMessageAr || 'تم رفض المحتوى من الإدارة.').trim();
+  }
+  if (await hasColumn('merchant_products', 'rejected_at')) {
+    patch.rejected_at = approved ? null : nowIso();
+  }
+
+  const saved = await saveRow('merchant_products', patch, 'id');
+  const productName = String(existing.name_ar ?? existing.nameAr ?? '').trim();
+
+  try {
+    if (approved) {
+      const { onProductApproved } = require('../push_events');
+      await onProductApproved(phoneKey, productName);
+    } else {
+      const { onProductRejected } = require('../push_events');
+      await onProductRejected(
+        phoneKey,
+        String(rejectionMessageAr || 'تم رفض المحتوى من الإدارة.').trim(),
+        productName
+      );
+    }
+  } catch (error) {
+    console.error('push product approval error:', error?.message || error);
+  }
+
+  return {
+    success: true,
+    product: serializeProductRowForClient(saved),
+  };
+}
+
 module.exports = {
   getAdminReports,
   getAllMerchants,
+  getAllProfessionals,
   getAllCouriers,
   getAllDrivers,
   getAdminMerchantDetails,
+  getAdminProfessionalDetails,
   toggleBazaarMemberStatus,
   toggleCourierApprovalStatus,
   rejectCourierApplication,
@@ -2550,10 +3160,13 @@ module.exports = {
   getAllAdminAccounts,
   purgeAccountData,
   adminDeleteAccount,
+  deleteDriverAccount,
   adminSuspendAccount,
   isPlatformAdminPhone,
   ensurePlatformAdminAccess,
   preRegisterMerchantAccount,
+  updateMerchantCategoryByAdmin,
+  preRegisterCustomerAccount,
   preRegisterDriverAccount,
   preRegisterCourierAccount,
   preRegisterProfessionalAccount,
@@ -2566,4 +3179,7 @@ module.exports = {
   saveAdminAppUpdatePolicy,
   getMaintenancePolicy,
   saveAdminMaintenancePolicy,
+  getPendingProductsForAdmin,
+  toggleProductApprovalStatus,
+  mapAdminProductRow,
 };

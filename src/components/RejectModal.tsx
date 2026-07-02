@@ -1,6 +1,8 @@
 import type { AdminAccountKind } from '../admin-types';
 import { MERCHANT_REJECTION_REASONS, COURIER_REJECTION_REASONS } from '../admin-types';
-import { AlertTriangle, XCircle, LoaderCircle } from 'lucide-react';
+import { XCircle } from 'lucide-react';
+import { Modal } from './ui/Modal';
+import { Button } from './ui/Button';
 
 interface RejectModalProps {
   target: { phone: string; displayName: string; kind: AdminAccountKind } | null;
@@ -13,18 +15,12 @@ interface RejectModalProps {
 
 function accountKindLabel(kind: AdminAccountKind) {
   switch (kind) {
-    case 'customer':
-      return 'زبون';
-    case 'merchant':
-      return 'تاجر / مهني';
-    case 'courier':
-      return 'مندوب توصيل';
-    case 'driver':
-      return 'سائق تكسي';
-    case 'admin':
-      return 'مشرف';
-    default:
-      return kind;
+    case 'customer': return 'زبون';
+    case 'merchant': return 'تاجر / مهني';
+    case 'courier': return 'مندوب توصيل';
+    case 'driver': return 'سائق تكسي';
+    case 'admin': return 'مشرف';
+    default: return kind;
   }
 }
 
@@ -36,83 +32,74 @@ export default function RejectModal({
   onConfirm,
   onClose,
 }: RejectModalProps) {
-  if (!target) return null;
-
   return (
-    <div
-      className="modal-backdrop"
-      role="presentation"
-      onClick={onClose}
-    >
-      <div
-        className="modal-card"
-        role="dialog"
-        aria-modal="true"
-        onClick={(event) => event.stopPropagation()}
-      >
-        <div className="panel-header">
-          <div>
-            <h3>رفض طلب التسجيل</h3>
-            <p>
-              اكتب سبب الرفض لحساب{' '}
-              <strong>{target.displayName || target.phone}</strong>{' '}
-              ({accountKindLabel(target.kind)}). سيظهر السبب للمستخدم في
-              التطبيق ليتمكن من تصحيح بياناته.
-            </p>
+    <Modal isOpen={!!target} onClose={onClose} title="رفض طلب التسجيل">
+      {target && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          <p style={{ margin: 0, color: 'var(--text-secondary)' }}>
+            اكتب سبب الرفض لحساب{' '}
+            <strong style={{ color: 'var(--text-primary)' }}>{target.displayName || target.phone}</strong>{' '}
+            ({accountKindLabel(target.kind)}). سيظهر السبب للمستخدم في
+            التطبيق ليتمكن من تصحيح بياناته.
+          </p>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <label style={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--text-secondary)' }}>سبب الرفض</label>
+            <textarea
+              className="ui-input"
+              rows={4}
+              value={rejectMessage}
+              onChange={(event) => onMessageChange(event.target.value)}
+              placeholder="اكتب سبب الرفض..."
+              style={{ resize: 'vertical', minHeight: '80px' }}
+            />
+          </div>
+
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+            {(target.kind === 'merchant'
+              ? MERCHANT_REJECTION_REASONS
+              : target.kind === 'courier'
+                ? COURIER_REJECTION_REASONS
+                : []
+            ).map((reason) => (
+              <button
+                key={reason.key}
+                type="button"
+                onClick={() => onMessageChange(reason.label)}
+                style={{
+                  background: 'var(--surface-elevated)',
+                  border: '1px solid var(--border)',
+                  color: 'var(--text-primary)',
+                  padding: '6px 12px',
+                  borderRadius: '999px',
+                  fontSize: '0.8rem',
+                  cursor: 'pointer',
+                  transition: '0.2s',
+                }}
+                onMouseOver={(e) => (e.currentTarget.style.background = 'var(--surface-hover)')}
+                onMouseOut={(e) => (e.currentTarget.style.background = 'var(--surface-elevated)')}
+              >
+                {reason.label}
+              </button>
+            ))}
+          </div>
+
+          <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', marginTop: '8px' }}>
+            <Button variant="secondary" onClick={onClose} disabled={isBusy}>
+              إلغاء
+            </Button>
+            <Button
+              variant="danger"
+              icon={<XCircle size={16} />}
+              onClick={onConfirm}
+              isLoading={isBusy}
+              disabled={!rejectMessage.trim()}
+            >
+              رفض الطلب
+            </Button>
           </div>
         </div>
-
-        <label className="reject-message-field">
-          <span>سبب الرفض</span>
-          <textarea
-            rows={4}
-            value={rejectMessage}
-            onChange={(event) => onMessageChange(event.target.value)}
-            placeholder="اكتب سبب الرفض..."
-          />
-        </label>
-
-        <div className="reject-quick-fill">
-          {(target.kind === 'merchant'
-            ? MERCHANT_REJECTION_REASONS
-            : target.kind === 'courier'
-              ? COURIER_REJECTION_REASONS
-              : []
-          ).map((reason) => (
-            <button
-              key={reason.key}
-              type="button"
-              className="account-filter-chip"
-              onClick={() => onMessageChange(reason.label)}
-            >
-              {reason.label}
-            </button>
-          ))}
-        </div>
-
-        <div className="modal-actions">
-          <button
-            className="ghost-button"
-            type="button"
-            onClick={onClose}
-          >
-            إلغاء
-          </button>
-          <button
-            className="soft-button danger"
-            type="button"
-            disabled={!rejectMessage.trim() || isBusy}
-            onClick={onConfirm}
-          >
-            {isBusy ? (
-              <LoaderCircle className="spin" size={16} />
-            ) : (
-              <XCircle size={16} />
-            )}
-            <span>حفظ وإرسال سبب الرفض</span>
-          </button>
-        </div>
-      </div>
-    </div>
+      )}
+    </Modal>
   );
 }

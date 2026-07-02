@@ -9,7 +9,10 @@ import '../../../utils/merchant_profile_fields.dart';
 import '../../../utils/extensions.dart';
 import '../../../utils/chat_navigation.dart';
 import '../../../utils/guest_gate.dart';
+import '../../../utils/helpers.dart';
 import '../../../widgets/app_image.dart';
+import '../../../widgets/internal_contact_buttons.dart';
+import '../../../widgets/whatsapp_icon.dart';
 import 'shopping_store_menu_screen.dart';
 
 // ── Store Kind Enum ────────────────────────────────────────
@@ -85,12 +88,16 @@ class ShopBackButton extends StatelessWidget {
 class ShopRestaurantCard extends StatelessWidget {
   final Map<String, dynamic> data;
   final bool isRestaurant;
+  final bool contactOnly;
+  final String? providerTitleAr;
   final VoidCallback onTap;
 
   const ShopRestaurantCard({
     super.key,
     required this.data,
     required this.isRestaurant,
+    this.contactOnly = false,
+    this.providerTitleAr,
     required this.onTap,
   });
 
@@ -103,8 +110,17 @@ class ShopRestaurantCard extends StatelessWidget {
 
     final primaryOrange = const Color(0xFFF5A01D);
     final customerPhone =
-        MerchantProfileFields.merchantInternalContactPhone(profile);
+        MerchantProfileFields.customerVisiblePhone(profile).isNotEmpty
+            ? MerchantProfileFields.customerVisiblePhone(profile)
+            : MerchantProfileFields.merchantInternalContactPhone(profile);
+    final customerWhatsapp = MerchantProfileFields.customerVisibleWhatsApp(profile);
     final storeName = MerchantProfileFields.name(profile);
+    final workingHours = MerchantProfileFields.workingHoursLabel(profile);
+    final doctorName = MerchantProfileFields.doctorName(profile);
+    final specialty = MerchantProfileFields.specialty(profile);
+    final providerLabel = providerTitleAr?.trim().isNotEmpty == true
+        ? providerTitleAr!.trim()
+        : 'مزود الخدمة';
 
     return Container(
       margin: const EdgeInsets.only(bottom: 20),
@@ -293,7 +309,7 @@ class ShopRestaurantCard extends StatelessWidget {
           ),
 
           // 2. Product Gallery
-          if (previewProducts.isNotEmpty) ...[
+          if (!contactOnly && previewProducts.isNotEmpty) ...[
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
               child: Row(
@@ -380,6 +396,114 @@ class ShopRestaurantCard extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
             child: Column(
               children: [
+                if (contactOnly) ...[
+                  if (workingHours != 'غير محدد')
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: Row(
+                        children: [
+                          Icon(Icons.access_time, size: 16, color: Colors.grey.shade600),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              'الدوام: $workingHours',
+                              style: const TextStyle(fontFamily: 'Cairo', fontSize: 12),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  if (providerLabel == 'صيدلية' && doctorName.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: Row(
+                        children: [
+                          Icon(Icons.medical_services_outlined, size: 16, color: Colors.grey.shade600),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              'الصيدلاني: $doctorName',
+                              style: const TextStyle(fontFamily: 'Cairo', fontSize: 12),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  if (specialty.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: Row(
+                        children: [
+                          Icon(Icons.medical_information_outlined, size: 16, color: Colors.grey.shade600),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              'التخصص: $specialty',
+                              style: const TextStyle(fontFamily: 'Cairo', fontSize: 12),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  InternalContactButtons.store(
+                    merchantPhone: customerPhone,
+                    storeName: storeName,
+                    merchantProfile: profile,
+                    chatLabel: 'مراسلة',
+                    callLabel: 'اتصال',
+                  ),
+                  if (customerWhatsapp.isNotEmpty) ...[
+                    const SizedBox(height: 10),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 48,
+                      child: FilledButton.icon(
+                        onPressed: () => AppHelpers.launchWhatsApp(
+                          customerWhatsapp,
+                          'مرحباً $storeName',
+                        ),
+                        icon: const WhatsAppIcon(size: 18),
+                        label: const Text(
+                          'واتساب',
+                          style: TextStyle(
+                            fontFamily: 'Cairo',
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: const Color(0xFF25D366),
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 48,
+                    child: OutlinedButton.icon(
+                      onPressed: onTap,
+                      icon: const Icon(Icons.info_outline, size: 18),
+                      label: Text(
+                        'عرض $providerLabel',
+                        style: const TextStyle(
+                          fontFamily: 'Cairo',
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: AppColors.primary,
+                        side: const BorderSide(color: AppColors.primary),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                    ),
+                  ),
+                ] else ...[
                 Row(
                   children: [
                     Expanded(
@@ -438,6 +562,7 @@ class ShopRestaurantCard extends StatelessWidget {
                     ),
                   ),
                 ),
+                ],
               ],
             ),
           ),
@@ -695,6 +820,7 @@ class ShopNoResultsState extends StatelessWidget {
   final bool hasStores;
   final bool hasSearch;
   final bool hasCuisineFilter;
+  final String? emptyMessage;
 
   const ShopNoResultsState({
     super.key,
@@ -702,6 +828,7 @@ class ShopNoResultsState extends StatelessWidget {
     this.hasStores = false,
     this.hasSearch = false,
     this.hasCuisineFilter = false,
+    this.emptyMessage,
   });
 
   @override
@@ -715,7 +842,7 @@ class ShopNoResultsState extends StatelessWidget {
           : 'لا توجد متاجر معتمدة في بازار ومطاعم الغيث حالياً.\n'
               'يظهر المتجر للزبائن بعد موافقة الإدارة على عضوية البازار.';
     } else {
-      message = 'لا توجد متاجر متاحة حالياً';
+      message = emptyMessage ?? 'لا توجد متاجر متاحة حالياً';
     }
 
     return Center(

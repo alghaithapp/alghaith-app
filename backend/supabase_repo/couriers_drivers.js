@@ -46,6 +46,42 @@ function courierRejectionMessage(profile) {
   return COURIER_REJECTION_REASONS[key] || '';
 }
 
+const OPERATOR_DOCUMENT_KEYS = [
+  'profileImage',
+  'vehicleImage',
+  'carImage',
+  'idFrontImage',
+  'idBackImage',
+  'residenceCardImage',
+  'vehicleRegFrontImage',
+  'vehicleRegBackImage',
+];
+
+function extractOperatorDocuments(profile) {
+  if (!profile || typeof profile !== 'object') return undefined;
+  const docs = {};
+  let hasAny = false;
+  for (const key of OPERATOR_DOCUMENT_KEYS) {
+    const url = String(profile[key] ?? '').trim();
+    if (url) {
+      docs[key] = url;
+      hasAny = true;
+    }
+  }
+  const bikeImage = String(profile.bikeImage ?? '').trim();
+  if (bikeImage && !docs.vehicleImage) {
+    docs.vehicleImage = bikeImage;
+    hasAny = true;
+  }
+  return hasAny ? docs : undefined;
+}
+
+function readDriverVehicleLabel(profile) {
+  const rawVehicle = String(profile?.vehicle ?? '').trim();
+  if (!rawVehicle || rawVehicle.startsWith('http')) return '';
+  return rawVehicle;
+}
+
 function mapCourierForAdmin(phone, user, profile) {
   const name = String(profile.name ?? '').trim();
   const contactPhone = String(profile.phone ?? phone ?? '').trim();
@@ -71,6 +107,8 @@ function mapCourierForAdmin(phone, user, profile) {
     role: String(user?.role ?? '').trim(),
     accountType: String(user?.account_type ?? '').trim(),
     updatedAt: user?.updated_at ?? null,
+    mukhtarName: String(profile.mukhtarName ?? '').trim(),
+    documents: extractOperatorDocuments(profile),
   };
 }
 
@@ -109,9 +147,10 @@ function driverRejectionMessage(profile) {
 function mapDriverForAdmin(phone, user, profile) {
   const name = String(profile.name ?? '').trim();
   const contactPhone = String(profile.phone ?? phone ?? '').trim();
-  const vehicle = String(profile.vehicle ?? profile.carImage ?? '').trim();
+  const vehicle = readDriverVehicleLabel(profile);
   const plate = String(profile.plate ?? '').trim();
   const area = String(profile.area ?? profile.homeAddress ?? '').trim();
+  const carImage = String(profile.carImage ?? '').trim();
 
   return {
     phone: String(phone || '').trim(),
@@ -120,6 +159,9 @@ function mapDriverForAdmin(phone, user, profile) {
     vehicle,
     plate,
     area,
+    carImage,
+    taxiType: String(profile.taxiType ?? profile.type ?? '').trim(),
+    mukhtarName: String(profile.mukhtarName ?? '').trim(),
     available: profile.available !== false && profile.isSuspended !== true,
     isSuspended: profile.isSuspended === true,
     isApproved: isDriverApproved(profile),
@@ -129,6 +171,7 @@ function mapDriverForAdmin(phone, user, profile) {
     role: String(user?.role ?? '').trim(),
     accountType: String(user?.account_type ?? '').trim(),
     updatedAt: user?.updated_at ?? null,
+    documents: extractOperatorDocuments(profile),
   };
 }
 

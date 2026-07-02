@@ -117,15 +117,6 @@ function createLimiter(maxReqs, windowMs = minute) {
     legacyHeaders: false,
     validate: { xForwardedForHeader: false },
     message: { message: 'Too many requests. Try again later.' },
-    keyGenerator: (req) => {
-      // إذا كان الطلب يحتوي على توكن تسجيل دخول، نقوم بتحديد المعدل بناءً على التوكن لمنع تعارض المستخدمين المشتركين في نفس الـ IP (شبكات الهاتف)
-      const authHeader = req.headers.authorization;
-      if (authHeader && authHeader.startsWith('Bearer ')) {
-        const token = authHeader.slice(7).trim();
-        if (token) return `token:${token}`;
-      }
-      return req.ip;
-    },
   };
 
   return rateLimit(options);

@@ -115,11 +115,11 @@ async function notifyNewTaxiRequest(requestMeta, nearbyDrivers = []) {
       eventKey: 'taxi:pool_new',
       orderId: requestId,
       requestId,
-      pickupAddress: String(requestMeta.pickupAddress || '').trim(),
-      dropoffAddress: String(requestMeta.dropoffAddress || '').trim(),
+      pickupAddress: String(requestMeta.pickupAddress || requestMeta.pickup_address || '').trim(),
+      dropoffAddress: String(requestMeta.dropoffAddress || requestMeta.dropoff_address || '').trim(),
       fare: String(requestMeta.fare || '0'),
-      distanceKm: String(requestMeta.distanceKm || '0'),
-      taxiType: String(requestMeta.taxiType || 'economic').trim(),
+      distanceKm: String(requestMeta.distanceKm || requestMeta.distance_km || '0'),
+      taxiType: String(requestMeta.taxiType || requestMeta.taxi_type || 'economic').trim(),
     },
   });
 

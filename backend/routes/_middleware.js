@@ -74,10 +74,41 @@ function requireOptionalAuthorizedPhone(req, res) {
   return requireAuthorizedPhone(req, res, { allowMissing: true });
 }
 
+/**
+ * Verify Bearer session token and set req.authPhone (for routes outside /db).
+ * @returns {string|null}
+ */
+function authenticateBearerSession(req, res) {
+  if (req.authPhone) {
+    return req.authPhone;
+  }
+
+  const authorization = String(req.headers.authorization || '').trim();
+  if (!authorization.startsWith('Bearer ')) {
+    res.status(401).json({ message: 'Missing authorization token.' });
+    return null;
+  }
+
+  try {
+    const { verifySessionToken } = require('../lib/session');
+    const token = authorization.slice('Bearer '.length).trim();
+    const session = verifySessionToken(token);
+    req.authPhone = session.phone;
+    req.authSessionExpiresAt = session.exp;
+    return req.authPhone;
+  } catch (error) {
+    res.status(401).json({
+      message: error?.message || 'Invalid authorization token.',
+    });
+    return null;
+  }
+}
+
 module.exports = {
   normalizePhone,
   parseQueryValue,
   readRequestedPhone,
   requireAuthorizedPhone,
   requireOptionalAuthorizedPhone,
+  authenticateBearerSession,
 };

@@ -2,6 +2,7 @@
 
 import '../../../utils/helpers.dart';
 import '../../../widgets/whatsapp_icon.dart';
+import '../../chat/utils/chat_navigation.dart';
 
 class MerchantSupportScreen extends StatelessWidget {
   const MerchantSupportScreen({super.key});
@@ -22,6 +23,12 @@ class MerchantSupportScreen extends StatelessWidget {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          _SupportCard(
+            title: 'محادثة داخل التطبيق',
+            subtitle: 'تواصل مع فريق الدعم وردّ على رسائلك هنا',
+            icon: Icons.chat_bubble_rounded,
+            onTap: () => ChatNavigation.openSupportChat(context),
+          ),
           _SupportCard(
             title: 'واتساب',
             subtitle: AppHelpers.supportPhoneNumber,

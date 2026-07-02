@@ -74,7 +74,7 @@ class MarketplaceRouter {
       }
     }
 
-    if (category.id == 'professionals') {
+    if (category.id == 'professionals' || category.id == 'gen_services') {
       Navigator.of(context).push(
         CupertinoPageRoute(
           builder: (_) => ProfessionalsDirectoryScreen(profession: sub),
@@ -135,6 +135,15 @@ class MarketplaceRouter {
             showCuisineFilters: category.showCuisineFilters,
             hideBack: false,
           ),
+        ),
+      );
+      return;
+    }
+
+    if (mode == SubCategoryBrowseMode.professionals) {
+      Navigator.of(context).push(
+        CupertinoPageRoute(
+          builder: (_) => ProfessionalsDirectoryScreen(profession: sub),
         ),
       );
       return;

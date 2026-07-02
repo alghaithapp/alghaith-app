@@ -105,12 +105,20 @@ class MerchantService extends ChangeNotifier {
       hasCompletedMerchantProfile &&
       !isMerchantApproved &&
       _merchantProfileOnServer == false;
+  bool get isAdminPreRegistered =>
+      MerchantProfileFields.boolValue(
+        _merchantStore?['adminPreRegistered'] ??
+            _merchantStore?['admin_pre_registered'],
+        fallback: false,
+      );
   bool get shouldShowMerchantPendingApproval =>
       hasCompletedMerchantProfile &&
       !isMerchantApproved &&
+      !isAdminPreRegistered &&
       _merchantProfileOnServer == true;
   bool get canUseMerchantAccount =>
-      hasCompletedMerchantProfile && isMerchantApproved;
+      hasCompletedMerchantProfile &&
+      (isMerchantApproved || isAdminPreRegistered);
   bool get isBazaarApproved =>
       MerchantProfileFields.boolValue(
           _merchantStore?['isBazaarMember'] ?? _merchantStore?['is_bazaar_member'],
@@ -418,18 +426,22 @@ class MerchantService extends ChangeNotifier {
             (storeData['professionalInfo'] as Map)['professionId'],
     };
     _merchantStore = {...nextStore};
-    if (!wasApproved) {
+    final requiresAccountApproval = MerchantProfileFields.accountRequiresApproval(
+      _merchantStore,
+    );
+    if (requiresAccountApproval) {
       _merchantStore!['isApproved'] = false;
       _merchantStore!['approvalStatus'] = 'pending';
-      _merchantStore!.remove('rejectionReasonKey');
-      _merchantStore!.remove('rejectionMessageAr');
-      _merchantStore!.remove('rejectedAt');
-      _merchantStore!.remove('rejection_reason_key');
-      _merchantStore!.remove('rejection_message_ar');
-      _merchantStore!.remove('rejected_at');
     } else {
+      _merchantStore!['isApproved'] = true;
       _merchantStore!['approvalStatus'] = 'approved';
     }
+    _merchantStore!.remove('rejectionReasonKey');
+    _merchantStore!.remove('rejectionMessageAr');
+    _merchantStore!.remove('rejectedAt');
+    _merchantStore!.remove('rejection_reason_key');
+    _merchantStore!.remove('rejection_message_ar');
+    _merchantStore!.remove('rejected_at');
     notifyListeners();
     try {
       await _persistMerchantStoreAndState();
@@ -622,10 +634,7 @@ class MerchantService extends ChangeNotifier {
       );
     }
 
-    var finalItem = item;
-    if (item.category == 'used') {
-      finalItem = item.copyWith(isApproved: false);
-    }
+    var finalItem = item.copyWith(isApproved: false);
 
     _items.insert(0, finalItem);
     _items = _dedupeMerchantItemsById(_items);
@@ -655,9 +664,10 @@ class MerchantService extends ChangeNotifier {
     if (index == -1) return;
     final previous = _items[index];
     final wasAvailable = previous.isAvailable;
-    _items[index] = updatedItem;
-    if (wasAvailable && !updatedItem.isAvailable) {
-      _notificationHub.onProductUnavailable(updatedItem.nameAr);
+    final finalItem = updatedItem.copyWith(isApproved: false);
+    _items[index] = finalItem;
+    if (wasAvailable && !finalItem.isAvailable) {
+      _notificationHub.onProductUnavailable(finalItem.nameAr);
     }
     notifyListeners();
 
@@ -666,7 +676,7 @@ class MerchantService extends ChangeNotifier {
       if (phone.isNotEmpty) {
         await SupabaseService.saveMerchantProduct(
           phone,
-          _productRowFromListItem(updatedItem),
+          _productRowFromListItem(finalItem),
         );
       }
       await _persistLocalBackup();
@@ -1064,6 +1074,11 @@ class MerchantService extends ChangeNotifier {
           : contactVisibility;
       professionalInfo['contact_visibility'] = visibilityMap;
       professionalInfo['contactVisibility'] = visibilityMap;
+      final specialty = MerchantProfileFields.specialty(_merchantStore);
+      if (specialty.isNotEmpty) {
+        professionalInfo['specialty'] = specialty;
+        _merchantStore!['specialty'] = specialty;
+      }
       _merchantStore!['showPhoneToCustomers'] = showPhoneToCustomers;
       _merchantStore!['showWhatsAppToCustomers'] = showWhatsAppToCustomers;
       _merchantStore!['show_phone_to_customers'] = showPhoneToCustomers;
@@ -1470,6 +1485,14 @@ class MerchantService extends ChangeNotifier {
             ),
       'approvalStatus': row['approval_status']?.toString() ??
           row['approvalStatus']?.toString(),
+      'adminPreRegistered': MerchantProfileFields.boolValue(
+        row['admin_pre_registered'] ?? row['adminPreRegistered'],
+        fallback: false,
+      ),
+      'admin_pre_registered': MerchantProfileFields.boolValue(
+        row['admin_pre_registered'] ?? row['adminPreRegistered'],
+        fallback: false,
+      ),
       'rejectionReasonKey': row['rejection_reason_key']?.toString() ??
           row['rejectionReasonKey']?.toString(),
       'rejectionMessageAr': row['rejection_message_ar']?.toString() ??

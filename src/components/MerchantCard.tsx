@@ -1,12 +1,8 @@
-import {
-  AlertTriangle,
-  BadgeCheck,
-  LoaderCircle,
-  Package2,
-  Trash2,
-  XCircle,
-} from 'lucide-react';
+import { AlertTriangle, BadgeCheck, LoaderCircle, Package2, Trash2, XCircle } from 'lucide-react';
 import type { MerchantSummary } from '../admin-types';
+import { Card } from './ui/Card';
+import { Badge } from './ui/Badge';
+import { Button } from './ui/Button';
 
 interface MerchantCardProps {
   merchant: MerchantSummary;
@@ -30,221 +26,114 @@ interface MerchantCardProps {
   canRequestBazaar: boolean;
 }
 
-function MiniStat({
-  label,
-  value,
-  hint,
-}: {
-  label: string;
-  value: string | number;
-  hint?: string;
-}) {
+function MiniStat({ label, value, hint }: { label: string; value: string | number; hint?: string }) {
   return (
-    <div className="mini-stat">
-      <span>{label}</span>
-      <strong>{value}</strong>
-      {hint ? <em>{hint}</em> : null}
+    <div style={{ display: 'flex', flexDirection: 'column', padding: '8px', background: 'var(--surface-elevated)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)' }}>
+      <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{label}</span>
+      <strong style={{ fontSize: '1rem', color: 'var(--text-primary)' }}>{value}</strong>
+      {hint && <em style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', fontStyle: 'normal' }}>{hint}</em>}
     </div>
   );
 }
 
 export default function MerchantCard({
-  merchant: m,
-  isSelected,
-  isPending,
-  isRejected,
-  freezeLoading,
-  bazaarLoading,
-  syncLoading,
-  approvalLoading,
-  rejectLoading,
-  onSelect,
-  onApprove,
-  onReject,
-  onFreeze,
-  onBazaar,
-  onSync,
-  onDelete,
-  formatMoney,
-  serviceLabel,
-  canRequestBazaar,
+  merchant: m, isSelected, isPending, isRejected, freezeLoading, bazaarLoading, syncLoading,
+  approvalLoading, rejectLoading, onSelect, onApprove, onReject, onFreeze, onBazaar, onSync, onDelete,
+  formatMoney, serviceLabel, canRequestBazaar,
 }: MerchantCardProps) {
+  const isProfessional = m.isProfessional || m.primaryServiceId === 'professionals';
+  
   return (
-    <article
-      className={isSelected ? 'merchant-card selected' : 'merchant-card'}
+    <Card 
+      padding="sm" 
       onClick={onSelect}
+      style={{ 
+        cursor: 'pointer', 
+        borderColor: isSelected ? 'var(--brand-primary)' : 'var(--border-strong)',
+        boxShadow: isSelected ? '0 0 0 1px var(--brand-primary)' : 'var(--shadow-sm)'
+      }}
     >
-      <div className="merchant-main">
+      <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
         <div>
-          <div className="merchant-title-row">
-            <h4>
-              {m.storeName ||
-                (m.isProfessional || m.primaryServiceId === 'professionals'
-                  ? 'مهني بدون اسم'
-                  : 'متجر بدون اسم')}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+            <h4 style={{ margin: 0, fontSize: '1.1rem', color: 'var(--text-primary)' }}>
+              {m.storeName || (isProfessional ? 'مهني بدون اسم' : 'متجر بدون اسم')}
             </h4>
-            {m.isProfessional || m.primaryServiceId === 'professionals' ? (
-              <span className="status-badge muted">مهني</span>
-            ) : null}
+            {isProfessional && <Badge variant="neutral">مهني</Badge>}
             {m.isApproved ? (
-              <span className="status-badge success">مفعّل</span>
+              <Badge variant="success">مفعّل</Badge>
             ) : isRejected ? (
-              <span className="status-badge danger">مرفوض</span>
+              <Badge variant="error">مرفوض</Badge>
             ) : (
-              <span className="status-badge warning">بانتظار الموافقة</span>
+              <Badge variant="warning">بانتظار الموافقة</Badge>
             )}
             {m.isFrozen ? (
-              <span className="status-badge danger">مجمّد</span>
+              <Badge variant="error">مجمّد</Badge>
             ) : !m.isOpen ? (
-              <span className="status-badge danger">المتجر مغلق</span>
+              <Badge variant="error">مغلق</Badge>
             ) : m.isBazaarMember ? (
-              <span className="status-badge success">مفعل في البازار</span>
-            ) : (
-              <span className="status-badge muted">بانتظار/خارج البازار</span>
-            )}
-            {m.isBazaarMember ? (
-              m.visibleToCustomers ? (
-                <span className="status-badge success">
-                  ظاهر للزبائن ({m.visibleProductCount})
-                </span>
-              ) : (
-                <span className="status-badge danger">غير ظاهر للزبائن</span>
-              )
+              <Badge variant="info">بازار</Badge>
             ) : null}
           </div>
-          <p className="merchant-meta">
-            {m.fullName || 'بدون اسم مالك'} · {serviceLabel(m.primaryServiceId)} ·{' '}
-            <span dir="ltr">{m.phone}</span>
+          
+          <p style={{ margin: 0, color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
+            المسؤول: {m.fullName || '—'} · <span dir="ltr">{m.phone}</span>
           </p>
-          <p className="merchant-description">
-            {m.description || 'لا يوجد وصف محفوظ.'}
+          <p style={{ margin: '4px 0 0', color: 'var(--text-muted)', fontSize: '0.8rem' }}>
+            القسم: {serviceLabel(m.primaryServiceId)} · الانضمام: {new Date(m.createdAt).toLocaleDateString('ar-IQ')}
           </p>
-          {isRejected && m.rejectionMessageAr ? (
-            <p className="courier-rejection-note">
-              سبب الرفض: {m.rejectionMessageAr}
+          
+          {isRejected && m.rejectionReason && (
+            <p style={{ margin: '8px 0 0', color: 'var(--error)', fontSize: '0.85rem', padding: '6px', background: 'var(--error-bg)', borderRadius: '6px' }}>
+              سبب الرفض: {m.rejectionReason}
             </p>
-          ) : null}
-          {m.isBazaarMember && !m.visibleToCustomers && m.visibilityNotes?.length ? (
-            <p className="merchant-visibility-note">
-              سبب عدم الظهور: {m.visibilityNotes.join(' · ')}
-            </p>
-          ) : null}
-        </div>
-        <div className="merchant-stats-inline">
-          <MiniStat
-            label="المنتجات"
-            value={m.totalProducts ?? 0}
-            hint={
-              m.availableProducts !== m.totalProducts
-                ? `${m.availableProducts ?? 0} متاح`
-                : undefined
-            }
-          />
-          <MiniStat label="الطلبات" value={m.totalOrders} />
-          <MiniStat label="المكتمل" value={m.completedOrders} />
-          <MiniStat label="الأرباح" value={`${formatMoney(m.totalRevenue)} د.ع`} />
+          )}
         </div>
       </div>
-      <div className="merchant-actions">
-        <button
-          className={m.isApproved ? 'soft-button danger' : 'soft-button success'}
-          disabled={approvalLoading || rejectLoading}
-          onClick={(event) => {
-            event.stopPropagation();
-            onApprove();
-          }}
-        >
-          {approvalLoading ? (
-            <LoaderCircle className="spin" size={16} />
-          ) : (
-            <BadgeCheck size={16} />
-          )}
-          <span>
-            {m.isApproved ? 'إلغاء تفعيل الحساب' : 'موافقة وتفعيل'}
-          </span>
-        </button>
-        {isPending || isRejected ? (
-          <button
-            className="soft-button danger"
-            disabled={approvalLoading || rejectLoading}
-            onClick={(event) => {
-              event.stopPropagation();
-              onReject();
-            }}
-          >
-            {rejectLoading ? (
-              <LoaderCircle className="spin" size={16} />
-            ) : (
-              <XCircle size={16} />
-            )}
-            <span>رفض الطلب</span>
-          </button>
-        ) : null}
-        <button
-          className={m.isFrozen ? 'soft-button' : 'soft-button danger'}
-          disabled={freezeLoading}
-          onClick={(event) => {
-            event.stopPropagation();
-            onFreeze();
-          }}
-        >
-          {freezeLoading ? (
-            <LoaderCircle className="spin" size={16} />
-          ) : (
-            <AlertTriangle size={16} />
-          )}
-          <span>{m.isFrozen ? 'فك التجميد' : 'تجميد التاجر'}</span>
-        </button>
-        {canRequestBazaar ? (
-          <button
-            className={m.isBazaarMember ? 'soft-button' : 'soft-button success'}
-            disabled={bazaarLoading}
-            onClick={(event) => {
-              event.stopPropagation();
-              onBazaar();
-            }}
-          >
-            {bazaarLoading ? (
-              <LoaderCircle className="spin" size={16} />
-            ) : (
-              <BadgeCheck size={16} />
-            )}
-            <span>
-              {m.isBazaarMember ? 'سحب الموافقة' : 'موافقة على البازار'}
-            </span>
-          </button>
-        ) : (
-          <span className="status-badge muted">لا ينطبق على هذا القسم</span>
-        )}
-        {m.isBazaarMember && !m.visibleToCustomers ? (
-          <button
-            className="soft-button success"
-            disabled={syncLoading}
-            onClick={(event) => {
-              event.stopPropagation();
-              onSync();
-            }}
-          >
-            {syncLoading ? (
-              <LoaderCircle className="spin" size={16} />
-            ) : (
-              <Package2 size={16} />
-            )}
-            <span>إصلاح الظهور في البازار</span>
-          </button>
-        ) : null}
-        <button
-          className="soft-button danger"
-          disabled={approvalLoading || rejectLoading || freezeLoading}
-          onClick={(event) => {
-            event.stopPropagation();
-            onDelete();
-          }}
-        >
-          <Trash2 size={16} />
-          <span>حذف الحساب</span>
-        </button>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(100px, 1fr))', gap: '8px', marginTop: 'auto' }}>
+        <MiniStat label="المبيعات الكلية" value={`${formatMoney(m.totalRevenue)} د.ع`} />
+        <MiniStat label="أرباح التطبيق" value={`${formatMoney(m.totalAppProfit)} د.ع`} />
+        <MiniStat label="الطلبات" value={m.totalOrders} hint={`تقييم: ${m.rating ? m.rating.toFixed(1) : '—'} ⭐`} />
       </div>
-    </article>
+      </div>
+
+      {isSelected && (
+        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '16px', paddingTop: '16px', borderTop: '1px solid var(--border)' }}>
+          {isPending || isRejected ? (
+            <>
+              <Button variant="primary" onClick={(e) => { e.stopPropagation(); onApprove(); }} isLoading={approvalLoading} icon={<BadgeCheck size={16}/>}>
+                قبول وتفعيل
+              </Button>
+              {!isRejected && (
+                <Button variant="secondary" onClick={(e) => { e.stopPropagation(); onReject(); }} isLoading={rejectLoading} icon={<XCircle size={16}/>}>
+                  رفض الطلب
+                </Button>
+              )}
+            </>
+          ) : (
+            <>
+              <Button variant="secondary" onClick={(e) => { e.stopPropagation(); onFreeze(); }} isLoading={freezeLoading} icon={<AlertTriangle size={16}/>}>
+                {m.isFrozen ? 'إلغاء التجميد' : 'تجميد الحساب'}
+              </Button>
+              {canRequestBazaar && (
+                <Button variant="secondary" onClick={(e) => { e.stopPropagation(); onBazaar(); }} isLoading={bazaarLoading} icon={<Package2 size={16}/>}>
+                  {m.isBazaarMember ? 'إزالة من البازار' : 'إضافة للبازار'}
+                </Button>
+              )}
+              {m.isBazaarMember && (
+                <Button variant="secondary" onClick={(e) => { e.stopPropagation(); onSync(); }} isLoading={syncLoading} icon={<LoaderCircle size={16}/>}>
+                  تحديث منتجات البازار
+                </Button>
+              )}
+            </>
+          )}
+          <Button variant="danger" onClick={(e) => { e.stopPropagation(); onDelete(); }} icon={<Trash2 size={16}/>} style={{ marginInlineStart: 'auto' }}>
+            حذف نهائي
+          </Button>
+        </div>
+      )}
+    </Card>
   );
 }

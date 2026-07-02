@@ -62,6 +62,72 @@ export interface MerchantPreRegisterPayload {
   primaryServiceId: string;
   serviceIds: string[];
   note?: string;
+  isBazaarMember?: boolean;
+  serviceSubCategory?: string;
+}
+
+export interface MerchantCategoryUpdatePayload {
+  merchantPhone: string;
+  primaryServiceId: string;
+  serviceIds?: string[];
+  serviceSubCategory?: string;
+  isBazaarMember?: boolean;
+}
+
+export interface MerchantCategoryUpdateResponse {
+  success: boolean;
+  phone: string;
+  primaryServiceId: string;
+  serviceIds: string[];
+  serviceSubCategory: string | null;
+  isBazaarMember: boolean;
+  storeName: string;
+}
+
+/** فئات فرعية لقسم التسوق (product) */
+export const SHOPPING_PRODUCT_SUBCATEGORIES = [
+  { id: 'cosmetics', labelAr: 'مستحضرات تجميل' },
+  { id: 'home_goods', labelAr: 'مواد منزلية' },
+  { id: 'electrical_appliances', labelAr: 'أجهزة كهربائية' },
+  { id: 'food_items', labelAr: 'مواد غذائية' },
+  { id: 'construction', labelAr: 'مواد إنشائية' },
+  { id: 'school', labelAr: 'لوازم مكتبية ومدرسية' },
+  { id: 'bakery', labelAr: 'مخابز ومعجنات' },
+  { id: 'meat', labelAr: 'لحوم' },
+  { id: 'grocery', labelAr: 'بقالة' },
+  { id: 'shoes_bags', labelAr: 'أحذية وحقائب' },
+  { id: 'kids_clothing', labelAr: 'ملابس أطفال' },
+  { id: 'women_clothing', labelAr: 'ملابس نسائية' },
+  { id: 'men_clothing', labelAr: 'ملابس رجالية' },
+  { id: 'gifts', labelAr: 'زهور وهدايا' },
+] as const;
+
+/** فئات فرعية لقسم الصحة والجمال */
+export const BEAUTY_SUBCATEGORIES = [
+  { id: 'صالون رجالي', labelAr: 'صالون رجالي' },
+  { id: 'صالون نسائي', labelAr: 'صالون نسائي' },
+  { id: 'أطباء وعيادات', labelAr: 'أطباء وعيادات' },
+  { id: 'صيدلية', labelAr: 'صيدلية' },
+] as const;
+
+/** تخصصات الأطباء الثابتة — للتسجيل والفلترة */
+export const DOCTOR_SPECIALTIES = [
+  { id: 'طب القلب', labelAr: 'طب القلب' },
+  { id: 'طب الأطفال', labelAr: 'طب الأطفال' },
+  { id: 'الطب الباطني', labelAr: 'الطب الباطني' },
+  { id: 'الجراحة العامة', labelAr: 'الجراحة العامة' },
+  { id: 'طب النساء والتوليد', labelAr: 'طب النساء والتوليد' },
+  { id: 'طب العيون', labelAr: 'طب العيون' },
+  { id: 'طب الأنف والأذن والحنجرة', labelAr: 'طب الأنف والأذن والحنجرة' },
+  { id: 'طب الأسنان', labelAr: 'طب الأسنان' },
+  { id: 'الأمراض الجلدية', labelAr: 'الأمراض الجلدية' },
+  { id: 'جراحة العظام', labelAr: 'جراحة العظام' },
+] as const;
+
+export type DoctorSpecialtyId = (typeof DOCTOR_SPECIALTIES)[number]['id'];
+
+export function isDoctorSpecialtyId(value: string): value is DoctorSpecialtyId {
+  return DOCTOR_SPECIALTIES.some((item) => item.id === value);
 }
 
 export interface MerchantPreRegisterResponse {
@@ -109,14 +175,31 @@ export interface CourierPreRegisterResponse {
 export interface DoctorPharmacyPreRegisterPayload {
   subscriberPhone: string;
   fullName: string;
-  subCategoryId: 'أطباء وعيادات' | 'صيدلية';
+  subCategoryId?: 'أطباء وعيادات' | 'صيدلية';
   description?: string;
   address?: string;
   contactPhone?: string;
   whatsapp?: string;
-  specialty?: string;
+  specialty?: DoctorSpecialtyId;
+  doctorPhone?: string;
+  clinicPhone?: string;
   openTime?: string;
   closeTime?: string;
+  profileImageUrl?: string;
+  clinicImageUrl?: string;
+}
+
+export interface CustomerPreRegisterPayload {
+  phone: string;
+  fullName?: string;
+  address?: string;
+}
+
+export interface CustomerPreRegisterResponse {
+  success: boolean;
+  phone: string;
+  fullName: string | null;
+  role: string;
 }
 
 export interface DoctorPharmacyPreRegisterResponse {
@@ -283,9 +366,44 @@ export interface MerchantSummary {
   lastOrderAt: string | null;
   totalProducts: number;
   availableProducts: number;
+  pendingProducts?: number;
+  accountApprovalRequired?: boolean;
   visibleToCustomers: boolean;
   visibleProductCount: number;
   visibilityNotes: string[];
+  serviceSubCategory?: string;
+  specialty?: string;
+  serviceIds?: string[];
+  profileImageUrl?: string;
+  logoImageUrl?: string;
+  coverImageUrl?: string;
+  clinicImageUrl?: string;
+  avatarImageUrl?: string;
+}
+
+export interface ProfessionalSummary extends MerchantSummary {
+  professionalCategoryId: string;
+  professionalCategoryLabel: string;
+  profileImageUrl: string;
+  workSampleCount: number;
+}
+
+export interface ProfessionalDetails extends MerchantDetails {
+  professional: {
+    categoryId: string;
+    categoryLabel: string;
+    profileImageUrl: string;
+    workSampleUrls: string[];
+    description: string;
+    contactPhone: string;
+    whatsapp: string;
+    openTime: string;
+    closeTime: string;
+    showPhoneToCustomers: boolean;
+    showWhatsAppToCustomers: boolean;
+    rejectionMessageAr: string;
+    professionalInfo: Record<string, unknown>;
+  };
 }
 
 export interface MerchantDetails {
@@ -297,6 +415,8 @@ export interface MerchantDetails {
     serviceIds: string[];
     isOpen: boolean;
     isFrozen: boolean;
+    isApproved?: boolean;
+    approvalStatus?: string;
     isBazaarMember: boolean;
     rating: number;
     address: string;
@@ -305,6 +425,12 @@ export interface MerchantDetails {
     updatedAt: string | null;
     fullName: string;
     role: string;
+    profileImageUrl?: string;
+    logoImageUrl?: string;
+    coverImageUrl?: string;
+    clinicImageUrl?: string;
+    avatarImageUrl?: string;
+    workSampleUrls?: string[];
   };
   stats: {
     totalOrders: number;
@@ -407,13 +533,67 @@ export interface CourierSummary {
   role: string;
   accountType: string;
   updatedAt: string | null;
-  documents?: {
-    profileImage?: string;
-    vehicleImage?: string;
-    idFrontImage?: string;
-    idBackImage?: string;
-    residenceCardImage?: string;
-  };
+  mukhtarName?: string;
+  documents?: OperatorDocuments;
+}
+
+export interface DriverSummary {
+  phone: string;
+  name: string;
+  contactPhone: string;
+  vehicle: string;
+  plate: string;
+  area: string;
+  available: boolean;
+  isSuspended: boolean;
+  isApproved: boolean;
+  approvalStatus: 'pending' | 'approved' | 'rejected';
+  rejectionReasonKey: string | null;
+  rejectionMessageAr: string | null;
+  role: string;
+  accountType: string;
+  updatedAt: string | null;
+  mukhtarName?: string;
+  taxiType?: string;
+  carImage?: string;
+  documents?: OperatorDocuments;
+}
+
+export interface OperatorDocuments {
+  profileImage?: string;
+  vehicleImage?: string;
+  carImage?: string;
+  idFrontImage?: string;
+  idBackImage?: string;
+  residenceCardImage?: string;
+  vehicleRegFrontImage?: string;
+  vehicleRegBackImage?: string;
+}
+
+export interface PendingProductSummary {
+  id: string;
+  phone?: string;
+  merchantPhone: string;
+  merchantStoreName: string;
+  merchantCategory: string;
+  name_ar?: string;
+  nameAr?: string;
+  description_ar?: string;
+  descriptionAr?: string;
+  price: number;
+  category: string;
+  sub_category?: string;
+  subCategory?: string;
+  image?: string;
+  image_url?: string;
+  isApproved: boolean;
+  approvalStatus: 'pending' | 'approved' | 'rejected';
+  rejectionMessageAr?: string;
+  listing_mode?: string;
+  listingMode?: string;
+  neighborhood?: string;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export const MERCHANT_REJECTION_REASONS: Array<{

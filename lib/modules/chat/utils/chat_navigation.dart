@@ -1,7 +1,9 @@
 ﻿import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../screens/chat_screen.dart';
 import '../services/chat_thread_refresh.dart';
+import '../../../providers/app_provider.dart';
 import '../../../utils/guest_gate.dart';
 import '../../../utils/helpers.dart';
 
@@ -100,9 +102,30 @@ class ChatNavigation {
   }
 
   static Future<void> openSupportChat(BuildContext context) {
-    return AppHelpers.launchWhatsApp(
-      AppHelpers.supportWhatsAppNumber,
-      'مرحباً، أحتاج مساعدة في تطبيق الغيث',
+    if (!GuestGate.requireAccount(
+      context,
+      message: 'سجّل دخولك للتواصل مع فريق الدعم داخل التطبيق.',
+    )) {
+      return Future.value();
+    }
+    final phone = context.read<AppProvider>().sessionPhone?.trim() ?? '';
+    if (phone.isEmpty) {
+      if (!context.mounted) return Future.value();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'تعذّر فتح محادثة الدعم — رقم الحساب غير متوفر.',
+            style: TextStyle(fontFamily: 'Cairo'),
+          ),
+        ),
+      );
+      return Future.value();
+    }
+    return open(
+      context,
+      threadType: 'support',
+      threadId: phone,
+      otherPartyName: 'دعم الغيث',
     );
   }
 
@@ -119,6 +142,9 @@ class ChatNavigation {
 
     final senderName = data['senderName']?.toString().trim();
     final senderPhone = data['senderPhone']?.toString().trim();
+    final displayName = threadType == 'support'
+        ? 'دعم الغيث'
+        : (senderName?.isNotEmpty == true ? senderName! : 'مراسل');
 
     final refreshed = ChatThreadRefreshHub.instance.notifyIfActive(
       threadType: threadType,
@@ -129,7 +155,7 @@ class ChatNavigation {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'رسالة جديدة من ${senderName?.isNotEmpty == true ? senderName! : 'مراسل'}',
+            'رسالة جديدة من ${threadType == 'support' ? 'دعم الغيث' : (senderName?.isNotEmpty == true ? senderName! : 'مراسل')}',
             style: const TextStyle(fontFamily: 'Cairo'),
           ),
           duration: const Duration(seconds: 2),
@@ -142,7 +168,7 @@ class ChatNavigation {
       context,
       threadType: threadType,
       threadId: threadId,
-      otherPartyName: senderName?.isNotEmpty == true ? senderName! : 'مراسل',
+      otherPartyName: displayName,
       receiverPhone: senderPhone?.isNotEmpty == true ? senderPhone : null,
     );
   }

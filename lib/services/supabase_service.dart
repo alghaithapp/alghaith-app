@@ -444,6 +444,19 @@ class SupabaseService {
   static Future<void> markPushInboxOpened({required String phone}) =>
       _db.markPushInboxOpened(phone: phone);
 
+  static Future<List<Map<String, dynamic>>> loadUserNotifications({
+    required String phone,
+    String? since,
+    int limit = 50,
+  }) =>
+      _db.loadUserNotifications(phone: phone, since: since, limit: limit);
+
+  static Future<void> markUserNotificationsRead({
+    required String phone,
+    List<String>? ids,
+  }) =>
+      _db.markUserNotificationsRead(phone: phone, ids: ids);
+
   static Future<void> deleteAccount(String phone) => _db.deleteAccount(phone);
 
   // ── Taxi methods ──────────────────────────────────────────────────

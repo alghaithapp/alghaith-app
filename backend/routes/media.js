@@ -10,9 +10,18 @@ const { requireAuthorizedPhone } = require('./_middleware');
 const { resolvePhoneKey } = require('../supabase_repo/common');
 const { phonesOverlap } = require('../supabase_repo/common');
 
+const { getAdminRole } = require('../supabase_repo/admin_roles');
+
 async function resolveAuthorizedOwnerId(authPhone, requestedOwnerId) {
   const authKey = await resolvePhoneKey(authPhone);
   const ownerId = String(requestedOwnerId || authKey).trim();
+  
+  // Allow admins to upload for anyone
+  const adminRole = await getAdminRole(authKey);
+  if (adminRole) {
+    return resolvePhoneKey(ownerId);
+  }
+
   if (!phonesOverlap(authKey, ownerId)) {
     throw new Error('Unauthorized media owner.');
   }

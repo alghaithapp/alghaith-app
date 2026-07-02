@@ -112,15 +112,13 @@ class _CatalogProductsScreenState extends State<CatalogProductsScreen> {
       child: SafeArea(
         child: Column(
           children: [
-            if (widget.subtitleAr != null || _contactOnly)
+            if (widget.subtitleAr != null && widget.subtitleAr!.trim().isNotEmpty)
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
                 child: Align(
                   alignment: Alignment.centerRight,
                   child: Text(
-                    _contactOnly
-                        ? 'تواصل مع صاحب الإعلان داخل التطبيق (مراسلة أو اتصال)'
-                        : widget.subtitleAr!,
+                    widget.subtitleAr!,
                     style: const TextStyle(
                       fontFamily: 'Cairo',
                       fontSize: 13,

@@ -22,6 +22,7 @@ import '../../../widgets/service_navigation_buttons.dart';
 import 'cart_screen.dart';
 import 'restaurant_menu_screen.dart';
 import 'shopping_shared_widgets.dart';
+import 'service_provider_detail_screen.dart';
 import 'shopping_store_menu_screen.dart';
 
 class ShoppingStoresScreen extends StatefulWidget {
@@ -64,6 +65,7 @@ class _ShoppingStoresScreenState extends State<ShoppingStoresScreen> {
   Object? _storesLoadError;
   bool _isLoadingStores = true;
   String _selectedFilter = 'الكل';
+  String _selectedDoctorSpecialty = 'الكل';
   String _bazaarKindFilter = '';
 
   final List<String> _filters = [
@@ -91,10 +93,27 @@ class _ShoppingStoresScreenState extends State<ShoppingStoresScreen> {
         subCategoryId: widget.subCategory?.id,
       );
     }
+    final serviceId = widget.serviceId?.trim() ?? '';
+    if (serviceId.isNotEmpty && serviceId != 'product') {
+      return SupabaseService.loadServiceStores(
+        serviceId: serviceId,
+        productCategory: widget.productCategory,
+        subCategoryId: widget.subCategory?.id,
+        marketplaceCategory: widget.marketplaceCategory,
+      );
+    }
     return SupabaseService.loadShoppingStores(
       subCategoryId: widget.subCategory?.id,
     );
   }
+
+  bool get _isContactOnlyService {
+    const contactOnly = {'beauty', 'professionals', 'tourism'};
+    final serviceId = widget.serviceId?.trim() ?? '';
+    return contactOnly.contains(serviceId);
+  }
+
+  bool get _isDoctorsBrowse => widget.subCategory?.id == 'أطباء وعيادات';
 
   String get _storesCacheBucket {
     final parts = <String>[
@@ -171,6 +190,14 @@ class _ShoppingStoresScreenState extends State<ShoppingStoresScreen> {
     return !isRestaurant;
   }
 
+  bool _storeMatchesDoctorSpecialty(Map profile) {
+    if (!_isDoctorsBrowse || _selectedDoctorSpecialty == 'الكل') return true;
+    return MerchantProfileFields.specialty(
+          Map<String, dynamic>.from(profile),
+        ) ==
+        _selectedDoctorSpecialty;
+  }
+
   String _restaurantCategoryFromProfile(Map profile) {
     final direct =
         profile['restaurantCategory'] ?? profile['restaurant_category'];
@@ -199,6 +226,7 @@ class _ShoppingStoresScreenState extends State<ShoppingStoresScreen> {
   }
 
   bool _storeHasVisibleProducts(Map<String, dynamic> store) {
+    if (_isContactOnlyService) return true;
     final products = store['products'];
     if (products is! List || products.isEmpty) return false;
     final subId = widget.subCategory?.id.trim() ?? '';
@@ -228,11 +256,15 @@ class _ShoppingStoresScreenState extends State<ShoppingStoresScreen> {
     final headerTitle = widget.titleAr ??
         (widget.storeKind == MerchantStoreKind.restaurant
             ? 'المطاعم'
-            : 'المتاجر');
+            : _isContactOnlyService
+                ? 'الخدمات'
+                : 'المتاجر');
     final headerSubtitle = widget.subtitleAr ??
         (widget.storeKind == MerchantStoreKind.restaurant
             ? 'اختر مطعمك المفضل واطلب بسهولة'
-            : 'اختر متجرك واطلب بسهولة');
+            : _isContactOnlyService
+                ? 'اختر مزود الخدمة المناسب'
+                : 'اختر متجرك واطلب بسهولة');
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -383,6 +415,56 @@ class _ShoppingStoresScreenState extends State<ShoppingStoresScreen> {
                       ),
                     ),
 
+                  if (_isDoctorsBrowse)
+                    SliverToBoxAdapter(
+                      child: Container(
+                        height: 55,
+                        margin: const EdgeInsets.symmetric(vertical: 10),
+                        child: ListView.builder(
+                          scrollDirection: Axis.horizontal,
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          itemCount: MarketplaceCatalog.doctorSpecialties.length + 1,
+                          itemBuilder: (context, index) {
+                            final filter = index == 0
+                                ? 'الكل'
+                                : MarketplaceCatalog.doctorSpecialties[index - 1];
+                            final isSelected = _selectedDoctorSpecialty == filter;
+                            return GestureDetector(
+                              onTap: () => setState(
+                                () => _selectedDoctorSpecialty = filter,
+                              ),
+                              child: AnimatedContainer(
+                                duration: const Duration(milliseconds: 300),
+                                margin: const EdgeInsets.symmetric(
+                                  horizontal: 5,
+                                  vertical: 5,
+                                ),
+                                padding: const EdgeInsets.symmetric(horizontal: 16),
+                                decoration: BoxDecoration(
+                                  color: isSelected
+                                      ? primaryRed
+                                      : const Color(0xFFF5F5F5),
+                                  borderRadius: BorderRadius.circular(25),
+                                ),
+                                alignment: Alignment.center,
+                                child: Text(
+                                  filter,
+                                  style: TextStyle(
+                                    fontFamily: 'Cairo',
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 12,
+                                    color: isSelected
+                                        ? Colors.white
+                                        : const Color(0xFF4A4A4A),
+                                  ),
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    ),
+
                   // 3. Cuisine Filters (only for non-bazaar channels)
                   if (widget.showCuisineFilters && !_isBazaarChannel)
                       SliverToBoxAdapter(
@@ -484,10 +566,13 @@ class _ShoppingStoresScreenState extends State<ShoppingStoresScreen> {
                               name.contains(query) || desc.contains(query);
                           final matchesFilter = _storeMatchesCuisineFilter(p);
                           final matchesBazaarKind = _storeMatchesBazaarKind(p);
+                          final matchesDoctorSpecialty =
+                              _storeMatchesDoctorSpecialty(p);
 
                           return matchesQuery &&
                               matchesFilter &&
-                              matchesBazaarKind;
+                              matchesBazaarKind &&
+                              matchesDoctorSpecialty;
                         }).toList();
 
                         if (filtered.isEmpty) {
@@ -498,6 +583,13 @@ class _ShoppingStoresScreenState extends State<ShoppingStoresScreen> {
                               hasSearch: query.isNotEmpty,
                               hasCuisineFilter: widget.showCuisineFilters &&
                                   _selectedFilter != 'الكل',
+                              emptyMessage: MarketplaceCatalog.emptyStoresMessage(
+                                serviceId: widget.serviceId,
+                                subCategoryId: widget.subCategory?.id,
+                                subCategoryTitleAr: widget.subCategory?.titleAr,
+                                isRestaurant:
+                                    widget.storeKind == MerchantStoreKind.restaurant,
+                              ),
                             ),
                           );
                         }
@@ -520,20 +612,30 @@ class _ShoppingStoresScreenState extends State<ShoppingStoresScreen> {
                                 return ShopRestaurantCard(
                                   data: filtered[index],
                                   isRestaurant: openAsRestaurant,
+                                  contactOnly: _isContactOnlyService,
+                                  providerTitleAr: widget.subCategory?.titleAr ??
+                                      widget.titleAr,
                                   onTap: () {
                                     Navigator.of(context).push(
                                       CupertinoPageRoute(
-                                        builder: (_) => openAsRestaurant
-                                            ? RestaurantMenuScreen(
-                                                storeProfile: profile,
-                                                storeProducts: products,
-                                              )
-                                            : ShoppingStoreMenuScreen(
+                                        builder: (_) => _isContactOnlyService
+                                            ? ServiceProviderDetailScreen(
                                                 profile: profile,
-                                                products: products,
-                                                subCategory: widget.subCategory,
-                                                storeKind: widget.storeKind,
-                                              ),
+                                                titleAr: widget.subCategory?.titleAr ??
+                                                    widget.titleAr ??
+                                                    'مزود الخدمة',
+                                              )
+                                            : openAsRestaurant
+                                                ? RestaurantMenuScreen(
+                                                    storeProfile: profile,
+                                                    storeProducts: products,
+                                                  )
+                                                : ShoppingStoreMenuScreen(
+                                                    profile: profile,
+                                                    products: products,
+                                                    subCategory: widget.subCategory,
+                                                    storeKind: widget.storeKind,
+                                                  ),
                                       ),
                                     );
                                   },

@@ -45,6 +45,7 @@ class _MerchantSetupScreenState extends State<MerchantSetupScreen> {
   String? _selectedProfessionalCategoryId;
   String? _selectedRestaurantCategory;
   String? _selectedServiceSubCategory;
+  String? _selectedDoctorSpecialty;
   double? _storeLatitude;
   double? _storeLongitude;
 
@@ -81,6 +82,9 @@ class _MerchantSetupScreenState extends State<MerchantSetupScreen> {
 
   /// خدمات الجمال تُعرض كملف خدمة (صورة + هاتف + واتساب + ساعات) لا كمتجر منتجات
   bool get _isBeautySetup => _primaryServiceId == 'beauty';
+
+  bool get _isDoctorSetup =>
+      _isBeautySetup && _selectedServiceSubCategory == 'أطباء وعيادات';
 
   bool get _hasServiceSubCategories =>
       const {'beauty', 'cars', 'real_estate', 'tourism'}.contains(_primaryServiceId);
@@ -205,6 +209,11 @@ class _MerchantSetupScreenState extends State<MerchantSetupScreen> {
           provider.merchantStore?['restaurantCategory']?.toString();
       _selectedServiceSubCategory ??=
           provider.merchantStore?['serviceSubCategory']?.toString();
+      _selectedDoctorSpecialty ??=
+          MerchantProfileFields.specialty(provider.merchantStore);
+      if ((_selectedDoctorSpecialty ?? '').isEmpty) {
+        _selectedDoctorSpecialty = null;
+      }
       _storeLatitude ??= provider.merchantLatitude;
       _storeLongitude ??= provider.merchantLongitude;
       if (_workSampleImagesBase64.isEmpty) {
@@ -615,10 +624,47 @@ class _MerchantSetupScreenState extends State<MerchantSetupScreen> {
                                   label: sub,
                                   selected: _selectedServiceSubCategory == sub,
                                   onTap: () => setState(
-                                    () => _selectedServiceSubCategory = sub,
+                                    () {
+                                      _selectedServiceSubCategory = sub;
+                                      if (sub != 'أطباء وعيادات') {
+                                        _selectedDoctorSpecialty = null;
+                                      }
+                                    },
                                   ),
                                 )).toList(),
                               ),
+                              if (_isDoctorSetup) ...[
+                                const SizedBox(height: 16),
+                                _sectionTitle('التخصص الطبي'),
+                                const SizedBox(height: 8),
+                                DropdownButtonFormField<String>(
+                                  value: _selectedDoctorSpecialty,
+                                  decoration: InputDecoration(
+                                    hintText: 'اختر التخصص...',
+                                    filled: true,
+                                    fillColor: Colors.grey.shade50,
+                                    border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                  ),
+                                  items: MarketplaceCatalog.doctorSpecialties
+                                      .map(
+                                        (item) => DropdownMenuItem(
+                                          value: item,
+                                          child: Text(
+                                            item,
+                                            style: const TextStyle(
+                                              fontFamily: 'Cairo',
+                                            ),
+                                          ),
+                                        ),
+                                      )
+                                      .toList(),
+                                  onChanged: (value) => setState(
+                                    () => _selectedDoctorSpecialty = value,
+                                  ),
+                                ),
+                              ],
                             ],
                           ] else if (_isBeautySetup) ...[
                             MerchantImageUploadSlot(
@@ -844,6 +890,11 @@ class _MerchantSetupScreenState extends State<MerchantSetupScreen> {
                                   return failWith(
                                       'يرجى اختيار $_serviceSubCategoryLabel');
                                 }
+                                if (_isDoctorSetup &&
+                                    (_selectedDoctorSpecialty == null ||
+                                        _selectedDoctorSpecialty!.isEmpty)) {
+                                  return failWith('يرجى اختيار التخصص الطبي');
+                                }
 
                                 if (_isProfessionalSetup) {
                                   final address =
@@ -906,6 +957,8 @@ class _MerchantSetupScreenState extends State<MerchantSetupScreen> {
                                         _selectedRestaurantCategory,
                                     'serviceSubCategory':
                                         _selectedServiceSubCategory,
+                                    if (_isDoctorSetup)
+                                      'specialty': _selectedDoctorSpecialty,
                                     'profileImageBase64': _isRestaurantSetup
                                         ? _logoImageBase64
                                         : _profileImageBase64,
@@ -965,7 +1018,21 @@ class _MerchantSetupScreenState extends State<MerchantSetupScreen> {
                                                         )
                                                         .titleEn,
                                           }
-                                        : null,
+                                        : _isDoctorSetup
+                                            ? {
+                                                'specialty':
+                                                    _selectedDoctorSpecialty,
+                                                'phone': _phoneController.text
+                                                    .trim(),
+                                                'whatsapp':
+                                                    _resolveWhatsAppNumber(),
+                                                'openTime': _openTime.trim(),
+                                                'closeTime': _closeTime.trim(),
+                                                'address': _addressController
+                                                    .text
+                                                    .trim(),
+                                              }
+                                            : null,
                                     'professionalCategoryId':
                                         _selectedProfessionalCategoryId,
                                   });

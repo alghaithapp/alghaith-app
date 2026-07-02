@@ -147,28 +147,28 @@ export default function MerchantsView({
 
   return (
     <>
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12, gap: 8 }}>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12, gap: 8, flexWrap: 'wrap' }}>
         <button
           type="button"
-          className="primary-button"
+          className="ui-btn ui-btn-primary"
           onClick={() => setShowProfessionalRegister(true)}
         >
-          <Wrench size={16} style={{ marginLeft: 6 }} />
+          <Wrench size={16} />
           إضافة مهني
         </button>
         {onPreRegisterDoctorPharmacy && (
           <button
             type="button"
-            className="primary-button"
+            className="ui-btn ui-btn-primary"
             onClick={() => setShowDoctorPharmacyRegister(true)}
           >
-            <Stethoscope size={16} style={{ marginLeft: 6 }} />
+            <Stethoscope size={16} />
             إضافة طبيب / صيدلية
           </button>
         )}
         <button
           type="button"
-          className="primary-button"
+          className="ui-btn ui-btn-primary"
           onClick={() => setShowPreRegister(true)}
         >
           + تسجيل تاجر برقم
@@ -229,17 +229,14 @@ export default function MerchantsView({
       )}
 
       {/* Filter chips */}
-      <div className="account-filter-row">
+      <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '8px', marginBottom: '16px' }}>
         {FILTERS.map(([filter, label]) => (
           <button
             key={filter}
             type="button"
-            className={
-              merchantFilter === filter
-                ? 'filter-chip active'
-                : 'filter-chip'
-            }
+            className={`ui-btn ${merchantFilter === filter ? 'ui-btn-primary' : 'ui-btn-secondary'}`}
             onClick={() => onFilterChange(filter)}
+            style={{ borderRadius: '999px', padding: '6px 16px', fontSize: '0.85rem' }}
           >
             {label}
           </button>
@@ -247,8 +244,8 @@ export default function MerchantsView({
       </div>
 
       {/* Sort controls */}
-      <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 16, flexWrap: 'wrap' }}>
-        <span className="sort-label">ترتيب حسب:</span>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 24, flexWrap: 'wrap' }}>
+        <span style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-muted)' }}>ترتيب حسب:</span>
         {(
           [
             ['storeName', 'الاسم'],
@@ -261,8 +258,8 @@ export default function MerchantsView({
           <button
             key={f}
             type="button"
-            className="filter-chip"
-            style={sortField === f ? { background: 'var(--brand-primary-glow)', color: 'var(--brand-primary)', borderColor: 'var(--brand-primary)' } : undefined}
+            className="ui-btn ui-btn-secondary"
+            style={{ borderRadius: '999px', padding: '4px 12px', fontSize: '0.8rem', ...(sortField === f ? { background: 'var(--brand-primary-glow)', color: 'var(--brand-primary)', borderColor: 'var(--brand-primary)' } : {}) }}
             onClick={() => toggleSort(f)}
           >
             {label}
@@ -271,7 +268,7 @@ export default function MerchantsView({
         ))}
       </div>
 
-      <div className="merchant-list">
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))', gap: '16px' }}>
         {(() => {
           const items = sortedMerchants;
           const pendingMerchantsList = items.filter(
@@ -373,17 +370,17 @@ export default function MerchantsView({
             return (
               <React.Fragment key={m.phone}>
                 {showGroup && group === 'pending' ? (
-                  <div className="section-divider">
+                  <div style={{ gridColumn: '1 / -1', padding: '16px 0 8px', borderBottom: '1px solid var(--border)', fontWeight: 800, color: 'var(--brand-primary)' }}>
                     <span>📋 طلبات جديدة ({pendingMerchantsList.length})</span>
                   </div>
                 ) : null}
                 {showGroup && group === 'approved' ? (
-                  <div className="section-divider">
+                  <div style={{ gridColumn: '1 / -1', padding: '16px 0 8px', borderBottom: '1px solid var(--border)', fontWeight: 800, color: 'var(--success)' }}>
                     <span>✅ التجار المعتمدون ({approvedMerchantsList.length})</span>
                   </div>
                 ) : null}
                 {showGroup && group === 'other' ? (
-                  <div className="section-divider">
+                  <div style={{ gridColumn: '1 / -1', padding: '16px 0 8px', borderBottom: '1px solid var(--border)', fontWeight: 800, color: 'var(--error)' }}>
                     <span>❌ مرفوض ({otherMerchantsList.length})</span>
                   </div>
                 ) : null}

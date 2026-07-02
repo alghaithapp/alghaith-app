@@ -10,6 +10,7 @@ import '../../../providers/app_provider.dart';
 import '../../../utils/account_role_switch.dart';
 import '../../../utils/helpers.dart';
 import '../../chat/services/chat_service.dart';
+import '../../chat/utils/chat_navigation.dart';
 import '../widgets/account/account_page_header.dart';
 import '../widgets/account/account_server_loading_view.dart';
 import '../../../widgets/app_image.dart';
@@ -378,10 +379,7 @@ class _SettingsListCard extends StatelessWidget {
         icon: Icons.headset_mic_rounded,
         color: Colors.green,
         title: 'خدمة دعم العملاء',
-        onTap: () => AppHelpers.launchWhatsApp(
-          AppHelpers.supportWhatsAppNumber,
-          'مرحبا، أحتاج مساعدة في تطبيق الغيث',
-        ),
+        onTap: () => ChatNavigation.openSupportChat(context),
         showDivider: false,
       ),
     ];

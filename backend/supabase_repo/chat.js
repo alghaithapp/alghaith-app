@@ -11,8 +11,36 @@ const {
 } = require('./common');
 const { readTaxiMeta } = require('./taxi');
 const { deleteChatImageByUrl, purgeExpiredChatImages } = require('../services/chat_media_cleanup');
+const { assertAdminAccess } = require('./users');
 
 const SUPPORT_PLATFORM_PHONE = '+9647830889994';
+
+async function isAdminChatPhone(phone) {
+  try {
+    await assertAdminAccess(phone);
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
+async function getPrimaryAdminReceiverPhone() {
+  const envPhones = String(process.env.ADMIN_PHONES || '')
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
+  const candidates = [...envPhones, ...PLATFORM_ADMIN_PHONES];
+  for (const candidate of candidates) {
+    const trimmed = String(candidate || '').trim();
+    if (!trimmed) continue;
+    try {
+      return await resolvePhoneKey(trimmed);
+    } catch (_) {
+      return trimmed;
+    }
+  }
+  return SUPPORT_PLATFORM_PHONE;
+}
 
 function formatMessage(row) {
   return {
@@ -124,6 +152,20 @@ async function buildThreadContext(threadType, threadId, myPhone, otherPartyPhone
         ? String(merchant.store_name).trim()
         : 'متجر';
       contextLabel = 'محادثة متجر';
+      break;
+    }
+    case 'support': {
+      contextLabel = 'دعم العملاء';
+      if (await isAdminChatPhone(myPhone)) {
+        const user = await selectSingleByPhone('app_users', trimmedId);
+        const merchant = user ? null : await selectSingleByPhone('merchant_profiles', trimmedId);
+        threadTitle =
+          (user?.full_name && String(user.full_name).trim()) ||
+          (merchant?.store_name && String(merchant.store_name).trim()) ||
+          trimmedId;
+      } else {
+        threadTitle = 'دعم الغيث';
+      }
       break;
     }
     default:
@@ -303,10 +345,7 @@ async function assertCanAccessThread(threadType, threadId, requestPhone) {
     }
     case 'support': {
       if (phonesOverlap(phone, trimmedId)) return;
-      const isAdmin = PLATFORM_ADMIN_PHONES.some((adminPhone) =>
-        phonesOverlap(phone, adminPhone)
-      );
-      if (isAdmin) return;
+      if (await isAdminChatPhone(phone)) return;
       throw new Error('Unauthorized chat access.');
     }
     default:
@@ -351,8 +390,12 @@ async function resolveReceiverPhone(threadType, threadId, senderPhone, explicitR
     }
     case 'store':
       return trimmedId;
-    case 'support':
-      return SUPPORT_PLATFORM_PHONE;
+    case 'support': {
+      if (await isAdminChatPhone(sender)) {
+        return await resolvePhoneKey(trimmedId);
+      }
+      return await getPrimaryAdminReceiverPhone();
+    }
     default:
       return null;
   }
@@ -608,6 +651,31 @@ async function markThreadAsRead(threadType, threadId, requestPhone, otherPartyPh
     }
   }
 
+  if (trimmedType === 'support' && (await isAdminChatPhone(phone))) {
+    const userVariants = getPhoneVariants(await resolvePhoneKey(trimmedId));
+    if (userVariants.length > 0) {
+      const { data, error } = await supabase
+        .from('chat_messages')
+        .update({ read_at: new Date().toISOString() })
+        .eq('thread_type', 'support')
+        .eq('thread_id', trimmedId)
+        .in('sender_phone', userVariants)
+        .is('read_at', null)
+        .select('id');
+      if (error) {
+        if (isMissingColumnError(error, 'read_at')) {
+          return { success: true, updated: 0, read_at_supported: false };
+        }
+        throw new Error(mapChatDbError(error));
+      }
+      return {
+        success: true,
+        updated: Array.isArray(data) ? data.length : 0,
+        read_at_supported: true,
+      };
+    }
+  }
+
   const { data, error } = await query.select('id');
   if (error) {
     if (isMissingColumnError(error, 'read_at')) {
@@ -747,6 +815,113 @@ async function markAllThreadsAsRead(requestPhone) {
   return { success: true, updated: data ? data.length : 0 };
 }
 
+function formatSupportThreadForAdmin(row, allRows) {
+  const threadId = String(row.thread_id || '').trim();
+  const threadRows = allRows.filter(
+    (item) => String(item.thread_id || '').trim() === threadId
+  );
+  const userVariants = new Set();
+  for (const variant of getPhoneVariants(threadId)) {
+    userVariants.add(variant);
+  }
+
+  let unreadCount = 0;
+  for (const item of threadRows) {
+    const fromUser = getPhoneVariants(item.sender_phone).some((variant) =>
+      userVariants.has(variant)
+    );
+    if (fromUser && !item.read_at) unreadCount += 1;
+  }
+
+  const latest = threadRows.reduce((best, item) => {
+    if (!best) return item;
+    return new Date(item.created_at).getTime() > new Date(best.created_at).getTime()
+      ? item
+      : best;
+  }, null);
+
+  const lastFromUser = latest
+    ? getPhoneVariants(latest.sender_phone).some((variant) => userVariants.has(variant))
+    : false;
+
+  return {
+    thread_type: 'support',
+    thread_id: threadId,
+    other_party_phone: threadId,
+    other_party_name: lastFromUser ? latest?.sender_name : null,
+    last_message: latest ? formatLastMessagePreview(latest) : '',
+    last_at: latest?.created_at || row.created_at,
+    unread_count: unreadCount,
+    has_unread: unreadCount > 0,
+  };
+}
+
+async function getSupportThreadsForAdmin(adminPhone) {
+  await assertAdminAccess(adminPhone);
+  const supabase = assertSupabaseAdmin();
+
+  let result = await supabase
+    .from('chat_messages')
+    .select(`${INBOX_COLUMNS_BASE}, read_at`)
+    .eq('thread_type', 'support')
+    .order('created_at', { ascending: false })
+    .limit(500);
+
+  if (result.error && isMissingColumnError(result.error, 'read_at')) {
+    result = await supabase
+      .from('chat_messages')
+      .select(INBOX_COLUMNS_BASE)
+      .eq('thread_type', 'support')
+      .order('created_at', { ascending: false })
+      .limit(500);
+  }
+  if (result.error && isMissingColumnError(result.error, 'sender_name')) {
+    result = await supabase
+      .from('chat_messages')
+      .select(
+        'id, thread_type, thread_id, sender_phone, receiver_phone, content, message_type, created_at'
+      )
+      .eq('thread_type', 'support')
+      .order('created_at', { ascending: false })
+      .limit(500);
+  }
+  if (result.error) throw new Error(mapChatDbError(result.error));
+
+  const rows = result.data || [];
+  const threads = new Map();
+  for (const row of rows) {
+    const key = String(row.thread_id || '').trim();
+    if (!key || threads.has(key)) continue;
+    threads.set(key, formatSupportThreadForAdmin(row, rows));
+  }
+
+  const summaries = Array.from(threads.values());
+  const enriched = await Promise.all(
+    summaries.map(async (summary) => {
+      const context = await buildThreadContext(
+        'support',
+        summary.thread_id,
+        adminPhone,
+        summary.other_party_phone,
+        summary.other_party_name
+      );
+      return {
+        ...summary,
+        ...context,
+        other_party_name:
+          context.other_party_name ||
+          context.thread_title ||
+          summary.other_party_name ||
+          summary.thread_id,
+      };
+    })
+  );
+
+  return enriched.sort(
+    (a, b) => new Date(b.last_at).getTime() - new Date(a.last_at).getTime()
+  );
+}
+
 async function getUnreadCount(requestPhone) {
   const phone = await resolvePhoneKey(requestPhone);
   const receiverVariants = getPhoneVariants(phone);
@@ -766,6 +941,7 @@ async function getUnreadCount(requestPhone) {
 module.exports = {
   getChatMessages,
   getChatInbox,
+  getSupportThreadsForAdmin,
   saveChatMessage,
   appendCallChatEvent,
   markThreadAsRead,
@@ -774,6 +950,7 @@ module.exports = {
   deleteChatThread,
   resolveReceiverPhone,
   assertCanAccessThread,
+  isAdminChatPhone,
   mapChatAccessError,
   SUPPORT_PLATFORM_PHONE,
 };

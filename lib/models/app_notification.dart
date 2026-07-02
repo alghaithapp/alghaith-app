@@ -216,6 +216,24 @@ class AppNotificationItem {
 
   }
 
+  factory AppNotificationItem.fromServerMap(Map<String, dynamic> map) {
+    final createdAtMs = map['createdAtMs'] is int
+        ? map['createdAtMs'] as int
+        : DateTime.tryParse(map['createdAt']?.toString() ?? '')?.millisecondsSinceEpoch ??
+            DateTime.now().millisecondsSinceEpoch;
+    return AppNotificationItem(
+      id: map['id']?.toString() ?? '',
+      title: map['title']?.toString() ?? '',
+      body: map['body']?.toString() ?? '',
+      audience: map['audience']?.toString() ?? 'customer',
+      read: map['read'] == true,
+      createdAtMs: createdAtMs,
+      category: _parseCategory(map['category']?.toString()),
+      priority: NotificationPriority.normal,
+      eventKey: map['eventKey']?.toString(),
+    );
+  }
+
 
 
   factory AppNotificationItem.fromLegacyMap(

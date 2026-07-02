@@ -277,7 +277,11 @@ async function createTaxiRequest(customerPhone, data = {}) {
     : [];
 
   const { sumWaypointDistanceKm } = require('../../../services/taxi_trip_service');
-  const routeDistanceKm = sumWaypointDistanceKm([
+
+  // نُفضّل distanceKm المُرسلة من Flutter (محسوبة عبر Mapbox على الطرق الفعلية)
+  // ونستخدم Haversine كبديل فقط عند عدم وجودها
+  const clientDistanceKm = Number(data.distanceKm) || 0;
+  const haversineDistanceKm = sumWaypointDistanceKm([
     {
       lat: Number(data.pickupLat) || 0,
       lng: Number(data.pickupLng) || 0,
@@ -289,13 +293,29 @@ async function createTaxiRequest(customerPhone, data = {}) {
     },
   ]);
   const distanceKm = Math.max(
-    routeDistanceKm > 0 ? routeDistanceKm : Number(data.distanceKm) || 0,
+    clientDistanceKm > 0 ? clientDistanceKm : haversineDistanceKm,
     0
   );
 
-  // حساب السعر تلقائياً (×2 للذهاب والعودة)
-  const { fareEconomic, fareSuper, fare } = await calculateFare(distanceKm, taxiType, tripType);
-  console.log(`[TAXI_CREATE] distance=${distanceKm} type=${taxiType} trip=${tripType} fare=${fare} eco=${fareEconomic} super=${fareSuper}`);
+  // ── الحل الجذري: نستخدم السعر الذي رآه المستخدم وأكده (confirmedFare) ──
+  // هذا يضمن أن السعر المعروض = السعر المخزّن في قاعدة البيانات تماماً.
+  // في حال عدم إرسال confirmedFare (طلبات قديمة/API خارجي)، نحسبه من الـ Backend.
+  const clientFare = Number(data.confirmedFare) || 0;
+  let fareEconomic, fareSuper, fare;
+  if (clientFare > 0) {
+    // السعر المؤكد من Flutter — يُستخدم مباشرة (هو ما رآه المستخدم وأكده)
+    fare = clientFare;
+    fareSuper = clientFare;
+    const ecoCalc = await calculateFare(distanceKm, 'economic', tripType);
+    fareEconomic = ecoCalc.fare;
+  } else {
+    // حساب السعر من الـ Backend (للحالات القديمة أو API مباشر)
+    const calculated = await calculateFare(distanceKm, taxiType, tripType);
+    fare = calculated.fare;
+    fareEconomic = calculated.fareEconomic;
+    fareSuper = calculated.fareSuper;
+  }
+  console.log(`[TAXI_CREATE] distance=${distanceKm} type=${taxiType} trip=${tripType} fare=${fare} eco=${fareEconomic} clientFare=${clientFare}`);
 
   const requestPayload = {
     id: requestId,
